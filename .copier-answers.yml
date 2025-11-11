@@ -1,0 +1,18 @@
+# Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
+_commit: v2.0.0
+_src_path: https://github.com/napari/napari-plugin-template
+display_name: PATARI
+email: moritz.schillinger@fau.de
+full_name: Moritz Schillinger
+github_repository_url: provide later
+github_username_or_organization: FAU
+include_reader_plugin: true
+include_sample_data_plugin: true
+include_widget_plugin: true
+include_writer_plugin: true
+install_dependabot: false
+install_precommit: false
+license: BSD-3
+module_name: patari
+plugin_name: patari
+short_description: Analysis tool for clinical PA studies based on PATATO and NAPARI
