@@ -12,15 +12,15 @@ contributions:
     - id: patari._widget.patari_controls
       title: PATARI Controls
       python_name: patari._widget:patari_controls
-    # - id: patari.write_multiple
-    #   python_name: patari._writer:write_multiple
-    #   title: Save multi-layer data with PATARI
-    # - id: patari.write_single_image
-    #   python_name: patari._writer:write_single_image
-    #   title: Save image data with PATARI
-    # - id: patari.make_sample_data
-    #   python_name: patari._sample_data:make_sample_data
-    #   title: Load sample data from PATARI
+    - id: patari.write_multiple
+      python_name: patari._writer:write_multiple
+      title: Save multi-layer data with PATARI
+    - id: patari.write_single_image
+      python_name: patari._writer:write_single_image
+      title: Save image data with PATARI
+    - id: patari.make_sample_data
+      python_name: patari._sample_data:make_sample_data
+      title: Load sample data from PATARI
     # - id: patari.make_container_widget
     #   python_name: patari:ImageThreshold
     #   title: Make threshold Container widget
