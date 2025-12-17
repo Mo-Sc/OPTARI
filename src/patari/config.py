@@ -5,15 +5,17 @@ dtype_map = {
     "roi_index": int,
     "source_layer": str,
     "roi_type": str,
+    "scan_id": str,
     "frame": int,
     "wavelength": int,
-    "n_pixels": int,
-    "area_mm2": float,
     "mean": float,
     "median": float,
     "std": float,
     "min": float,
     "max": float,
+    "n_pixels": int,
+    "area_mm2": float,
+    "filepath": str,
 }
 
 # TODO: better color maps

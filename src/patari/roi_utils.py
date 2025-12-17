@@ -4,6 +4,7 @@ from skimage.draw import polygon
 import cv2
 import pandas as pd
 from patari.config import dtype_map
+from pathlib import Path
 
 
 def polygon_mask(verts_px, image_shape):
@@ -134,10 +135,14 @@ def compute_roi_stats(
         else:
             wav_val = wav_idx
 
+        filepath = active_layer.metadata.get("filepath", "")
+        scan_id = Path(filepath).stem.split("_")[0] if filepath else ""
         stats["source_layer"] = active_layer.name
         stats["roi_type"] = shape_type
+        stats["scan_id"] = scan_id
         stats["frame"] = frame_idx
         stats["wavelength"] = wav_val
+        stats["filepath"] = filepath
 
         rows.append(stats)
 

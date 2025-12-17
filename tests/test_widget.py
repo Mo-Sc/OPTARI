@@ -10,13 +10,10 @@ def test_patari_controls_importable():
 
 @pytest.mark.usefixtures("make_napari_viewer")
 def test_patari_controls_instantiates(make_napari_viewer):
-    # Smoke-test: create the magicgui factory and call it.
-    from pathlib import Path
-
+    # Smoke-test: calling the widget entrypoint returns a QWidget.
     from patari._widget import patari_controls
+    from qtpy.QtWidgets import QWidget
 
     viewer = make_napari_viewer()
-    widget = patari_controls()
-
-    # Calling with a dummy path should not crash even if loading fails later.
-    widget(viewer, Path("dummy.hdf5"))
+    widget = patari_controls(viewer)
+    assert isinstance(widget, QWidget)
