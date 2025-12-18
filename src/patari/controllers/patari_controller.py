@@ -16,6 +16,7 @@ from patari.config import (
     DEFAULT_WAV_START_IDX,
     dtype_map,
     ROI_LABELS,
+    DEFAULT_PA_LAYER,
 )
 from patari.roi_utils import (
     compute_roi_stats,
@@ -23,7 +24,8 @@ from patari.roi_utils import (
     extract_roi_pixels_for_slice,
 )
 from patari.utils.misc import parse_float_input, roi_color_for_index
-from patari.utils.napari_layers import resolve_active_image_layer
+
+# from patari.utils.napari_layers import resolve_active_image_layer
 from patari.widgets.info_dock import InfoDock, create_info_dock
 from patari.widgets.roi_dock import RoiDock, create_roi_dock
 from patari.widgets.scan_browser_dock import (
@@ -118,15 +120,17 @@ class PatariController:
             metadata={"type": "roi"},
         )
 
-        self._apply_roi_colors()
-        if ROI_LABELS:
-            self._apply_roi_labels()
+        # this is not necessary if shape layer is initially empty
+        # self._apply_roi_colors()
+        # if ROI_LABELS:
+        #     self._apply_roi_labels()
         self._ensure_roi_on_top()
 
     def _ensure_roi_on_top(self) -> None:
         """
         Necessary because ROI layer should persist across different scans and will therefore
         end up below newly added image layers. This ensures it is always on top.
+        TODO: could be extended to full ordering: ROIs > PA images > US images
         """
 
         if self.shapes_layer is None:
@@ -212,9 +216,11 @@ class PatariController:
             self.shapes_layer.events.data.connect(self._on_shapes_data_changed)
 
         self.viewer.dims.events.point.connect(self.on_dims_changed)
-        self.viewer.layers.events.reordered.connect(self.on_layers_changed)
-        self.viewer.layers.events.inserted.connect(self.on_layers_changed)
-        self.viewer.layers.events.removed.connect(self.on_layers_changed)
+
+        # TODO: should reordering / adding / removing layers trigger anything?
+        # self.viewer.layers.events.reordered.connect(self.on_layers_changed)
+        # self.viewer.layers.events.inserted.connect(self.on_layers_changed)
+        # self.viewer.layers.events.removed.connect(self.on_layers_changed)
         self.viewer.layers.selection.events.changed.connect(
             self.on_selection_changed
         )
@@ -281,7 +287,10 @@ class PatariController:
         ]
 
     def _apply_roi_labels(self) -> None:
-        """show ROI index labels next to shapes."""
+        """
+        show ROI index labels next to shapes.
+        TODO: this is a bit hacky
+        """
         if self.shapes_layer is None:
             return
 
@@ -291,10 +300,8 @@ class PatariController:
             self.shapes_layer.properties = props
             # napari text supports formatting from properties.
             self.shapes_layer.text = {"string": "{roi_id}"}
-            try:
-                self.shapes_layer.text.visible = True
-            except Exception:
-                pass
+            # self.shapes_layer.text.visible = True # default
+
         except Exception:
             print("PATARI: failed to apply ROI labels")
             pass
@@ -402,29 +409,25 @@ class PatariController:
                 pass
 
     def _select_default_pa_layer(self) -> None:
-        # Prefer a PA layer; otherwise any Image layer.
-        pa_layers: list[Image] = [
-            l
-            for l in self.viewer.layers
-            if isinstance(l, Image) and l.metadata.get("type") == "pa"
-        ]
-        chosen = pa_layers[0] if pa_layers else None
-        if chosen is None:
-            for l in self.viewer.layers:
-                if isinstance(l, Image):
-                    chosen = l
-                    break
-        if chosen is None:
+
+        # Find layer named DEFAULT_PA_LAYER, otherwise pick first PA layer found
+        first_pa = None
+        for layer in self.viewer.layers:
+            if not isinstance(layer, Image):
+                continue
+            if layer.name == DEFAULT_PA_LAYER:
+                self.viewer.layers.selection.select_only(layer)
+                return
+            if first_pa is None and layer.metadata.get("type") == "pa":
+                first_pa = layer
+
+        if first_pa is not None:
+            self.viewer.layers.selection.select_only(first_pa)
             return
 
-        try:
-            self.viewer.layers.selection.select_only(chosen)
-        except Exception:
-            try:
-                self.viewer.layers.selection.clear()
-                self.viewer.layers.selection.add(chosen)
-            except Exception:
-                pass
+        raise RuntimeError(
+            f"No PA image layer found (looking for '{DEFAULT_PA_LAYER}')"
+        )
 
     def on_browse_folder_clicked(self) -> None:
         folder = QFileDialog.getExistingDirectory(
@@ -456,20 +459,44 @@ class PatariController:
 
     # ---------------- layer selection ----------------
     def _resolve_active_layer(self) -> None:
-        res = resolve_active_image_layer(self.viewer, require_pa=True)
-        self.active_layer = res.layer if res is not None else None
+        """
+        Docstring for _resolve_active_layer
 
-        # keep PA layers visually consistent; show only the active PA layer
-        for layer in self.viewer.layers:
-            if isinstance(layer, Image) and layer.metadata.get("type") == "pa":
-                layer.blending = "multiplicative"
-                layer._keep_auto_contrast = True
-                layer.visible = layer is self.active_layer
+        :param self: Description
+        """
+
+        selection = self.viewer.layers.selection
+
+        if len(selection) != 1:
+            # no layer selected or multiple layers selected
+            return
+
+        selected_layer = getattr(selection, "active", None)
+
+        # only change active layer if selected layer is a PA image layer
+        if (
+            isinstance(selected_layer, Image)
+            and selected_layer.metadata.get("type") == "pa"
+        ):
+            self.active_layer = selected_layer
+            print(f"active layer set to {self.active_layer.name}")
+            # keep PA layers visually consistent; show only the active PA layer
+            # set all other PA layers to invisible
+            # set blending and auto contrast for all PA layers
+            for layer in self.viewer.layers:
+                if (
+                    isinstance(layer, Image)
+                    and layer.metadata.get("type") == "pa"
+                ):
+                    layer.blending = "multiplicative"
+                    layer._keep_auto_contrast = True
+                    layer.visible = layer is self.active_layer
 
     # ---------------- events ----------------
-    def on_layers_changed(self, event=None) -> None:
-        self._ensure_roi_on_top()
-        self.refresh_all()
+    # def on_layers_changed(self, event=None) -> None:
+    #     # TODO: relevant?
+    #     self._ensure_roi_on_top()
+    #     self.refresh_all()
 
     def _on_roi_intensity_settings_changed(self) -> None:
         if self.annotation is None:
@@ -484,6 +511,7 @@ class PatariController:
         self.update_live_table()
 
     def on_selection_changed(self, event=None) -> None:
+        self._resolve_active_layer()
         self.refresh_all()
 
     def on_dims_changed(self, event=None) -> None:
@@ -499,24 +527,31 @@ class PatariController:
                 self.viewer.dims.set_point(0, snapped)
                 return
 
-            # Scrolling dims should not re-resolve the active layer or toggle
-            # layer visibility; that work is selection-dependent and can be
-            # expensive. Only update the dims-dependent UI.
-            # (no refresh_all call)
-            self.update_info_labels()
-            self.update_live_table()
+            self.refresh_all()
+
         except Exception as e:
             print("on_dims_changed:", e)
 
     # ---------------- time analysis ----------------
     def on_generate_time_analysis_clicked(self, event=None) -> None:
-        if self.time_analysis is None:
-            return
+
+        error_msg = ""
+
         if self.shapes_layer is None:
-            self.time_analysis.status_label.setText("No ROIs layer")
-            return
-        if self.active_layer is None:
-            self.time_analysis.status_label.setText("Select a PA image layer")
+            error_msg = "No ROIs layer"
+        elif self.active_layer is None:
+            error_msg = "Select a PA image layer"
+        elif len(self.shapes_layer.data) == 0:
+            error_msg = "No ROIs defined"
+        elif len(self.active_layer.metadata["frames"]) < 2:
+            error_msg = "PA image layer has less than 2 frames"
+
+        if error_msg:
+            self.time_analysis.status_label.setText(
+                f'<span style="color:red">{error_msg}</span>'
+            )
+            if self.time_analysis.plot_widget is not None:
+                self.time_analysis.plot_widget.clear()
             return
 
         # Lazily create plot widget.
@@ -546,10 +581,8 @@ class PatariController:
         )
 
         plot.clear()
-        try:
-            plot.addLegend()
-        except Exception:
-            pass
+
+        plot.addLegend()
 
         for roi_index, y in series.items():
             color = roi_color_for_index(int(roi_index))
@@ -656,7 +689,9 @@ class PatariController:
 
     # ---------------- info/roi updates ----------------
     def refresh_all(self) -> None:
-        self._resolve_active_layer()
+        """
+        refresh all info that should be live updated
+        """
         self.update_info_labels()
         self.update_live_table()
 
@@ -844,6 +879,7 @@ class PatariController:
         print(f"Deleted {len(selected_indices)} saved rows")
 
     def on_csv_export_clicked(self, event=None) -> None:
+        # TODO: export all data
         if self.roi is None:
             return
 
