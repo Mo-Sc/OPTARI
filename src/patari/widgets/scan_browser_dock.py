@@ -33,9 +33,10 @@ class ScanBrowserDock:
 
 def create_scan_browser_dock() -> ScanBrowserDock:
     widget = QWidget()
+    widget.setMinimumHeight(500)
     outer = QVBoxLayout(widget)
 
-    outer.addWidget(QLabel("Scans"))
+    outer.addWidget(QLabel("Scan Browser"))
 
     row = QWidget()
     row_layout = QHBoxLayout(row)

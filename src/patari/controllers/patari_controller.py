@@ -8,14 +8,21 @@ from napari.layers import Image, Shapes
 from napari.viewer import Viewer
 from qtpy.QtGui import QColor
 from qtpy.QtWidgets import QFileDialog
+import pyqtgraph as pg
+
 
 from patari.config import (
     DEFAULT_FRAME_START_IDX,
     DEFAULT_WAV_START_IDX,
     dtype_map,
-    roi_colors,
+    ROI_LABELS,
 )
-from patari.roi_utils import compute_roi_stats
+from patari.roi_utils import (
+    compute_roi_stats,
+    compute_roi_time_series,
+    extract_roi_pixels_for_slice,
+)
+from patari.utils.misc import parse_float_input, roi_color_for_index
 from patari.utils.napari_layers import resolve_active_image_layer
 from patari.widgets.info_dock import InfoDock, create_info_dock
 from patari.widgets.roi_dock import RoiDock, create_roi_dock
@@ -23,6 +30,15 @@ from patari.widgets.scan_browser_dock import (
     ScanBrowserDock,
     create_scan_browser_dock,
 )
+from patari.widgets.annotation_dock import (
+    AnnotationDock,
+    create_annotation_dock,
+)
+from patari.widgets.time_analysis_dock import (
+    TimeAnalysisDock,
+    create_time_analysis_dock,
+)
+from patari.widgets.histogram_dock import HistogramDock, create_histogram_dock
 
 
 class PatariController:
@@ -37,14 +53,28 @@ class PatariController:
         self.path = Path(path) if path is not None else Path()
         self.reader = reader
 
-        self.info: InfoDock | None = None
-        self.roi: RoiDock | None = None
-        self.scan_browser: ScanBrowserDock | None = None
-
         self._scan_paths: list[Path] = []
 
         self.shapes_layer: Shapes | None = None
         self.active_layer: Image | None = None
+
+        # --- left elements ---
+        self.info: InfoDock | None = None
+
+        # --- right elements ---
+        self.scan_browser: ScanBrowserDock | None = None
+        self.annotation: AnnotationDock | None = None
+
+        self.roi_intensity_min: float | None = None
+        self.roi_intensity_max: float | None = None
+
+        # -- bottom elements --
+        self.roi: RoiDock | None = None
+        self.time_analysis: TimeAnalysisDock | None = None
+        self.histograms: HistogramDock | None = None
+        self._roi_dock_widget = None
+        self._time_analysis_dock_widget = None
+        self._histograms_dock_widget = None
 
         self._setup_viewer()
         self._ensure_shapes_layer()
@@ -81,12 +111,16 @@ class PatariController:
 
         self.shapes_layer = self.viewer.add_shapes(
             name="ROIs",
-            edge_color="#aa0000ff",
+            edge_color=roi_color_for_index(0),
             face_color="transparent",
-            edge_width=0.2,
+            edge_width=0.1,
             ndim=2,
             metadata={"type": "roi"},
         )
+
+        self._apply_roi_colors()
+        if ROI_LABELS:
+            self._apply_roi_labels()
         self._ensure_roi_on_top()
 
     def _ensure_roi_on_top(self) -> None:
@@ -123,37 +157,67 @@ class PatariController:
             dock = self.viewer.window.add_dock_widget(
                 self.info.widget,
                 name="Info",
-                area="right",
+                area="left",
             )
-            # info dock is floating by default
-            dock.setFloating(True)
-            dock.show()
+            # in case info dock should be floating
+            # dock.setFloating(True)
+            # dock.show()
 
         if self.roi is None:
             self.roi = create_roi_dock()
-            self.viewer.window.add_dock_widget(
+            self._roi_dock_widget = self.viewer.window.add_dock_widget(
                 self.roi.widget,
-                name="ROI Tables",
+                name="Tabular",
                 area="bottom",
+            )
+
+        if self.time_analysis is None:
+            self.time_analysis = create_time_analysis_dock()
+            self._time_analysis_dock_widget = (
+                self.viewer.window.add_dock_widget(
+                    self.time_analysis.widget,
+                    name="Time Analysis",
+                    area="bottom",
+                )
+            )
+
+        if self.histograms is None:
+            self.histograms = create_histogram_dock()
+            self._histograms_dock_widget = self.viewer.window.add_dock_widget(
+                self.histograms.widget,
+                name="Histograms",
+                area="bottom",
+            )
+
+        if self.annotation is None:
+            self.annotation = create_annotation_dock()
+            self.viewer.window.add_dock_widget(
+                self.annotation.widget,
+                name="Annotation",
+                area="right",
+            )
+
+        # make sure ROI, Time Analysis and Histogram docks are tabified
+        qt_window = getattr(self.viewer.window, "_qt_window", None)
+        if qt_window is not None:
+            qt_window.tabifyDockWidget(
+                self._roi_dock_widget, self._time_analysis_dock_widget
+            )
+            qt_window.tabifyDockWidget(
+                self._roi_dock_widget, self._histograms_dock_widget
             )
 
     def _connect_events(self) -> None:
         if self.shapes_layer is not None:
-            self.shapes_layer.events.data.connect(self.update_live_table)
+            self.shapes_layer.events.data.connect(self._on_shapes_data_changed)
 
         self.viewer.dims.events.point.connect(self.on_dims_changed)
         self.viewer.layers.events.reordered.connect(self.on_layers_changed)
         self.viewer.layers.events.inserted.connect(self.on_layers_changed)
         self.viewer.layers.events.removed.connect(self.on_layers_changed)
-
-        # selection change (preferred for selected-layer rule)
-        try:
-            self.viewer.layers.selection.events.changed.connect(
-                self.on_selection_changed
-            )
-        except Exception:
-            # older napari or different event model
-            pass
+        self.viewer.layers.selection.events.changed.connect(
+            self.on_selection_changed
+        )
 
         if self.roi is not None:
             self.roi.save_button.clicked.connect(self.on_save_clicked)
@@ -162,6 +226,41 @@ class PatariController:
             )
             self.roi.csv_button.clicked.connect(self.on_csv_export_clicked)
 
+        if self.time_analysis is not None:
+            self.time_analysis.generate_button.clicked.connect(
+                self.on_generate_time_analysis_clicked
+            )
+
+        if self.histograms is not None:
+            self.histograms.refresh_button.clicked.connect(
+                self.on_refresh_histograms_clicked
+            )
+
+        if self.annotation is not None:
+            # if roi min is edited
+            self.annotation.roi_min_edit.editingFinished.connect(
+                self._on_roi_intensity_settings_changed
+            )
+            # if roi max is edited
+            self.annotation.roi_max_edit.editingFinished.connect(
+                self._on_roi_intensity_settings_changed
+            )
+            # required for reset via 'unset' clear button
+            self.annotation.roi_min_edit.textChanged.connect(
+                lambda t: (
+                    self._on_roi_intensity_settings_changed()
+                    if (t or "").strip() == ""
+                    else None
+                )
+            )
+            self.annotation.roi_max_edit.textChanged.connect(
+                lambda t: (
+                    self._on_roi_intensity_settings_changed()
+                    if (t or "").strip() == ""
+                    else None
+                )
+            )
+
         if self.scan_browser is not None:
             self.scan_browser.browse_button.clicked.connect(
                 self.on_browse_folder_clicked
@@ -169,6 +268,46 @@ class PatariController:
             self.scan_browser.scans_list.currentRowChanged.connect(
                 self.on_scan_selected
             )
+
+    def _apply_roi_colors(self) -> None:
+        """
+        Assign distinct colors to each ROI shape based on its index.
+        """
+        if self.shapes_layer is None:
+            return
+
+        self.shapes_layer.edge_color = [
+            roi_color_for_index(i) for i in range(len(self.shapes_layer.data))
+        ]
+
+    def _apply_roi_labels(self) -> None:
+        """show ROI index labels next to shapes."""
+        if self.shapes_layer is None:
+            return
+
+        try:
+            props = dict(getattr(self.shapes_layer, "properties", {}) or {})
+            props["roi_id"] = np.arange(len(self.shapes_layer.data), dtype=int)
+            self.shapes_layer.properties = props
+            # napari text supports formatting from properties.
+            self.shapes_layer.text = {"string": "{roi_id}"}
+            try:
+                self.shapes_layer.text.visible = True
+            except Exception:
+                pass
+        except Exception:
+            print("PATARI: failed to apply ROI labels")
+            pass
+
+    def _on_shapes_data_changed(self, event=None) -> None:
+        if self.shapes_layer is None:
+            return
+
+        self._apply_roi_colors()
+        if ROI_LABELS:
+            self._apply_roi_labels()
+
+        self.update_live_table()
 
     # ---------------- scans / loading ----------------
     def _init_path(self, path: Path) -> None:
@@ -332,6 +471,18 @@ class PatariController:
         self._ensure_roi_on_top()
         self.refresh_all()
 
+    def _on_roi_intensity_settings_changed(self) -> None:
+        if self.annotation is None:
+            return
+
+        self.roi_intensity_min = parse_float_input(
+            self.annotation.roi_min_edit.text()
+        )
+        self.roi_intensity_max = parse_float_input(
+            self.annotation.roi_max_edit.text()
+        )
+        self.update_live_table()
+
     def on_selection_changed(self, event=None) -> None:
         self.refresh_all()
 
@@ -356,6 +507,152 @@ class PatariController:
             self.update_live_table()
         except Exception as e:
             print("on_dims_changed:", e)
+
+    # ---------------- time analysis ----------------
+    def on_generate_time_analysis_clicked(self, event=None) -> None:
+        if self.time_analysis is None:
+            return
+        if self.shapes_layer is None:
+            self.time_analysis.status_label.setText("No ROIs layer")
+            return
+        if self.active_layer is None:
+            self.time_analysis.status_label.setText("Select a PA image layer")
+            return
+
+        # Lazily create plot widget.
+        if self.time_analysis.plot_widget is None:
+            plot = pg.PlotWidget()
+            plot.showGrid(x=True, y=True)
+            plot.addLegend()
+            self.time_analysis.plot_widget = plot
+            layout = self.time_analysis.plot_container.layout()
+            if layout is not None:
+                layout.addWidget(plot)
+
+        plot = self.time_analysis.plot_widget
+        assert plot is not None
+
+        # Current wavelength index from dims.
+        pt = list(self.viewer.dims.point)
+        wav_idx = int(round(pt[1])) if len(pt) >= 2 else 0
+
+        self.time_analysis.status_label.setText("Computing time series…")
+        x, series = compute_roi_time_series(
+            self.shapes_layer,
+            self.active_layer,
+            wav_idx,
+            clamp_min=self.roi_intensity_min,
+            clamp_max=self.roi_intensity_max,
+        )
+
+        plot.clear()
+        try:
+            plot.addLegend()
+        except Exception:
+            pass
+
+        for roi_index, y in series.items():
+            color = roi_color_for_index(int(roi_index))
+            plot.plot(
+                x,
+                y,
+                pen=pg.mkPen(color=color, width=2),
+                name=f"ROI {roi_index}",
+            )
+
+        xlabel = (
+            "Time (s)"
+            if self.active_layer.metadata.get("timestamps") is not None
+            else "Frame"
+        )
+        plot.setLabel("bottom", xlabel)
+        plot.setLabel("left", "Mean intensity")
+
+        self.time_analysis.status_label.setText(
+            f"Plotted {len(series)} ROI(s) over {len(x)} frame(s)."
+        )
+
+    # ---------------- histograms ----------------
+    def on_refresh_histograms_clicked(self, event=None) -> None:
+        if self.histograms is None:
+            return
+        if self.shapes_layer is None:
+            self.histograms.status_label.setText("No ROIs layer")
+            return
+        if self.active_layer is None:
+            self.histograms.status_label.setText("Select a PA image layer")
+            return
+
+        pt = list(self.viewer.dims.point)
+        if len(pt) < 2:
+            frame_idx, wav_idx = 0, 0
+        else:
+            frame_idx = int(round(pt[0]))
+            wav_idx = int(round(pt[1]))
+
+        self.histograms.status_label.setText("Computing histograms…")
+
+        roi_vals = extract_roi_pixels_for_slice(
+            self.shapes_layer,
+            self.active_layer,
+            frame_idx,
+            wav_idx,
+            clamp_min=self.roi_intensity_min,
+            clamp_max=self.roi_intensity_max,
+        )
+
+        # Clear previous plots
+        container = self.histograms.plots_container
+        layout = container.layout()
+        if layout is not None:
+            while layout.count():
+                item = layout.takeAt(0)
+                w = item.widget() if item is not None else None
+                if w is not None:
+                    w.setParent(None)
+                    w.deleteLater()
+
+        n_plotted = 0
+        for roi_index, vals in roi_vals.items():
+            vals = np.asarray(vals)
+            if vals.size == 0:
+                continue
+
+            # Histogram bins: simple default.
+            try:
+                counts, edges = np.histogram(vals, bins=50)
+            except Exception:
+                continue
+
+            if counts.size == 0 or edges.size < 2:
+                continue
+
+            x = (edges[:-1] + edges[1:]) / 2.0
+            width = float(edges[1] - edges[0])
+
+            color = roi_color_for_index(int(roi_index))
+            brush = pg.mkBrush(color)
+            pen = pg.mkPen(color)
+
+            plot = pg.PlotWidget()
+            plot.setTitle(f"ROI {roi_index}")
+            plot.showGrid(x=True, y=True)
+            bar = pg.BarGraphItem(
+                x=x,
+                height=counts,
+                width=width,
+                brush=brush,
+                pen=pen,
+            )
+            plot.addItem(bar)
+
+            if layout is not None:
+                layout.addWidget(plot)
+            n_plotted += 1
+
+        self.histograms.status_label.setText(
+            f"Plotted {n_plotted} histogram(s) for frame {frame_idx}, wav {wav_idx}."
+        )
 
     # ---------------- info/roi updates ----------------
     def refresh_all(self) -> None:
@@ -470,6 +767,8 @@ class PatariController:
                 self.active_layer,
                 frame_idx,
                 wav_idx,
+                clamp_min=self.roi_intensity_min,
+                clamp_max=self.roi_intensity_max,
             )
         except Exception as e:
             print("update_live_table:", e)
@@ -477,18 +776,15 @@ class PatariController:
 
         self.roi.live_table.value = df
 
-        # color ROIs in shapes layer to distinct colors
-        num_shapes = len(self.shapes_layer.data)
-        colors_for_shapes = [
-            roi_colors[i % len(roi_colors)] for i in range(num_shapes)
-        ]
-        self.shapes_layer.edge_color = colors_for_shapes
+        # Keep shapes layer colors in sync with indices.
+        self._apply_roi_colors()
 
-        # color first column cells background to match colors
-        for row_idx, color_hex in enumerate(colors_for_shapes):
+        # color first column cells background to match ROI colors
+        num_shapes = len(self.shapes_layer.data)
+        for row_idx in range(num_shapes):
             item = self.roi.live_table.native.item(row_idx, 0)
             if item is not None:
-                item.setBackground(QColor(color_hex))
+                item.setBackground(QColor(roi_color_for_index(row_idx)))
 
     # ---------------- table helpers ----------------
     @staticmethod

@@ -32,6 +32,7 @@ dependencies = [
     "numpy",
     "magicgui",
     "qtpy",
+    "pyqtgraph",
     "scikit-image",
 ]
 

@@ -1,5 +1,6 @@
 DEFAULT_WAV_START_IDX = 0
 DEFAULT_FRAME_START_IDX = 0
+ROI_LABELS = True
 
 dtype_map = {
     "roi_index": int,
@@ -19,7 +20,7 @@ dtype_map = {
 }
 
 # TODO: better color maps
-roi_colors = [
+roi_colors_ordered = [
     "#8B0000",
     "#B22222",
     "#DC143C",
@@ -30,4 +31,16 @@ roi_colors = [
     "#FFA500",
     "#FFD700",
     "#FFFF00",
+]
+roi_colors = [
+    "#8B0000",
+    "#FFD700",
+    "#FF6347",
+    "#FF8C00",
+    "#B22222",
+    "#FFFF00",
+    "#DC143C",
+    "#FF4500",
+    "#FFA500",
+    "#FF7F50",
 ]

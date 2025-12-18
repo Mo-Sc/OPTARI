@@ -50,6 +50,9 @@ def compute_roi_stats(
     active_layer,
     frame_idx: int,
     wav_idx: int,
+    *,
+    clamp_min: float | None = None,
+    clamp_max: float | None = None,
 ):
     """
     Compute ROI statistics for all shapes in shapes_layer
@@ -103,7 +106,20 @@ def compute_roi_stats(
             continue
 
         vals = img2d[mask]
+        vals_stats = vals
+        if vals_stats.size and (
+            clamp_min is not None or clamp_max is not None
+        ):
+            # apply clamping for stats computation
+            lo = float(clamp_min) if clamp_min is not None else None
+            hi = float(clamp_max) if clamp_max is not None else None
+            vals_stats = np.clip(
+                vals_stats,
+                a_min=lo,
+                a_max=hi,
+            )
         if vals.size == 0:
+            # empty ROI
             stats = dict(
                 roi_index=i,
                 n_pixels=0,
@@ -119,11 +135,11 @@ def compute_roi_stats(
                 roi_index=i,
                 n_pixels=int(vals.size),
                 area_mm2=float(vals.size * sy * sx),
-                mean=float(np.nanmean(vals)),
-                median=float(np.nanmedian(vals)),
-                std=float(np.nanstd(vals)),
-                min=float(np.nanmin(vals)),
-                max=float(np.nanmax(vals)),
+                mean=float(np.nanmean(vals_stats)),
+                median=float(np.nanmedian(vals_stats)),
+                std=float(np.nanstd(vals_stats)),
+                min=float(np.nanmin(vals_stats)),
+                max=float(np.nanmax(vals_stats)),
             )
 
         # wavelength metadata
@@ -152,3 +168,164 @@ def compute_roi_stats(
     except Exception:
         pass
     return df
+
+
+def compute_roi_time_series(
+    shapes_layer,
+    active_layer,
+    wav_idx: int,
+    *,
+    clamp_min: float | None = None,
+    clamp_max: float | None = None,
+):
+    """Compute per-ROI mean intensity over time for a fixed wavelength.
+
+    Returns (x, series) where:
+    - x is either frame indices or timestamps (seconds since start)
+    - series is a dict {roi_index: np.ndarray}
+
+    This intentionally does not depend on napari classes; it only relies on the
+    minimal attributes used below (data, scale, metadata, shapes_layer.data).
+    """
+
+    if active_layer is None:
+        return np.asarray([]), {}
+
+    data = np.asarray(active_layer.data)
+    if data.ndim < 3:
+        return np.asarray([]), {}
+
+    n_frames = data.shape[0]
+    n_wavs = data.shape[1]
+    wav_idx = int(np.clip(int(wav_idx), 0, max(0, n_wavs - 1)))
+
+    frames_meta = getattr(active_layer, "metadata", {}).get("frames")
+    if frames_meta:
+        frames = np.asarray(frames_meta, dtype=int)
+    else:
+        frames = np.arange(n_frames, dtype=int)
+
+    ts = getattr(active_layer, "metadata", {}).get("timestamps")
+    if ts is not None:
+        try:
+            ts = np.asarray(ts)
+            x = ts[frames, wav_idx].astype(float)
+            x = x - float(ts[0, wav_idx])
+        except Exception:
+            x = frames.astype(float)
+    else:
+        x = frames.astype(float)
+
+    # ROI masks are stable across frames for a given (y,x) image shape.
+    scale = getattr(active_layer, "scale", (1.0, 1.0, 1.0))
+    sy, sx = float(scale[-2]), float(scale[-1])
+    img_shape = data.shape[-2:]
+
+    series: dict[int, np.ndarray] = {}
+    for roi_index, verts in enumerate(getattr(shapes_layer, "data", [])):
+        verts_arr = np.asarray(verts)
+        if verts_arr.ndim != 2:
+            continue
+
+        verts_pixels = verts_arr / np.array([sy, sx])
+        shape_type = (
+            shapes_layer.shape_type[roi_index]
+            if hasattr(shapes_layer, "shape_type")
+            else "polygon"
+        )
+
+        try:
+            if shape_type == "ellipse":
+                mask = ellipse_mask(verts_pixels, img_shape)
+            else:
+                mask = polygon_mask(verts_pixels, img_shape)
+        except Exception:
+            continue
+
+        flat_idx = np.flatnonzero(mask.ravel())
+        if flat_idx.size == 0:
+            series[roi_index] = np.full(frames.shape[0], np.nan, dtype=float)
+            continue
+
+        y = np.empty(frames.shape[0], dtype=float)
+        for j, f in enumerate(frames):
+            img2d = data[int(f), wav_idx]
+            vals = img2d.ravel()[flat_idx]
+            if vals.size and (clamp_min is not None or clamp_max is not None):
+                # apply clamping
+                lo = float(clamp_min) if clamp_min is not None else None
+                hi = float(clamp_max) if clamp_max is not None else None
+                vals = np.clip(vals, a_min=lo, a_max=hi)
+            y[j] = float(np.nanmean(vals)) if vals.size else np.nan
+        series[roi_index] = y
+
+    return x, series
+
+
+def extract_roi_pixels_for_slice(
+    shapes_layer,
+    active_layer,
+    frame_idx: int,
+    wav_idx: int,
+    *,
+    clamp_min: float | None = None,
+    clamp_max: float | None = None,
+) -> dict[int, np.ndarray]:
+    """Return per-ROI pixel intensities for a single (frame, wavelength).
+
+    Returns {roi_index: 1D np.ndarray}.
+    Applies optional intensity clamping to the returned values.
+    """
+
+    if active_layer is None:
+        return {}
+
+    data = np.asarray(active_layer.data)
+    if data.ndim < 3:
+        return {}
+
+    # Skip zero-padded frames if reconstruction is sparse.
+    frames = getattr(active_layer, "metadata", {}).get("frames")
+    if frames is not None and frame_idx not in frames:
+        return {}
+
+    # clamp wavelength to valid range
+    W = data.shape[1]
+    wav_idx = min(max(0, int(wav_idx)), W - 1)
+    frame_idx = int(frame_idx)
+
+    img2d = data[frame_idx, wav_idx]
+
+    scale = getattr(active_layer, "scale", (1.0, 1.0, 1.0))
+    sy, sx = float(scale[-2]), float(scale[-1])
+
+    out: dict[int, np.ndarray] = {}
+    for roi_index, verts in enumerate(getattr(shapes_layer, "data", [])):
+        verts_arr = np.asarray(verts)
+        if verts_arr.ndim != 2:
+            continue
+
+        verts_pixels = verts_arr / np.array([sy, sx])
+        shape_type = (
+            shapes_layer.shape_type[roi_index]
+            if hasattr(shapes_layer, "shape_type")
+            else "polygon"
+        )
+
+        try:
+            if shape_type == "ellipse":
+                mask = ellipse_mask(verts_pixels, img2d.shape)
+            else:
+                mask = polygon_mask(verts_pixels, img2d.shape)
+        except Exception:
+            continue
+
+        vals = img2d[mask]
+        if vals.size and (clamp_min is not None or clamp_max is not None):
+            lo = float(clamp_min) if clamp_min is not None else None
+            hi = float(clamp_max) if clamp_max is not None else None
+            vals = np.clip(vals, a_min=lo, a_max=hi)
+
+        out[roi_index] = np.asarray(vals).ravel()
+
+    return out
