@@ -4,10 +4,10 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from napari.layers import Image, Shapes
+from napari.layers import Image, Labels, Shapes
 from napari.viewer import Viewer
 from qtpy.QtGui import QColor
-from qtpy.QtWidgets import QFileDialog
+from qtpy.QtWidgets import QDockWidget, QFileDialog
 import pyqtgraph as pg
 
 
@@ -17,13 +17,20 @@ from patari.config import (
     dtype_map,
     ROI_LABELS,
     DEFAULT_PA_LAYER,
+    ROI_PLACEMENT_PRESETS,
 )
-from patari.roi_utils import (
+from patari.roi.roi_utils import (
     compute_roi_stats,
     compute_roi_time_series,
     extract_roi_pixels_for_slice,
 )
+from patari.roi.roi_shapes import EllipseConfig, ShapeFactory
+from patari.segmentation.service import DummySegmenter
 from patari.utils.misc import parse_float_input, roi_color_for_index
+from patari.segmentation.napari import (
+    ensure_segmentation_labels_layer,
+    set_segmentation_2d,
+)
 
 # from patari.utils.napari_layers import resolve_active_image_layer
 from patari.widgets.info_dock import InfoDock, create_info_dock
@@ -62,13 +69,21 @@ class PatariController:
 
         # --- left elements ---
         self.info: InfoDock | None = None
+        # Info widget is the plugin-provided dock widget; controller does not dock it.
 
         # --- right elements ---
         self.scan_browser: ScanBrowserDock | None = None
         self.annotation: AnnotationDock | None = None
+        self._scan_browser_dock_widget = None
+        self._annotation_dock_widget = None
 
         self.roi_intensity_min: float | None = None
         self.roi_intensity_max: float | None = None
+
+        # segmentation
+        self._segmenter = DummySegmenter()
+        self._placed_roi_index: int | None = None
+        self._pending_preset_class: str | None = None
 
         # -- bottom elements --
         self.roi: RoiDock | None = None
@@ -155,17 +170,16 @@ class PatariController:
         # Create docks once per controller instance.
         if self.scan_browser is None:
             self.scan_browser = create_scan_browser_dock()
+            self._scan_browser_dock_widget = (
+                self.viewer.window.add_dock_widget(
+                    self.scan_browser.widget,
+                    name="Scan Browser",
+                    area="right",
+                )
+            )
 
         if self.info is None:
             self.info = create_info_dock()
-            dock = self.viewer.window.add_dock_widget(
-                self.info.widget,
-                name="Info",
-                area="left",
-            )
-            # in case info dock should be floating
-            # dock.setFloating(True)
-            # dock.show()
 
         if self.roi is None:
             self.roi = create_roi_dock()
@@ -195,20 +209,26 @@ class PatariController:
 
         if self.annotation is None:
             self.annotation = create_annotation_dock()
-            self.viewer.window.add_dock_widget(
+            self._annotation_dock_widget = self.viewer.window.add_dock_widget(
                 self.annotation.widget,
                 name="Annotation",
                 area="right",
             )
 
-        # make sure ROI, Time Analysis and Histogram docks are tabified
+        # make sure some docks are tabified
         qt_window = getattr(self.viewer.window, "_qt_window", None)
         if qt_window is not None:
+            # Bottom: ROI, Time Analysis and Histogram
             qt_window.tabifyDockWidget(
                 self._roi_dock_widget, self._time_analysis_dock_widget
             )
             qt_window.tabifyDockWidget(
                 self._roi_dock_widget, self._histograms_dock_widget
+            )
+            # Right: Scan Browser + Annotation
+            qt_window.tabifyDockWidget(
+                self._scan_browser_dock_widget,
+                self._annotation_dock_widget,
             )
 
     def _connect_events(self) -> None:
@@ -266,6 +286,18 @@ class PatariController:
                     else None
                 )
             )
+
+            self.annotation.generate_tissue_segmentation_button.clicked.connect(
+                self.on_generate_tissue_segmentation_clicked
+            )
+            self.annotation.place_roi_button.clicked.connect(
+                self.on_place_roi_clicked
+            )
+
+            for btn in getattr(self.annotation, "roi_preset_buttons", []):
+                btn.clicked.connect(
+                    lambda checked=False, b=btn: self.on_roi_preset_clicked(b)
+                )
 
         if self.scan_browser is not None:
             self.scan_browser.browse_button.clicked.connect(
@@ -510,6 +542,297 @@ class PatariController:
         )
         self.update_live_table()
 
+    # ---------------- segmentation ----------------
+    def _resolve_us_layer(self) -> Image | None:
+        """Find US Image layer for segmentation (always runs on US)."""
+        for layer in self.viewer.layers:
+            if isinstance(layer, Image) and layer.metadata.get("type") == "us":
+                return layer
+        return None
+
+    def _us_slice_2d(self, us_layer: Image) -> np.ndarray | None:
+        data = np.asarray(us_layer.data)
+        if data.ndim == 2:
+            return data
+
+        # Use current frame index if available.
+        try:
+            pt = list(self.viewer.dims.point)
+            frame_idx = int(round(pt[0])) if len(pt) >= 1 else 0
+        except Exception:
+            frame_idx = 0
+
+        frame_idx = int(np.clip(frame_idx, 0, max(0, data.shape[0] - 1)))
+
+        if data.ndim == 3:
+            return data[frame_idx]
+        if data.ndim >= 4:
+            # e.g. (frame, channel, y, x)
+            return data[frame_idx, 0]
+
+        return None
+
+    def _remove_previous_placed_roi(self) -> None:
+        if self.shapes_layer is None:
+            return
+        if self._placed_roi_index is None:
+            return
+        idx = int(self._placed_roi_index)
+        if idx < 0 or idx >= len(self.shapes_layer.data):
+            self._placed_roi_index = None
+            return
+        try:
+            self.shapes_layer.selected_data = {idx}
+            self.shapes_layer.remove_selected()
+        except Exception:
+            pass
+        self._placed_roi_index = None
+
+    def _set_roi_class_choices(self, class_names: dict[int, str]) -> None:
+        if self.annotation is None:
+            return
+        combo = self.annotation.roi_class_combo
+        combo.blockSignals(True)
+        try:
+            combo.clear()
+            for class_id, name in sorted(
+                class_names.items(), key=lambda kv: int(kv[0])
+            ):
+                combo.addItem(str(name), userData=int(class_id))
+            combo.setEnabled(combo.count() > 0)
+        finally:
+            combo.blockSignals(False)
+
+        # Apply pending preset class selection once classes are available.
+        if self._pending_preset_class:
+            self._select_roi_class_by_name(self._pending_preset_class)
+            self._pending_preset_class = None
+
+    def _select_roi_class_by_name(self, class_name: str) -> None:
+        if self.annotation is None:
+            return
+        combo = self.annotation.roi_class_combo
+        target = (class_name or "").strip().lower()
+        if not target:
+            return
+        for i in range(combo.count()):
+            txt = (combo.itemText(i) or "").strip().lower()
+            if txt == target:
+                combo.setCurrentIndex(i)
+                return
+
+    def on_roi_preset_clicked(self, button) -> None:
+        if self.annotation is None:
+            return
+
+        try:
+            preset_index = int(button.property("roi_preset_index"))
+        except Exception:
+            return
+
+        if not (0 <= preset_index < len(ROI_PLACEMENT_PRESETS)):
+            return
+
+        preset = ROI_PLACEMENT_PRESETS[preset_index]
+        roi_type = str(preset.get("roi_type", "ellipse"))
+
+        # ROI type dropdown (currently only ellipse).
+        for i in range(self.annotation.roi_type_combo.count()):
+            if self.annotation.roi_type_combo.itemData(i) == roi_type:
+                self.annotation.roi_type_combo.setCurrentIndex(i)
+                break
+
+        # Numeric fields
+        self.annotation.roi_width_edit.setText(str(preset.get("width_mm", "")))
+        self.annotation.roi_height_edit.setText(
+            str(preset.get("height_mm", ""))
+        )
+        self.annotation.roi_depth_edit.setText(str(preset.get("depth_mm", "")))
+
+        # Segmentation class selection (may be unavailable until segmentation exists).
+        seg_class = str(preset.get("segmentation_class", "")).strip()
+        if not seg_class:
+            return
+        if (
+            self.annotation.roi_class_combo.isEnabled()
+            and self.annotation.roi_class_combo.count() > 0
+        ):
+            self._select_roi_class_by_name(seg_class)
+        else:
+            self._pending_preset_class = seg_class
+
+    def on_generate_tissue_segmentation_clicked(self) -> None:
+        if self.annotation is None:
+            return
+
+        us_layer = self._resolve_us_layer()
+        if us_layer is None:
+            self.annotation.segmentation_status_label.setText(
+                "No US layer found"
+            )
+            return
+
+        us_2d = self._us_slice_2d(us_layer)
+        if us_2d is None:
+            self.annotation.segmentation_status_label.setText(
+                "US layer has unsupported shape"
+            )
+            return
+
+        self.annotation.segmentation_status_label.setText(
+            "Running segmentation…"
+        )
+
+        try:
+            result = self._segmenter.predict(us_2d)
+        except Exception as e:
+            self.annotation.segmentation_status_label.setText(
+                f"Segmentation failed: {e}"
+            )
+            return
+
+        # show segmentation as Labels
+        labels = ensure_segmentation_labels_layer(self.viewer)
+        try:
+            set_segmentation_2d(
+                labels,
+                result.seg,
+                class_names=result.class_names,
+                reference_layer=us_layer,
+            )
+        except Exception as e:
+            self.annotation.segmentation_status_label.setText(
+                f"Failed to show labels: {e}"
+            )
+            return
+
+        # Populate ROI class dropdown from model classes.
+        self._set_roi_class_choices(result.class_names)
+        self.annotation.roi_status_label.setText(
+            "Segmentation generated. Choose class and place ROI."
+        )
+
+        self.annotation.segmentation_status_label.setText(
+            "Segmentation layer added."
+        )
+
+    def on_place_roi_clicked(self) -> None:
+        if self.annotation is None:
+            return
+        if self.shapes_layer is None:
+            self.annotation.roi_status_label.setText("No ROIs layer")
+            return
+
+        # Must have segmentation layer.
+        seg_layer = None
+        try:
+            if "Segmentation" in self.viewer.layers:
+                seg_layer = self.viewer.layers["Segmentation"]
+        except Exception:
+            seg_layer = None
+
+        if seg_layer is None or not isinstance(seg_layer, Labels):
+            self.annotation.roi_status_label.setText(
+                "Generate tissue segmentation first"
+            )
+            return
+
+        try:
+            seg = np.asarray(getattr(seg_layer, "data"))
+        except Exception:
+            self.annotation.roi_status_label.setText(
+                "Invalid segmentation data"
+            )
+            return
+
+        if seg.ndim != 2:
+            self.annotation.roi_status_label.setText(
+                "Segmentation layer must be 2D"
+            )
+            return
+
+        class_id = self.annotation.roi_class_combo.currentData()
+        if class_id is None:
+            self.annotation.roi_status_label.setText("Select a class")
+            return
+
+        roi_type = self.annotation.roi_type_combo.currentData()
+        if roi_type is None:
+            roi_type = "ellipse"
+
+        width_mm = parse_float_input(self.annotation.roi_width_edit.text())
+        height_mm = parse_float_input(self.annotation.roi_height_edit.text())
+        depth_mm = parse_float_input(self.annotation.roi_depth_edit.text())
+
+        if width_mm is None or height_mm is None:
+            self.annotation.roi_status_label.setText(
+                "Enter ROI width and height (mm)"
+            )
+            return
+        if depth_mm is None:
+            depth_mm = 0.0
+
+        # Use US layer calibration for placement.
+        us_layer = self._resolve_us_layer()
+        if us_layer is None:
+            self.annotation.roi_status_label.setText("No US layer found")
+            return
+
+        try:
+            ref_scale = getattr(us_layer, "scale", (1.0, 1.0))
+            sy, sx = float(ref_scale[-2]), float(ref_scale[-1])
+        except Exception:
+            sy, sx = 1.0, 1.0
+
+        try:
+            ref_translate = getattr(us_layer, "translate", (0.0, 0.0))
+            ty, tx = float(ref_translate[-2]), float(ref_translate[-1])
+        except Exception:
+            ty, tx = 0.0, 0.0
+
+        class_mask = seg == int(class_id)
+        config = EllipseConfig(
+            width_mm=float(width_mm),
+            height_mm=float(height_mm),
+            depth_mm=float(depth_mm),
+        )
+
+        try:
+            placer = ShapeFactory.create_shape(str(roi_type), config)
+            verts_world = placer.to_napari_verts_world(
+                class_mask=class_mask,
+                sy=sy,
+                sx=sx,
+                ty=ty,
+                tx=tx,
+            )
+        except Exception as e:
+            self.annotation.roi_status_label.setText(
+                f"ROI placement failed: {e}"
+            )
+            return
+
+        # Only one placed ROI at a time.
+        self._remove_previous_placed_roi()
+
+        try:
+            before = len(self.shapes_layer.data)
+            self.shapes_layer.add(verts_world, shape_type="ellipse")
+            after = len(self.shapes_layer.data)
+            if after == before + 1:
+                self._placed_roi_index = before
+        except Exception as e:
+            self.annotation.roi_status_label.setText(
+                f"Failed to add ROI to viewer: {e}"
+            )
+            return
+
+        self._ensure_roi_on_top()
+        self._apply_roi_colors()
+        self.update_live_table()
+
+        self.annotation.roi_status_label.setText("ROI placed.")
+
     def on_selection_changed(self, event=None) -> None:
         self._resolve_active_layer()
         self.refresh_all()
@@ -694,6 +1017,7 @@ class PatariController:
         """
         self.update_info_labels()
         self.update_live_table()
+        # self._tabify_controls_and_annotation()
 
     def snap_to_reconstructed_frame(self, frame_idx: int) -> int:
         if self.active_layer is None:
@@ -774,9 +1098,8 @@ class PatariController:
         self.info.label.setText(
             f"Scan: {scan_str}\n"
             f"Layer: {self.active_layer.name}\n"
-            f"Frame: {frame_idx}\n"
-            f"Timestamp: {ts} ({ts_delta:.2f} s)\n"
-            f"Wavelength: {wav_label}"
+            f"Frame: {frame_idx} | Wavelength: {wav_label}\n"
+            f"Timestamp: {ts} ({ts_delta:.2f} s)"
         )
 
     def update_live_table(self, event=None) -> None:

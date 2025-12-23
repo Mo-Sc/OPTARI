@@ -5,11 +5,23 @@ from patari._reader import patari_reader_function_all
 from patari.controllers.patari_controller import PatariController
 
 
+# TODO: timestamp in time graph doesnt fit the timestamp in info widget (at least peaks)
+# TODO: problem is that timestamps are always taken from the first wavelength, so there they match
+# also would it make sense to be able to toggle between time and frame as x-axis in time graph?
+# also refresh button still doesnt rescale the time graph properly
+
+# TODO: reset button in controls: deletes all ROIs, etc
+# TODO: Export hdf5 button to patari_controls. add functionality
+# TODO: export xlsx feature (all vs current wavelength / frame)
+# TODO: Unmixed datasets
+# TODO: Unmix widget?
+# TODO: width of controls should not depend on length of folder path
+
+
 def patari_controls(napari_viewer: Viewer | None = None) -> QWidget:
     """Instantiate PATARI UI.
 
-    Returns the Scan Browser widget (folder chooser + scan list). Additional
-    docks (Info + ROI Tables) are added by the controller.
+    Returns the Info widget as the plugin's main widget. Other docks are added by the controller.
 
     Note: napari injects the active viewer into plugin widgets using the
     parameter name `napari_viewer`.
@@ -39,5 +51,5 @@ def patari_controls(napari_viewer: Viewer | None = None) -> QWidget:
             reader=patari_reader_function_all,
         )
 
-    # Expose the scan browser as the main PATARI Controls widget.
-    return patari_controls._controller.scan_browser.widget
+    # Expose the info widget as the main PATARI Controls widget.
+    return patari_controls._controller.info.widget

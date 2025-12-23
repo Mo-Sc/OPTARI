@@ -1,13 +1,14 @@
-# roi_utils.py
 from __future__ import annotations
 
-import numpy as np
-from skimage.draw import polygon
-import cv2
-import pandas as pd
-from patari.config import dtype_map
-from pathlib import Path
 from dataclasses import dataclass
+from pathlib import Path
+
+import cv2
+import numpy as np
+import pandas as pd
+from skimage.draw import polygon
+
+from patari.config import dtype_map
 
 
 @dataclass
@@ -122,12 +123,7 @@ def compute_roi_stats(
     clamp_min: float | None = None,
     clamp_max: float | None = None,
 ):
-    """
-    Compute ROI statistics for all shapes in shapes_layer
-    for the given active_layer and specific frame/wavelength.
-
-    Returns a DataFrame with correct dtype. Skips zero-padded frames.
-    """
+    """Compute ROI statistics for all shapes for a specific frame/wavelength."""
 
     empty = pd.DataFrame(columns=list(dtype_map.keys())).astype(dtype_map)
     if active_layer is None:
@@ -175,7 +171,6 @@ def compute_roi_stats(
                 max=float(np.nanmax(vals_stats)),
             )
 
-        # wavelength metadata
         wavelengths = active_layer.metadata.get("wavelengths", None)
         if isinstance(wavelengths, (list, tuple)) and 0 <= wav_idx < len(
             wavelengths
@@ -185,7 +180,7 @@ def compute_roi_stats(
             wav_val = wav_idx
 
         filepath = active_layer.metadata.get("filepath", "")
-        scan_id = Path(filepath).stem.split("_")[0] if filepath else ""
+        scan_id = Path(filepath).stem.split("_")[1] if filepath else ""
         stats["source_layer"] = active_layer.name
         stats["roi_type"] = roi.kind
         stats["scan_id"] = scan_id
@@ -211,15 +206,7 @@ def compute_roi_time_series(
     clamp_min: float | None = None,
     clamp_max: float | None = None,
 ):
-    """Compute per-ROI mean intensity over time for a fixed wavelength.
-
-    Returns (x, series) where:
-    - x is either frame indices or timestamps (seconds since start)
-    - series is a dict {roi_index: np.ndarray}
-
-    This intentionally does not depend on napari classes; it only relies on the
-    minimal attributes used below (data, scale, metadata, shapes_layer.data).
-    """
+    """Compute per-ROI mean intensity over time for a fixed wavelength."""
 
     if active_layer is None:
         return np.asarray([]), {}
@@ -248,7 +235,6 @@ def compute_roi_time_series(
     else:
         x = frames.astype(float)
 
-    # ROI masks are stable across frames for a given (y,x) image shape.
     sy, sx = _scale_sy_sx(active_layer)
     img_shape = data.shape[-2:]
 
@@ -258,20 +244,17 @@ def compute_roi_time_series(
         if mask is None:
             continue
 
-        flat_idx = np.flatnonzero(mask.ravel())
-        if flat_idx.size == 0:
-            series[roi.index] = np.full(frames.shape[0], np.nan, dtype=float)
-            continue
-
-        y = np.empty(frames.shape[0], dtype=float)
-        for j, f in enumerate(frames):
-            img2d = data[int(f), wav_idx]
-            vals = img2d.ravel()[flat_idx]
+        y = []
+        for frame_idx in frames:
+            if not _is_reconstructed_frame(active_layer, int(frame_idx)):
+                continue
+            img2d = data[int(frame_idx), wav_idx]
+            vals = img2d[mask]
             vals = _apply_clamp(vals, clamp_min, clamp_max)
-            y[j] = float(np.nanmean(vals)) if vals.size else np.nan
-        series[roi.index] = y
+            y.append(float(np.nanmean(vals)) if vals.size else np.nan)
+        series[int(roi.index)] = np.asarray(y, dtype=float)
 
-    return x, series
+    return np.asarray(x, dtype=float), series
 
 
 def extract_roi_pixels_for_slice(
@@ -282,30 +265,19 @@ def extract_roi_pixels_for_slice(
     *,
     clamp_min: float | None = None,
     clamp_max: float | None = None,
-) -> dict[int, np.ndarray]:
-    """Return per-ROI pixel intensities for a single (frame, wavelength).
-
-    Returns {roi_index: 1D np.ndarray}.
-    Applies optional intensity clamping to the returned values.
-    """
+):
+    """Extract pixel values per ROI for the given frame/wavelength."""
 
     if active_layer is None:
         return {}
 
-    data = np.asarray(active_layer.data)
-    if data.ndim < 3:
-        return {}
-
-    # Skip zero-padded frames if reconstruction is sparse.
     frame_idx = int(frame_idx)
     if not _is_reconstructed_frame(active_layer, frame_idx):
         return {}
 
-    # clamp wavelength to valid range
     wav_idx = _clamp_wav_idx(active_layer, wav_idx)
-
+    data = np.asarray(active_layer.data)
     img2d = data[frame_idx, wav_idx]
-
     sy, sx = _scale_sy_sx(active_layer)
 
     out: dict[int, np.ndarray] = {}
@@ -313,10 +285,6 @@ def extract_roi_pixels_for_slice(
         mask = _roi_mask(roi, sy=sy, sx=sx, image_shape=img2d.shape)
         if mask is None:
             continue
-
         vals = img2d[mask]
-        vals = _apply_clamp(vals, clamp_min, clamp_max)
-
-        out[roi.index] = np.asarray(vals).ravel()
-
+        out[int(roi.index)] = _apply_clamp(vals, clamp_min, clamp_max)
     return out
