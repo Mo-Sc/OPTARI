@@ -134,7 +134,7 @@ def patato_reader_function(path):
         {
             # "contrast_limits": contrast_limits_per_wav,  # todo: does that work?
             "colormap": "viridis" if i != 0 else "gray",
-            "name": "Reconstruction" if i != 0 else "Ultrasound",
+            "name": "Recon" if i != 0 else "US",
             "scale": recon_scale if i != 0 else us_scale,
             "metadata": {"wavelengths": wavelengths} if i != 0 else {},
         }
@@ -192,7 +192,7 @@ def patari_reader_function_all(path):
 
     us_kwargs = {
         "colormap": "gray",
-        "name": "Ultrasound",
+        "name": "US",
         "scale": us_scale,
         "metadata": {
             "type": "us",
@@ -262,7 +262,7 @@ def patari_reader_function_all(path):
         #     )
         recon_kwargs = {
             "colormap": "viridis",
-            "name": f"Reconstruction: {recon_name}_{idx}",
+            "name": f"Recon: {recon_name}_{idx}",
             "scale": recon_scale,
             "metadata": {
                 "type": "pa",
@@ -321,7 +321,7 @@ def patari_reader_function_lazy(path):
 
     us_kwargs = {
         "colormap": "gray",
-        "name": "Ultrasound",
+        "name": "US",
         "scale": us_scale,
         "metadata": {},
     }
@@ -345,7 +345,7 @@ def patari_reader_function_lazy(path):
 
     recon_kwargs = {
         "colormap": "viridis",
-        "name": "Reconstruction",
+        "name": "Recon",
         "scale": recon_scale,
         "metadata": {
             "wavelengths": wavelengths,

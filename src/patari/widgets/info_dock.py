@@ -14,7 +14,7 @@ class InfoDock:
 def create_info_dock() -> InfoDock:
     widget = QWidget()
     layout = QVBoxLayout(widget)
-    layout.addWidget(QLabel("Slice Info:"))
+    layout.addWidget(QLabel("<b>PATARI ©Moritz Schillinger</b>"))
     label = QLabel("")
     layout.addWidget(label)
     layout.addStretch()
