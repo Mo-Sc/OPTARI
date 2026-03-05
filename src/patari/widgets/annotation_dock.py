@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from patari.config import ROI_PLACEMENT_PRESETS
 from qtpy.QtGui import QDoubleValidator
 from qtpy.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QFormLayout,
     QGroupBox,
@@ -20,8 +21,14 @@ from qtpy.QtWidgets import (
 @dataclass
 class AnnotationDock:
     widget: QWidget
-    roi_min_edit: QLineEdit
-    roi_max_edit: QLineEdit
+    roi_clipping_box: QGroupBox
+    roi_clip_min_edit: QLineEdit
+    roi_clip_max_edit: QLineEdit
+    roi_exclusion_box: QGroupBox
+    roi_exclude_min_edit: QLineEdit
+    roi_exclude_max_edit: QLineEdit
+    include_all_frames_checkbox: QCheckBox
+    include_all_wavelengths_checkbox: QCheckBox
 
     # Segmentation
     segmentation_model_combo: QComboBox
@@ -44,21 +51,57 @@ def create_annotation_dock() -> AnnotationDock:
     outer = QVBoxLayout(widget)
 
     # --- ROI Settings ---
-    roi_box = QGroupBox("ROI Thresholds")
-    roi_form = QFormLayout(roi_box)
+    roi_box = QGroupBox("ROI Settings")
+    roi_layout = QVBoxLayout(roi_box)
 
-    roi_min_edit = QLineEdit()
-    roi_max_edit = QLineEdit()
-    validator = QDoubleValidator()
-    roi_min_edit.setValidator(validator)
-    roi_max_edit.setValidator(validator)
-    roi_min_edit.setPlaceholderText("(unset)")
-    roi_max_edit.setPlaceholderText("(unset)")
-    roi_min_edit.setClearButtonEnabled(True)
-    roi_max_edit.setClearButtonEnabled(True)
+    def _make_range_edits() -> tuple[QLineEdit, QLineEdit]:
+        min_edit = QLineEdit()
+        max_edit = QLineEdit()
+        validator = QDoubleValidator()
+        min_edit.setValidator(validator)
+        max_edit.setValidator(validator)
+        min_edit.setPlaceholderText("(unset)")
+        max_edit.setPlaceholderText("(unset)")
+        min_edit.setClearButtonEnabled(True)
+        max_edit.setClearButtonEnabled(True)
+        return min_edit, max_edit
 
-    roi_form.addRow("Min. Intensity", roi_min_edit)
-    roi_form.addRow("Max. intensity", roi_max_edit)
+    roi_clipping_box = QGroupBox("ROI Clipping")
+    roi_clipping_box.setCheckable(True)
+    roi_clipping_box.setChecked(True)
+    roi_clip_form = QFormLayout(roi_clipping_box)
+    roi_clip_min_edit, roi_clip_max_edit = _make_range_edits()
+    roi_clip_form.addRow("Min. Intensity", roi_clip_min_edit)
+    roi_clip_form.addRow("Max. intensity", roi_clip_max_edit)
+
+    roi_exclusion_box = QGroupBox("ROI Exclusion")
+    roi_exclusion_box.setCheckable(True)
+    roi_exclusion_box.setChecked(False)
+    roi_exclude_form = QFormLayout(roi_exclusion_box)
+    roi_exclude_min_edit, roi_exclude_max_edit = _make_range_edits()
+    roi_exclude_form.addRow("Min. Intensity", roi_exclude_min_edit)
+    roi_exclude_form.addRow("Max. intensity", roi_exclude_max_edit)
+
+    def _on_clipping_toggled(checked: bool) -> None:
+        if checked:
+            roi_exclusion_box.setChecked(False)
+
+    def _on_exclusion_toggled(checked: bool) -> None:
+        if checked:
+            roi_clipping_box.setChecked(False)
+
+    roi_clipping_box.toggled.connect(_on_clipping_toggled)
+    roi_exclusion_box.toggled.connect(_on_exclusion_toggled)
+
+    include_all_frames_checkbox = QCheckBox("Include all frames")
+    include_all_wavelengths_checkbox = QCheckBox("Include all wavelengths")
+    include_all_frames_checkbox.setChecked(False)
+    include_all_wavelengths_checkbox.setChecked(False)
+
+    roi_layout.addWidget(roi_clipping_box)
+    roi_layout.addWidget(roi_exclusion_box)
+    roi_layout.addWidget(include_all_frames_checkbox)
+    roi_layout.addWidget(include_all_wavelengths_checkbox)
 
     # --- Segmentation ---
     seg_box = QGroupBox("Segmentation")
@@ -134,8 +177,14 @@ def create_annotation_dock() -> AnnotationDock:
 
     return AnnotationDock(
         widget=widget,
-        roi_min_edit=roi_min_edit,
-        roi_max_edit=roi_max_edit,
+        roi_clipping_box=roi_clipping_box,
+        roi_clip_min_edit=roi_clip_min_edit,
+        roi_clip_max_edit=roi_clip_max_edit,
+        roi_exclusion_box=roi_exclusion_box,
+        roi_exclude_min_edit=roi_exclude_min_edit,
+        roi_exclude_max_edit=roi_exclude_max_edit,
+        include_all_frames_checkbox=include_all_frames_checkbox,
+        include_all_wavelengths_checkbox=include_all_wavelengths_checkbox,
         segmentation_model_combo=segmentation_model_combo,
         generate_tissue_segmentation_button=generate_tissue_segmentation_button,
         segmentation_status_label=segmentation_status_label,

@@ -65,14 +65,29 @@ def _roi_mask(
 
 
 def _apply_clamp(
-    vals: np.ndarray, clamp_min: float | None, clamp_max: float | None
+    vals: np.ndarray,
+    clamp_min: float | None,
+    clamp_max: float | None,
+    *,
+    mode: str = "clip",
 ) -> np.ndarray:
     if vals.size == 0:
         return vals
     if clamp_min is None and clamp_max is None:
         return vals
+
     lo = float(clamp_min) if clamp_min is not None else None
     hi = float(clamp_max) if clamp_max is not None else None
+
+    if mode == "exclude":
+        mask = np.ones(vals.shape, dtype=bool)
+        if lo is not None:
+            mask &= vals >= lo
+        if hi is not None:
+            mask &= vals <= hi
+        return vals[mask]
+
+    # default: clip
     return np.clip(vals, a_min=lo, a_max=hi)
 
 
@@ -122,6 +137,7 @@ def compute_roi_stats(
     *,
     clamp_min: float | None = None,
     clamp_max: float | None = None,
+    clamp_mode: str = "clip",
 ):
     """Compute ROI statistics for all shapes for a specific frame/wavelength."""
 
@@ -138,6 +154,18 @@ def compute_roi_stats(
     data = np.asarray(active_layer.data)
     img2d = data[frame_idx, wav_idx]
 
+    timestamp_str = "N/A"
+    ts = getattr(active_layer, "metadata", {}).get("timestamps")
+    if ts is not None:
+        ts_seconds = ts[frame_idx, wav_idx]
+        from datetime import datetime, timedelta
+
+        timestamp_str = str(
+            datetime(1, 1, 1) + timedelta(seconds=float(ts_seconds))
+        )
+    else:
+        timestamp_str = "N/A"
+
     sy, sx = _scale_sy_sx(active_layer)
 
     rows = []
@@ -147,7 +175,18 @@ def compute_roi_stats(
             continue
 
         vals = img2d[mask]
-        vals_stats = _apply_clamp(vals, clamp_min, clamp_max)
+        vals_stats = _apply_clamp(
+            vals,
+            clamp_min,
+            clamp_max,
+            mode=str(clamp_mode or "clip"),
+        )
+
+        mode_str = str(clamp_mode or "clip")
+        n_pixels = (
+            int(vals.size) if mode_str != "exclude" else int(vals_stats.size)
+        )
+
         if vals.size == 0:
             stats = dict(
                 roi_index=roi.index,
@@ -159,11 +198,22 @@ def compute_roi_stats(
                 min=np.nan,
                 max=np.nan,
             )
+        elif vals_stats.size == 0:
+            stats = dict(
+                roi_index=roi.index,
+                n_pixels=0,
+                area_mm2=0.0,
+                mean=np.nan,
+                median=np.nan,
+                std=np.nan,
+                min=np.nan,
+                max=np.nan,
+            )
         else:
             stats = dict(
                 roi_index=roi.index,
-                n_pixels=int(vals.size),
-                area_mm2=float(vals.size * sy * sx),
+                n_pixels=n_pixels,
+                area_mm2=float(n_pixels * sy * sx),
                 mean=float(np.nanmean(vals_stats)),
                 median=float(np.nanmedian(vals_stats)),
                 std=float(np.nanstd(vals_stats)),
@@ -186,6 +236,7 @@ def compute_roi_stats(
         stats["scan_id"] = scan_id
         stats["frame"] = frame_idx
         stats["wavelength"] = wav_val
+        stats["timestamp"] = timestamp_str
         stats["filepath"] = filepath
 
         rows.append(stats)
@@ -205,6 +256,7 @@ def compute_roi_time_series(
     *,
     clamp_min: float | None = None,
     clamp_max: float | None = None,
+    clamp_mode: str = "clip",
 ):
     """Compute per-ROI mean intensity over time for a fixed wavelength."""
 
@@ -250,7 +302,12 @@ def compute_roi_time_series(
                 continue
             img2d = data[int(frame_idx), wav_idx]
             vals = img2d[mask]
-            vals = _apply_clamp(vals, clamp_min, clamp_max)
+            vals = _apply_clamp(
+                vals,
+                clamp_min,
+                clamp_max,
+                mode=str(clamp_mode or "clip"),
+            )
             y.append(float(np.nanmean(vals)) if vals.size else np.nan)
         series[int(roi.index)] = np.asarray(y, dtype=float)
 
@@ -265,6 +322,7 @@ def extract_roi_pixels_for_slice(
     *,
     clamp_min: float | None = None,
     clamp_max: float | None = None,
+    clamp_mode: str = "clip",
 ):
     """Extract pixel values per ROI for the given frame/wavelength."""
 
@@ -286,5 +344,10 @@ def extract_roi_pixels_for_slice(
         if mask is None:
             continue
         vals = img2d[mask]
-        out[int(roi.index)] = _apply_clamp(vals, clamp_min, clamp_max)
+        out[int(roi.index)] = _apply_clamp(
+            vals,
+            clamp_min,
+            clamp_max,
+            mode=str(clamp_mode or "clip"),
+        )
     return out

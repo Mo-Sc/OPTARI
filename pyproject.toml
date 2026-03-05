@@ -34,6 +34,7 @@ dependencies = [
     "qtpy",
     "pyqtgraph",
     "scikit-image",
+    "openpyxl",
 ]
 
 [project.optional-dependencies]

@@ -16,6 +16,17 @@ from patari.controllers.patari_controller import PatariController
 # TODO: Unmixed datasets
 # TODO: Unmix widget?
 # TODO: width of controls should not depend on length of folder path
+# TODO: ROI Layer should not be deleted
+# TODO: refactor the segmentation part. Currently there is still a lot of AI stuff that is not necessary
+# add more ROI types, make sure ROI is still somewhat consistent with pipeline implementation
+# compare current ROI and segmentation handling to PATATO
+# PATATO ithera ROI PR is now merged
+# TODO: there will be only one US layer, so maybe that can be stored in the controller so it doenst have to be searched every time
+# Same for scaling and unit conversion
+# TODO: xlsx /csv export in a way that it can be easily viewed in excel (semicolon separated?)
+# TODO: best frame selection based on SSIM or motion score
+# TODO: iannotation import and export
+# TODO: when clicking on pixel, show spectra. Or spectra view of roi like the histogram view
 
 
 def patari_controls(napari_viewer: Viewer | None = None) -> QWidget:

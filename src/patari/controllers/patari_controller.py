@@ -7,7 +7,7 @@ import pandas as pd
 from napari.layers import Image, Labels, Shapes
 from napari.viewer import Viewer
 from qtpy.QtGui import QColor
-from qtpy.QtWidgets import QDockWidget, QFileDialog
+from qtpy.QtWidgets import QFileDialog
 import pyqtgraph as pg
 
 
@@ -43,10 +43,15 @@ from patari.widgets.annotation_dock import (
     AnnotationDock,
     create_annotation_dock,
 )
+from patari.widgets.reconstruction_dock import (
+    ReconstructionDock,
+    create_reconstruction_dock,
+)
 from patari.widgets.time_analysis_dock import (
     TimeAnalysisDock,
     create_time_analysis_dock,
 )
+from patari.widgets.unmixing_dock import UnmixingDock, create_unmixing_dock
 from patari.widgets.histogram_dock import HistogramDock, create_histogram_dock
 
 
@@ -74,11 +79,16 @@ class PatariController:
         # --- right elements ---
         self.scan_browser: ScanBrowserDock | None = None
         self.annotation: AnnotationDock | None = None
+        self.unmixing: UnmixingDock | None = None
+        self.reconstruction: ReconstructionDock | None = None
         self._scan_browser_dock_widget = None
         self._annotation_dock_widget = None
+        self._unmixing_dock_widget = None
+        self._reconstruction_dock_widget = None
 
         self.roi_intensity_min: float | None = None
         self.roi_intensity_max: float | None = None
+        self.roi_intensity_mode: str | None = "clip"
 
         # segmentation
         self._segmenter = DummySegmenter()
@@ -215,6 +225,24 @@ class PatariController:
                 area="right",
             )
 
+        if self.unmixing is None:
+            self.unmixing = create_unmixing_dock()
+            self._unmixing_dock_widget = self.viewer.window.add_dock_widget(
+                self.unmixing.widget,
+                name="Unmixing",
+                area="right",
+            )
+
+        if self.reconstruction is None:
+            self.reconstruction = create_reconstruction_dock()
+            self._reconstruction_dock_widget = (
+                self.viewer.window.add_dock_widget(
+                    self.reconstruction.widget,
+                    name="Reconstruction",
+                    area="right",
+                )
+            )
+
         # make sure some docks are tabified
         qt_window = getattr(self.viewer.window, "_qt_window", None)
         if qt_window is not None:
@@ -229,6 +257,14 @@ class PatariController:
             qt_window.tabifyDockWidget(
                 self._scan_browser_dock_widget,
                 self._annotation_dock_widget,
+            )
+            qt_window.tabifyDockWidget(
+                self._scan_browser_dock_widget,
+                self._unmixing_dock_widget,
+            )
+            qt_window.tabifyDockWidget(
+                self._scan_browser_dock_widget,
+                self._reconstruction_dock_widget,
             )
 
     def _connect_events(self) -> None:
@@ -251,6 +287,7 @@ class PatariController:
                 self.on_delete_saved_clicked
             )
             self.roi.csv_button.clicked.connect(self.on_csv_export_clicked)
+            self.roi.hdf5_button.clicked.connect(self.on_hdf5_export_clicked)
 
         if self.time_analysis is not None:
             self.time_analysis.generate_button.clicked.connect(
@@ -263,28 +300,29 @@ class PatariController:
             )
 
         if self.annotation is not None:
-            # if roi min is edited
-            self.annotation.roi_min_edit.editingFinished.connect(
-                self._on_roi_intensity_settings_changed
-            )
-            # if roi max is edited
-            self.annotation.roi_max_edit.editingFinished.connect(
-                self._on_roi_intensity_settings_changed
-            )
-            # required for reset via 'unset' clear button
-            self.annotation.roi_min_edit.textChanged.connect(
-                lambda t: (
-                    self._on_roi_intensity_settings_changed()
-                    if (t or "").strip() == ""
-                    else None
+            for edit in (
+                self.annotation.roi_clip_min_edit,
+                self.annotation.roi_clip_max_edit,
+                self.annotation.roi_exclude_min_edit,
+                self.annotation.roi_exclude_max_edit,
+            ):
+                edit.editingFinished.connect(
+                    self._on_roi_intensity_settings_changed
                 )
-            )
-            self.annotation.roi_max_edit.textChanged.connect(
-                lambda t: (
-                    self._on_roi_intensity_settings_changed()
-                    if (t or "").strip() == ""
-                    else None
+                # required for reset via 'unset' clear button
+                edit.textChanged.connect(
+                    lambda t, _e=edit: (
+                        self._on_roi_intensity_settings_changed()
+                        if (t or "").strip() == ""
+                        else None
+                    )
                 )
+
+            self.annotation.roi_clipping_box.toggled.connect(
+                lambda checked: self._on_roi_intensity_settings_changed()
+            )
+            self.annotation.roi_exclusion_box.toggled.connect(
+                lambda checked: self._on_roi_intensity_settings_changed()
             )
 
             self.annotation.generate_tissue_segmentation_button.clicked.connect(
@@ -331,7 +369,7 @@ class PatariController:
             props["roi_id"] = np.arange(len(self.shapes_layer.data), dtype=int)
             self.shapes_layer.properties = props
             # napari text supports formatting from properties.
-            self.shapes_layer.text = {"string": "{roi_id}"}
+            self.shapes_layer.text = {"string": "{roi_id}", "size": 8}
             # self.shapes_layer.text.visible = True # default
 
         except Exception:
@@ -534,12 +572,26 @@ class PatariController:
         if self.annotation is None:
             return
 
-        self.roi_intensity_min = parse_float_input(
-            self.annotation.roi_min_edit.text()
-        )
-        self.roi_intensity_max = parse_float_input(
-            self.annotation.roi_max_edit.text()
-        )
+        if self.annotation.roi_exclusion_box.isChecked():
+            self.roi_intensity_mode = "exclude"
+            self.roi_intensity_min = parse_float_input(
+                self.annotation.roi_exclude_min_edit.text()
+            )
+            self.roi_intensity_max = parse_float_input(
+                self.annotation.roi_exclude_max_edit.text()
+            )
+        elif self.annotation.roi_clipping_box.isChecked():
+            self.roi_intensity_mode = "clip"
+            self.roi_intensity_min = parse_float_input(
+                self.annotation.roi_clip_min_edit.text()
+            )
+            self.roi_intensity_max = parse_float_input(
+                self.annotation.roi_clip_max_edit.text()
+            )
+        else:
+            self.roi_intensity_mode = None
+            self.roi_intensity_min = None
+            self.roi_intensity_max = None
         self.update_live_table()
 
     # ---------------- segmentation ----------------
@@ -901,6 +953,7 @@ class PatariController:
             wav_idx,
             clamp_min=self.roi_intensity_min,
             clamp_max=self.roi_intensity_max,
+            clamp_mode=(self.roi_intensity_mode or "clip"),
         )
 
         plot.clear()
@@ -913,8 +966,17 @@ class PatariController:
                 x,
                 y,
                 pen=pg.mkPen(color=color, width=2),
+                symbol="o",
+                symbolSize=4,
+                symbolBrush=pg.mkBrush(color),
+                symbolPen=pg.mkPen(color=color, width=1),
                 name=f"ROI {roi_index}",
             )
+
+        # Re-autoscale y-axis on every refresh (useful when intensities vary).
+        vb = plot.getViewBox()
+        vb.enableAutoRange(axis=getattr(vb, "YAxis", "y"), enable=True)
+        vb.autoRange(padding=0.02)
 
         xlabel = (
             "Time (s)"
@@ -955,6 +1017,7 @@ class PatariController:
             wav_idx,
             clamp_min=self.roi_intensity_min,
             clamp_max=self.roi_intensity_max,
+            clamp_mode=(self.roi_intensity_mode or "clip"),
         )
 
         # Clear previous plots
@@ -1042,8 +1105,7 @@ class PatariController:
         ts_seconds = ts[frame_idx, wav_idx]
         ts_start_seconds = ts[0, 0]
 
-        # iThera uses .NET DateTime ticks sometimes; your data seems to already
-        # be in seconds. Keep display conservative.
+        # iThera uses .NET DateTime ticks
         try:
             from datetime import datetime, timedelta
 
@@ -1127,6 +1189,7 @@ class PatariController:
                 wav_idx,
                 clamp_min=self.roi_intensity_min,
                 clamp_max=self.roi_intensity_max,
+                clamp_mode=(self.roi_intensity_mode or "clip"),
             )
         except Exception as e:
             print("update_live_table:", e)
@@ -1171,16 +1234,91 @@ class PatariController:
             print("Nothing to save")
             return
 
-        row = df_live.iloc[[roi_idx]].astype(dtype_map)
+        include_all_frames = False
+        include_all_wavelengths = False
+        if self.annotation is not None:
+            cb_frames = getattr(
+                self.annotation, "include_all_frames_checkbox", None
+            )
+            cb_wavs = getattr(
+                self.annotation, "include_all_wavelengths_checkbox", None
+            )
+            include_all_frames = (
+                bool(cb_frames.isChecked()) if cb_frames is not None else False
+            )
+            include_all_wavelengths = (
+                bool(cb_wavs.isChecked()) if cb_wavs is not None else False
+            )
+
+        if not include_all_frames and not include_all_wavelengths:
+            rows_to_add = df_live.iloc[[roi_idx]].astype(dtype_map)
+        else:
+            if self.active_layer is None:
+                print("Select an image layer to save ROI stats")
+                return
+
+            pt = list(self.viewer.dims.point)
+            if len(pt) < 2:
+                return
+            frame_idx = int(round(pt[0]))
+            wav_idx = int(round(pt[1]))
+
+            data = np.asarray(self.active_layer.data)
+
+            if data.ndim < 2:
+                print("Active layer has no frame/wavelength dimensions")
+                return
+
+            if include_all_frames:
+                frames_meta = getattr(self.active_layer, "metadata", {}).get(
+                    "frames"
+                )
+                frame_indices = [int(f) for f in frames_meta]
+
+            else:
+                frame_indices = [frame_idx]
+
+            if include_all_wavelengths:
+                wav_indices = list(range(data.shape[1]))
+            else:
+                wav_indices = [wav_idx]
+
+            collected: list[pd.DataFrame] = []
+            for f_idx in frame_indices:
+                for w_idx in wav_indices:
+                    df_slice = compute_roi_stats(
+                        self.shapes_layer,
+                        self.active_layer,
+                        int(f_idx),
+                        int(w_idx),
+                        clamp_min=self.roi_intensity_min,
+                        clamp_max=self.roi_intensity_max,
+                        clamp_mode=(self.roi_intensity_mode or "clip"),
+                    )
+
+                    roi_index_numeric = pd.to_numeric(
+                        df_slice["roi_index"], errors="coerce"
+                    )
+                    df_row = df_slice[roi_index_numeric == int(roi_idx)]
+
+                    collected.append(df_row.iloc[[0]].astype(dtype_map))
+
+            if not collected:
+                print("Nothing to save")
+                return
+
+            rows_to_add = pd.concat(collected, ignore_index=True).astype(
+                dtype_map
+            )
 
         df_saved = self._table_value_to_df(self.roi.saved_table)
         if df_saved.empty:
-            df_saved = row.copy()
+            df_saved = rows_to_add.copy()
         else:
-            df_saved = pd.concat([df_saved, row], ignore_index=True)
+            df_saved = pd.concat([df_saved, rows_to_add], ignore_index=True)
 
         self.roi.saved_table.value = df_saved.astype(dtype_map)
-        print(f"Saved ROI {roi_idx}")
+        print(f"Saved ROI {roi_idx} ({len(rows_to_add)} row(s))")
 
     def on_delete_saved_clicked(self, event=None) -> None:
         if self.roi is None:
@@ -1202,26 +1340,173 @@ class PatariController:
         print(f"Deleted {len(selected_indices)} saved rows")
 
     def on_csv_export_clicked(self, event=None) -> None:
-        # TODO: export all data
         if self.roi is None:
             return
 
-        df_saved = self._table_value_to_df(self.roi.saved_table).astype(
-            dtype_map
-        )
+        df_saved = self._table_value_to_df(self.roi.saved_table)
         if df_saved.empty:
             print("Saved table empty")
             return
 
         filename, _ = QFileDialog.getSaveFileName(
             None,
-            "Save Saved ROIs as CSV",
-            "saved_rois.csv",
-            "CSV Files (*.csv)",
+            "Save ROIs as Excel",
+            "roi_data.xlsx",
+            "Excel Files (*.xlsx)",
         )
         if not filename:
             return
-        if not filename.endswith(".csv"):
-            filename += ".csv"
-        df_saved.to_csv(filename, index=False)
+        if not filename.endswith(".xlsx"):
+            filename += ".xlsx"
+
+        df_saved.to_excel(filename, index=False)
         print(f"Saved ROI table to {filename}")
+
+    def on_hdf5_export_clicked(self, event=None) -> None:
+        """
+        Export ROIs as a single 2D label mask image in an HDF5 file.
+
+        The mask is rasterized in the active layer's pixel grid (last two dims).
+        Metadata is stored as attributes on the "rois" group.
+        TODO: this is GPT stuff. There is for sure a more compact way to do this
+        """
+
+        if self.roi is None:
+            return
+
+        if self.shapes_layer is None:
+            print("No ROIs layer to export")
+            return
+
+        if self.active_layer is None:
+            print(
+                "Select a PA image layer (active layer) to define export grid"
+            )
+            return
+
+        import h5py
+
+        filename, _ = QFileDialog.getSaveFileName(
+            None,
+            "Save ROIs as HDF5",
+            "rois.hdf5",
+            "HDF5 Files (*.hdf5)",
+        )
+        if not filename:
+            return
+        if not filename.endswith(".hdf5"):
+            filename += ".hdf5"
+
+        # Determine output 2D mask shape from active layer (last two axes).
+        try:
+            data = np.asarray(self.active_layer.data)
+            if data.ndim < 2:
+                print("Active layer has unsupported shape")
+                return
+            mask_shape = tuple(map(int, data.shape[-2:]))  # (y, x)
+        except Exception as e:
+            print(f"Failed to determine export shape from active layer: {e}")
+            return
+
+        # Use current viewer point for non-spatial dims during world->data conversion.
+        try:
+            pt_world = list(self.viewer.dims.point)
+        except Exception:
+            pt_world = []
+
+        # Convert ROI vertices from world coords (stored in shapes_layer) to the active
+        # layer's data coords, then rasterize as a single 2D labels image.
+        try:
+            n_prefix = max(0, int(getattr(self.active_layer, "ndim", 2)) - 2)
+            if len(pt_world) < n_prefix:
+                pt_world = pt_world + [0.0] * (n_prefix - len(pt_world))
+            prefix = np.asarray(pt_world[:n_prefix], dtype=float)
+
+            data_2d_list: list[np.ndarray] = []
+            shape_types = list(getattr(self.shapes_layer, "shape_type", []))
+
+            for shape in self.shapes_layer.data:
+                verts_world_2d = np.asarray(shape, dtype=float)
+                if verts_world_2d.ndim != 2 or verts_world_2d.shape[1] != 2:
+                    raise ValueError("ROI vertices must be an (N, 2) array")
+
+                if n_prefix > 0:
+                    prefix_rep = np.tile(
+                        prefix[None, :], (verts_world_2d.shape[0], 1)
+                    )
+                    verts_world_full = np.concatenate(
+                        [prefix_rep, verts_world_2d], axis=1
+                    )
+                else:
+                    verts_world_full = verts_world_2d
+
+                verts_data_full = np.asarray(
+                    self.active_layer.world_to_data(verts_world_full),
+                    dtype=float,
+                )
+                verts_data_2d = verts_data_full[:, -2:]
+                data_2d_list.append(verts_data_2d)
+
+            tmp_shapes = Shapes(
+                data=data_2d_list, shape_type=shape_types, ndim=2
+            )
+            mask = tmp_shapes.to_labels(mask_shape)
+        except Exception as e:
+            print(f"Failed to rasterize ROIs to 2D mask: {e}")
+            return
+
+        # Extract current indices for metadata (if available).
+        try:
+            frame_idx = int(round(pt_world[0])) if len(pt_world) >= 1 else 0
+        except Exception:
+            frame_idx = 0
+        try:
+            wav_idx = int(round(pt_world[1])) if len(pt_world) >= 2 else 0
+        except Exception:
+            wav_idx = 0
+
+        # rotate mask so that it fits the orientation in patato imported data
+        mask = np.flipud(mask)
+        # mask = np.rot90(mask)
+
+        try:
+            with h5py.File(filename, "w") as f:
+                rois_group = f.create_group("rois")
+                rois_group.create_dataset(
+                    "mask",
+                    data=np.asarray(mask),
+                    compression="gzip",
+                )
+
+                # Metadata as attributes on the "rois" group.
+                rois_group.attrs["exported_from"] = "PATARI"
+                rois_group.attrs["timestamp"] = str(pd.Timestamp.now())
+                rois_group.attrs["num_rois"] = int(len(self.shapes_layer.data))
+                rois_group.attrs["active_layer"] = (
+                    self.active_layer.name if self.active_layer else "N/A"
+                )
+                rois_group.attrs["frame_idx"] = int(frame_idx)
+                rois_group.attrs["wav_idx"] = int(wav_idx)
+                rois_group.attrs["mask_shape_yx"] = tuple(
+                    int(x) for x in mask_shape
+                )
+
+                # Store reference transform info (useful to interpret world coords later).
+                try:
+                    rois_group.attrs["active_layer_scale"] = tuple(
+                        float(x)
+                        for x in getattr(self.active_layer, "scale", ())
+                    )
+                except Exception:
+                    pass
+                try:
+                    rois_group.attrs["active_layer_translate"] = tuple(
+                        float(x)
+                        for x in getattr(self.active_layer, "translate", ())
+                    )
+                except Exception:
+                    pass
+
+            print(f"Saved ROI mask to {filename}")
+        except Exception as e:
+            print(f"Failed to save ROIs: {e}")

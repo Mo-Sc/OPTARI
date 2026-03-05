@@ -17,6 +17,7 @@ dtype_map = {
     "max": float,
     "n_pixels": int,
     "area_mm2": float,
+    "timestamp": str,
     "filepath": str,
 }
 
@@ -52,9 +53,9 @@ roi_colors = [
 ROI_PLACEMENT_PRESETS = [
     {
         "name": "Skin",
-        "segmentation_class": "skin",
+        "segmentation_class": "Haut",
         "roi_type": "ellipse",
-        "width_mm": 2.0,
+        "width_mm": 5.0,
         "height_mm": 1.0,
         "depth_mm": 0.0,
     },
@@ -68,10 +69,10 @@ ROI_PLACEMENT_PRESETS = [
     },
     {
         "name": "Muscle",
-        "segmentation_class": "muscle",
+        "segmentation_class": "Muskel1",
         "roi_type": "ellipse",
-        "width_mm": 3.0,
+        "width_mm": 7.0,
         "height_mm": 2.0,
-        "depth_mm": 1.0,
+        "depth_mm": 0.0,
     },
 ]
