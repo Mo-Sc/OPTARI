@@ -29,7 +29,7 @@ def create_roi_dock() -> RoiDock:
     save_button = PushButton(text="Save ROI")
     delete_button = PushButton(text="Delete Saved")
     csv_button = PushButton(text="Export XLSX")
-    hdf5_button = PushButton(text="Export HDF5")
+    hdf5_button = PushButton(text="Save to scan")
 
     # build Qt container for the bottom dock
     container = QWidget()

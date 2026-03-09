@@ -1,7 +1,6 @@
 from napari.viewer import Viewer
 from qtpy.QtWidgets import QLabel, QWidget
 
-from patari._reader import patari_reader_function_all
 from patari.controllers.patari_controller import PatariController
 
 
@@ -27,6 +26,7 @@ from patari.controllers.patari_controller import PatariController
 # TODO: best frame selection based on SSIM or motion score
 # TODO: iannotation import and export
 # TODO: when clicking on pixel, show spectra. Or spectra view of roi like the histogram view
+# TODO: maybe a measurement tool for distances?
 
 
 def patari_controls(napari_viewer: Viewer | None = None) -> QWidget:
@@ -59,7 +59,6 @@ def patari_controls(napari_viewer: Viewer | None = None) -> QWidget:
         patari_controls._controller = PatariController(
             viewer,
             None,
-            reader=patari_reader_function_all,
         )
 
     # Expose the info widget as the main PATARI Controls widget.

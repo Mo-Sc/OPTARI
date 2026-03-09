@@ -36,7 +36,7 @@ contributions:
   readers:
     - command: patari.get_reader
       accepts_directories: false
-      filename_patterns: ['*.npy', '*.hdf5']
+      filename_patterns: ['*.npy']
   writers:
     - command: patari.write_multiple
       layer_types: ['image*','labels*']

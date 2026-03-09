@@ -187,27 +187,24 @@ def compute_roi_stats(
             int(vals.size) if mode_str != "exclude" else int(vals_stats.size)
         )
 
+        _nan_stats = dict(
+            mean=np.nan,
+            median=np.nan,
+            std=np.nan,
+            p10=np.nan,
+            p90=np.nan,
+            p95=np.nan,
+            p99=np.nan,
+            min=np.nan,
+            max=np.nan,
+        )
         if vals.size == 0:
             stats = dict(
-                roi_index=roi.index,
-                n_pixels=0,
-                area_mm2=np.nan,
-                mean=np.nan,
-                median=np.nan,
-                std=np.nan,
-                min=np.nan,
-                max=np.nan,
+                roi_index=roi.index, n_pixels=0, area_mm2=np.nan, **_nan_stats
             )
         elif vals_stats.size == 0:
             stats = dict(
-                roi_index=roi.index,
-                n_pixels=0,
-                area_mm2=0.0,
-                mean=np.nan,
-                median=np.nan,
-                std=np.nan,
-                min=np.nan,
-                max=np.nan,
+                roi_index=roi.index, n_pixels=0, area_mm2=0.0, **_nan_stats
             )
         else:
             stats = dict(
@@ -217,6 +214,10 @@ def compute_roi_stats(
                 mean=float(np.nanmean(vals_stats)),
                 median=float(np.nanmedian(vals_stats)),
                 std=float(np.nanstd(vals_stats)),
+                p10=float(np.nanpercentile(vals_stats, 10)),
+                p90=float(np.nanpercentile(vals_stats, 90)),
+                p95=float(np.nanpercentile(vals_stats, 95)),
+                p99=float(np.nanpercentile(vals_stats, 99)),
                 min=float(np.nanmin(vals_stats)),
                 max=float(np.nanmax(vals_stats)),
             )

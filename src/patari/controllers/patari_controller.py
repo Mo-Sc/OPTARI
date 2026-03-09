@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import patato as pat
 from napari.layers import Image, Labels, Shapes
 from napari.viewer import Viewer
 from qtpy.QtGui import QColor
@@ -53,6 +54,12 @@ from patari.widgets.time_analysis_dock import (
 )
 from patari.widgets.unmixing_dock import UnmixingDock, create_unmixing_dock
 from patari.widgets.histogram_dock import HistogramDock, create_histogram_dock
+from patari.patato_bridge import (
+    build_napari_layers,
+    fov_from_objects,
+    shapes_from_scan_rois,
+    save_rois_to_scan,
+)
 
 
 class PatariController:
@@ -60,14 +67,13 @@ class PatariController:
         self,
         viewer: Viewer,
         path: Path | None,
-        *,
-        reader,
     ):
         self.viewer = viewer
         self.path = Path(path) if path is not None else Path()
-        self.reader = reader
 
         self._scan_paths: list[Path] = []
+        self.pa_data: pat.PAData | None = None
+        self._patato_objects: dict[str, pat.ImageSequence] = {}
 
         self.shapes_layer: Shapes | None = None
         self.active_layer: Image | None = None
@@ -273,6 +279,12 @@ class PatariController:
 
         self.viewer.dims.events.point.connect(self.on_dims_changed)
 
+        from qtpy.QtWidgets import QApplication
+
+        app = QApplication.instance()
+        if app is not None:
+            app.aboutToQuit.connect(self._close_current_scan)
+
         # TODO: should reordering / adding / removing layers trigger anything?
         # self.viewer.layers.events.reordered.connect(self.on_layers_changed)
         # self.viewer.layers.events.inserted.connect(self.on_layers_changed)
@@ -387,6 +399,17 @@ class PatariController:
         self.update_live_table()
 
     # ---------------- scans / loading ----------------
+    def _close_current_scan(self) -> None:
+        """Close the HDF5 handle for the current scan."""
+        if self.pa_data is None:
+            return
+        try:
+            self.pa_data.close()
+        except Exception:
+            pass
+        self.pa_data = None
+        self._patato_objects = {}
+
     def _init_path(self, path: Path) -> None:
         if path.is_dir():
             self.set_scan_folder(path)
@@ -418,6 +441,7 @@ class PatariController:
     def load_scan(self, scan_path: Path) -> None:
         scan_path = Path(scan_path)
         self.path = scan_path
+        self._close_current_scan()
 
         # Remove existing data layers but keep ROI shapes and docks.
         self._clear_data_layers(keep_layers={self.shapes_layer})
@@ -428,9 +452,17 @@ class PatariController:
             return
 
         try:
-            layers = self.reader(str(scan_path))
+            self.pa_data = pat.PAData.from_hdf5(str(scan_path), mode="r")
+        except Exception as e:
+            print(f"PATARI: failed to open HDF5 '{scan_path}': {e}")
+            self.refresh_all()
+            return
+
+        try:
+            layers = self._layers_from_pa_data()
         except Exception as e:
             print(f"PATARI: failed to load '{scan_path}': {e}")
+            self._close_current_scan()
             self.refresh_all()
             return
 
@@ -446,6 +478,8 @@ class PatariController:
                 kw["metadata"].setdefault("filepath", str(scan_path))
                 self.viewer.add_labels(data, **kw)
 
+        # Clear shapes from previous scan and populate from any ROIs in the new file.
+        self._init_shapes_from_scan()
         # After adding layers, pick a sensible default selected layer.
         self._select_default_pa_layer()
         self._ensure_roi_on_top()
@@ -457,6 +491,87 @@ class PatariController:
         except Exception:
             pass
         self.refresh_all()
+
+    @property
+    def wavelengths(self) -> "list[int] | None":
+        """Wavelengths (nm) for the current scan, read directly from PAData.
+
+        Returns ``None`` if no scan is loaded or the metadata cannot be read.
+        Falls back gracefully so callers can treat ``None`` as "unknown".
+        """
+        if self.pa_data is None:
+            return None
+        try:
+            return [int(w) for w in self.pa_data.get_wavelengths()]
+        except Exception:
+            return None
+
+    @property
+    def timestamps(self) -> "np.ndarray | None":
+        """Acquisition timestamps for the current scan, read directly from PAData.
+
+        Returns a 2-D ``np.ndarray`` of shape ``(n_frames, n_wavelengths)`` in
+        seconds, or ``None`` if no scan is loaded or reading fails.
+        """
+        if self.pa_data is None:
+            return None
+        try:
+            return np.array(self.pa_data.get_timestamps())
+        except Exception:
+            return None
+
+    def _layers_from_pa_data(self) -> list[tuple]:
+        """Build napari LayerData tuples from the open self.pa_data handle.
+
+        PATATO image objects are stored in ``self._patato_objects`` keyed by
+        napari layer name for later FOV/scale queries.
+        """
+        layers, self._patato_objects = build_napari_layers(self.pa_data)
+        return layers
+
+    def _get_fov(self) -> "tuple[float, float] | None":
+        """Return ``(fov_x_m, fov_y_m)`` from stored PATATO objects, or ``None``."""
+        return fov_from_objects(self._patato_objects)
+
+    def _init_shapes_from_scan(self) -> None:
+        """Clear the ROIs layer and populate it with any ROIs stored in the scan.
+
+        Called on every scan load.  Because the shapes layer is 2-D it is
+        displayed on all frames and wavelengths automatically by napari —
+        there is no per-frame visibility logic needed here.
+        """
+        if self.shapes_layer is None:
+            return
+
+        # Disconnect the data-change handler for the duration of the bulk
+        # operation — otherwise it fires once per shape.add(), triggering
+        # redundant compute_roi_stats calls and table refreshes.
+        try:
+            self.shapes_layer.events.data.disconnect(
+                self._on_shapes_data_changed
+            )
+        except Exception:
+            pass
+
+        shapes: list = []
+        try:
+            self.shapes_layer.data = []
+            fov = self._get_fov() if self.pa_data is not None else None
+            if fov is not None:
+                shapes = shapes_from_scan_rois(self.pa_data, *fov)
+                for verts in shapes:
+                    self.shapes_layer.add(verts, shape_type="polygon")
+                if shapes:
+                    print(f"PATARI: loaded {len(shapes)} ROI(s) from scan")
+        finally:
+            try:
+                self.shapes_layer.events.data.connect(
+                    self._on_shapes_data_changed
+                )
+            except Exception:
+                pass
+            # Single refresh at the end regardless of success/failure.
+            self._on_shapes_data_changed()
 
     def _clear_data_layers(self, keep_layers: set[object]) -> None:
         # Copy list of layers first (napari list is live).
@@ -978,11 +1093,7 @@ class PatariController:
         vb.enableAutoRange(axis=getattr(vb, "YAxis", "y"), enable=True)
         vb.autoRange(padding=0.02)
 
-        xlabel = (
-            "Time (s)"
-            if self.active_layer.metadata.get("timestamps") is not None
-            else "Frame"
-        )
+        xlabel = "Time (s)" if self.timestamps is not None else "Frame"
         plot.setLabel("bottom", xlabel)
         plot.setLabel("left", "Mean intensity")
 
@@ -1095,7 +1206,7 @@ class PatariController:
         if self.active_layer is None:
             return "N/A", 0.0
 
-        ts = self.active_layer.metadata.get("timestamps")
+        ts = self.timestamps
         if ts is None:
             return "N/A", 0.0
 
@@ -1130,7 +1241,7 @@ class PatariController:
         frame_idx = int(round(pt[0]))
         wav_idx = int(round(pt[1]))
 
-        wavelengths = self.active_layer.metadata.get("wavelengths")
+        wavelengths = self.wavelengths
         wav_label = (
             f"{wavelengths[wav_idx]} nm"
             if isinstance(wavelengths, (list, tuple))
@@ -1363,150 +1474,66 @@ class PatariController:
         print(f"Saved ROI table to {filename}")
 
     def on_hdf5_export_clicked(self, event=None) -> None:
+        """Save all ROI shapes to the scan HDF5 (full overwrite).
+
+        Briefly closes the read handle so the file can be opened for writing,
+        then reopens it so the scan stays usable.
         """
-        Export ROIs as a single 2D label mask image in an HDF5 file.
-
-        The mask is rasterized in the active layer's pixel grid (last two dims).
-        Metadata is stored as attributes on the "rois" group.
-        TODO: this is GPT stuff. There is for sure a more compact way to do this
-        """
-
-        if self.roi is None:
+        if self.shapes_layer is None or len(self.shapes_layer.data) == 0:
+            print("PATARI: no ROIs to save")
+            return
+        if self.pa_data is None or self.path is None:
+            print("PATARI: no scan loaded")
             return
 
-        if self.shapes_layer is None:
-            print("No ROIs layer to export")
+        fov = self._get_fov()
+        if fov is None:
+            print("PATARI: cannot determine FOV — is a reconstruction loaded?")
             return
+        fov_x_m, fov_y_m = fov
 
-        if self.active_layer is None:
-            print(
-                "Select a PA image layer (active layer) to define export grid"
+        pt = list(self.viewer.dims.point)
+        frame_idx = int(round(pt[0])) if pt else 0
+        try:
+            z = float(
+                self.pa_data.scan_reader.get_scanner_z_position()[frame_idx, 0]
             )
-            return
-
-        import h5py
-
-        filename, _ = QFileDialog.getSaveFileName(
-            None,
-            "Save ROIs as HDF5",
-            "rois.hdf5",
-            "HDF5 Files (*.hdf5)",
-        )
-        if not filename:
-            return
-        if not filename.endswith(".hdf5"):
-            filename += ".hdf5"
-
-        # Determine output 2D mask shape from active layer (last two axes).
-        try:
-            data = np.asarray(self.active_layer.data)
-            if data.ndim < 2:
-                print("Active layer has unsupported shape")
-                return
-            mask_shape = tuple(map(int, data.shape[-2:]))  # (y, x)
-        except Exception as e:
-            print(f"Failed to determine export shape from active layer: {e}")
-            return
-
-        # Use current viewer point for non-spatial dims during world->data conversion.
-        try:
-            pt_world = list(self.viewer.dims.point)
-        except Exception:
-            pt_world = []
-
-        # Convert ROI vertices from world coords (stored in shapes_layer) to the active
-        # layer's data coords, then rasterize as a single 2D labels image.
-        try:
-            n_prefix = max(0, int(getattr(self.active_layer, "ndim", 2)) - 2)
-            if len(pt_world) < n_prefix:
-                pt_world = pt_world + [0.0] * (n_prefix - len(pt_world))
-            prefix = np.asarray(pt_world[:n_prefix], dtype=float)
-
-            data_2d_list: list[np.ndarray] = []
-            shape_types = list(getattr(self.shapes_layer, "shape_type", []))
-
-            for shape in self.shapes_layer.data:
-                verts_world_2d = np.asarray(shape, dtype=float)
-                if verts_world_2d.ndim != 2 or verts_world_2d.shape[1] != 2:
-                    raise ValueError("ROI vertices must be an (N, 2) array")
-
-                if n_prefix > 0:
-                    prefix_rep = np.tile(
-                        prefix[None, :], (verts_world_2d.shape[0], 1)
-                    )
-                    verts_world_full = np.concatenate(
-                        [prefix_rep, verts_world_2d], axis=1
-                    )
-                else:
-                    verts_world_full = verts_world_2d
-
-                verts_data_full = np.asarray(
-                    self.active_layer.world_to_data(verts_world_full),
-                    dtype=float,
-                )
-                verts_data_2d = verts_data_full[:, -2:]
-                data_2d_list.append(verts_data_2d)
-
-            tmp_shapes = Shapes(
-                data=data_2d_list, shape_type=shape_types, ndim=2
+            run = float(
+                self.pa_data.scan_reader.get_run_numbers()[frame_idx, 0]
             )
-            mask = tmp_shapes.to_labels(mask_shape)
-        except Exception as e:
-            print(f"Failed to rasterize ROIs to 2D mask: {e}")
-            return
-
-        # Extract current indices for metadata (if available).
-        try:
-            frame_idx = int(round(pt_world[0])) if len(pt_world) >= 1 else 0
+            rep = float(
+                self.pa_data.scan_reader.get_repetition_numbers()[frame_idx, 0]
+            )
         except Exception:
-            frame_idx = 0
+            z, run, rep = 0.0, 0.0, 0.0
+
+        # Snapshot shapes before closing the handle (defensive copy).
+        shapes_snapshot = [
+            np.asarray(v, dtype=float) for v in self.shapes_layer.data
+        ]
+
+        # Close read handle while writing; always reopen in finally.
+        self.pa_data.close()
+        self.pa_data = None
+
+        error = None
         try:
-            wav_idx = int(round(pt_world[1])) if len(pt_world) >= 2 else 0
-        except Exception:
-            wav_idx = 0
-
-        # rotate mask so that it fits the orientation in patato imported data
-        mask = np.flipud(mask)
-        # mask = np.rot90(mask)
-
-        try:
-            with h5py.File(filename, "w") as f:
-                rois_group = f.create_group("rois")
-                rois_group.create_dataset(
-                    "mask",
-                    data=np.asarray(mask),
-                    compression="gzip",
-                )
-
-                # Metadata as attributes on the "rois" group.
-                rois_group.attrs["exported_from"] = "PATARI"
-                rois_group.attrs["timestamp"] = str(pd.Timestamp.now())
-                rois_group.attrs["num_rois"] = int(len(self.shapes_layer.data))
-                rois_group.attrs["active_layer"] = (
-                    self.active_layer.name if self.active_layer else "N/A"
-                )
-                rois_group.attrs["frame_idx"] = int(frame_idx)
-                rois_group.attrs["wav_idx"] = int(wav_idx)
-                rois_group.attrs["mask_shape_yx"] = tuple(
-                    int(x) for x in mask_shape
-                )
-
-                # Store reference transform info (useful to interpret world coords later).
-                try:
-                    rois_group.attrs["active_layer_scale"] = tuple(
-                        float(x)
-                        for x in getattr(self.active_layer, "scale", ())
-                    )
-                except Exception:
-                    pass
-                try:
-                    rois_group.attrs["active_layer_translate"] = tuple(
-                        float(x)
-                        for x in getattr(self.active_layer, "translate", ())
-                    )
-                except Exception:
-                    pass
-
-            print(f"Saved ROI mask to {filename}")
+            n_saved = save_rois_to_scan(
+                self.path,
+                shapes_snapshot,
+                fov_x_m,
+                fov_y_m,
+                z,
+                run,
+                rep,
+                frame_idx,
+            )
+            print(f"PATARI: saved {n_saved} ROI(s) to {self.path.name}")
         except Exception as e:
-            print(f"Failed to save ROIs: {e}")
+            error = e
+            print(f"PATARI: failed to save ROIs: {e}")
+        finally:
+            try:
+                self.pa_data = pat.PAData.from_hdf5(str(self.path), mode="r")
+            except Exception as e2:
+                print(f"PATARI: failed to reopen scan after ROI save: {e2}")
