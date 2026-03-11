@@ -7,6 +7,8 @@ import pandas as pd
 import patato as pat
 from napari.layers import Image, Labels, Shapes
 from napari.viewer import Viewer
+
+# from qtpy.QtCore import Qt
 from qtpy.QtGui import QColor
 from qtpy.QtWidgets import QFileDialog
 import pyqtgraph as pg
@@ -23,6 +25,7 @@ from patari.config import (
 from patari.roi.roi_utils import (
     compute_roi_stats,
     compute_roi_time_series,
+    compute_roi_spectra,
     extract_roi_pixels_for_slice,
 )
 from patari.roi.roi_shapes import EllipseConfig, ShapeFactory
@@ -54,6 +57,7 @@ from patari.widgets.time_analysis_dock import (
 )
 from patari.widgets.unmixing_dock import UnmixingDock, create_unmixing_dock
 from patari.widgets.histogram_dock import HistogramDock, create_histogram_dock
+from patari.widgets.spectrum_dock import SpectrumDock, create_spectrum_dock
 from patari.patato_bridge import (
     build_napari_layers,
     fov_from_objects,
@@ -105,9 +109,16 @@ class PatariController:
         self.roi: RoiDock | None = None
         self.time_analysis: TimeAnalysisDock | None = None
         self.histograms: HistogramDock | None = None
+        self.spectrum: SpectrumDock | None = None
         self._roi_dock_widget = None
         self._time_analysis_dock_widget = None
         self._histograms_dock_widget = None
+        self._spectrum_dock_widget = None
+
+        # # time-series scrubber state
+        # self._time_x: np.ndarray | None = None
+        # self._time_frames: np.ndarray | None = None
+        # self._scrub_updating: bool = False
 
         self._setup_viewer()
         self._ensure_shapes_layer()
@@ -223,6 +234,14 @@ class PatariController:
                 area="bottom",
             )
 
+        if self.spectrum is None:
+            self.spectrum = create_spectrum_dock()
+            self._spectrum_dock_widget = self.viewer.window.add_dock_widget(
+                self.spectrum.widget,
+                name="Spectrum",
+                area="bottom",
+            )
+
         if self.annotation is None:
             self.annotation = create_annotation_dock()
             self._annotation_dock_widget = self.viewer.window.add_dock_widget(
@@ -252,12 +271,15 @@ class PatariController:
         # make sure some docks are tabified
         qt_window = getattr(self.viewer.window, "_qt_window", None)
         if qt_window is not None:
-            # Bottom: ROI, Time Analysis and Histogram
+            # Bottom: ROI, Time Analysis, Histograms, Spectrum
             qt_window.tabifyDockWidget(
                 self._roi_dock_widget, self._time_analysis_dock_widget
             )
             qt_window.tabifyDockWidget(
                 self._roi_dock_widget, self._histograms_dock_widget
+            )
+            qt_window.tabifyDockWidget(
+                self._roi_dock_widget, self._spectrum_dock_widget
             )
             # Right: Scan Browser + Annotation
             qt_window.tabifyDockWidget(
@@ -309,6 +331,11 @@ class PatariController:
         if self.histograms is not None:
             self.histograms.refresh_button.clicked.connect(
                 self.on_refresh_histograms_clicked
+            )
+
+        if self.spectrum is not None:
+            self.spectrum.refresh_button.clicked.connect(
+                self.on_refresh_spectrum_clicked
             )
 
         if self.annotation is not None:
@@ -559,8 +586,8 @@ class PatariController:
             fov = self._get_fov() if self.pa_data is not None else None
             if fov is not None:
                 shapes = shapes_from_scan_rois(self.pa_data, *fov)
-                for verts in shapes:
-                    self.shapes_layer.add(verts, shape_type="polygon")
+                for verts, stype in shapes:
+                    self.shapes_layer.add(verts, shape_type=stype)
                 if shapes:
                     print(f"PATARI: loaded {len(shapes)} ROI(s) from scan")
         finally:
@@ -1097,9 +1124,81 @@ class PatariController:
         plot.setLabel("bottom", xlabel)
         plot.setLabel("left", "Mean intensity")
 
+        # ---- Scrub line ----
+        # Store the x<->frame mapping so _on_scrub_line_moved can convert back.
+        # frames_meta = getattr(self.active_layer, "metadata", {}).get("frames")
+        # if frames_meta:
+        #     self._time_frames = np.asarray(frames_meta, dtype=int)
+        # else:
+        #     self._time_frames = np.arange(
+        #         np.asarray(self.active_layer.data).shape[0], dtype=int
+        #     )
+        # self._time_x = x
+
+        # # plot.clear() was called above, so we always create a fresh line.
+        # frame_idx = int(round(pt[0])) if len(pt) >= 1 else 0
+        # x_pos = self._x_for_frame(frame_idx)
+        # line = pg.InfiniteLine(
+        #     pos=x_pos,
+        #     angle=90,
+        #     movable=True,
+        #     pen=pg.mkPen(color=(220, 220, 220, 200), width=1, style=Qt.DashLine),
+        # )
+        # line.sigPositionChanged.connect(self._on_scrub_line_moved)
+
+        # plot.plotItem.addItem(line)
+        # self.time_analysis.scrub_line = line
+
         self.time_analysis.status_label.setText(
             f"Plotted {len(series)} ROI(s) over {len(x)} frame(s)."
         )
+
+    # def _x_for_frame(self, frame_idx: int) -> float:
+    #     """Return the x-axis value on the time-series plot for *frame_idx*."""
+    #     if (
+    #         self._time_x is None
+    #         or self._time_frames is None
+    #         or len(self._time_frames) == 0
+    #     ):
+    #         return float(frame_idx)
+    #     idx = int(np.argmin(np.abs(self._time_frames - frame_idx)))
+    #     return float(self._time_x[idx])
+
+    # def _on_scrub_line_moved(self, line) -> None:
+    #     """User dragged the scrub line → snap the viewer to the nearest frame."""
+    #     if self._scrub_updating:
+    #         return
+    #     if (
+    #         self._time_x is None
+    #         or self._time_frames is None
+    #         or len(self._time_x) == 0
+    #     ):
+    #         return
+    #     x_pos = float(line.value())
+    #     idx = int(np.argmin(np.abs(self._time_x - x_pos)))
+    #     frame_idx = int(self._time_frames[idx])
+    #     self._scrub_updating = True
+    #     try:
+    #         self.viewer.dims.set_point(0, frame_idx)
+    #     finally:
+    #         self._scrub_updating = False
+
+    # def _update_scrub_line(self) -> None:
+    #     """Move the scrub line to the current viewer frame (no-op if not visible)."""
+    #     if self._scrub_updating:
+    #         return
+    #     if self.time_analysis is None or self.time_analysis.scrub_line is None:
+    #         return
+    #     pt = list(self.viewer.dims.point)
+    #     if not pt:
+    #         return
+    #     frame_idx = int(round(pt[0]))
+    #     x_pos = self._x_for_frame(frame_idx)
+    #     self._scrub_updating = True
+    #     try:
+    #         self.time_analysis.scrub_line.setValue(x_pos)
+    #     finally:
+    #         self._scrub_updating = False
 
     # ---------------- histograms ----------------
     def on_refresh_histograms_clicked(self, event=None) -> None:
@@ -1184,6 +1283,72 @@ class PatariController:
             f"Plotted {n_plotted} histogram(s) for frame {frame_idx}, wav {wav_idx}."
         )
 
+    # ---------------- spectrum ----------------
+    def on_refresh_spectrum_clicked(self, event=None) -> None:
+        if self.spectrum is None:
+            return
+        if self.shapes_layer is None:
+            self.spectrum.status_label.setText("No ROIs layer")
+            return
+        if self.active_layer is None:
+            self.spectrum.status_label.setText("Select a PA image layer")
+            return
+
+        pt = list(self.viewer.dims.point)
+        frame_idx = int(round(pt[0])) if len(pt) >= 1 else 0
+
+        self.spectrum.status_label.setText("Computing spectra…")
+
+        x, series = compute_roi_spectra(
+            self.shapes_layer,
+            self.active_layer,
+            frame_idx,
+            clamp_min=self.roi_intensity_min,
+            clamp_max=self.roi_intensity_max,
+            clamp_mode=(self.roi_intensity_mode or "clip"),
+        )
+
+        # Clear previous plots
+        container = self.spectrum.plots_container
+        layout = container.layout()
+        if layout is not None:
+            while layout.count():
+                item = layout.takeAt(0)
+                w = item.widget() if item is not None else None
+                if w is not None:
+                    w.setParent(None)
+                    w.deleteLater()
+
+        n_plotted = 0
+        for roi_index, y in series.items():
+            if y.size == 0 or np.all(np.isnan(y)):
+                continue
+
+            color = roi_color_for_index(int(roi_index))
+
+            plot = pg.PlotWidget()
+            plot.setTitle(f"ROI {roi_index}")
+            plot.showGrid(x=True, y=True)
+            plot.setLabel("bottom", "Wavelength (nm)")
+            plot.setLabel("left", "Mean intensity")
+            plot.plot(
+                x,
+                y,
+                pen=pg.mkPen(color=color, width=2),
+                symbol="o",
+                symbolSize=6,
+                symbolBrush=pg.mkBrush(color),
+                symbolPen=pg.mkPen(color=color, width=1),
+            )
+
+            if layout is not None:
+                layout.addWidget(plot)
+            n_plotted += 1
+
+        self.spectrum.status_label.setText(
+            f"Plotted {n_plotted} spectrum/a for frame {frame_idx}."
+        )
+
     # ---------------- info/roi updates ----------------
     def refresh_all(self) -> None:
         """
@@ -1191,7 +1356,7 @@ class PatariController:
         """
         self.update_info_labels()
         self.update_live_table()
-        # self._tabify_controls_and_annotation()
+        # self._update_scrub_line()
 
     def snap_to_reconstructed_frame(self, frame_idx: int) -> int:
         if self.active_layer is None:
@@ -1476,11 +1641,12 @@ class PatariController:
     def on_hdf5_export_clicked(self, event=None) -> None:
         """Save all ROI shapes to the scan HDF5 (full overwrite).
 
+        Passing an empty shapes list clears all ROIs from the file.
         Briefly closes the read handle so the file can be opened for writing,
         then reopens it so the scan stays usable.
         """
-        if self.shapes_layer is None or len(self.shapes_layer.data) == 0:
-            print("PATARI: no ROIs to save")
+        if self.shapes_layer is None:
+            print("PATARI: no ROIs layer")
             return
         if self.pa_data is None or self.path is None:
             print("PATARI: no scan loaded")
@@ -1511,6 +1677,7 @@ class PatariController:
         shapes_snapshot = [
             np.asarray(v, dtype=float) for v in self.shapes_layer.data
         ]
+        shape_types_snapshot = list(self.shapes_layer.shape_type)
 
         # Close read handle while writing; always reopen in finally.
         self.pa_data.close()
@@ -1521,6 +1688,7 @@ class PatariController:
             n_saved = save_rois_to_scan(
                 self.path,
                 shapes_snapshot,
+                shape_types_snapshot,
                 fov_x_m,
                 fov_y_m,
                 z,
@@ -1528,7 +1696,10 @@ class PatariController:
                 rep,
                 frame_idx,
             )
-            print(f"PATARI: saved {n_saved} ROI(s) to {self.path.name}")
+            if n_saved == 0:
+                print(f"PATARI: cleared all ROIs from {self.path.name}")
+            else:
+                print(f"PATARI: saved {n_saved} ROI(s) to {self.path.name}")
         except Exception as e:
             error = e
             print(f"PATARI: failed to save ROIs: {e}")

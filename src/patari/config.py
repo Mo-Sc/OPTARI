@@ -15,8 +15,6 @@ dtype_map = {
     "std": float,
     "p10": float,
     "p90": float,
-    "p95": float,
-    "p99": float,
     "min": float,
     "max": float,
     "n_pixels": int,

@@ -193,8 +193,6 @@ def compute_roi_stats(
             std=np.nan,
             p10=np.nan,
             p90=np.nan,
-            p95=np.nan,
-            p99=np.nan,
             min=np.nan,
             max=np.nan,
         )
@@ -216,8 +214,6 @@ def compute_roi_stats(
                 std=float(np.nanstd(vals_stats)),
                 p10=float(np.nanpercentile(vals_stats, 10)),
                 p90=float(np.nanpercentile(vals_stats, 90)),
-                p95=float(np.nanpercentile(vals_stats, 95)),
-                p99=float(np.nanpercentile(vals_stats, 99)),
                 min=float(np.nanmin(vals_stats)),
                 max=float(np.nanmax(vals_stats)),
             )
@@ -352,3 +348,54 @@ def extract_roi_pixels_for_slice(
             mode=str(clamp_mode or "clip"),
         )
     return out
+
+
+def compute_roi_spectra(
+    shapes_layer,
+    active_layer,
+    frame_idx: int,
+    *,
+    clamp_min: float | None = None,
+    clamp_max: float | None = None,
+    clamp_mode: str = "clip",
+):
+    """Compute per-ROI mean intensity over wavelengths for a fixed frame."""
+
+    if active_layer is None:
+        return np.asarray([]), {}
+
+    data = np.asarray(active_layer.data)
+    if data.ndim < 2:
+        return np.asarray([]), {}
+
+    frame_idx = int(frame_idx)
+    if not _is_reconstructed_frame(active_layer, frame_idx):
+        return np.asarray([]), {}
+
+    n_wavs = data.shape[1]
+    wavelengths = getattr(active_layer, "metadata", {}).get(
+        "wavelengths", None
+    )
+    if isinstance(wavelengths, (list, tuple)) and len(wavelengths) == n_wavs:
+        x = np.asarray(wavelengths, dtype=float)
+    else:
+        x = np.arange(n_wavs, dtype=float)
+
+    sy, sx = _scale_sy_sx(active_layer)
+    img_shape = data.shape[-2:]
+
+    series: dict[int, np.ndarray] = {}
+    for roi in _iter_rois(shapes_layer):
+        mask = _roi_mask(roi, sy=sy, sx=sx, image_shape=img_shape)
+        if mask is None:
+            continue
+        y = []
+        for w in range(n_wavs):
+            vals = data[frame_idx, w][mask]
+            vals = _apply_clamp(
+                vals, clamp_min, clamp_max, mode=str(clamp_mode or "clip")
+            )
+            y.append(float(np.nanmean(vals)) if vals.size else np.nan)
+        series[int(roi.index)] = np.asarray(y, dtype=float)
+
+    return x, series

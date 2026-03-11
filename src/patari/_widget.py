@@ -7,26 +7,30 @@ from patari.controllers.patari_controller import PatariController
 # TODO: timestamp in time graph doesnt fit the timestamp in info widget (at least peaks)
 # TODO: problem is that timestamps are always taken from the first wavelength, so there they match
 # also would it make sense to be able to toggle between time and frame as x-axis in time graph?
-# also refresh button still doesnt rescale the time graph properly
-
-# TODO: reset button in controls: deletes all ROIs, etc
+# maybe at later point do p10/p90 shading in the time graph
 # TODO: Export hdf5 button to patari_controls. add functionality
 # TODO: export xlsx feature (all vs current wavelength / frame)
 # TODO: Unmixed datasets
-# TODO: Unmix widget?
+# TODO: Unmix widget, recon widget
 # TODO: width of controls should not depend on length of folder path
 # TODO: ROI Layer should not be deleted
 # TODO: refactor the segmentation part. Currently there is still a lot of AI stuff that is not necessary
 # add more ROI types, make sure ROI is still somewhat consistent with pipeline implementation
 # compare current ROI and segmentation handling to PATATO
 # PATATO ithera ROI PR is now merged
-# TODO: there will be only one US layer, so maybe that can be stored in the controller so it doenst have to be searched every time
-# Same for scaling and unit conversion
-# TODO: xlsx /csv export in a way that it can be easily viewed in excel (semicolon separated?)
+
 # TODO: best frame selection based on SSIM or motion score
-# TODO: iannotation import and export
 # TODO: when clicking on pixel, show spectra. Or spectra view of roi like the histogram view
 # TODO: maybe a measurement tool for distances?
+# TODO: check whether raw ithera import also works
+# TODO: performance evaluation: FOr example scrub line is currently commented out, but is nice feature, so check whether it is a bottleneck
+# TODO: annotation dock should include option to select which feature to use for histo, time analysis, and spectrum (e.g. mean, p90, etc.) (and also for clipping?)
+# TODO: Since ROI layer is accidentaly deleted sometimes by user, maybe re-add everytime a new scan is loaded? Or add a button to layer list if possible
+# TODO: currently we can only select a study folder, not an individual scan. Also we could rename Browse Folder to Open Study or smth
+# TODO: explore keyboard shortcuts
+# TODO: workaround for old iannotation hdf5 group -> simply load as polygon vertices
+
+# TODO: I think currently scrolling only works if the AnnotationDOck is the limiting factor. But it would be nicer to create some base class that is scrollable and then wrap all the side docks into it
 
 
 def patari_controls(napari_viewer: Viewer | None = None) -> QWidget:

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from patari.config import ROI_PLACEMENT_PRESETS
+from qtpy.QtCore import Qt
 from qtpy.QtGui import QDoubleValidator
 from qtpy.QtWidgets import (
     QCheckBox,
@@ -13,6 +14,8 @@ from qtpy.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
+    QScrollArea,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -47,10 +50,27 @@ class AnnotationDock:
 
 
 def create_annotation_dock() -> AnnotationDock:
+    # Outer shell — what napari receives as the dock widget
     widget = QWidget()
-    outer = QVBoxLayout(widget)
+    shell_layout = QVBoxLayout(widget)
+    shell_layout.setContentsMargins(0, 0, 0, 0)
 
-    # --- ROI Settings ---
+    # Scroll area fills the shell
+    scroll = QScrollArea()
+    scroll.setWidgetResizable(True)
+    scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+    scroll.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+    shell_layout.addWidget(scroll)
+
+    # Content widget lives inside the scroll area
+    content_widget = QWidget()
+    scroll.setWidget(content_widget)
+    outer = QVBoxLayout(content_widget)
+
+    # ------------------------------------------------------------------ #
+    # ROI Settings section                                                 #
+    # ------------------------------------------------------------------ #
     roi_box = QGroupBox("ROI Settings")
     roi_layout = QVBoxLayout(roi_box)
 
@@ -72,7 +92,7 @@ def create_annotation_dock() -> AnnotationDock:
     roi_clip_form = QFormLayout(roi_clipping_box)
     roi_clip_min_edit, roi_clip_max_edit = _make_range_edits()
     roi_clip_form.addRow("Min. Intensity", roi_clip_min_edit)
-    roi_clip_form.addRow("Max. intensity", roi_clip_max_edit)
+    roi_clip_form.addRow("Max. Intensity", roi_clip_max_edit)
 
     roi_exclusion_box = QGroupBox("ROI Exclusion")
     roi_exclusion_box.setCheckable(True)
@@ -80,7 +100,7 @@ def create_annotation_dock() -> AnnotationDock:
     roi_exclude_form = QFormLayout(roi_exclusion_box)
     roi_exclude_min_edit, roi_exclude_max_edit = _make_range_edits()
     roi_exclude_form.addRow("Min. Intensity", roi_exclude_min_edit)
-    roi_exclude_form.addRow("Max. intensity", roi_exclude_max_edit)
+    roi_exclude_form.addRow("Max. Intensity", roi_exclude_max_edit)
 
     def _on_clipping_toggled(checked: bool) -> None:
         if checked:
@@ -103,12 +123,13 @@ def create_annotation_dock() -> AnnotationDock:
     roi_layout.addWidget(include_all_frames_checkbox)
     roi_layout.addWidget(include_all_wavelengths_checkbox)
 
-    # --- Segmentation ---
+    # ------------------------------------------------------------------ #
+    # Segmentation section                                                 #
+    # ------------------------------------------------------------------ #
     seg_box = QGroupBox("Segmentation")
     seg_form = QFormLayout(seg_box)
 
     segmentation_model_combo = QComboBox()
-    # Dummy model list for now
     segmentation_model_combo.addItem("DummySeg")
 
     generate_tissue_segmentation_button = QPushButton(
@@ -120,7 +141,9 @@ def create_annotation_dock() -> AnnotationDock:
     seg_form.addRow(generate_tissue_segmentation_button)
     seg_form.addRow(segmentation_status_label)
 
-    # --- ROI placement ---
+    # ------------------------------------------------------------------ #
+    # Auto-ROI placement section                                           #
+    # ------------------------------------------------------------------ #
     roi_place_box = QGroupBox("Auto-ROI")
     roi_place_form = QFormLayout(roi_place_box)
 
@@ -172,8 +195,9 @@ def create_annotation_dock() -> AnnotationDock:
     roi_place_form.addRow(roi_status_label)
 
     outer.addWidget(roi_box)
-    outer.addWidget(seg_box, stretch=1)
-    outer.addWidget(roi_place_box, stretch=1)
+    outer.addWidget(seg_box)
+    outer.addWidget(roi_place_box)
+    outer.addStretch()
 
     return AnnotationDock(
         widget=widget,

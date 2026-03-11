@@ -224,7 +224,10 @@ def shapes_from_scan_rois(
     for (_name, _number), roi in rois.items():
         try:
             pts = np.asarray(roi.points, dtype=float)  # (N, 2): (x_m, y_m)
-            shapes.append(patato_to_napari(pts, fov_x_m, fov_y_m))
+            shapes.append((
+                patato_to_napari(pts, fov_x_m, fov_y_m),
+                getattr(roi, "shape_type", "polygon"),
+            ))
         except Exception as e:
             print(f"PATARI: skipped ROI {_name}/{_number}: {e}")
     return shapes
@@ -233,6 +236,7 @@ def shapes_from_scan_rois(
 def save_rois_to_scan(
     path: Path,
     shapes: list[np.ndarray],
+    shape_types: list[str],
     fov_x_m: float,
     fov_y_m: float,
     z: float = 0.0,
@@ -242,9 +246,10 @@ def save_rois_to_scan(
 ) -> int:
     """Overwrite all ROIs in an HDF5 scan file with *shapes*.
 
-    *shapes* are napari ``(y_mm, x_mm)`` vertex arrays.  The file is
-    opened in ``"r+"`` mode; the caller must close any existing read
-    handle before calling this function.
+    *shapes* are napari ``(y_mm, x_mm)`` vertex arrays.  *shape_types* is a
+    parallel list of napari shape type strings (e.g. ``"polygon"``,
+    ``"ellipse"``, ``"rectangle"``).  The file is opened in ``"r+"`` mode;
+    the caller must close any existing read handle before calling this.
 
     Returns the number of ROIs written.  Raises on HDF5 errors.
     """
@@ -260,7 +265,7 @@ def save_rois_to_scan(
             del wf[roi_tag]  # full overwrite
 
         writer = HDF5Writer(wf)
-        for i, verts in enumerate(shapes):
+        for i, (verts, stype) in enumerate(zip(shapes, shape_types)):
             verts_yx = verts[:, -2:]  # last 2 dims: (y_mm, x_mm)
             roi = PatatoROI.from_polygon_mm(
                 verts_yx_mm=verts_yx,
@@ -272,6 +277,7 @@ def save_rois_to_scan(
                 roi_class="PATARI",
                 position=str(i),
                 generated=True,
+                shape_type=stype,
             )
             writer.add_roi(roi, generated=True)
             n_saved += 1
