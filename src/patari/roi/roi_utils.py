@@ -141,6 +141,8 @@ def compute_roi_stats(
 ):
     """Compute ROI statistics for all shapes for a specific frame/wavelength."""
 
+    print(f"DEBUG: compute_roi_stats for frame {frame_idx}, wav {wav_idx}, ")
+
     empty = pd.DataFrame(columns=list(dtype_map.keys())).astype(dtype_map)
     if active_layer is None:
         return empty
@@ -154,16 +156,17 @@ def compute_roi_stats(
     data = np.asarray(active_layer.data)
     img2d = data[frame_idx, wav_idx]
 
-    timestamp_str = "N/A"
-    ts = getattr(active_layer, "metadata", {}).get("timestamps")
-    if ts is not None:
-        ts_seconds = ts[frame_idx, wav_idx]
+    timestamps = getattr(active_layer, "metadata", {}).get("timestamps")
+
+    try:
         from datetime import datetime, timedelta
 
         timestamp_str = str(
-            datetime(1, 1, 1) + timedelta(seconds=float(ts_seconds))
+            datetime(1, 1, 1)
+            + timedelta(seconds=float(timestamps[frame_idx, wav_idx]))
         )
-    else:
+    except Exception:
+        print("Could not parse timestamp for frame", frame_idx, "wav", wav_idx)
         timestamp_str = "N/A"
 
     sy, sx = _scale_sy_sx(active_layer)
@@ -277,8 +280,10 @@ def compute_roi_time_series(
     if ts is not None:
         try:
             ts = np.asarray(ts)
+            # Use per-wavelength timestamps for the plotted wavelength,
+            # but reference all values to scan start
             x = ts[frames, wav_idx].astype(float)
-            x = x - float(ts[0, wav_idx])
+            x = x - float(ts[0, 0])
         except Exception:
             x = frames.astype(float)
     else:

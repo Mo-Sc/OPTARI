@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 import numpy as np
 import pandas as pd
 import patato as pat
 from napari.layers import Image, Labels, Shapes
 from napari.viewer import Viewer
+from patato.io.ithera.read_ithera import iTheraMSOT
 
 # from qtpy.QtCore import Qt
 from qtpy.QtGui import QColor
@@ -15,8 +17,6 @@ import pyqtgraph as pg
 
 
 from patari.config import (
-    DEFAULT_FRAME_START_IDX,
-    DEFAULT_WAV_START_IDX,
     dtype_map,
     ROI_LABELS,
     DEFAULT_PA_LAYER,
@@ -74,8 +74,11 @@ class PatariController:
     ):
         self.viewer = viewer
         self.path = Path(path) if path is not None else Path()
+        self.study_path: Path | None = (
+            self.path if self.path.is_dir() else self.path.parent
+        )
 
-        self._scan_paths: list[Path] = []
+        self._scans: dict[Path, str] = {}
         self.pa_data: pat.PAData | None = None
         self._patato_objects: dict[str, pat.ImageSequence] = {}
 
@@ -121,10 +124,8 @@ class PatariController:
         # self._scrub_updating: bool = False
 
         self._setup_viewer()
-        self._ensure_shapes_layer()
         self._ensure_docks()
         self._connect_events()
-        self._init_dims_point()
 
         # If a path is provided, populate scan browser / load scan.
         # Otherwise, the Scan Browser dock drives loading.
@@ -144,54 +145,6 @@ class PatariController:
         self.viewer.scale_bar.visible = True
         self.viewer.scale_bar.unit = "mm"
         self.viewer.dims.axis_labels = ("Frame", "Wavelength", "z", "x")
-
-    def _ensure_shapes_layer(self) -> None:
-        if "ROIs" in self.viewer.layers and isinstance(
-            self.viewer.layers["ROIs"], Shapes
-        ):
-            self.shapes_layer = self.viewer.layers["ROIs"]
-            self._ensure_roi_on_top()
-            return
-
-        self.shapes_layer = self.viewer.add_shapes(
-            name="ROIs",
-            edge_color=roi_color_for_index(0),
-            face_color="transparent",
-            edge_width=0.1,
-            ndim=2,
-            metadata={"type": "roi"},
-        )
-
-        # this is not necessary if shape layer is initially empty
-        # self._apply_roi_colors()
-        # if ROI_LABELS:
-        #     self._apply_roi_labels()
-        self._ensure_roi_on_top()
-
-    def _ensure_roi_on_top(self) -> None:
-        """
-        Necessary because ROI layer should persist across different scans and will therefore
-        end up below newly added image layers. This ensures it is always on top.
-        TODO: could be extended to full ordering: ROIs > PA images > US images
-        """
-
-        if self.shapes_layer is None:
-            return
-        try:
-            self.shapes_layer.visible = True
-        except Exception:
-            pass
-
-        # Keep ROIs above newly-added image layers.
-        try:
-            layers = self.viewer.layers
-            idx = list(self.viewer.layers).index(self.shapes_layer)
-            # Put ROIs at the very top of the stack.
-            if idx != len(layers) - 1:
-                layers.move(idx, len(layers))
-        except Exception:
-            print("PATARI: failed to move ROIs layer to top")
-            pass
 
     def _ensure_docks(self) -> None:
         # Create docks once per controller instance.
@@ -296,8 +249,7 @@ class PatariController:
             )
 
     def _connect_events(self) -> None:
-        if self.shapes_layer is not None:
-            self.shapes_layer.events.data.connect(self._on_shapes_data_changed)
+        self._connect_shapes_layer_events()
 
         self.viewer.dims.events.point.connect(self.on_dims_changed)
 
@@ -384,6 +336,20 @@ class PatariController:
                 self.on_scan_selected
             )
 
+    def _connect_shapes_layer_events(self) -> None:
+        if self.shapes_layer is None:
+            return
+        try:
+            self.shapes_layer.events.data.disconnect(
+                self._on_shapes_data_changed
+            )
+        except Exception:
+            pass
+        try:
+            self.shapes_layer.events.data.connect(self._on_shapes_data_changed)
+        except Exception:
+            pass
+
     def _apply_roi_colors(self) -> None:
         """
         Assign distinct colors to each ROI shape based on its index.
@@ -437,6 +403,17 @@ class PatariController:
         self.pa_data = None
         self._patato_objects = {}
 
+    def _reset_scan_state(self) -> None:
+        """Clear current scan state and remove all viewer layers."""
+
+        self._close_current_scan()
+
+        for layer in list(self.viewer.layers):
+            self.viewer.layers.remove(layer)
+        self.active_layer = None
+        self.shapes_layer = None
+        self._placed_roi_index = None
+
     def _init_path(self, path: Path) -> None:
         if path.is_dir():
             self.set_scan_folder(path)
@@ -452,36 +429,44 @@ class PatariController:
 
     def set_scan_folder(self, folder: Path) -> None:
         folder = Path(folder)
-        self.path = folder
-        self._scan_paths = sorted(
-            folder.glob("Scan_*.hdf5"), key=lambda p: int(p.stem.split("_")[1])
-        )
+        self.study_path = folder
+
+        self._scans = self._discover_scans(folder)
 
         if self.scan_browser is not None:
             self.scan_browser.set_folder(folder)
-            self.scan_browser.set_scans(self._scan_paths)
+            self.scan_browser.set_scans(list(self._scans.keys()))
 
         # Auto-select first scan if available.
-        if self._scan_paths and self.scan_browser is not None:
+        if self._scans and self.scan_browser is not None:
             self.scan_browser.scans_list.setCurrentRow(0)
 
     def load_scan(self, scan_path: Path) -> None:
         scan_path = Path(scan_path)
         self.path = scan_path
-        self._close_current_scan()
-
-        # Remove existing data layers but keep ROI shapes and docks.
-        self._clear_data_layers(keep_layers={self.shapes_layer})
+        self._reset_scan_state()
 
         if not scan_path.exists():
             print(f"PATARI: scan not found: {scan_path}")
             self.refresh_all()
             return
 
+        scan_kind = self._scans.get(
+            scan_path,
+            (
+                "hdf5"
+                if scan_path.suffix.lower() in {".hdf5", ".h5"}
+                else "ithera"
+            ),
+        )
+
         try:
-            self.pa_data = pat.PAData.from_hdf5(str(scan_path), mode="r")
+            if scan_kind == "hdf5":
+                self.pa_data = pat.PAData.from_hdf5(str(scan_path), mode="r")
+            else:
+                self.pa_data = pat.PAData(iTheraMSOT(str(scan_path)))
         except Exception as e:
-            print(f"PATARI: failed to open HDF5 '{scan_path}': {e}")
+            print(f"PATARI: failed to open scan '{scan_path}': {e}")
             self.refresh_all()
             return
 
@@ -505,19 +490,70 @@ class PatariController:
                 kw["metadata"].setdefault("filepath", str(scan_path))
                 self.viewer.add_labels(data, **kw)
 
-        # Clear shapes from previous scan and populate from any ROIs in the new file.
-        self._init_shapes_from_scan()
+        # Create a fresh ROIs layer after image/label layers so it stays on top.
+        self.shapes_layer = self.viewer.add_shapes(
+            name="ROIs",
+            edge_color=roi_color_for_index(0),
+            face_color="transparent",
+            edge_width=0.1,
+            ndim=2,
+            metadata={"type": "roi"},
+        )
+        self._connect_shapes_layer_events()
+
         # After adding layers, pick a sensible default selected layer.
         self._select_default_pa_layer()
-        self._ensure_roi_on_top()
-        self._init_dims_point()
+        self._resolve_active_layer()
+        # Initialize viewer position to middle frame/wav for each scan.
+        try:
+            data = np.asarray(self.active_layer.data)
+            if data.ndim >= 2:
+                self.viewer.dims.set_point(0, int((data.shape[0] - 1) // 2))
+                self.viewer.dims.set_point(1, int((data.shape[1] - 1) // 2))
+        except Exception:
+            print("PATARI: failed to set initial viewer position")
+            pass
+        # Populate ROIs after dims are initialized to avoid computing stats before the viewer is ready.
+        self._init_shapes_from_scan()
 
         # Fit view to the newly loaded data (prevents "zoomed out" state).
         try:
             self.viewer.reset_view()
         except Exception:
             pass
-        self.refresh_all()
+
+    @staticmethod
+    def _scan_key(scan_path: Path) -> str:
+        name = scan_path.stem if scan_path.is_file() else scan_path.name
+        m = re.match(r"^(Scan_\d+)", name)
+        return m.group(1) if m else name
+
+    @staticmethod
+    def _scan_sort_key(scan_path: Path):
+        key = PatariController._scan_key(scan_path)
+        m = re.match(r"^Scan_(\d+)$", key)
+        if m:
+            return (0, int(m.group(1)), key)
+        return (1, 0, key)
+
+    def _discover_scans(self, folder: Path) -> dict[Path, str]:
+        # One entry per scan key; if both exist, prefer HDF5 over iThera folder.
+        by_key: dict[str, tuple[Path, str]] = {}
+
+        for p in folder.glob("Scan_*.hdf5"):
+            by_key[self._scan_key(p)] = (p, "hdf5")
+
+        for d in folder.glob("Scan_*"):
+            if not d.is_dir():
+                continue
+            if any(d.glob("*.msot")):
+                key = self._scan_key(d)
+                if key not in by_key:
+                    by_key[key] = (d, "ithera")
+
+        entries = sorted((v[0], v[1]) for v in by_key.values())
+        entries.sort(key=lambda item: self._scan_sort_key(item[0]))
+        return {p: k for p, k in entries}
 
     @property
     def wavelengths(self) -> "list[int] | None":
@@ -600,26 +636,6 @@ class PatariController:
             # Single refresh at the end regardless of success/failure.
             self._on_shapes_data_changed()
 
-    def _clear_data_layers(self, keep_layers: set[object]) -> None:
-        # Copy list of layers first (napari list is live).
-        to_remove = []
-        for layer in list(self.viewer.layers):
-            if layer in keep_layers:
-                continue
-            # Prefer removing layers that look like PATARI data layers.
-            layer_type = getattr(layer, "metadata", {}).get("type")
-            if layer_type in {"pa", "us"}:
-                to_remove.append(layer)
-            # Also remove labels layers created by our reader.
-            elif layer.__class__.__name__.lower().startswith("labels"):
-                to_remove.append(layer)
-
-        for layer in to_remove:
-            try:
-                self.viewer.layers.remove(layer)
-            except Exception:
-                pass
-
     def _select_default_pa_layer(self) -> None:
 
         # Find layer named DEFAULT_PA_LAYER, otherwise pick first PA layer found
@@ -642,40 +658,55 @@ class PatariController:
         )
 
     def on_browse_folder_clicked(self) -> None:
-        folder = QFileDialog.getExistingDirectory(
+        start_path = str(self.path if self.path.exists() else Path.cwd())
+
+        dialog = QFileDialog(
             None,
-            "Select folder with HDF5 scans",
-            str(self.path if self.path.exists() else Path.cwd()),
+            "Select folder or HDF5 scan",
+            start_path,
         )
-        if folder:
-            self.set_scan_folder(Path(folder))
+        # Allow selecting either a directory or a specific file.
+        # dialog.setOption(QFileDialog.DontUseNativeDialog, True)
+        dialog.setFileMode(QFileDialog.AnyFile)
+        dialog.setNameFilters(
+            [
+                "HDF5 scans (*.hdf5 *.h5)",
+                "All files (*)",
+            ]
+        )
+
+        if not dialog.exec():
+            return
+
+        selected = dialog.selectedFiles()
+        if not selected:
+            return
+
+        target = Path(selected[0])
+        if target.is_dir():
+            self.set_scan_folder(target)
+            return
+
+        if target.is_file():
+            # Keep browser list in sync when opening a single scan.
+            self.set_scan_folder(target.parent)
+            scan_paths = list(self._scans.keys())
+            try:
+                idx = scan_paths.index(target)
+                if self.scan_browser is not None:
+                    self.scan_browser.scans_list.setCurrentRow(idx)
+            except ValueError:
+                self.load_scan(target)
 
     def on_scan_selected(self, row: int) -> None:
-        if row < 0 or row >= len(self._scan_paths):
+        scan_paths = list(self._scans.keys())
+        if row < 0 or row >= len(scan_paths):
             return
-        self.load_scan(self._scan_paths[row])
-
-    def _init_dims_point(self) -> None:
-        # Only set if viewer has at least 2 dims (frame/wavelength)
-        try:
-            pt = list(self.viewer.dims.point)
-        except Exception:
-            return
-
-        if len(pt) < 2:
-            return
-
-        pt[0] = DEFAULT_FRAME_START_IDX
-        pt[1] = DEFAULT_WAV_START_IDX
-        self.viewer.dims.point = tuple(pt)
+        self.load_scan(scan_paths[row])
 
     # ---------------- layer selection ----------------
     def _resolve_active_layer(self) -> None:
-        """
-        Docstring for _resolve_active_layer
-
-        :param self: Description
-        """
+        """ """
 
         selection = self.viewer.layers.selection
 
@@ -690,6 +721,10 @@ class PatariController:
             isinstance(selected_layer, Image)
             and selected_layer.metadata.get("type") == "pa"
         ):
+            # No-op if nothing changed (avoids duplicate work/logging).
+            if self.active_layer is selected_layer:
+                return
+
             self.active_layer = selected_layer
             print(f"active layer set to {self.active_layer.name}")
             # keep PA layers visually consistent; show only the active PA layer
@@ -707,7 +742,6 @@ class PatariController:
     # ---------------- events ----------------
     # def on_layers_changed(self, event=None) -> None:
     #     # TODO: relevant?
-    #     self._ensure_roi_on_top()
     #     self.refresh_all()
 
     def _on_roi_intensity_settings_changed(self) -> None:
@@ -1021,7 +1055,6 @@ class PatariController:
             )
             return
 
-        self._ensure_roi_on_top()
         self._apply_roi_colors()
         self.update_live_table()
 
@@ -1109,7 +1142,7 @@ class PatariController:
                 y,
                 pen=pg.mkPen(color=color, width=2),
                 symbol="o",
-                symbolSize=4,
+                symbolSize=6,
                 symbolBrush=pg.mkBrush(color),
                 symbolPen=pg.mkPen(color=color, width=1),
                 name=f"ROI {roi_index}",
@@ -1386,7 +1419,11 @@ class PatariController:
             from datetime import datetime, timedelta
 
             dt = datetime(1, 1, 1) + timedelta(seconds=float(ts_seconds))
-        except Exception:
+        except Exception as e:
+            print(
+                "DEBUG: timestamp_for_slice: failed to convert timestamp to datetime:",
+                e,
+            )
             dt = "N/A"
 
         return dt, float(ts_seconds) - float(ts_start_seconds)
@@ -1433,8 +1470,13 @@ class PatariController:
         scan_str = (
             str(self.path.stem) if getattr(self, "path", None) else "N/A"
         )
+        study_str = (
+            str(self.study_path.stem)
+            if getattr(self, "study_path", None)
+            else "N/A"
+        )
         self.info.label.setText(
-            f"Scan: {scan_str}\n"
+            f"Study: {study_str} | Scan: {scan_str}\n"
             f"Layer: {self.active_layer.name}\n"
             f"Frame: {frame_idx} | Wavelength: {wav_label}\n"
             f"Timestamp: {ts} ({ts_delta:.2f} s)"
@@ -1650,6 +1692,11 @@ class PatariController:
             return
         if self.pa_data is None or self.path is None:
             print("PATARI: no scan loaded")
+            return
+        if self.path.suffix.lower() not in {".hdf5", ".h5"}:
+            print(
+                "PATARI: ROI export currently supports loaded HDF5 scans only"
+            )
             return
 
         fov = self._get_fov()

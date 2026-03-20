@@ -44,7 +44,7 @@ def create_scan_browser_dock() -> ScanBrowserDock:
 
     folder_lineedit = QLineEdit()
     folder_lineedit.setReadOnly(True)
-    browse_button = QPushButton("Browse folder…")
+    browse_button = QPushButton("Open Study")
 
     row_layout.addWidget(folder_lineedit, stretch=1)
     row_layout.addWidget(browse_button)

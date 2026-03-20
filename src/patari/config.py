@@ -1,7 +1,7 @@
-DEFAULT_WAV_START_IDX = 0
-DEFAULT_FRAME_START_IDX = 0
 ROI_LABELS = True
 DEFAULT_PA_LAYER = "Recon: iThera BP-40mm(res:100μm)_0"
+
+STARTUP_LOGO_PATH = "patari/startup.png"
 
 dtype_map = {
     "roi_index": int,
