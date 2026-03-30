@@ -134,6 +134,14 @@ class AnalysisController:
         if controller.shapes_layer is None:
             controller.histograms.status_label.setText("No ROIs layer")
             return
+        if len(controller.shapes_layer.data) == 0:
+            controller.histograms.status_label.setText(
+                '<span style="color:red">No ROIs defined</span>'
+            )
+            AnalysisController._clear_plot_layout(
+                controller.histograms.plots_container
+            )
+            return
         if controller.active_layer is None:
             controller.histograms.status_label.setText(
                 "Select a PA image layer"
@@ -204,6 +212,14 @@ class AnalysisController:
             return
         if controller.shapes_layer is None:
             controller.spectrum.status_label.setText("No ROIs layer")
+            return
+        if len(controller.shapes_layer.data) == 0:
+            controller.spectrum.status_label.setText(
+                '<span style="color:red">No ROIs defined</span>'
+            )
+            AnalysisController._clear_plot_layout(
+                controller.spectrum.plots_container
+            )
             return
         if controller.active_layer is None:
             controller.spectrum.status_label.setText("Select a PA image layer")
