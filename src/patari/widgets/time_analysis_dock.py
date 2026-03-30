@@ -14,8 +14,6 @@ class TimeAnalysisDock:
 
     # Optional pyqtgraph PlotWidget; kept as object to avoid hard dependency
     plot_widget: object | None = None
-    # Movable vertical line for frame scrubbing
-    # scrub_line: object | None = None
 
 
 def create_time_analysis_dock() -> TimeAnalysisDock:

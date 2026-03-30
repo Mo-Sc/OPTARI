@@ -1,69 +1,32 @@
 from __future__ import annotations
 
 from pathlib import Path
-import re
 
 import numpy as np
-import pandas as pd
 import patato as pat
 from napari.layers import Image, Labels, Shapes
 from napari.viewer import Viewer
-from patato.io.ithera.read_ithera import iTheraMSOT
-
-# from qtpy.QtCore import Qt
-from qtpy.QtGui import QColor
 from qtpy.QtWidgets import QFileDialog
-import pyqtgraph as pg
-
 
 from patari.config import (
-    dtype_map,
-    ROI_LABELS,
     DEFAULT_PA_LAYER,
-    ROI_PLACEMENT_PRESETS,
 )
-from patari.roi.roi_utils import (
-    compute_roi_stats,
-    compute_roi_time_series,
-    compute_roi_spectra,
-    extract_roi_pixels_for_slice,
-)
-from patari.roi.roi_shapes import EllipseConfig, ShapeFactory
-from patari.segmentation.service import DummySegmenter
-from patari.utils.misc import parse_float_input, roi_color_for_index
-from patari.segmentation.napari import (
-    ensure_segmentation_labels_layer,
-    set_segmentation_2d,
-)
-
-# from patari.utils.napari_layers import resolve_active_image_layer
-from patari.widgets.info_dock import InfoDock, create_info_dock
-from patari.widgets.roi_dock import RoiDock, create_roi_dock
-from patari.widgets.scan_browser_dock import (
-    ScanBrowserDock,
-    create_scan_browser_dock,
-)
-from patari.widgets.annotation_dock import (
-    AnnotationDock,
-    create_annotation_dock,
-)
-from patari.widgets.reconstruction_dock import (
-    ReconstructionDock,
-    create_reconstruction_dock,
-)
-from patari.widgets.time_analysis_dock import (
-    TimeAnalysisDock,
-    create_time_analysis_dock,
-)
-from patari.widgets.unmixing_dock import UnmixingDock, create_unmixing_dock
-from patari.widgets.histogram_dock import HistogramDock, create_histogram_dock
-from patari.widgets.spectrum_dock import SpectrumDock, create_spectrum_dock
-from patari.patato_bridge import (
-    build_napari_layers,
-    fov_from_objects,
-    shapes_from_scan_rois,
-    save_rois_to_scan,
-)
+from patari.segmentation.segmenter import DummySegmenter
+from patari.utils.misc import parse_float_input
+from patari.widgets.info_dock import InfoDock
+from patari.widgets.roi_dock import RoiDock
+from patari.widgets.scan_browser_dock import ScanBrowserDock
+from patari.widgets.annotation_dock import AnnotationDock
+from patari.widgets.reconstruction_dock import ReconstructionDock
+from patari.widgets.time_analysis_dock import TimeAnalysisDock
+from patari.widgets.unmixing_dock import UnmixingDock
+from patari.widgets.histogram_dock import HistogramDock
+from patari.widgets.spectrum_dock import SpectrumDock
+from patari.controllers.ui_manager import UiManager
+from patari.controllers.scan_controller import ScanController
+from patari.controllers.roi_controller import RoiController
+from patari.controllers.segmentation_controller import SegmentationController
+from patari.controllers.analysis_controller import AnalysisController
 
 
 class PatariController:
@@ -105,8 +68,6 @@ class PatariController:
 
         # segmentation
         self._segmenter = DummySegmenter()
-        self._placed_roi_index: int | None = None
-        self._pending_preset_class: str | None = None
 
         # -- bottom elements --
         self.roi: RoiDock | None = None
@@ -117,11 +78,6 @@ class PatariController:
         self._time_analysis_dock_widget = None
         self._histograms_dock_widget = None
         self._spectrum_dock_widget = None
-
-        # # time-series scrubber state
-        # self._time_x: np.ndarray | None = None
-        # self._time_frames: np.ndarray | None = None
-        # self._scrub_updating: bool = False
 
         self._setup_viewer()
         self._ensure_docks()
@@ -147,194 +103,10 @@ class PatariController:
         self.viewer.dims.axis_labels = ("Frame", "Wavelength", "z", "x")
 
     def _ensure_docks(self) -> None:
-        # Create docks once per controller instance.
-        if self.scan_browser is None:
-            self.scan_browser = create_scan_browser_dock()
-            self._scan_browser_dock_widget = (
-                self.viewer.window.add_dock_widget(
-                    self.scan_browser.widget,
-                    name="Scan Browser",
-                    area="right",
-                )
-            )
-
-        if self.info is None:
-            self.info = create_info_dock()
-
-        if self.roi is None:
-            self.roi = create_roi_dock()
-            self._roi_dock_widget = self.viewer.window.add_dock_widget(
-                self.roi.widget,
-                name="Tabular",
-                area="bottom",
-            )
-
-        if self.time_analysis is None:
-            self.time_analysis = create_time_analysis_dock()
-            self._time_analysis_dock_widget = (
-                self.viewer.window.add_dock_widget(
-                    self.time_analysis.widget,
-                    name="Time Analysis",
-                    area="bottom",
-                )
-            )
-
-        if self.histograms is None:
-            self.histograms = create_histogram_dock()
-            self._histograms_dock_widget = self.viewer.window.add_dock_widget(
-                self.histograms.widget,
-                name="Histograms",
-                area="bottom",
-            )
-
-        if self.spectrum is None:
-            self.spectrum = create_spectrum_dock()
-            self._spectrum_dock_widget = self.viewer.window.add_dock_widget(
-                self.spectrum.widget,
-                name="Spectrum",
-                area="bottom",
-            )
-
-        if self.annotation is None:
-            self.annotation = create_annotation_dock()
-            self._annotation_dock_widget = self.viewer.window.add_dock_widget(
-                self.annotation.widget,
-                name="Annotation",
-                area="right",
-            )
-
-        if self.unmixing is None:
-            self.unmixing = create_unmixing_dock()
-            self._unmixing_dock_widget = self.viewer.window.add_dock_widget(
-                self.unmixing.widget,
-                name="Unmixing",
-                area="right",
-            )
-
-        if self.reconstruction is None:
-            self.reconstruction = create_reconstruction_dock()
-            self._reconstruction_dock_widget = (
-                self.viewer.window.add_dock_widget(
-                    self.reconstruction.widget,
-                    name="Reconstruction",
-                    area="right",
-                )
-            )
-
-        # make sure some docks are tabified
-        qt_window = getattr(self.viewer.window, "_qt_window", None)
-        if qt_window is not None:
-            # Bottom: ROI, Time Analysis, Histograms, Spectrum
-            qt_window.tabifyDockWidget(
-                self._roi_dock_widget, self._time_analysis_dock_widget
-            )
-            qt_window.tabifyDockWidget(
-                self._roi_dock_widget, self._histograms_dock_widget
-            )
-            qt_window.tabifyDockWidget(
-                self._roi_dock_widget, self._spectrum_dock_widget
-            )
-            # Right: Scan Browser + Annotation
-            qt_window.tabifyDockWidget(
-                self._scan_browser_dock_widget,
-                self._annotation_dock_widget,
-            )
-            qt_window.tabifyDockWidget(
-                self._scan_browser_dock_widget,
-                self._unmixing_dock_widget,
-            )
-            qt_window.tabifyDockWidget(
-                self._scan_browser_dock_widget,
-                self._reconstruction_dock_widget,
-            )
+        UiManager.setup_docks(self)
 
     def _connect_events(self) -> None:
-        self._connect_shapes_layer_events()
-
-        self.viewer.dims.events.point.connect(self.on_dims_changed)
-
-        from qtpy.QtWidgets import QApplication
-
-        app = QApplication.instance()
-        if app is not None:
-            app.aboutToQuit.connect(self._close_current_scan)
-
-        # TODO: should reordering / adding / removing layers trigger anything?
-        # self.viewer.layers.events.reordered.connect(self.on_layers_changed)
-        # self.viewer.layers.events.inserted.connect(self.on_layers_changed)
-        # self.viewer.layers.events.removed.connect(self.on_layers_changed)
-        self.viewer.layers.selection.events.changed.connect(
-            self.on_selection_changed
-        )
-
-        if self.roi is not None:
-            self.roi.save_button.clicked.connect(self.on_save_clicked)
-            self.roi.delete_button.clicked.connect(
-                self.on_delete_saved_clicked
-            )
-            self.roi.csv_button.clicked.connect(self.on_csv_export_clicked)
-            self.roi.hdf5_button.clicked.connect(self.on_hdf5_export_clicked)
-
-        if self.time_analysis is not None:
-            self.time_analysis.generate_button.clicked.connect(
-                self.on_generate_time_analysis_clicked
-            )
-
-        if self.histograms is not None:
-            self.histograms.refresh_button.clicked.connect(
-                self.on_refresh_histograms_clicked
-            )
-
-        if self.spectrum is not None:
-            self.spectrum.refresh_button.clicked.connect(
-                self.on_refresh_spectrum_clicked
-            )
-
-        if self.annotation is not None:
-            for edit in (
-                self.annotation.roi_clip_min_edit,
-                self.annotation.roi_clip_max_edit,
-                self.annotation.roi_exclude_min_edit,
-                self.annotation.roi_exclude_max_edit,
-            ):
-                edit.editingFinished.connect(
-                    self._on_roi_intensity_settings_changed
-                )
-                # required for reset via 'unset' clear button
-                edit.textChanged.connect(
-                    lambda t, _e=edit: (
-                        self._on_roi_intensity_settings_changed()
-                        if (t or "").strip() == ""
-                        else None
-                    )
-                )
-
-            self.annotation.roi_clipping_box.toggled.connect(
-                lambda checked: self._on_roi_intensity_settings_changed()
-            )
-            self.annotation.roi_exclusion_box.toggled.connect(
-                lambda checked: self._on_roi_intensity_settings_changed()
-            )
-
-            self.annotation.generate_tissue_segmentation_button.clicked.connect(
-                self.on_generate_tissue_segmentation_clicked
-            )
-            self.annotation.place_roi_button.clicked.connect(
-                self.on_place_roi_clicked
-            )
-
-            for btn in getattr(self.annotation, "roi_preset_buttons", []):
-                btn.clicked.connect(
-                    lambda checked=False, b=btn: self.on_roi_preset_clicked(b)
-                )
-
-        if self.scan_browser is not None:
-            self.scan_browser.browse_button.clicked.connect(
-                self.on_browse_folder_clicked
-            )
-            self.scan_browser.scans_list.currentRowChanged.connect(
-                self.on_scan_selected
-            )
+        UiManager.connect_events(self)
 
     def _connect_shapes_layer_events(self) -> None:
         if self.shapes_layer is None:
@@ -351,290 +123,65 @@ class PatariController:
             pass
 
     def _apply_roi_colors(self) -> None:
-        """
-        Assign distinct colors to each ROI shape based on its index.
-        """
-        if self.shapes_layer is None:
-            return
-
-        self.shapes_layer.edge_color = [
-            roi_color_for_index(i) for i in range(len(self.shapes_layer.data))
-        ]
+        RoiController.apply_roi_colors(self)
 
     def _apply_roi_labels(self) -> None:
-        """
-        show ROI index labels next to shapes.
-        TODO: this is a bit hacky
-        """
-        if self.shapes_layer is None:
-            return
-
-        try:
-            props = dict(getattr(self.shapes_layer, "properties", {}) or {})
-            props["roi_id"] = np.arange(len(self.shapes_layer.data), dtype=int)
-            self.shapes_layer.properties = props
-            # napari text supports formatting from properties.
-            self.shapes_layer.text = {"string": "{roi_id}", "size": 8}
-            # self.shapes_layer.text.visible = True # default
-
-        except Exception:
-            print("PATARI: failed to apply ROI labels")
-            pass
+        RoiController.apply_roi_labels(self)
 
     def _on_shapes_data_changed(self, event=None) -> None:
-        if self.shapes_layer is None:
-            return
-
-        self._apply_roi_colors()
-        if ROI_LABELS:
-            self._apply_roi_labels()
-
-        self.update_live_table()
+        RoiController.on_shapes_data_changed(self, event)
 
     # ---------------- scans / loading ----------------
     def _close_current_scan(self) -> None:
-        """Close the HDF5 handle for the current scan."""
-        if self.pa_data is None:
-            return
-        try:
-            self.pa_data.close()
-        except Exception:
-            pass
-        self.pa_data = None
-        self._patato_objects = {}
+        ScanController.close_current_scan(self)
 
     def _reset_scan_state(self) -> None:
-        """Clear current scan state and remove all viewer layers."""
-
-        self._close_current_scan()
-
-        for layer in list(self.viewer.layers):
-            self.viewer.layers.remove(layer)
-        self.active_layer = None
-        self.shapes_layer = None
-        self._placed_roi_index = None
+        ScanController.reset_scan_state(self)
 
     def _init_path(self, path: Path) -> None:
-        if path.is_dir():
-            self.set_scan_folder(path)
-            return
-
-        if path.is_file():
-            self.load_scan(path)
-            return
-
-        # Not a real path yet (e.g. in tests). Leave UI usable.
-        if self.scan_browser is not None:
-            self.scan_browser.set_folder(path)
+        ScanController.init_path(self, path)
 
     def set_scan_folder(self, folder: Path) -> None:
-        folder = Path(folder)
-        self.study_path = folder
-
-        self._scans = self._discover_scans(folder)
-
-        if self.scan_browser is not None:
-            self.scan_browser.set_folder(folder)
-            self.scan_browser.set_scans(list(self._scans.keys()))
-
-        # Auto-select first scan if available.
-        if self._scans and self.scan_browser is not None:
-            self.scan_browser.scans_list.setCurrentRow(0)
+        ScanController.set_scan_folder(self, folder)
 
     def load_scan(self, scan_path: Path) -> None:
-        scan_path = Path(scan_path)
-        self.path = scan_path
-        self._reset_scan_state()
-
-        if not scan_path.exists():
-            print(f"PATARI: scan not found: {scan_path}")
-            self.refresh_all()
-            return
-
-        scan_kind = self._scans.get(
-            scan_path,
-            (
-                "hdf5"
-                if scan_path.suffix.lower() in {".hdf5", ".h5"}
-                else "ithera"
-            ),
-        )
-
-        try:
-            if scan_kind == "hdf5":
-                self.pa_data = pat.PAData.from_hdf5(str(scan_path), mode="r")
-            else:
-                self.pa_data = pat.PAData(iTheraMSOT(str(scan_path)))
-        except Exception as e:
-            print(f"PATARI: failed to open scan '{scan_path}': {e}")
-            self.refresh_all()
-            return
-
-        try:
-            layers = self._layers_from_pa_data()
-        except Exception as e:
-            print(f"PATARI: failed to load '{scan_path}': {e}")
-            self._close_current_scan()
-            self.refresh_all()
-            return
-
-        for data, kw, lt in layers:
-            if lt == "image":
-                kw = dict(kw)
-                kw.setdefault("metadata", {})
-                kw["metadata"].setdefault("filepath", str(scan_path))
-                self.viewer.add_image(data, **kw)
-            else:
-                kw = dict(kw)
-                kw.setdefault("metadata", {})
-                kw["metadata"].setdefault("filepath", str(scan_path))
-                self.viewer.add_labels(data, **kw)
-
-        # Create a fresh ROIs layer after image/label layers so it stays on top.
-        self.shapes_layer = self.viewer.add_shapes(
-            name="ROIs",
-            edge_color=roi_color_for_index(0),
-            face_color="transparent",
-            edge_width=0.1,
-            ndim=2,
-            metadata={"type": "roi"},
-        )
-        self._connect_shapes_layer_events()
-
-        # After adding layers, pick a sensible default selected layer.
-        self._select_default_pa_layer()
-        self._resolve_active_layer()
-        # Initialize viewer position to middle frame/wav for each scan.
-        try:
-            data = np.asarray(self.active_layer.data)
-            if data.ndim >= 2:
-                self.viewer.dims.set_point(0, int((data.shape[0] - 1) // 2))
-                self.viewer.dims.set_point(1, int((data.shape[1] - 1) // 2))
-        except Exception:
-            print("PATARI: failed to set initial viewer position")
-            pass
-        # Populate ROIs after dims are initialized to avoid computing stats before the viewer is ready.
-        self._init_shapes_from_scan()
-
-        # Fit view to the newly loaded data (prevents "zoomed out" state).
-        try:
-            self.viewer.reset_view()
-        except Exception:
-            pass
+        ScanController.load_scan(self, scan_path)
 
     @staticmethod
     def _scan_key(scan_path: Path) -> str:
-        name = scan_path.stem if scan_path.is_file() else scan_path.name
-        m = re.match(r"^(Scan_\d+)", name)
-        return m.group(1) if m else name
+        return ScanController.scan_key(scan_path)
 
     @staticmethod
     def _scan_sort_key(scan_path: Path):
-        key = PatariController._scan_key(scan_path)
-        m = re.match(r"^Scan_(\d+)$", key)
-        if m:
-            return (0, int(m.group(1)), key)
-        return (1, 0, key)
+        return ScanController.scan_sort_key(scan_path)
 
     def _discover_scans(self, folder: Path) -> dict[Path, str]:
-        # One entry per scan key; if both exist, prefer HDF5 over iThera folder.
-        by_key: dict[str, tuple[Path, str]] = {}
-
-        for p in folder.glob("Scan_*.hdf5"):
-            by_key[self._scan_key(p)] = (p, "hdf5")
-
-        for d in folder.glob("Scan_*"):
-            if not d.is_dir():
-                continue
-            if any(d.glob("*.msot")):
-                key = self._scan_key(d)
-                if key not in by_key:
-                    by_key[key] = (d, "ithera")
-
-        entries = sorted((v[0], v[1]) for v in by_key.values())
-        entries.sort(key=lambda item: self._scan_sort_key(item[0]))
-        return {p: k for p, k in entries}
+        return ScanController.discover_scans(folder)
 
     @property
     def wavelengths(self) -> "list[int] | None":
-        """Wavelengths (nm) for the current scan, read directly from PAData.
-
-        Returns ``None`` if no scan is loaded or the metadata cannot be read.
-        Falls back gracefully so callers can treat ``None`` as "unknown".
         """
-        if self.pa_data is None:
-            return None
-        try:
-            return [int(w) for w in self.pa_data.get_wavelengths()]
-        except Exception:
-            return None
+        Wavelengths (nm) for the current scan
+        """
+        return ScanController.wavelengths(self)
 
     @property
     def timestamps(self) -> "np.ndarray | None":
-        """Acquisition timestamps for the current scan, read directly from PAData.
-
-        Returns a 2-D ``np.ndarray`` of shape ``(n_frames, n_wavelengths)`` in
-        seconds, or ``None`` if no scan is loaded or reading fails.
         """
-        if self.pa_data is None:
-            return None
-        try:
-            return np.array(self.pa_data.get_timestamps())
-        except Exception:
-            return None
+        Acquisition timestamps for the current scan
+        Returns a 2-D ``np.ndarray`` of shape ``(n_frames, n_wavelengths)`` in
+        seconds
+        """
+        return ScanController.timestamps(self)
 
     def _layers_from_pa_data(self) -> list[tuple]:
-        """Build napari LayerData tuples from the open self.pa_data handle.
-
-        PATATO image objects are stored in ``self._patato_objects`` keyed by
-        napari layer name for later FOV/scale queries.
-        """
-        layers, self._patato_objects = build_napari_layers(self.pa_data)
-        return layers
+        return ScanController.layers_from_pa_data(self)
 
     def _get_fov(self) -> "tuple[float, float] | None":
-        """Return ``(fov_x_m, fov_y_m)`` from stored PATATO objects, or ``None``."""
-        return fov_from_objects(self._patato_objects)
+        return ScanController.get_fov(self)
 
     def _init_shapes_from_scan(self) -> None:
-        """Clear the ROIs layer and populate it with any ROIs stored in the scan.
-
-        Called on every scan load.  Because the shapes layer is 2-D it is
-        displayed on all frames and wavelengths automatically by napari —
-        there is no per-frame visibility logic needed here.
-        """
-        if self.shapes_layer is None:
-            return
-
-        # Disconnect the data-change handler for the duration of the bulk
-        # operation — otherwise it fires once per shape.add(), triggering
-        # redundant compute_roi_stats calls and table refreshes.
-        try:
-            self.shapes_layer.events.data.disconnect(
-                self._on_shapes_data_changed
-            )
-        except Exception:
-            pass
-
-        shapes: list = []
-        try:
-            self.shapes_layer.data = []
-            fov = self._get_fov() if self.pa_data is not None else None
-            if fov is not None:
-                shapes = shapes_from_scan_rois(self.pa_data, *fov)
-                for verts, stype in shapes:
-                    self.shapes_layer.add(verts, shape_type=stype)
-                if shapes:
-                    print(f"PATARI: loaded {len(shapes)} ROI(s) from scan")
-        finally:
-            try:
-                self.shapes_layer.events.data.connect(
-                    self._on_shapes_data_changed
-                )
-            except Exception:
-                pass
-            # Single refresh at the end regardless of success/failure.
-            self._on_shapes_data_changed()
+        ScanController.init_shapes_from_scan(self)
 
     def _select_default_pa_layer(self) -> None:
 
@@ -706,7 +253,7 @@ class PatariController:
 
     # ---------------- layer selection ----------------
     def _resolve_active_layer(self) -> None:
-        """ """
+        """Set `active_layer` to the selected PA image layer (if exactly one is selected)."""
 
         selection = self.viewer.layers.selection
 
@@ -739,11 +286,6 @@ class PatariController:
                     layer._keep_auto_contrast = True
                     layer.visible = layer is self.active_layer
 
-    # ---------------- events ----------------
-    # def on_layers_changed(self, event=None) -> None:
-    #     # TODO: relevant?
-    #     self.refresh_all()
-
     def _on_roi_intensity_settings_changed(self) -> None:
         if self.annotation is None:
             return
@@ -772,293 +314,25 @@ class PatariController:
 
     # ---------------- segmentation ----------------
     def _resolve_us_layer(self) -> Image | None:
-        """Find US Image layer for segmentation (always runs on US)."""
-        for layer in self.viewer.layers:
-            if isinstance(layer, Image) and layer.metadata.get("type") == "us":
-                return layer
-        return None
+        return SegmentationController.resolve_us_layer(self)
 
     def _us_slice_2d(self, us_layer: Image) -> np.ndarray | None:
-        data = np.asarray(us_layer.data)
-        if data.ndim == 2:
-            return data
-
-        # Use current frame index if available.
-        try:
-            pt = list(self.viewer.dims.point)
-            frame_idx = int(round(pt[0])) if len(pt) >= 1 else 0
-        except Exception:
-            frame_idx = 0
-
-        frame_idx = int(np.clip(frame_idx, 0, max(0, data.shape[0] - 1)))
-
-        if data.ndim == 3:
-            return data[frame_idx]
-        if data.ndim >= 4:
-            # e.g. (frame, channel, y, x)
-            return data[frame_idx, 0]
-
-        return None
-
-    def _remove_previous_placed_roi(self) -> None:
-        if self.shapes_layer is None:
-            return
-        if self._placed_roi_index is None:
-            return
-        idx = int(self._placed_roi_index)
-        if idx < 0 or idx >= len(self.shapes_layer.data):
-            self._placed_roi_index = None
-            return
-        try:
-            self.shapes_layer.selected_data = {idx}
-            self.shapes_layer.remove_selected()
-        except Exception:
-            pass
-        self._placed_roi_index = None
+        return SegmentationController.us_slice_2d(self, us_layer)
 
     def _set_roi_class_choices(self, class_names: dict[int, str]) -> None:
-        if self.annotation is None:
-            return
-        combo = self.annotation.roi_class_combo
-        combo.blockSignals(True)
-        try:
-            combo.clear()
-            for class_id, name in sorted(
-                class_names.items(), key=lambda kv: int(kv[0])
-            ):
-                combo.addItem(str(name), userData=int(class_id))
-            combo.setEnabled(combo.count() > 0)
-        finally:
-            combo.blockSignals(False)
-
-        # Apply pending preset class selection once classes are available.
-        if self._pending_preset_class:
-            self._select_roi_class_by_name(self._pending_preset_class)
-            self._pending_preset_class = None
+        SegmentationController.set_roi_class_choices(self, class_names)
 
     def _select_roi_class_by_name(self, class_name: str) -> None:
-        if self.annotation is None:
-            return
-        combo = self.annotation.roi_class_combo
-        target = (class_name or "").strip().lower()
-        if not target:
-            return
-        for i in range(combo.count()):
-            txt = (combo.itemText(i) or "").strip().lower()
-            if txt == target:
-                combo.setCurrentIndex(i)
-                return
+        SegmentationController.select_roi_class_by_name(self, class_name)
 
     def on_roi_preset_clicked(self, button) -> None:
-        if self.annotation is None:
-            return
-
-        try:
-            preset_index = int(button.property("roi_preset_index"))
-        except Exception:
-            return
-
-        if not (0 <= preset_index < len(ROI_PLACEMENT_PRESETS)):
-            return
-
-        preset = ROI_PLACEMENT_PRESETS[preset_index]
-        roi_type = str(preset.get("roi_type", "ellipse"))
-
-        # ROI type dropdown (currently only ellipse).
-        for i in range(self.annotation.roi_type_combo.count()):
-            if self.annotation.roi_type_combo.itemData(i) == roi_type:
-                self.annotation.roi_type_combo.setCurrentIndex(i)
-                break
-
-        # Numeric fields
-        self.annotation.roi_width_edit.setText(str(preset.get("width_mm", "")))
-        self.annotation.roi_height_edit.setText(
-            str(preset.get("height_mm", ""))
-        )
-        self.annotation.roi_depth_edit.setText(str(preset.get("depth_mm", "")))
-
-        # Segmentation class selection (may be unavailable until segmentation exists).
-        seg_class = str(preset.get("segmentation_class", "")).strip()
-        if not seg_class:
-            return
-        if (
-            self.annotation.roi_class_combo.isEnabled()
-            and self.annotation.roi_class_combo.count() > 0
-        ):
-            self._select_roi_class_by_name(seg_class)
-        else:
-            self._pending_preset_class = seg_class
+        SegmentationController.on_roi_preset_clicked(self, button)
 
     def on_generate_tissue_segmentation_clicked(self) -> None:
-        if self.annotation is None:
-            return
-
-        us_layer = self._resolve_us_layer()
-        if us_layer is None:
-            self.annotation.segmentation_status_label.setText(
-                "No US layer found"
-            )
-            return
-
-        us_2d = self._us_slice_2d(us_layer)
-        if us_2d is None:
-            self.annotation.segmentation_status_label.setText(
-                "US layer has unsupported shape"
-            )
-            return
-
-        self.annotation.segmentation_status_label.setText(
-            "Running segmentation…"
-        )
-
-        try:
-            result = self._segmenter.predict(us_2d)
-        except Exception as e:
-            self.annotation.segmentation_status_label.setText(
-                f"Segmentation failed: {e}"
-            )
-            return
-
-        # show segmentation as Labels
-        labels = ensure_segmentation_labels_layer(self.viewer)
-        try:
-            set_segmentation_2d(
-                labels,
-                result.seg,
-                class_names=result.class_names,
-                reference_layer=us_layer,
-            )
-        except Exception as e:
-            self.annotation.segmentation_status_label.setText(
-                f"Failed to show labels: {e}"
-            )
-            return
-
-        # Populate ROI class dropdown from model classes.
-        self._set_roi_class_choices(result.class_names)
-        self.annotation.roi_status_label.setText(
-            "Segmentation generated. Choose class and place ROI."
-        )
-
-        self.annotation.segmentation_status_label.setText(
-            "Segmentation layer added."
-        )
+        SegmentationController.on_generate_tissue_segmentation_clicked(self)
 
     def on_place_roi_clicked(self) -> None:
-        if self.annotation is None:
-            return
-        if self.shapes_layer is None:
-            self.annotation.roi_status_label.setText("No ROIs layer")
-            return
-
-        # Must have segmentation layer.
-        seg_layer = None
-        try:
-            if "Segmentation" in self.viewer.layers:
-                seg_layer = self.viewer.layers["Segmentation"]
-        except Exception:
-            seg_layer = None
-
-        if seg_layer is None or not isinstance(seg_layer, Labels):
-            self.annotation.roi_status_label.setText(
-                "Generate tissue segmentation first"
-            )
-            return
-
-        try:
-            seg = np.asarray(getattr(seg_layer, "data"))
-        except Exception:
-            self.annotation.roi_status_label.setText(
-                "Invalid segmentation data"
-            )
-            return
-
-        if seg.ndim != 2:
-            self.annotation.roi_status_label.setText(
-                "Segmentation layer must be 2D"
-            )
-            return
-
-        class_id = self.annotation.roi_class_combo.currentData()
-        if class_id is None:
-            self.annotation.roi_status_label.setText("Select a class")
-            return
-
-        roi_type = self.annotation.roi_type_combo.currentData()
-        if roi_type is None:
-            roi_type = "ellipse"
-
-        width_mm = parse_float_input(self.annotation.roi_width_edit.text())
-        height_mm = parse_float_input(self.annotation.roi_height_edit.text())
-        depth_mm = parse_float_input(self.annotation.roi_depth_edit.text())
-
-        if width_mm is None or height_mm is None:
-            self.annotation.roi_status_label.setText(
-                "Enter ROI width and height (mm)"
-            )
-            return
-        if depth_mm is None:
-            depth_mm = 0.0
-
-        # Use US layer calibration for placement.
-        us_layer = self._resolve_us_layer()
-        if us_layer is None:
-            self.annotation.roi_status_label.setText("No US layer found")
-            return
-
-        try:
-            ref_scale = getattr(us_layer, "scale", (1.0, 1.0))
-            sy, sx = float(ref_scale[-2]), float(ref_scale[-1])
-        except Exception:
-            sy, sx = 1.0, 1.0
-
-        try:
-            ref_translate = getattr(us_layer, "translate", (0.0, 0.0))
-            ty, tx = float(ref_translate[-2]), float(ref_translate[-1])
-        except Exception:
-            ty, tx = 0.0, 0.0
-
-        class_mask = seg == int(class_id)
-        config = EllipseConfig(
-            width_mm=float(width_mm),
-            height_mm=float(height_mm),
-            depth_mm=float(depth_mm),
-        )
-
-        try:
-            placer = ShapeFactory.create_shape(str(roi_type), config)
-            verts_world = placer.to_napari_verts_world(
-                class_mask=class_mask,
-                sy=sy,
-                sx=sx,
-                ty=ty,
-                tx=tx,
-            )
-        except Exception as e:
-            self.annotation.roi_status_label.setText(
-                f"ROI placement failed: {e}"
-            )
-            return
-
-        # Only one placed ROI at a time.
-        self._remove_previous_placed_roi()
-
-        try:
-            before = len(self.shapes_layer.data)
-            self.shapes_layer.add(verts_world, shape_type="ellipse")
-            after = len(self.shapes_layer.data)
-            if after == before + 1:
-                self._placed_roi_index = before
-        except Exception as e:
-            self.annotation.roi_status_label.setText(
-                f"Failed to add ROI to viewer: {e}"
-            )
-            return
-
-        self._apply_roi_colors()
-        self.update_live_table()
-
-        self.annotation.roi_status_label.setText("ROI placed.")
+        SegmentationController.on_place_roi_clicked(self)
 
     def on_selection_changed(self, event=None) -> None:
         self._resolve_active_layer()
@@ -1084,303 +358,15 @@ class PatariController:
 
     # ---------------- time analysis ----------------
     def on_generate_time_analysis_clicked(self, event=None) -> None:
-
-        error_msg = ""
-
-        if self.shapes_layer is None:
-            error_msg = "No ROIs layer"
-        elif self.active_layer is None:
-            error_msg = "Select a PA image layer"
-        elif len(self.shapes_layer.data) == 0:
-            error_msg = "No ROIs defined"
-        elif len(self.active_layer.metadata["frames"]) < 2:
-            error_msg = "PA image layer has less than 2 frames"
-
-        if error_msg:
-            self.time_analysis.status_label.setText(
-                f'<span style="color:red">{error_msg}</span>'
-            )
-            if self.time_analysis.plot_widget is not None:
-                self.time_analysis.plot_widget.clear()
-            return
-
-        # Lazily create plot widget.
-        if self.time_analysis.plot_widget is None:
-            plot = pg.PlotWidget()
-            plot.showGrid(x=True, y=True)
-            plot.addLegend()
-            self.time_analysis.plot_widget = plot
-            layout = self.time_analysis.plot_container.layout()
-            if layout is not None:
-                layout.addWidget(plot)
-
-        plot = self.time_analysis.plot_widget
-        assert plot is not None
-
-        # Current wavelength index from dims.
-        pt = list(self.viewer.dims.point)
-        wav_idx = int(round(pt[1])) if len(pt) >= 2 else 0
-
-        self.time_analysis.status_label.setText("Computing time series…")
-        x, series = compute_roi_time_series(
-            self.shapes_layer,
-            self.active_layer,
-            wav_idx,
-            clamp_min=self.roi_intensity_min,
-            clamp_max=self.roi_intensity_max,
-            clamp_mode=(self.roi_intensity_mode or "clip"),
-        )
-
-        plot.clear()
-
-        plot.addLegend()
-
-        for roi_index, y in series.items():
-            color = roi_color_for_index(int(roi_index))
-            plot.plot(
-                x,
-                y,
-                pen=pg.mkPen(color=color, width=2),
-                symbol="o",
-                symbolSize=6,
-                symbolBrush=pg.mkBrush(color),
-                symbolPen=pg.mkPen(color=color, width=1),
-                name=f"ROI {roi_index}",
-            )
-
-        # Re-autoscale y-axis on every refresh (useful when intensities vary).
-        vb = plot.getViewBox()
-        vb.enableAutoRange(axis=getattr(vb, "YAxis", "y"), enable=True)
-        vb.autoRange(padding=0.02)
-
-        xlabel = "Time (s)" if self.timestamps is not None else "Frame"
-        plot.setLabel("bottom", xlabel)
-        plot.setLabel("left", "Mean intensity")
-
-        # ---- Scrub line ----
-        # Store the x<->frame mapping so _on_scrub_line_moved can convert back.
-        # frames_meta = getattr(self.active_layer, "metadata", {}).get("frames")
-        # if frames_meta:
-        #     self._time_frames = np.asarray(frames_meta, dtype=int)
-        # else:
-        #     self._time_frames = np.arange(
-        #         np.asarray(self.active_layer.data).shape[0], dtype=int
-        #     )
-        # self._time_x = x
-
-        # # plot.clear() was called above, so we always create a fresh line.
-        # frame_idx = int(round(pt[0])) if len(pt) >= 1 else 0
-        # x_pos = self._x_for_frame(frame_idx)
-        # line = pg.InfiniteLine(
-        #     pos=x_pos,
-        #     angle=90,
-        #     movable=True,
-        #     pen=pg.mkPen(color=(220, 220, 220, 200), width=1, style=Qt.DashLine),
-        # )
-        # line.sigPositionChanged.connect(self._on_scrub_line_moved)
-
-        # plot.plotItem.addItem(line)
-        # self.time_analysis.scrub_line = line
-
-        self.time_analysis.status_label.setText(
-            f"Plotted {len(series)} ROI(s) over {len(x)} frame(s)."
-        )
-
-    # def _x_for_frame(self, frame_idx: int) -> float:
-    #     """Return the x-axis value on the time-series plot for *frame_idx*."""
-    #     if (
-    #         self._time_x is None
-    #         or self._time_frames is None
-    #         or len(self._time_frames) == 0
-    #     ):
-    #         return float(frame_idx)
-    #     idx = int(np.argmin(np.abs(self._time_frames - frame_idx)))
-    #     return float(self._time_x[idx])
-
-    # def _on_scrub_line_moved(self, line) -> None:
-    #     """User dragged the scrub line → snap the viewer to the nearest frame."""
-    #     if self._scrub_updating:
-    #         return
-    #     if (
-    #         self._time_x is None
-    #         or self._time_frames is None
-    #         or len(self._time_x) == 0
-    #     ):
-    #         return
-    #     x_pos = float(line.value())
-    #     idx = int(np.argmin(np.abs(self._time_x - x_pos)))
-    #     frame_idx = int(self._time_frames[idx])
-    #     self._scrub_updating = True
-    #     try:
-    #         self.viewer.dims.set_point(0, frame_idx)
-    #     finally:
-    #         self._scrub_updating = False
-
-    # def _update_scrub_line(self) -> None:
-    #     """Move the scrub line to the current viewer frame (no-op if not visible)."""
-    #     if self._scrub_updating:
-    #         return
-    #     if self.time_analysis is None or self.time_analysis.scrub_line is None:
-    #         return
-    #     pt = list(self.viewer.dims.point)
-    #     if not pt:
-    #         return
-    #     frame_idx = int(round(pt[0]))
-    #     x_pos = self._x_for_frame(frame_idx)
-    #     self._scrub_updating = True
-    #     try:
-    #         self.time_analysis.scrub_line.setValue(x_pos)
-    #     finally:
-    #         self._scrub_updating = False
+        AnalysisController.on_generate_time_analysis_clicked(self, event)
 
     # ---------------- histograms ----------------
     def on_refresh_histograms_clicked(self, event=None) -> None:
-        if self.histograms is None:
-            return
-        if self.shapes_layer is None:
-            self.histograms.status_label.setText("No ROIs layer")
-            return
-        if self.active_layer is None:
-            self.histograms.status_label.setText("Select a PA image layer")
-            return
-
-        pt = list(self.viewer.dims.point)
-        if len(pt) < 2:
-            frame_idx, wav_idx = 0, 0
-        else:
-            frame_idx = int(round(pt[0]))
-            wav_idx = int(round(pt[1]))
-
-        self.histograms.status_label.setText("Computing histograms…")
-
-        roi_vals = extract_roi_pixels_for_slice(
-            self.shapes_layer,
-            self.active_layer,
-            frame_idx,
-            wav_idx,
-            clamp_min=self.roi_intensity_min,
-            clamp_max=self.roi_intensity_max,
-            clamp_mode=(self.roi_intensity_mode or "clip"),
-        )
-
-        # Clear previous plots
-        container = self.histograms.plots_container
-        layout = container.layout()
-        if layout is not None:
-            while layout.count():
-                item = layout.takeAt(0)
-                w = item.widget() if item is not None else None
-                if w is not None:
-                    w.setParent(None)
-                    w.deleteLater()
-
-        n_plotted = 0
-        for roi_index, vals in roi_vals.items():
-            vals = np.asarray(vals)
-            if vals.size == 0:
-                continue
-
-            # Histogram bins: simple default.
-            try:
-                counts, edges = np.histogram(vals, bins=50)
-            except Exception:
-                continue
-
-            if counts.size == 0 or edges.size < 2:
-                continue
-
-            x = (edges[:-1] + edges[1:]) / 2.0
-            width = float(edges[1] - edges[0])
-
-            color = roi_color_for_index(int(roi_index))
-            brush = pg.mkBrush(color)
-            pen = pg.mkPen(color)
-
-            plot = pg.PlotWidget()
-            plot.setTitle(f"ROI {roi_index}")
-            plot.showGrid(x=True, y=True)
-            bar = pg.BarGraphItem(
-                x=x,
-                height=counts,
-                width=width,
-                brush=brush,
-                pen=pen,
-            )
-            plot.addItem(bar)
-
-            if layout is not None:
-                layout.addWidget(plot)
-            n_plotted += 1
-
-        self.histograms.status_label.setText(
-            f"Plotted {n_plotted} histogram(s) for frame {frame_idx}, wav {wav_idx}."
-        )
+        AnalysisController.on_refresh_histograms_clicked(self, event)
 
     # ---------------- spectrum ----------------
     def on_refresh_spectrum_clicked(self, event=None) -> None:
-        if self.spectrum is None:
-            return
-        if self.shapes_layer is None:
-            self.spectrum.status_label.setText("No ROIs layer")
-            return
-        if self.active_layer is None:
-            self.spectrum.status_label.setText("Select a PA image layer")
-            return
-
-        pt = list(self.viewer.dims.point)
-        frame_idx = int(round(pt[0])) if len(pt) >= 1 else 0
-
-        self.spectrum.status_label.setText("Computing spectra…")
-
-        x, series = compute_roi_spectra(
-            self.shapes_layer,
-            self.active_layer,
-            frame_idx,
-            clamp_min=self.roi_intensity_min,
-            clamp_max=self.roi_intensity_max,
-            clamp_mode=(self.roi_intensity_mode or "clip"),
-        )
-
-        # Clear previous plots
-        container = self.spectrum.plots_container
-        layout = container.layout()
-        if layout is not None:
-            while layout.count():
-                item = layout.takeAt(0)
-                w = item.widget() if item is not None else None
-                if w is not None:
-                    w.setParent(None)
-                    w.deleteLater()
-
-        n_plotted = 0
-        for roi_index, y in series.items():
-            if y.size == 0 or np.all(np.isnan(y)):
-                continue
-
-            color = roi_color_for_index(int(roi_index))
-
-            plot = pg.PlotWidget()
-            plot.setTitle(f"ROI {roi_index}")
-            plot.showGrid(x=True, y=True)
-            plot.setLabel("bottom", "Wavelength (nm)")
-            plot.setLabel("left", "Mean intensity")
-            plot.plot(
-                x,
-                y,
-                pen=pg.mkPen(color=color, width=2),
-                symbol="o",
-                symbolSize=6,
-                symbolBrush=pg.mkBrush(color),
-                symbolPen=pg.mkPen(color=color, width=1),
-            )
-
-            if layout is not None:
-                layout.addWidget(plot)
-            n_plotted += 1
-
-        self.spectrum.status_label.setText(
-            f"Plotted {n_plotted} spectrum/a for frame {frame_idx}."
-        )
+        AnalysisController.on_refresh_spectrum_clicked(self, event)
 
     # ---------------- info/roi updates ----------------
     def refresh_all(self) -> None:
@@ -1389,7 +375,6 @@ class PatariController:
         """
         self.update_info_labels()
         self.update_live_table()
-        # self._update_scrub_line()
 
     def snap_to_reconstructed_frame(self, frame_idx: int) -> int:
         if self.active_layer is None:
@@ -1483,275 +468,22 @@ class PatariController:
         )
 
     def update_live_table(self, event=None) -> None:
-        if self.roi is None or self.shapes_layer is None:
-            return
-
-        if self.active_layer is None:
-            self.roi.live_table.value = pd.DataFrame(
-                columns=list(dtype_map.keys())
-            ).astype(dtype_map)
-            return
-
-        pt = list(self.viewer.dims.point)
-        if len(pt) < 2:
-            return
-
-        frame_idx = int(round(pt[0]))
-        wav_idx = int(round(pt[1]))
-
-        try:
-            df = compute_roi_stats(
-                self.shapes_layer,
-                self.active_layer,
-                frame_idx,
-                wav_idx,
-                clamp_min=self.roi_intensity_min,
-                clamp_max=self.roi_intensity_max,
-                clamp_mode=(self.roi_intensity_mode or "clip"),
-            )
-        except Exception as e:
-            print("update_live_table:", e)
-            df = pd.DataFrame(columns=list(dtype_map.keys())).astype(dtype_map)
-
-        self.roi.live_table.value = df
-
-        # Keep shapes layer colors in sync with indices.
-        self._apply_roi_colors()
-
-        # color first column cells background to match ROI colors
-        num_shapes = len(self.shapes_layer.data)
-        for row_idx in range(num_shapes):
-            item = self.roi.live_table.native.item(row_idx, 0)
-            if item is not None:
-                item.setBackground(QColor(roi_color_for_index(row_idx)))
+        RoiController.update_live_table(self, event)
 
     # ---------------- table helpers ----------------
     @staticmethod
-    def _table_value_to_df(table: object) -> pd.DataFrame:
-        # magicgui Table.value is sometimes a DataFrame and sometimes dict-like
-        val = getattr(table, "value", table)
-        if isinstance(val, pd.DataFrame):
-            return val
-        if isinstance(val, dict) and "data" in val and "columns" in val:
-            return pd.DataFrame(val["data"], columns=val["columns"])
-        return pd.DataFrame()
+    def _table_value_to_df(table: object):
+        return RoiController.table_value_to_df(table)
 
     # ---------------- button callbacks ----------------
     def on_save_clicked(self, event=None) -> None:
-        if self.roi is None or self.shapes_layer is None:
-            return
-
-        selected = self.shapes_layer.selected_data
-        if len(selected) != 1:
-            print("Select one ROI to save")
-            return
-
-        roi_idx = list(selected)[0]
-        df_live = self._table_value_to_df(self.roi.live_table)
-        if df_live.empty or roi_idx >= len(df_live):
-            print("Nothing to save")
-            return
-
-        include_all_frames = False
-        include_all_wavelengths = False
-        if self.annotation is not None:
-            cb_frames = getattr(
-                self.annotation, "include_all_frames_checkbox", None
-            )
-            cb_wavs = getattr(
-                self.annotation, "include_all_wavelengths_checkbox", None
-            )
-            include_all_frames = (
-                bool(cb_frames.isChecked()) if cb_frames is not None else False
-            )
-            include_all_wavelengths = (
-                bool(cb_wavs.isChecked()) if cb_wavs is not None else False
-            )
-
-        if not include_all_frames and not include_all_wavelengths:
-            rows_to_add = df_live.iloc[[roi_idx]].astype(dtype_map)
-        else:
-            if self.active_layer is None:
-                print("Select an image layer to save ROI stats")
-                return
-
-            pt = list(self.viewer.dims.point)
-            if len(pt) < 2:
-                return
-            frame_idx = int(round(pt[0]))
-            wav_idx = int(round(pt[1]))
-
-            data = np.asarray(self.active_layer.data)
-
-            if data.ndim < 2:
-                print("Active layer has no frame/wavelength dimensions")
-                return
-
-            if include_all_frames:
-                frames_meta = getattr(self.active_layer, "metadata", {}).get(
-                    "frames"
-                )
-                frame_indices = [int(f) for f in frames_meta]
-
-            else:
-                frame_indices = [frame_idx]
-
-            if include_all_wavelengths:
-                wav_indices = list(range(data.shape[1]))
-            else:
-                wav_indices = [wav_idx]
-
-            collected: list[pd.DataFrame] = []
-            for f_idx in frame_indices:
-                for w_idx in wav_indices:
-                    df_slice = compute_roi_stats(
-                        self.shapes_layer,
-                        self.active_layer,
-                        int(f_idx),
-                        int(w_idx),
-                        clamp_min=self.roi_intensity_min,
-                        clamp_max=self.roi_intensity_max,
-                        clamp_mode=(self.roi_intensity_mode or "clip"),
-                    )
-
-                    roi_index_numeric = pd.to_numeric(
-                        df_slice["roi_index"], errors="coerce"
-                    )
-                    df_row = df_slice[roi_index_numeric == int(roi_idx)]
-
-                    collected.append(df_row.iloc[[0]].astype(dtype_map))
-
-            if not collected:
-                print("Nothing to save")
-                return
-
-            rows_to_add = pd.concat(collected, ignore_index=True).astype(
-                dtype_map
-            )
-
-        df_saved = self._table_value_to_df(self.roi.saved_table)
-        if df_saved.empty:
-            df_saved = rows_to_add.copy()
-        else:
-            df_saved = pd.concat([df_saved, rows_to_add], ignore_index=True)
-
-        self.roi.saved_table.value = df_saved.astype(dtype_map)
-        print(f"Saved ROI {roi_idx} ({len(rows_to_add)} row(s))")
+        RoiController.on_save_clicked(self, event)
 
     def on_delete_saved_clicked(self, event=None) -> None:
-        if self.roi is None:
-            return
-
-        selection_model = self.roi.saved_table.native.selectionModel()
-        selected_rows = selection_model.selectedRows()
-        selected_indices = [idx.row() for idx in selected_rows]
-        if not selected_indices:
-            print("No row selected to delete.")
-            return
-
-        df_saved = self._table_value_to_df(self.roi.saved_table)
-        if df_saved.empty:
-            return
-
-        df_saved = df_saved.drop(selected_indices).reset_index(drop=True)
-        self.roi.saved_table.value = df_saved.astype(dtype_map)
-        print(f"Deleted {len(selected_indices)} saved rows")
+        RoiController.on_delete_saved_clicked(self, event)
 
     def on_csv_export_clicked(self, event=None) -> None:
-        if self.roi is None:
-            return
-
-        df_saved = self._table_value_to_df(self.roi.saved_table)
-        if df_saved.empty:
-            print("Saved table empty")
-            return
-
-        filename, _ = QFileDialog.getSaveFileName(
-            None,
-            "Save ROIs as Excel",
-            "roi_data.xlsx",
-            "Excel Files (*.xlsx)",
-        )
-        if not filename:
-            return
-        if not filename.endswith(".xlsx"):
-            filename += ".xlsx"
-
-        df_saved.to_excel(filename, index=False)
-        print(f"Saved ROI table to {filename}")
+        RoiController.on_csv_export_clicked(self, event)
 
     def on_hdf5_export_clicked(self, event=None) -> None:
-        """Save all ROI shapes to the scan HDF5 (full overwrite).
-
-        Passing an empty shapes list clears all ROIs from the file.
-        Briefly closes the read handle so the file can be opened for writing,
-        then reopens it so the scan stays usable.
-        """
-        if self.shapes_layer is None:
-            print("PATARI: no ROIs layer")
-            return
-        if self.pa_data is None or self.path is None:
-            print("PATARI: no scan loaded")
-            return
-        if self.path.suffix.lower() not in {".hdf5", ".h5"}:
-            print(
-                "PATARI: ROI export currently supports loaded HDF5 scans only"
-            )
-            return
-
-        fov = self._get_fov()
-        if fov is None:
-            print("PATARI: cannot determine FOV — is a reconstruction loaded?")
-            return
-        fov_x_m, fov_y_m = fov
-
-        pt = list(self.viewer.dims.point)
-        frame_idx = int(round(pt[0])) if pt else 0
-        try:
-            z = float(
-                self.pa_data.scan_reader.get_scanner_z_position()[frame_idx, 0]
-            )
-            run = float(
-                self.pa_data.scan_reader.get_run_numbers()[frame_idx, 0]
-            )
-            rep = float(
-                self.pa_data.scan_reader.get_repetition_numbers()[frame_idx, 0]
-            )
-        except Exception:
-            z, run, rep = 0.0, 0.0, 0.0
-
-        # Snapshot shapes before closing the handle (defensive copy).
-        shapes_snapshot = [
-            np.asarray(v, dtype=float) for v in self.shapes_layer.data
-        ]
-        shape_types_snapshot = list(self.shapes_layer.shape_type)
-
-        # Close read handle while writing; always reopen in finally.
-        self.pa_data.close()
-        self.pa_data = None
-
-        error = None
-        try:
-            n_saved = save_rois_to_scan(
-                self.path,
-                shapes_snapshot,
-                shape_types_snapshot,
-                fov_x_m,
-                fov_y_m,
-                z,
-                run,
-                rep,
-                frame_idx,
-            )
-            if n_saved == 0:
-                print(f"PATARI: cleared all ROIs from {self.path.name}")
-            else:
-                print(f"PATARI: saved {n_saved} ROI(s) to {self.path.name}")
-        except Exception as e:
-            error = e
-            print(f"PATARI: failed to save ROIs: {e}")
-        finally:
-            try:
-                self.pa_data = pat.PAData.from_hdf5(str(self.path), mode="r")
-            except Exception as e2:
-                print(f"PATARI: failed to reopen scan after ROI save: {e2}")
+        RoiController.on_hdf5_export_clicked(self, event)

@@ -1,6 +1,6 @@
 """Segmentation utilities and model wrappers."""
 
-from patari.segmentation.service import DummySegmenter, SegmentationResult
+from patari.segmentation.segmenter import DummySegmenter, SegmentationResult
 from patari.segmentation.napari import (
     ensure_segmentation_labels_layer,
     set_segmentation_2d,
