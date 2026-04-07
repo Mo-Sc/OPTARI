@@ -2,56 +2,11 @@ name: patari
 display_name: PATARI
 # use 'hidden' to remove plugin from napari hub search results
 visibility: public
-# see https://napari.org/stable/plugins/technical_references/manifest.html#fields for valid categories
-# categories: []
 contributions:
   commands:
-    - id: patari.get_reader
-      python_name: patari._reader:napari_get_reader
-      title: Open data with PATARI
-    - id: patari.write_multiple
-      python_name: patari._writer:write_multiple
-      title: Save multi-layer data with PATARI
-    - id: patari.write_single_image
-      python_name: patari._writer:write_single_image
-      title: Save image data with PATARI
-    - id: patari.make_sample_data
-      python_name: patari._sample_data:make_sample_data
-      title: Load sample data from PATARI
-    - id: patari.make_container_widget
-      python_name: patari:ImageThreshold
-      title: Make threshold Container widget
-    - id: patari.make_magic_widget
-      python_name: patari:threshold_magic_widget
-      title: Make threshold magic widget
-    - id: patari.make_function_widget
-      python_name: patari:threshold_autogenerate_widget
-      title: Make threshold function widget
-    - id: patari.make_qwidget
-      python_name: patari:ExampleQWidget
-      title: Make example QWidget
-  readers:
-    - command: patari.get_reader
-      accepts_directories: false
-      filename_patterns: ['*.npy']
-  writers:
-    - command: patari.write_multiple
-      layer_types: ['image*','labels*']
-      filename_extensions: []
-    - command: patari.write_single_image
-      layer_types: ['image']
-      filename_extensions: ['.npy']
-  sample_data:
-    - command: patari.make_sample_data
-      display_name: PATARI
-      key: unique_id.1
+    - id: patari._widget.patari_controls
+      title: PATARI Controls
+      python_name: patari._widget:patari_controls
   widgets:
-    - command: patari.make_container_widget
-      display_name: Container Threshold
-    - command: patari.make_magic_widget
-      display_name: Magic Threshold
-    - command: patari.make_function_widget
-      autogenerate: true
-      display_name: Autogenerate Threshold
-    - command: patari.make_qwidget
-      display_name: Example QWidget
+    - command: patari._widget.patari_controls
+      display_name: PATARI Controls
