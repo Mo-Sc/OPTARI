@@ -5,13 +5,13 @@ import re
 
 import numpy as np
 import patato as pat
-from napari.layers import Image
 from patato.io.ithera.read_ithera import iTheraMSOT
 
 from patari.patato_bridge import (
     build_napari_layers,
     fov_from_objects,
-    shapes_from_scan_rois,
+    napari_shapes_to_patato_rois,
+    napari_shapes_from_scan_rois,
 )
 from patari.utils.misc import roi_color_for_index
 
@@ -256,7 +256,7 @@ class ScanController:
                 else None
             )
             if fov is not None:
-                shapes = shapes_from_scan_rois(controller.pa_data, *fov)
+                shapes = napari_shapes_from_scan_rois(controller.pa_data, *fov)
                 for verts, stype in shapes:
                     controller.shapes_layer.add(verts, shape_type=stype)
                 if shapes:
@@ -270,3 +270,104 @@ class ScanController:
                 pass
             # Single refresh at the end regardless of success/failure.
             controller._on_shapes_data_changed()
+
+    @staticmethod
+    def export_hdf5(controller, destination: Path) -> bool:
+        """Export the current scan to a new HDF5 file and persist live ROIs.
+
+        Returns ``True`` on success, ``False`` on failure.
+        """
+        if controller.pa_data is None:
+            print("PATARI: no scan loaded")
+            return False
+
+        destination = Path(destination)
+        if destination.suffix.lower() not in {".hdf5", ".h5"}:
+            destination = destination.with_suffix(".hdf5")
+        if destination.exists():
+            print(f"PATARI: export target already exists: {destination}")
+            return False
+
+        try:
+            controller.pa_data.save_hdf5(str(destination))
+        except Exception as e:
+            print(f"PATARI: failed to export scan to HDF5: {e}")
+            return False
+
+        if controller.shapes_layer is None:
+            print(f"PATARI: exported scan to {destination} (no ROIs layer)")
+            return True
+
+        fov = ScanController.get_fov(controller)
+        if fov is None:
+            print(
+                f"PATARI: exported scan to {destination} (ROIs skipped: no FOV)"
+            )
+            return True
+
+        fov_x_m, fov_y_m = fov
+        pt = list(controller.viewer.dims.point)
+        frame_idx = int(round(pt[0])) if pt else 0
+        try:
+            z = float(
+                controller.pa_data.scan_reader.get_scanner_z_position()[
+                    frame_idx, 0
+                ]
+            )
+            run = float(
+                controller.pa_data.scan_reader.get_run_numbers()[frame_idx, 0]
+            )
+            rep = float(
+                controller.pa_data.scan_reader.get_repetition_numbers()[
+                    frame_idx, 0
+                ]
+            )
+        except Exception:
+            z, run, rep = 0.0, 0.0, 0.0
+
+        shapes_snapshot = [
+            np.asarray(v, dtype=float) for v in controller.shapes_layer.data
+        ]
+        shape_types_snapshot = list(controller.shapes_layer.shape_type)
+
+        try:
+            destination_pa_data = pat.PAData.from_hdf5(
+                str(destination), mode="r+"
+            )
+        except Exception as e:
+            print(
+                f"PATARI: exported scan, but failed to reopen destination: {e}"
+            )
+            return False
+
+        try:
+            # Replace any ROIs copied by the base PATATO export with the
+            # current live napari shapes.
+            destination_pa_data.delete_rois()
+            rois = napari_shapes_to_patato_rois(
+                shapes_snapshot,
+                shape_types_snapshot,
+                fov_x_m,
+                fov_y_m,
+                z,
+                run,
+                rep,
+                frame_idx,
+            )
+            for roi in rois:
+                destination_pa_data.add_roi(roi, generated=True)
+            if not rois:
+                print(f"PATARI: exported scan to {destination}; no ROIs saved")
+            else:
+                print(
+                    f"PATARI: exported scan to {destination}; saved {len(rois)} ROI(s)"
+                )
+            return True
+        except Exception as e:
+            print(f"PATARI: exported scan, but failed to write ROIs: {e}")
+            return False
+        finally:
+            try:
+                destination_pa_data.close()
+            except Exception:
+                pass

@@ -15,6 +15,23 @@ Analysis tool for clinical PA studies based on PATATO and NAPARI
 
 This [napari] plugin was generated with [copier] using the [napari-plugin-template] (None).
 
+## Developer Notes
+
+### Data Loading
+
+- PATARI loads either iThera scan folders or HDF5 scans through PATATO readers.
+- Can load individual scans as well as study folders
+- When native ithera and hdf5 versions are available for the same scan key, the scan browser prefers the HDF5 file, assuming it is an already converted version of the ithera scan.
+- HDF5 export is always to a new HDF5 file, cant export back to iThera.
+- Export uses PATATO export functionality, so all new data that is part of pa_data will be exported
+- Currently no overwrite / append functionality (PATARI fails if file exists already)
+- Export is a two-pass operation: First the loaded scan is exported, then re-opens the new file and writes the live napari ROIs back through PATATO.
+    - Necessary because PATATOs PAData doesnt really own a copy of the scan, but just wraps reader and writer
+    - so for loaded hdf5 scan, data stays tied to underlying file
+    - therefore adding data always mutates the source file, not to some internal memory which can later be exported to a new target file
+    - But I still think there should be a better way of doing this (is also relevant for future recon / unmixing features)
+- For compatibility with some previous versions of ithera import frameworks, there are some custom changes to dataset names etc. (for example `name` or `scan_name`)
+
 <!--
 Don't miss the full getting started guide to set up your new package:
 https://github.com/napari/napari-plugin-template#getting-started

@@ -5,17 +5,6 @@ from imageio.v3 import imread
 from .config import STARTUP_LOGO_PATH
 from patari.controllers.patari_controller import PatariController
 
-# TODO: workaround for old iannotation hdf5 group -> simply load as polygon vertices
-# TODO: maybe include actual timestamp in patato directly?
-# TODO: setup theme using FAU colors
-
-# TODO: in patato, check whether napari roi to patato roi conversion should be moved to patari
-# TODO: finish up full export hdf5, as suggested in chat
-# TODO: currently auto ROI placement only works for ellipse ROIs --- decide on whether to support other shapes, and how (e.g. bounding box for rectangle, convex hull for polygon, etc.)
-# decide on whether hdf5 files should be stored separately or in a folder?
-# and when they should be exported (e.g. on save button click, or automatically when a new scan is loaded, or when the plugin is closed?)
-# should we check for changes and ask the user when closing?
-
 
 def patari_controls(napari_viewer: Viewer | None = None) -> QWidget:
     """Instantiate PATARI UI.

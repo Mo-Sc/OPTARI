@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import patato as pat
 from qtpy.QtGui import QColor
 from qtpy.QtWidgets import QFileDialog
 
 from patari.config import ROI_LABELS, dtype_map
-from patari.patato_bridge import save_rois_to_scan
+from patari.controllers.scan_controller import ScanController
 from patari.roi.roi_utils import compute_roi_stats
 from patari.utils.misc import roi_color_for_index
 
@@ -254,82 +253,3 @@ class RoiController:
 
         df_saved.to_excel(filename, index=False)
         print(f"Saved ROI table to {filename}")
-
-    @staticmethod
-    def on_hdf5_export_clicked(controller, event=None) -> None:
-        """Save all ROI shapes to the scan HDF5 (full overwrite)."""
-        if controller.shapes_layer is None:
-            print("PATARI: no ROIs layer")
-            return
-        if controller.pa_data is None or controller.path is None:
-            print("PATARI: no scan loaded")
-            return
-        if controller.path.suffix.lower() not in {".hdf5", ".h5"}:
-            print(
-                "PATARI: ROI export currently supports loaded HDF5 scans only"
-            )
-            return
-
-        fov = controller._get_fov()
-        if fov is None:
-            print("PATARI: cannot determine FOV — is a reconstruction loaded?")
-            return
-        fov_x_m, fov_y_m = fov
-
-        pt = list(controller.viewer.dims.point)
-        frame_idx = int(round(pt[0])) if pt else 0
-        try:
-            z = float(
-                controller.pa_data.scan_reader.get_scanner_z_position()[
-                    frame_idx, 0
-                ]
-            )
-            run = float(
-                controller.pa_data.scan_reader.get_run_numbers()[frame_idx, 0]
-            )
-            rep = float(
-                controller.pa_data.scan_reader.get_repetition_numbers()[
-                    frame_idx, 0
-                ]
-            )
-        except Exception:
-            z, run, rep = 0.0, 0.0, 0.0
-
-        # Snapshot shapes before closing the read handle.
-        # This keeps UI state independent from the write/reopen cycle below.
-        shapes_snapshot = [
-            np.asarray(v, dtype=float) for v in controller.shapes_layer.data
-        ]
-        shape_types_snapshot = list(controller.shapes_layer.shape_type)
-
-        # Close read handle while writing; always reopen in finally.
-        controller.pa_data.close()
-        controller.pa_data = None
-
-        try:
-            n_saved = save_rois_to_scan(
-                controller.path,
-                shapes_snapshot,
-                shape_types_snapshot,
-                fov_x_m,
-                fov_y_m,
-                z,
-                run,
-                rep,
-                frame_idx,
-            )
-            if n_saved == 0:
-                print(f"PATARI: cleared all ROIs from {controller.path.name}")
-            else:
-                print(
-                    f"PATARI: saved {n_saved} ROI(s) to {controller.path.name}"
-                )
-        except Exception as e:
-            print(f"PATARI: failed to save ROIs: {e}")
-        finally:
-            try:
-                controller.pa_data = pat.PAData.from_hdf5(
-                    str(controller.path), mode="r"
-                )
-            except Exception as e2:
-                print(f"PATARI: failed to reopen scan after ROI save: {e2}")

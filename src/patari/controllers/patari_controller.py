@@ -486,4 +486,34 @@ class PatariController:
         RoiController.on_csv_export_clicked(self, event)
 
     def on_hdf5_export_clicked(self, event=None) -> None:
-        RoiController.on_hdf5_export_clicked(self, event)
+        destination = self._choose_export_path()
+        if destination is None:
+            return
+        ScanController.export_hdf5(self, destination)
+
+    def _choose_export_path(self) -> Path | None:
+        if self.pa_data is None:
+            print("PATARI: no scan loaded")
+            return None
+
+        default_name = (
+            f"{Path(self.path).stem}.hdf5"
+            if getattr(self, "path", None)
+            else "export.hdf5"
+        )
+        filename, _ = QFileDialog.getSaveFileName(
+            None,
+            "Export scan as HDF5",
+            str(
+                (
+                    Path(self.path).parent
+                    if getattr(self, "path", None)
+                    else Path.cwd()
+                )
+                / default_name
+            ),
+            "HDF5 files (*.hdf5 *.h5)",
+        )
+        if not filename:
+            return None
+        return Path(filename)

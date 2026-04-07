@@ -174,9 +174,6 @@ class UiManager:
             controller.roi.csv_button.clicked.connect(
                 controller.on_csv_export_clicked
             )
-            controller.roi.hdf5_button.clicked.connect(
-                controller.on_hdf5_export_clicked
-            )
 
         if controller.time_analysis is not None:
             controller.time_analysis.generate_button.clicked.connect(
@@ -241,4 +238,7 @@ class UiManager:
             )
             controller.scan_browser.scans_list.currentRowChanged.connect(
                 controller.on_scan_selected
+            )
+            controller.scan_browser.hdf5_button.clicked.connect(
+                controller.on_hdf5_export_clicked
             )

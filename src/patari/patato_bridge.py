@@ -6,7 +6,6 @@ tested independently of the plugin runtime.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -204,12 +203,12 @@ def fov_from_objects(patato_objects: dict) -> "tuple[float, float] | None":
 # ---------------------------------------------------------------------------
 
 
-def shapes_from_scan_rois(
+def napari_shapes_from_scan_rois(
     pa_data: "pat.PAData",
     fov_x_m: float,
     fov_y_m: float,
-) -> list[np.ndarray]:
-    """Load ROI polygons from *pa_data* as napari ``(y_mm, x_mm)`` vertex arrays.
+) -> list[tuple[np.ndarray, str]]:
+    """Load ROI polygons from *pa_data* as napari ``(y_mm, x_mm)`` vertices.
 
     Silently skips individual ROIs that cannot be converted.
     Returns an empty list when no ROIs exist or loading fails.
@@ -224,17 +223,18 @@ def shapes_from_scan_rois(
     for (_name, _number), roi in rois.items():
         try:
             pts = np.asarray(roi.points, dtype=float)  # (N, 2): (x_m, y_m)
-            shapes.append((
-                patato_to_napari(pts, fov_x_m, fov_y_m),
-                getattr(roi, "shape_type", "polygon"),
-            ))
+            shapes.append(
+                (
+                    patato_to_napari(pts, fov_x_m, fov_y_m),
+                    getattr(roi, "shape_type", "polygon"),
+                )
+            )
         except Exception as e:
             print(f"PATARI: skipped ROI {_name}/{_number}: {e}")
     return shapes
 
 
-def save_rois_to_scan(
-    path: Path,
+def napari_shapes_to_patato_rois(
     shapes: list[np.ndarray],
     shape_types: list[str],
     fov_x_m: float,
@@ -243,31 +243,18 @@ def save_rois_to_scan(
     run: float = 0.0,
     rep: float = 0.0,
     frame_idx: int = 0,
-) -> int:
-    """Overwrite all ROIs in an HDF5 scan file with *shapes*.
+) -> list[object]:
+    """Convert napari ROI shapes into PATATO ROI objects.
 
-    *shapes* are napari ``(y_mm, x_mm)`` vertex arrays.  *shape_types* is a
-    parallel list of napari shape type strings (e.g. ``"polygon"``,
-    ``"ellipse"``, ``"rectangle"``).  The file is opened in ``"r+"`` mode;
-    the caller must close any existing read handle before calling this.
-
-    Returns the number of ROIs written.  Raises on HDF5 errors.
+    The returned objects can be persisted with PATATO's native writer API.
     """
     from patato.utils.rois.roi_type import ROI as PatatoROI  # type: ignore[import]
-    from patato.io.hdf.hdf5_interface import HDF5Writer  # type: ignore[import]
-    from patato.io.attribute_tags import HDF5Tags  # type: ignore[import]
-    import h5py
 
-    n_saved = 0
-    with h5py.File(str(path), "r+") as wf:
-        roi_tag = HDF5Tags.REGIONS_OF_INTEREST
-        if roi_tag in wf:
-            del wf[roi_tag]  # full overwrite
-
-        writer = HDF5Writer(wf)
-        for i, (verts, stype) in enumerate(zip(shapes, shape_types)):
-            verts_yx = verts[:, -2:]  # last 2 dims: (y_mm, x_mm)
-            roi = PatatoROI.from_polygon_mm(
+    rois: list[object] = []
+    for i, (verts, stype) in enumerate(zip(shapes, shape_types)):
+        verts_yx = np.asarray(verts, dtype=float)[..., -2:]
+        rois.append(
+            PatatoROI.from_polygon_mm(
                 verts_yx_mm=verts_yx,
                 fov=(fov_x_m, fov_y_m),
                 z_position=z,
@@ -279,6 +266,5 @@ def save_rois_to_scan(
                 generated=True,
                 shape_type=stype,
             )
-            writer.add_roi(roi, generated=True)
-            n_saved += 1
-    return n_saved
+        )
+    return rois

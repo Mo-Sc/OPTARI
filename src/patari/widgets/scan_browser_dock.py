@@ -21,6 +21,7 @@ class ScanBrowserDock:
     folder_lineedit: QLineEdit
     browse_button: QPushButton
     scans_list: QListWidget
+    hdf5_button: QPushButton
 
     def set_folder(self, folder: Path) -> None:
         self.folder_lineedit.setText(str(folder))
@@ -52,12 +53,16 @@ def create_scan_browser_dock() -> ScanBrowserDock:
     scans_list = QListWidget()
     scans_list.setSelectionMode(QAbstractItemView.SingleSelection)
 
+    hdf5_button = QPushButton("Export HDF5")
+
     outer.addWidget(row)
     outer.addWidget(scans_list, stretch=1)
+    outer.addWidget(hdf5_button)
 
     return ScanBrowserDock(
         widget=widget,
         folder_lineedit=folder_lineedit,
         browse_button=browse_button,
         scans_list=scans_list,
+        hdf5_button=hdf5_button,
     )
