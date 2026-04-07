@@ -1,7 +1,8 @@
+from pathlib import Path
+
 ROI_LABELS = True
 DEFAULT_PA_LAYER = "Recon: iThera BP-40mm(res:100μm)_0"
-
-STARTUP_LOGO_PATH = "patari/startup.png"
+STARTUP_LOGO_PATH = Path(__file__).resolve().parents[2] / "startup.png"
 
 dtype_map = {
     "roi_index": int,

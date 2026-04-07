@@ -11,14 +11,18 @@ def patari_controls(napari_viewer: Viewer | None = None) -> QWidget:
 
     Returns the Info widget as the plugin's main widget. Other docks are added by the controller.
 
-    Note: napari injects the active viewer into plugin widgets using the
-    parameter name `napari_viewer`.
+    Is a bit hacky, but this way it handles two startup paths:
+        - Plugin menu path: napari usually injects the active viewer via
+            ``napari_viewer``.
+        - Script path: the widget may be created without an injected
+            viewer, so we fall back to ``napari.current_viewer()``.
+
+        This keeps PATARI initialization robust for both plugin-menu startup and
+        script-based startup.
     """
 
     viewer = napari_viewer
     if viewer is None:
-        # Some napari call paths (e.g. add_plugin_dock_widget) call widget
-        # factories with no args. Try to resolve the active viewer.
         try:
             import napari
 
@@ -29,21 +33,23 @@ def patari_controls(napari_viewer: Viewer | None = None) -> QWidget:
     if viewer is None:
         return QLabel("PATARI: no active napari viewer")
 
-    # make sure relative path loading works
-    viewer.add_image(
-        imread(STARTUP_LOGO_PATH),
-        name="Welcome to PATARI!",
-        metadata={"type": "startup_logo", "filepath": str(STARTUP_LOGO_PATH)},
-    )
+    try:
+        viewer.add_image(
+            imread(STARTUP_LOGO_PATH),
+            name="Welcome to PATARI!",
+            metadata={
+                "type": "startup_logo",
+                "filepath": str(STARTUP_LOGO_PATH),
+            },
+        )
+    except Exception:
+        print(f"PATARI: failed to load startup logo from {STARTUP_LOGO_PATH}")
 
     if (
         not hasattr(patari_controls, "_controller")
         or patari_controls._controller.viewer is not viewer
     ):
-        patari_controls._controller = PatariController(
-            viewer,
-            None,
-        )
+        patari_controls._controller = PatariController(viewer, None)
 
     # Expose the info widget as the main PATARI Controls widget.
     return patari_controls._controller.info.widget
