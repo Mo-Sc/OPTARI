@@ -54,7 +54,7 @@ include-package-data = true
 where = ["src"]
 
 [tool.setuptools.package-data]
-"*" = ["*.yaml"]
+"patari" = ["*.yaml", "data/*.json"]
 
 [tool.setuptools_scm]
 write_to = "src/patari/_version.py"

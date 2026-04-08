@@ -59,10 +59,12 @@ class PatariController:
         # --- right elements ---
         self.scan_browser: ScanBrowserDock | None = None
         self.annotation: AnnotationDock | None = None
+        self.segmentation = None
         self.unmixing: UnmixingDock | None = None
         self.reconstruction: ReconstructionDock | None = None
         self._scan_browser_dock_widget = None
         self._annotation_dock_widget = None
+        self._segmentation_dock_widget = None
         self._unmixing_dock_widget = None
         self._reconstruction_dock_widget = None
 
@@ -85,6 +87,7 @@ class PatariController:
 
         self._setup_viewer()
         self._ensure_docks()
+        self._initialize_roi_library()
         self._connect_events()
 
         # If a path is provided, populate scan browser / load scan.
@@ -131,6 +134,9 @@ class PatariController:
 
     def _apply_roi_labels(self) -> None:
         RoiController.apply_roi_labels(self)
+
+    def _initialize_roi_library(self) -> None:
+        RoiController.initialize_roi_library(self)
 
     def _on_shapes_data_changed(self, event=None) -> None:
         RoiController.on_shapes_data_changed(self, event)
@@ -488,6 +494,21 @@ class PatariController:
 
     def on_csv_export_clicked(self, event=None) -> None:
         RoiController.on_csv_export_clicked(self, event)
+
+    def on_save_roi_library_clicked(self, event=None) -> None:
+        RoiController.on_save_roi_library_clicked(self, event)
+
+    def on_remove_roi_library_clicked(self, event=None) -> None:
+        RoiController.on_remove_roi_library_clicked(self, event)
+
+    def on_save_roi_library_file_clicked(self, event=None) -> None:
+        RoiController.on_save_roi_library_file_clicked(self, event)
+
+    def on_roi_library_item_clicked(self, roi_id: str) -> None:
+        RoiController.on_roi_library_item_clicked(self, roi_id)
+
+    def on_roi_library_item_selected(self, roi_id: str) -> None:
+        RoiController.on_roi_library_item_selected(self, roi_id)
 
     def on_hdf5_export_clicked(self, event=None) -> None:
         destination = self._choose_export_path()

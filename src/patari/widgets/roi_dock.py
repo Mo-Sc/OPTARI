@@ -25,8 +25,8 @@ def create_roi_dock() -> RoiDock:
     live_table = Table(value=df_empty.copy())
     saved_table = Table(value=df_empty.copy())
 
-    save_button = PushButton(text="Save ROI")
-    delete_button = PushButton(text="Delete Saved")
+    save_button = PushButton(text="Save ROI Data")
+    delete_button = PushButton(text="Delete ROI Data")
     csv_button = PushButton(text="Export XLSX")
 
     # build Qt container for the bottom dock
@@ -35,7 +35,7 @@ def create_roi_dock() -> RoiDock:
 
     live_panel = QWidget()
     live_layout = QVBoxLayout(live_panel)
-    live_layout.addWidget(QLabel("Live ROIs"))
+    live_layout.addWidget(QLabel("Live Analysis"))
     live_layout.addWidget(live_table.native)
 
     btn_panel = QWidget()
@@ -48,7 +48,7 @@ def create_roi_dock() -> RoiDock:
 
     saved_panel = QWidget()
     saved_layout = QVBoxLayout(saved_panel)
-    saved_layout.addWidget(QLabel("Saved ROIs"))
+    saved_layout.addWidget(QLabel("Saved Analysis"))
     saved_layout.addWidget(saved_table.native)
 
     layout.addWidget(live_panel)

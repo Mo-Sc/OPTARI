@@ -1,18 +1,57 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from qtpy.QtGui import QColor
-from qtpy.QtWidgets import QFileDialog
+from qtpy.QtWidgets import (
+    QDialog,
+    QDialogButtonBox,
+    QFileDialog,
+    QFormLayout,
+    QLineEdit,
+    QMessageBox,
+)
 
 from patari.config import ROI_LABELS, dtype_map
+from patari.roi.roi_library import RoiLibrary
 from patari.roi.roi_utils import compute_roi_stats
 from patari.utils.misc import roi_color_for_index
 
 
 logger = logging.getLogger(__name__)
+
+
+def _roi_library_file() -> Path:
+    return Path(__file__).resolve().parents[1] / "data" / "roi_library.json"
+
+
+def _roi_name_popup() -> tuple[str, str] | None:
+    dialog = QDialog()
+    dialog.setWindowTitle("Save ROI")
+
+    form = QFormLayout(dialog)
+    roi_id_edit = QLineEdit()
+    description_edit = QLineEdit()
+    form.addRow("ROI Name:", roi_id_edit)
+    form.addRow("Description (optional):", description_edit)
+
+    buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+    buttons.accepted.connect(dialog.accept)
+    buttons.rejected.connect(dialog.reject)
+    form.addRow(buttons)
+
+    if dialog.exec() != QDialog.Accepted:
+        return None
+
+    roi_id = (roi_id_edit.text() or "").strip()
+    if not roi_id:
+        return None
+
+    description = (description_edit.text() or "").strip()
+    return roi_id, description
 
 
 class RoiController:
@@ -257,3 +296,160 @@ class RoiController:
 
         df_saved.to_excel(filename, index=False)
         logger.info("Saved ROI table to %s", filename)
+
+    @staticmethod
+    def _ensure_roi_library_loaded(controller) -> RoiLibrary:
+        library = getattr(controller, "_roi_library", None)
+        if library is None:
+            library = RoiLibrary(_roi_library_file())
+            library.load()
+            controller._roi_library = library
+        return library
+
+    @staticmethod
+    def _refresh_roi_library_ui(controller) -> None:
+        if controller.annotation is None:
+            return
+        library = RoiController._ensure_roi_library_loaded(controller)
+        ids = library.list_ids()
+        controller.annotation.set_roi_ids(ids)
+        controller.annotation.roi_library_description_label.setText("")
+
+    @staticmethod
+    def on_save_roi_library_clicked(controller, event=None) -> None:
+        if controller.shapes_layer is None:
+            return
+
+        selected = list(controller.shapes_layer.selected_data)
+        if len(selected) == 0:
+            logger.info("Save ROI clicked with no selected ROI")
+            if controller.annotation is not None:
+                controller.annotation.roi_library_description_label.setText(
+                    "No ROI selected in viewer."
+                )
+            return
+
+        roi_idx = int(selected[0])
+        verts = np.asarray(controller.shapes_layer.data[roi_idx], dtype=float)
+        shape_type = str(controller.shapes_layer.shape_type[roi_idx])
+
+        metadata = _roi_name_popup()
+        if metadata is None:
+            return
+        roi_id, description = metadata
+
+        source_fov_x_mm = None
+        source_fov_y_mm = None
+        fov_m = controller._get_fov()
+        if fov_m is not None:
+            source_fov_x_mm = float(fov_m[0]) * 1000.0
+            source_fov_y_mm = float(fov_m[1]) * 1000.0
+
+        library = RoiController._ensure_roi_library_loaded(controller)
+        library.add_or_update(
+            roi_id=roi_id,
+            description=str(description or ""),
+            shape_type=shape_type,
+            vertices=[[float(v[0]), float(v[1])] for v in verts[:, -2:]],
+            source_fov_x_mm=source_fov_x_mm,
+            source_fov_y_mm=source_fov_y_mm,
+        )
+
+        RoiController._refresh_roi_library_ui(controller)
+        logger.info("Saved ROI '%s' into ROI Library (in-memory)", roi_id)
+
+    @staticmethod
+    def on_remove_roi_library_clicked(controller, event=None) -> None:
+        if controller.annotation is None:
+            return
+        item = controller.annotation.roi_library_list.currentItem()
+        if item is None:
+            return
+        roi_id = item.text()
+        if not roi_id:
+            return
+
+        library = RoiController._ensure_roi_library_loaded(controller)
+        removed = library.remove(roi_id)
+        if removed:
+            RoiController._refresh_roi_library_ui(controller)
+            logger.info(
+                "Removed ROI '%s' from ROI Library (in-memory)", roi_id
+            )
+
+    @staticmethod
+    def on_save_roi_library_file_clicked(controller, event=None) -> None:
+        library = RoiController._ensure_roi_library_loaded(controller)
+        library.save()
+        logger.info("Saved ROI Library to %s", _roi_library_file())
+
+    @staticmethod
+    def on_roi_library_item_clicked(controller, roi_id: str) -> None:
+        if controller.shapes_layer is None:
+            return
+        library = RoiController._ensure_roi_library_loaded(controller)
+        entry = library.get_by_id(roi_id)
+        if entry is None:
+            if controller.annotation is not None:
+                controller.annotation.roi_library_description_label.setText("")
+            return
+
+        target_fov = controller._get_fov()
+        if target_fov is not None:
+            target_fov_mm = (
+                float(target_fov[0]) * 1000.0,
+                float(target_fov[1]) * 1000.0,
+            )
+        else:
+            target_fov_mm = None
+
+        source_fov_mm = (
+            (entry.source_fov_x_mm, entry.source_fov_y_mm)
+            if entry.source_fov_x_mm is not None
+            and entry.source_fov_y_mm is not None
+            else None
+        )
+        if (
+            source_fov_mm is not None
+            and target_fov_mm is not None
+            and not np.allclose(
+                np.asarray(source_fov_mm, dtype=float),
+                np.asarray(target_fov_mm, dtype=float),
+                rtol=0.0,
+                atol=1e-3,
+            )
+        ):
+            QMessageBox.warning(
+                None,
+                "ROI Library",
+                "ROI was created for a different FOV. It will still be placed literally.",
+            )
+
+        verts = np.asarray(entry.vertices, dtype=float)
+        if verts.ndim != 2 or verts.shape[1] < 2:
+            logger.info("ROI '%s' has invalid vertices", roi_id)
+            return
+
+        controller.shapes_layer.add(verts[:, -2:], shape_type=entry.shape_type)
+        controller._apply_roi_colors()
+        controller.update_live_table()
+
+    @staticmethod
+    def on_roi_library_item_selected(controller, roi_id: str) -> None:
+        if controller.annotation is None:
+            return
+        library = RoiController._ensure_roi_library_loaded(controller)
+        entry = library.get_by_id(roi_id)
+        if entry is None:
+            controller.annotation.roi_library_description_label.setText("")
+            return
+
+        desc = str(entry.description or "")
+        controller.annotation.roi_library_description_label.setText(desc)
+
+    @staticmethod
+    def initialize_roi_library(controller) -> None:
+        try:
+            RoiController._refresh_roi_library_ui(controller)
+        except Exception:
+            logger.exception("failed to initialize ROI Library")

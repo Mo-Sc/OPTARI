@@ -8,6 +8,7 @@ from patari.widgets.info_dock import create_info_dock
 from patari.widgets.reconstruction_dock import create_reconstruction_dock
 from patari.widgets.roi_dock import create_roi_dock
 from patari.widgets.scan_browser_dock import create_scan_browser_dock
+from patari.widgets.segmentation_dock import create_segmentation_dock
 from patari.widgets.spectrum_dock import create_spectrum_dock
 from patari.widgets.time_analysis_dock import create_time_analysis_dock
 from patari.widgets.unmixing_dock import create_unmixing_dock
@@ -85,6 +86,16 @@ class UiManager:
                 )
             )
 
+        if controller.segmentation is None:
+            controller.segmentation = create_segmentation_dock()
+            controller._segmentation_dock_widget = (
+                controller.viewer.window.add_dock_widget(
+                    controller.segmentation.widget,
+                    name="Segmentation",
+                    area="right",
+                )
+            )
+
         if controller.unmixing is None:
             controller.unmixing = create_unmixing_dock()
             controller._unmixing_dock_widget = (
@@ -127,10 +138,14 @@ class UiManager:
             controller._spectrum_dock_widget,
         )
 
-        # Right: Scan Browser + Annotation + Unmixing + Reconstruction
+        # Right: Scan Browser + Annotation + Segmentation + Unmixing + Reconstruction
         qt_window.tabifyDockWidget(
             controller._scan_browser_dock_widget,
             controller._annotation_dock_widget,
+        )
+        qt_window.tabifyDockWidget(
+            controller._scan_browser_dock_widget,
+            controller._segmentation_dock_widget,
         )
         qt_window.tabifyDockWidget(
             controller._scan_browser_dock_widget,
@@ -216,15 +231,36 @@ class UiManager:
                 lambda checked: controller._on_roi_intensity_settings_changed()
             )
 
-            controller.annotation.generate_tissue_segmentation_button.clicked.connect(
+            controller.annotation.roi_library_list.itemClicked.connect(
+                lambda item: controller.on_roi_library_item_selected(
+                    item.text()
+                )
+            )
+            controller.annotation.roi_library_list.itemDoubleClicked.connect(
+                lambda item: controller.on_roi_library_item_clicked(
+                    item.text()
+                )
+            )
+            controller.annotation.save_roi_button.clicked.connect(
+                controller.on_save_roi_library_clicked
+            )
+            controller.annotation.remove_roi_button.clicked.connect(
+                controller.on_remove_roi_library_clicked
+            )
+            controller.annotation.save_library_button.clicked.connect(
+                controller.on_save_roi_library_file_clicked
+            )
+
+        if controller.segmentation is not None:
+            controller.segmentation.generate_tissue_segmentation_button.clicked.connect(
                 controller.on_generate_tissue_segmentation_clicked
             )
-            controller.annotation.place_roi_button.clicked.connect(
+            controller.segmentation.place_roi_button.clicked.connect(
                 controller.on_place_roi_clicked
             )
 
             for btn in getattr(
-                controller.annotation, "roi_preset_buttons", []
+                controller.segmentation, "roi_preset_buttons", []
             ):
                 btn.clicked.connect(
                     lambda checked=False, b=btn: controller.on_roi_preset_clicked(

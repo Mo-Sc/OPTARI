@@ -57,10 +57,10 @@ class SegmentationController:
 
     @staticmethod
     def set_roi_class_choices(controller, class_names: dict[int, str]) -> None:
-        if controller.annotation is None:
+        if controller.segmentation is None:
             return
 
-        combo = controller.annotation.roi_class_combo
+        combo = controller.segmentation.roi_class_combo
         combo.blockSignals(True)
         try:
             combo.clear()
@@ -74,10 +74,10 @@ class SegmentationController:
 
     @staticmethod
     def select_roi_class_by_name(controller, class_name: str) -> None:
-        if controller.annotation is None:
+        if controller.segmentation is None:
             return
 
-        combo = controller.annotation.roi_class_combo
+        combo = controller.segmentation.roi_class_combo
         target = (class_name or "").strip()
         if not target:
             return
@@ -90,7 +90,7 @@ class SegmentationController:
 
     @staticmethod
     def on_roi_preset_clicked(controller, button) -> None:
-        if controller.annotation is None:
+        if controller.segmentation is None:
             return
 
         try:
@@ -105,19 +105,19 @@ class SegmentationController:
         roi_type = str(preset.get("roi_type", "ellipse"))
 
         # ROI type dropdown (currently only ellipse).
-        for i in range(controller.annotation.roi_type_combo.count()):
-            if controller.annotation.roi_type_combo.itemData(i) == roi_type:
-                controller.annotation.roi_type_combo.setCurrentIndex(i)
+        for i in range(controller.segmentation.roi_type_combo.count()):
+            if controller.segmentation.roi_type_combo.itemData(i) == roi_type:
+                controller.segmentation.roi_type_combo.setCurrentIndex(i)
                 break
 
         # Numeric fields
-        controller.annotation.roi_width_edit.setText(
+        controller.segmentation.roi_width_edit.setText(
             str(preset.get("width_mm", ""))
         )
-        controller.annotation.roi_height_edit.setText(
+        controller.segmentation.roi_height_edit.setText(
             str(preset.get("height_mm", ""))
         )
-        controller.annotation.roi_depth_edit.setText(
+        controller.segmentation.roi_depth_edit.setText(
             str(preset.get("depth_mm", ""))
         )
 
@@ -126,8 +126,8 @@ class SegmentationController:
             return
 
         if (
-            controller.annotation.roi_class_combo.isEnabled()
-            and controller.annotation.roi_class_combo.count() > 0
+            controller.segmentation.roi_class_combo.isEnabled()
+            and controller.segmentation.roi_class_combo.count() > 0
         ):
             SegmentationController.select_roi_class_by_name(
                 controller, seg_class
@@ -135,31 +135,31 @@ class SegmentationController:
 
     @staticmethod
     def on_generate_tissue_segmentation_clicked(controller) -> None:
-        if controller.annotation is None:
+        if controller.segmentation is None:
             return
 
         us_layer = SegmentationController.resolve_us_layer(controller)
         if us_layer is None:
-            controller.annotation.segmentation_status_label.setText(
+            controller.segmentation.segmentation_status_label.setText(
                 "No US layer found"
             )
             return
 
         us_2d = SegmentationController.us_slice_2d(controller, us_layer)
         if us_2d is None:
-            controller.annotation.segmentation_status_label.setText(
+            controller.segmentation.segmentation_status_label.setText(
                 "US layer has unsupported shape"
             )
             return
 
-        controller.annotation.segmentation_status_label.setText(
+        controller.segmentation.segmentation_status_label.setText(
             "Running segmentation…"
         )
 
         try:
             result = controller._segmenter.predict(us_2d)
         except Exception as e:
-            controller.annotation.segmentation_status_label.setText(
+            controller.segmentation.segmentation_status_label.setText(
                 f"Segmentation failed: {e}"
             )
             return
@@ -173,7 +173,7 @@ class SegmentationController:
                 reference_layer=us_layer,
             )
         except Exception as e:
-            controller.annotation.segmentation_status_label.setText(
+            controller.segmentation.segmentation_status_label.setText(
                 f"Failed to show labels: {e}"
             )
             return
@@ -181,19 +181,19 @@ class SegmentationController:
         SegmentationController.set_roi_class_choices(
             controller, result.class_names
         )
-        controller.annotation.roi_status_label.setText(
+        controller.segmentation.roi_status_label.setText(
             "Segmentation generated. Choose class and place ROI."
         )
-        controller.annotation.segmentation_status_label.setText(
+        controller.segmentation.segmentation_status_label.setText(
             "Segmentation layer added."
         )
 
     @staticmethod
     def on_place_roi_clicked(controller) -> None:
-        if controller.annotation is None:
+        if controller.segmentation is None:
             return
         if controller.shapes_layer is None:
-            controller.annotation.roi_status_label.setText("No ROIs layer")
+            controller.segmentation.roi_status_label.setText("No ROIs layer")
             return
 
         # Must have segmentation layer first.
@@ -204,7 +204,7 @@ class SegmentationController:
         )
 
         if seg_layer is None or not isinstance(seg_layer, Labels):
-            controller.annotation.roi_status_label.setText(
+            controller.segmentation.roi_status_label.setText(
                 "Generate tissue segmentation first"
             )
             return
@@ -212,32 +212,32 @@ class SegmentationController:
         seg = np.asarray(seg_layer.data)
 
         if seg.ndim != 2:
-            controller.annotation.roi_status_label.setText(
+            controller.segmentation.roi_status_label.setText(
                 "Segmentation layer must be 2D"
             )
             return
 
-        class_id = controller.annotation.roi_class_combo.currentData()
+        class_id = controller.segmentation.roi_class_combo.currentData()
         if class_id is None:
-            controller.annotation.roi_status_label.setText("Select a class")
+            controller.segmentation.roi_status_label.setText("Select a class")
             return
 
         roi_type = (
-            controller.annotation.roi_type_combo.currentData() or "ellipse"
+            controller.segmentation.roi_type_combo.currentData() or "ellipse"
         )
 
         width_mm = parse_float_input(
-            controller.annotation.roi_width_edit.text()
+            controller.segmentation.roi_width_edit.text()
         )
         height_mm = parse_float_input(
-            controller.annotation.roi_height_edit.text()
+            controller.segmentation.roi_height_edit.text()
         )
         depth_mm = parse_float_input(
-            controller.annotation.roi_depth_edit.text()
+            controller.segmentation.roi_depth_edit.text()
         )
 
         if width_mm is None or height_mm is None:
-            controller.annotation.roi_status_label.setText(
+            controller.segmentation.roi_status_label.setText(
                 "Enter ROI width and height (mm)"
             )
             return
@@ -248,7 +248,9 @@ class SegmentationController:
         # to convert from segmentation pixels to napari-world ROI vertices.
         us_layer = SegmentationController.resolve_us_layer(controller)
         if us_layer is None:
-            controller.annotation.roi_status_label.setText("No US layer found")
+            controller.segmentation.roi_status_label.setText(
+                "No US layer found"
+            )
             return
 
         ref_scale = getattr(us_layer, "scale", (1.0, 1.0))
@@ -274,7 +276,7 @@ class SegmentationController:
                 tx=tx,
             )
         except Exception as e:
-            controller.annotation.roi_status_label.setText(
+            controller.segmentation.roi_status_label.setText(
                 f"ROI placement failed: {e}"
             )
             return
@@ -282,11 +284,11 @@ class SegmentationController:
         try:
             controller.shapes_layer.add(verts_world, shape_type=str(roi_type))
         except Exception as e:
-            controller.annotation.roi_status_label.setText(
+            controller.segmentation.roi_status_label.setText(
                 f"Failed to add ROI to viewer: {e}"
             )
             return
 
         controller._apply_roi_colors()
         controller.update_live_table()
-        controller.annotation.roi_status_label.setText("ROI placed.")
+        controller.segmentation.roi_status_label.setText("ROI placed.")
