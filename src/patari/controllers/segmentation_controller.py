@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 import numpy as np
 from napari.layers import Image, Labels
 
@@ -10,6 +12,9 @@ from patari.segmentation.napari import (
     set_segmentation_2d,
 )
 from patari.utils.misc import parse_float_input
+
+
+logger = logging.getLogger(__name__)
 
 
 class SegmentationController:
@@ -34,6 +39,10 @@ class SegmentationController:
             pt = list(controller.viewer.dims.point)
             frame_idx = int(round(pt[0])) if len(pt) >= 1 else 0
         except Exception:
+            logger.debug(
+                "failed to read viewer dims point for US frame; using frame 0",
+                exc_info=True,
+            )
             frame_idx = 0
 
         frame_idx = int(np.clip(frame_idx, 0, max(0, data.shape[0] - 1)))
@@ -271,9 +280,7 @@ class SegmentationController:
             return
 
         try:
-            controller.shapes_layer.add(
-                verts_world, shape_type=str(roi_type)
-            )
+            controller.shapes_layer.add(verts_world, shape_type=str(roi_type))
         except Exception as e:
             controller.annotation.roi_status_label.setText(
                 f"Failed to add ROI to viewer: {e}"

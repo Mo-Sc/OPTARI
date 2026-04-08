@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+import logging
+
 import numpy as np
 import pandas as pd
 from qtpy.QtGui import QColor
 from qtpy.QtWidgets import QFileDialog
 
 from patari.config import ROI_LABELS, dtype_map
-from patari.controllers.scan_controller import ScanController
 from patari.roi.roi_utils import compute_roi_stats
 from patari.utils.misc import roi_color_for_index
+
+
+logger = logging.getLogger(__name__)
 
 
 class RoiController:
@@ -42,7 +46,7 @@ class RoiController:
             # napari text supports formatting from properties.
             controller.shapes_layer.text = {"string": "{roi_id}", "size": 8}
         except Exception:
-            print("PATARI: failed to apply ROI labels")
+            logger.exception("failed to apply ROI labels")
 
     @staticmethod
     def on_shapes_data_changed(controller, event=None) -> None:
@@ -83,8 +87,8 @@ class RoiController:
                 clamp_max=controller.roi_intensity_max,
                 clamp_mode=(controller.roi_intensity_mode or "clip"),
             )
-        except Exception as e:
-            print("update_live_table:", e)
+        except Exception:
+            logger.exception("update_live_table failed")
             df = pd.DataFrame(columns=list(dtype_map.keys())).astype(dtype_map)
 
         controller.roi.live_table.value = df
@@ -116,13 +120,13 @@ class RoiController:
 
         selected = controller.shapes_layer.selected_data
         if len(selected) != 1:
-            print("Select one ROI to save")
+            logger.info("Select one ROI to save")
             return
 
         roi_idx = list(selected)[0]
         df_live = RoiController.table_value_to_df(controller.roi.live_table)
         if df_live.empty or roi_idx >= len(df_live):
-            print("Nothing to save")
+            logger.info("Nothing to save")
             return
 
         include_all_frames = False
@@ -145,7 +149,7 @@ class RoiController:
             rows_to_add = df_live.iloc[[roi_idx]].astype(dtype_map)
         else:
             if controller.active_layer is None:
-                print("Select an image layer to save ROI stats")
+                logger.info("Select an image layer to save ROI stats")
                 return
 
             pt = list(controller.viewer.dims.point)
@@ -156,7 +160,7 @@ class RoiController:
 
             data = np.asarray(controller.active_layer.data)
             if data.ndim < 2:
-                print("Active layer has no frame/wavelength dimensions")
+                logger.info("Active layer has no frame/wavelength dimensions")
                 return
 
             if include_all_frames:
@@ -194,7 +198,7 @@ class RoiController:
                     collected.append(df_row.iloc[[0]].astype(dtype_map))
 
             if not collected:
-                print("Nothing to save")
+                logger.info("Nothing to save")
                 return
 
             rows_to_add = pd.concat(collected, ignore_index=True).astype(
@@ -208,7 +212,7 @@ class RoiController:
             df_saved = pd.concat([df_saved, rows_to_add], ignore_index=True)
 
         controller.roi.saved_table.value = df_saved.astype(dtype_map)
-        print(f"Saved ROI {roi_idx} ({len(rows_to_add)} row(s))")
+        logger.info("Saved ROI %s (%s row(s))", roi_idx, len(rows_to_add))
 
     @staticmethod
     def on_delete_saved_clicked(controller, event=None) -> None:
@@ -219,7 +223,7 @@ class RoiController:
         selected_rows = selection_model.selectedRows()
         selected_indices = [idx.row() for idx in selected_rows]
         if not selected_indices:
-            print("No row selected to delete.")
+            logger.info("No row selected to delete.")
             return
 
         df_saved = RoiController.table_value_to_df(controller.roi.saved_table)
@@ -228,7 +232,7 @@ class RoiController:
 
         df_saved = df_saved.drop(selected_indices).reset_index(drop=True)
         controller.roi.saved_table.value = df_saved.astype(dtype_map)
-        print(f"Deleted {len(selected_indices)} saved rows")
+        logger.info("Deleted %s saved rows", len(selected_indices))
 
     @staticmethod
     def on_csv_export_clicked(controller, event=None) -> None:
@@ -237,7 +241,7 @@ class RoiController:
 
         df_saved = RoiController.table_value_to_df(controller.roi.saved_table)
         if df_saved.empty:
-            print("Saved table empty")
+            logger.info("Saved table empty")
             return
 
         filename, _ = QFileDialog.getSaveFileName(
@@ -252,4 +256,4 @@ class RoiController:
             filename += ".xlsx"
 
         df_saved.to_excel(filename, index=False)
-        print(f"Saved ROI table to {filename}")
+        logger.info("Saved ROI table to %s", filename)

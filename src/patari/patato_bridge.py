@@ -6,12 +6,16 @@ tested independently of the plugin runtime.
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 import numpy as np
 
 if TYPE_CHECKING:
     import patato as pat
+
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -215,8 +219,8 @@ def napari_shapes_from_scan_rois(
     """
     try:
         rois = pa_data.get_rois()
-    except Exception as e:
-        print(f"PATARI: could not load ROIs: {e}")
+    except Exception:
+        logger.exception("could not load ROIs")
         return []
 
     shapes = []
@@ -229,8 +233,8 @@ def napari_shapes_from_scan_rois(
                     getattr(roi, "shape_type", "polygon"),
                 )
             )
-        except Exception as e:
-            print(f"PATARI: skipped ROI {_name}/{_number}: {e}")
+        except Exception:
+            logger.exception("skipped ROI %s/%s", _name, _number)
     return shapes
 
 

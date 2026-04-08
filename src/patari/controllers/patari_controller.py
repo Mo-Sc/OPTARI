@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -27,6 +28,9 @@ from patari.controllers.scan_controller import ScanController
 from patari.controllers.roi_controller import RoiController
 from patari.controllers.segmentation_controller import SegmentationController
 from patari.controllers.analysis_controller import AnalysisController
+
+
+logger = logging.getLogger(__name__)
 
 
 class PatariController:
@@ -273,7 +277,7 @@ class PatariController:
                 return
 
             self.active_layer = selected_layer
-            print(f"active layer set to {self.active_layer.name}")
+            logger.info("active layer set to %s", self.active_layer.name)
             # keep PA layers visually consistent; show only the active PA layer
             # set all other PA layers to invisible
             # set blending and auto contrast for all PA layers
@@ -353,8 +357,8 @@ class PatariController:
 
             self.refresh_all()
 
-        except Exception as e:
-            print("on_dims_changed:", e)
+        except Exception:
+            logger.exception("on_dims_changed failed")
 
     # ---------------- time analysis ----------------
     def on_generate_time_analysis_clicked(self, event=None) -> None:
@@ -404,10 +408,10 @@ class PatariController:
             from datetime import datetime, timedelta
 
             dt = datetime(1, 1, 1) + timedelta(seconds=float(ts_seconds))
-        except Exception as e:
-            print(
-                "DEBUG: timestamp_for_slice: failed to convert timestamp to datetime:",
-                e,
+        except Exception:
+            logger.debug(
+                "timestamp_for_slice failed to convert timestamp to datetime",
+                exc_info=True,
             )
             dt = "N/A"
 
@@ -493,7 +497,7 @@ class PatariController:
 
     def _choose_export_path(self) -> Path | None:
         if self.pa_data is None:
-            print("PATARI: no scan loaded")
+            logger.warning("no scan loaded")
             return None
 
         default_name = (

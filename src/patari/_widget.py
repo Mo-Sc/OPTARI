@@ -1,9 +1,15 @@
+import logging
+
 from napari.viewer import Viewer
 from qtpy.QtWidgets import QLabel, QWidget
 from imageio.v3 import imread
 
 from .config import STARTUP_LOGO_PATH
+from .logging_utils import configure_logging
 from patari.controllers.patari_controller import PatariController
+
+
+logger = logging.getLogger(__name__)
 
 
 def patari_controls(napari_viewer: Viewer | None = None) -> QWidget:
@@ -21,6 +27,8 @@ def patari_controls(napari_viewer: Viewer | None = None) -> QWidget:
         script-based startup.
     """
 
+    configure_logging()
+
     viewer = napari_viewer
     if viewer is None:
         try:
@@ -28,6 +36,10 @@ def patari_controls(napari_viewer: Viewer | None = None) -> QWidget:
 
             viewer = napari.current_viewer()
         except Exception:
+            logger.debug(
+                "failed to resolve current napari viewer",
+                exc_info=True,
+            )
             viewer = None
 
     if viewer is None:
@@ -43,7 +55,9 @@ def patari_controls(napari_viewer: Viewer | None = None) -> QWidget:
             },
         )
     except Exception:
-        print(f"PATARI: failed to load startup logo from {STARTUP_LOGO_PATH}")
+        logger.warning(
+            "failed to load startup logo from %s", STARTUP_LOGO_PATH
+        )
 
     if (
         not hasattr(patari_controls, "_controller")

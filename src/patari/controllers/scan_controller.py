@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 import re
 
@@ -16,6 +17,9 @@ from patari.patato_bridge import (
 from patari.utils.misc import roi_color_for_index
 
 
+logger = logging.getLogger(__name__)
+
+
 class ScanController:
     """Scan/session lifecycle and data-loading helpers for PATARI."""
 
@@ -26,10 +30,8 @@ class ScanController:
             return None
         try:
             return [int(w) for w in controller.pa_data.get_wavelengths()]
-        except Exception as e:
-            print(
-                f"PATARI: failed to read wavelengths from scan metadata: {e}"
-            )
+        except Exception:
+            logger.exception("failed to read wavelengths from scan metadata")
             return None
 
     @staticmethod
@@ -39,8 +41,8 @@ class ScanController:
             return None
         try:
             return np.array(controller.pa_data.get_timestamps())
-        except Exception as e:
-            print(f"PATARI: failed to read timestamps from scan metadata: {e}")
+        except Exception:
+            logger.exception("failed to read timestamps from scan metadata")
             return None
 
     @staticmethod
@@ -51,7 +53,7 @@ class ScanController:
         try:
             controller.pa_data.close()
         except Exception:
-            pass
+            logger.debug("failed to close current scan handle", exc_info=True)
         controller.pa_data = None
         controller._patato_objects = {}
 
@@ -101,7 +103,7 @@ class ScanController:
         ScanController.reset_scan_state(controller)
 
         if not scan_path.exists():
-            print(f"PATARI: scan not found: {scan_path}")
+            logger.warning("scan not found: %s", scan_path)
             controller.refresh_all()
             return
 
@@ -121,15 +123,15 @@ class ScanController:
                 )
             else:
                 controller.pa_data = pat.PAData(iTheraMSOT(str(scan_path)))
-        except Exception as e:
-            print(f"PATARI: failed to open scan '{scan_path}': {e}")
+        except Exception:
+            logger.exception("failed to open scan '%s'", scan_path)
             controller.refresh_all()
             return
 
         try:
             layers = ScanController.layers_from_pa_data(controller)
-        except Exception as e:
-            print(f"PATARI: failed to load '{scan_path}': {e}")
+        except Exception:
+            logger.exception("failed to load '%s'", scan_path)
             ScanController.close_current_scan(controller)
             controller.refresh_all()
             return
@@ -172,8 +174,7 @@ class ScanController:
                     1, int((data.shape[1] - 1) // 2)
                 )
         except Exception:
-            print("PATARI: failed to set initial viewer position")
-            pass
+            logger.exception("failed to set initial viewer position")
 
         # Populate ROIs after dims are initialized to avoid computing stats before the viewer is ready.
         ScanController.init_shapes_from_scan(controller)
@@ -182,7 +183,7 @@ class ScanController:
         try:
             controller.viewer.reset_view()
         except Exception:
-            pass
+            logger.debug("failed to reset viewer view", exc_info=True)
 
     @staticmethod
     def scan_key(scan_path: Path) -> str:
@@ -260,7 +261,7 @@ class ScanController:
                 for verts, stype in shapes:
                     controller.shapes_layer.add(verts, shape_type=stype)
                 if shapes:
-                    print(f"PATARI: loaded {len(shapes)} ROI(s) from scan")
+                    logger.info("loaded %s ROI(s) from scan", len(shapes))
         finally:
             try:
                 controller.shapes_layer.events.data.connect(
@@ -278,30 +279,30 @@ class ScanController:
         Returns ``True`` on success, ``False`` on failure.
         """
         if controller.pa_data is None:
-            print("PATARI: no scan loaded")
+            logger.warning("no scan loaded")
             return False
 
         destination = Path(destination)
         if destination.suffix.lower() not in {".hdf5", ".h5"}:
             destination = destination.with_suffix(".hdf5")
         if destination.exists():
-            print(f"PATARI: export target already exists: {destination}")
+            logger.warning("export target already exists: %s", destination)
             return False
 
         try:
             controller.pa_data.save_hdf5(str(destination))
-        except Exception as e:
-            print(f"PATARI: failed to export scan to HDF5: {e}")
+        except Exception:
+            logger.exception("failed to export scan to HDF5")
             return False
 
         if controller.shapes_layer is None:
-            print(f"PATARI: exported scan to {destination} (no ROIs layer)")
+            logger.info("exported scan to %s (no ROIs layer)", destination)
             return True
 
         fov = ScanController.get_fov(controller)
         if fov is None:
-            print(
-                f"PATARI: exported scan to {destination} (ROIs skipped: no FOV)"
+            logger.info(
+                "exported scan to %s (ROIs skipped: no FOV)", destination
             )
             return True
 
@@ -334,10 +335,8 @@ class ScanController:
             destination_pa_data = pat.PAData.from_hdf5(
                 str(destination), mode="r+"
             )
-        except Exception as e:
-            print(
-                f"PATARI: exported scan, but failed to reopen destination: {e}"
-            )
+        except Exception:
+            logger.exception("exported scan, but failed to reopen destination")
             return False
 
         try:
@@ -357,14 +356,16 @@ class ScanController:
             for roi in rois:
                 destination_pa_data.add_roi(roi, generated=True)
             if not rois:
-                print(f"PATARI: exported scan to {destination}; no ROIs saved")
+                logger.info("exported scan to %s; no ROIs saved", destination)
             else:
-                print(
-                    f"PATARI: exported scan to {destination}; saved {len(rois)} ROI(s)"
+                logger.info(
+                    "exported scan to %s; saved %s ROI(s)",
+                    destination,
+                    len(rois),
                 )
             return True
-        except Exception as e:
-            print(f"PATARI: exported scan, but failed to write ROIs: {e}")
+        except Exception:
+            logger.exception("exported scan, but failed to write ROIs")
             return False
         finally:
             try:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -9,6 +10,9 @@ import pandas as pd
 from skimage.draw import polygon
 
 from patari.config import dtype_map
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -141,7 +145,7 @@ def compute_roi_stats(
 ):
     """Compute ROI statistics for all shapes for a specific frame/wavelength."""
 
-    print(f"DEBUG: compute_roi_stats for frame {frame_idx}, wav {wav_idx}, ")
+    logger.debug("compute_roi_stats for frame %s, wav %s", frame_idx, wav_idx)
 
     empty = pd.DataFrame(columns=list(dtype_map.keys())).astype(dtype_map)
     if active_layer is None:
@@ -166,7 +170,11 @@ def compute_roi_stats(
             + timedelta(seconds=float(timestamps[frame_idx, wav_idx]))
         )
     except Exception:
-        print("Could not parse timestamp for frame", frame_idx, "wav", wav_idx)
+        logger.debug(
+            "could not parse timestamp for frame %s wav %s",
+            frame_idx,
+            wav_idx,
+        )
         timestamp_str = "N/A"
 
     sy, sx = _scale_sy_sx(active_layer)

@@ -14,8 +14,8 @@ PATATO is a python based analysis tool for clinical photoacoustic studies, based
 
 Main features:
 
-- Load iThera scan folders and HDF5 scans via PATATO.
-- Browse complete studies and quickly switch between scans.
+s- Load iThera scan folders (including ROIs) and HDF5 scans via PATATO.
+- Browse complete studies and switch between scans.
 - Visualize US + reconstructed PA layers.
 - Draw, edit, and save ROIs with live statistics (frame/wavelength aware).
 - Visualize intensities over time and spectrum.
@@ -23,7 +23,6 @@ Main features:
 - Export processed scans and ROI results (XLSX/HDF5).
 - Demo: [PATARI v0.1 PDF](PATARIv01DEMO.pdf)
 
-----------------------------------
 
 
 
@@ -66,6 +65,12 @@ Note: PATARI currently depends on a custom PATATO fork:
 - Also ensures compatibility with some of my legacy hdf5 files
 
 ## Developer Notes
+
+Set `PATARI_LOG_LEVEL=DEBUG` for verbose development logging; the default is `INFO`.
+
+
+TODO
+
 
 ### Data Loading
 
