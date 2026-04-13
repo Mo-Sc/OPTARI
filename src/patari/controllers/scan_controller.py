@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 import logging
 from pathlib import Path
 import re
@@ -14,6 +15,7 @@ from patari.patato_bridge import (
     napari_shapes_to_patato_rois,
     napari_shapes_from_scan_rois,
 )
+from patari.controllers.roi_controller import RoiController
 from patari.utils.misc import roi_color_for_index
 
 
@@ -274,9 +276,12 @@ class ScanController:
 
     @staticmethod
     def export_hdf5(controller, destination: Path) -> bool:
-        """Export the current scan to a new HDF5 file and persist live ROIs.
-
-        Returns ``True`` on success, ``False`` on failure.
+        """
+        Export the current scan to a new HDF5 file.
+        Using PATATO native hdf5 export.
+        To save new ROIs, the export process re-reads the newly written file and updates its ROIs with the current ROIs from the viewer, then writes back to disk.
+        Not ideal, but necessary because PATATO immediatly saves ROIs to the source HDF5 file, which in this case is not our target.
+        Existing non-PATARI ROIs in the target file are preserved. PATARI-created ROIs are overwritten
         """
         if controller.pa_data is None:
             logger.warning("no scan loaded")
@@ -295,74 +300,92 @@ class ScanController:
             logger.exception("failed to export scan to HDF5")
             return False
 
-        if controller.shapes_layer is None:
+        if controller.shapes_layer.data is None:
             logger.info("exported scan to %s (no ROIs layer)", destination)
             return True
 
-        fov = ScanController.get_fov(controller)
-        if fov is None:
-            logger.info(
-                "exported scan to %s (ROIs skipped: no FOV)", destination
-            )
-            return True
+        # info: dims.current_step gives discrete integer steps,
+        # dims.point gives continuous position which may be between steps
+        frame_idx = int(controller.viewer.dims.current_step[0])
+        wav_idx = int(controller.viewer.dims.current_step[1])
 
-        fov_x_m, fov_y_m = fov
-        pt = list(controller.viewer.dims.point)
-        frame_idx = int(round(pt[0])) if pt else 0
         try:
-            z = float(
+            z = int(
                 controller.pa_data.scan_reader.get_scanner_z_position()[
-                    frame_idx, 0
+                    frame_idx, wav_idx
                 ]
             )
-            run = float(
-                controller.pa_data.scan_reader.get_run_numbers()[frame_idx, 0]
+            run = int(
+                controller.pa_data.scan_reader.get_run_numbers()[
+                    frame_idx, wav_idx
+                ]
             )
-            rep = float(
+            rep = int(
                 controller.pa_data.scan_reader.get_repetition_numbers()[
-                    frame_idx, 0
+                    frame_idx, wav_idx
                 ]
             )
         except Exception:
-            z, run, rep = 0.0, 0.0, 0.0
+            logging.exception(
+                "failed to read z/run/repetition when exporting ROIs; defaulting to 0"
+            )
+            z, run, rep = 0, 0, 0
 
         shapes_snapshot = [
             np.asarray(v, dtype=float) for v in controller.shapes_layer.data
         ]
         shape_types_snapshot = list(controller.shapes_layer.shape_type)
+        roi_positions_snapshot = list(
+            controller.shapes_layer.properties["roi_position"]
+        )
 
         try:
             destination_pa_data = pat.PAData.from_hdf5(
                 str(destination), mode="r+"
             )
-        except Exception:
-            logger.exception("exported scan, but failed to reopen destination")
-            return False
 
-        try:
-            # Replace any ROIs copied by the base PATATO export with the
-            # current live napari shapes.
-            destination_pa_data.delete_rois()
+            # simple rule:
+            # overwrite existing PATARI ROIs
+            # preserve existing non-PATARI ROIs
+
+            existing_rois = dict(destination_pa_data.get_rois())
+
+            # find existing patari rois and delete them
+            patari_groups_to_delete: set[str] = set()
+            for (name_position, _number), roi in list(existing_rois.items()):
+                if not str(getattr(roi, "roi_class", "")).startswith("PATARI"):
+                    continue
+                patari_groups_to_delete.add(str(name_position))
+
+            for name_position in patari_groups_to_delete:
+                destination_pa_data.delete_rois(name_position=name_position)
+
+            fov_x_m, fov_y_m = ScanController.get_fov(controller)
+            export_roi_class = (
+                f"PATARI-{dt.datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+            )
+
+            # add current ROIs from viewer to the file
             rois = napari_shapes_to_patato_rois(
                 shapes_snapshot,
                 shape_types_snapshot,
+                roi_positions_snapshot,
                 fov_x_m,
                 fov_y_m,
                 z,
                 run,
                 rep,
                 frame_idx,
+                roi_class=export_roi_class,
             )
             for roi in rois:
                 destination_pa_data.add_roi(roi, generated=True)
-            if not rois:
-                logger.info("exported scan to %s; no ROIs saved", destination)
-            else:
-                logger.info(
-                    "exported scan to %s; saved %s ROI(s)",
-                    destination,
-                    len(rois),
-                )
+
+            logger.info(
+                "exported scan to %s; saved %s PATARI ROI(s)",
+                destination,
+                len(rois),
+            )
             return True
         except Exception:
             logger.exception("exported scan, but failed to write ROIs")

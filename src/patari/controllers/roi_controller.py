@@ -28,15 +28,18 @@ def _roi_library_file() -> Path:
     return Path(__file__).resolve().parents[1] / "data" / "roi_library.json"
 
 
-def _roi_name_popup() -> tuple[str, str] | None:
+def _roi_name_popup() -> tuple[str, str, str] | None:
     dialog = QDialog()
     dialog.setWindowTitle("Save ROI")
 
     form = QFormLayout(dialog)
     roi_id_edit = QLineEdit()
     description_edit = QLineEdit()
+    position_edit = QLineEdit()
+    position_edit.setPlaceholderText("undefined")
     form.addRow("ROI Name:", roi_id_edit)
     form.addRow("Description (optional):", description_edit)
+    form.addRow("Position (optional):", position_edit)
 
     buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
     buttons.accepted.connect(dialog.accept)
@@ -51,11 +54,23 @@ def _roi_name_popup() -> tuple[str, str] | None:
         return None
 
     description = (description_edit.text() or "").strip()
-    return roi_id, description
+    position = (position_edit.text() or "").strip() or "undefined"
+    return roi_id, description, position
 
 
 class RoiController:
     """ROI visualization, table management, and ROI export helpers."""
+
+    @staticmethod
+    def set_last_roi_position(controller, position: str) -> None:
+        """
+        Set the "roi_position" property of the most recently added shape to the given position string.
+        """
+
+        positions = list(controller.shapes_layer.properties["roi_position"])
+        positions[-1] = str(position or "undefined")
+
+        controller.shapes_layer.properties["roi_position"] = positions
 
     @staticmethod
     def apply_roi_colors(controller) -> None:
@@ -91,6 +106,19 @@ class RoiController:
     def on_shapes_data_changed(controller, event=None) -> None:
         if controller.shapes_layer is None:
             return
+
+        # positions = controller.shapes_layer.properties["roi_position"]
+        # if len(positions) != len(controller.shapes_layer.data):
+        #     positions = ["undefined"] * len(controller.shapes_layer.data)
+        #     controller.shapes_layer.properties["roi_position"] = positions
+
+        props = dict(getattr(controller.shapes_layer, "properties", {}) or {})
+        positions = list(props.get("roi_position", []))
+        n_shapes = len(controller.shapes_layer.data)
+        if len(positions) < n_shapes:
+            positions.extend(["undefined"] * (n_shapes - len(positions)))
+        props["roi_position"] = positions[:n_shapes]
+        controller.shapes_layer.properties = props
 
         RoiController.apply_roi_colors(controller)
         if ROI_LABELS:
@@ -336,7 +364,7 @@ class RoiController:
         metadata = _roi_name_popup()
         if metadata is None:
             return
-        roi_id, description = metadata
+        roi_id, description, position = metadata
 
         source_fov_x_mm = None
         source_fov_y_mm = None
@@ -349,6 +377,7 @@ class RoiController:
         library.add_or_update(
             roi_id=roi_id,
             description=str(description or ""),
+            position=str(position or "undefined"),
             shape_type=shape_type,
             vertices=[[float(v[0]), float(v[1])] for v in verts[:, -2:]],
             source_fov_x_mm=source_fov_x_mm,
@@ -431,6 +460,7 @@ class RoiController:
             return
 
         controller.shapes_layer.add(verts[:, -2:], shape_type=entry.shape_type)
+        RoiController.set_last_roi_position(controller, entry.position)
         controller._apply_roi_colors()
         controller.update_live_table()
 
@@ -445,6 +475,13 @@ class RoiController:
             return
 
         desc = str(entry.description or "")
+        pos = str(entry.position or "undefined")
+
+        desc = (
+            f"{desc} (default position: {pos})"
+            if desc
+            else f"(default position: {pos})"
+        )
         controller.annotation.roi_library_description_label.setText(desc)
 
     @staticmethod

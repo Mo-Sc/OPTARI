@@ -41,6 +41,10 @@ def scale_from_patato_obj(obj, fallback: tuple) -> tuple:
             return fallback
         return (fallback[0], fov_y_m / ny * 1000, fov_x_m / nx * 1000)
     except Exception:
+        logger.debug(
+            f"could not derive scale from object {obj}, using fallback {fallback}",
+            exc_info=True,
+        )
         return fallback
 
 
@@ -136,14 +140,18 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
     for (recon_name, idx), recon in pa_data.get_scan_reconstructions().items():
         recon_raw = np.flip(np.array(recon.da[:, :, :, 0, :]), axis=-2)
 
-        frames_info = recon.da.attrs.get("frame", None)
+        frames_info = recon.da.attrs.get("frames", recon.da.attrs.get("frame"))
         if frames_info is None:
             recon_frame_list = list(range(recon_raw.shape[0]))
-        elif isinstance(frames_info, (np.int64, float, int)):
+        elif isinstance(frames_info, (np.int64, float, int, str)):
             recon_frame_list = [int(frames_info)]
         elif isinstance(frames_info, (list, np.ndarray)):
             recon_frame_list = [int(f) for f in frames_info]
         else:
+            logger.debug(
+                f"unsupported 'frame' attribute type {type(frames_info)} in reconstruction {recon_name}_{idx}",
+                exc_info=True,
+            )
             raise ValueError(
                 "Reconstruction 'frame' attribute has unsupported type."
             )
@@ -241,12 +249,14 @@ def napari_shapes_from_scan_rois(
 def napari_shapes_to_patato_rois(
     shapes: list[np.ndarray],
     shape_types: list[str],
+    roi_positions: list[str],
     fov_x_m: float,
     fov_y_m: float,
     z: float = 0.0,
     run: float = 0.0,
     rep: float = 0.0,
     frame_idx: int = 0,
+    roi_class: str = "PATARI",
 ) -> list[object]:
     """Convert napari ROI shapes into PATATO ROI objects.
 
@@ -255,7 +265,9 @@ def napari_shapes_to_patato_rois(
     from patato.utils.rois.roi_type import ROI as PatatoROI  # type: ignore[import]
 
     rois: list[object] = []
-    for i, (verts, stype) in enumerate(zip(shapes, shape_types)):
+    for i, (verts, stype, position) in enumerate(
+        zip(shapes, shape_types, roi_positions)
+    ):
         verts_yx = np.asarray(verts, dtype=float)[..., -2:]
         rois.append(
             PatatoROI.from_polygon_mm(
@@ -265,8 +277,8 @@ def napari_shapes_to_patato_rois(
                 run=run,
                 repetition=rep,
                 ax0_index=np.array([frame_idx]),
-                roi_class="PATARI",
-                position=str(i),
+                roi_class=str(roi_class),
+                position=position,
                 generated=True,
                 shape_type=stype,
             )

@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 class RoiLibraryEntry:
     id: str
     description: str
+    position: str
     created: str
     shape_type: str
     vertices: list[list[float]]
@@ -53,6 +54,7 @@ class RoiLibrary:
                 RoiLibraryEntry(
                     id=roi_id,
                     description=str(row.get("description", "")),
+                    position=str(row.get("position", "undefined")),
                     created=str(row.get("created", "")),
                     shape_type=str(row.get("shape_type", "polygon")),
                     vertices=vertices,
@@ -94,6 +96,7 @@ class RoiLibrary:
         *,
         roi_id: str,
         description: str,
+        position: str,
         shape_type: str,
         vertices: list[list[float]],
         source_fov_x_mm: float | None,
@@ -103,6 +106,7 @@ class RoiLibrary:
         new_entry = RoiLibraryEntry(
             id=roi_id,
             description=description,
+            position=position,
             created=created,
             shape_type=shape_type,
             vertices=vertices,

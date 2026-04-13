@@ -282,7 +282,14 @@ class SegmentationController:
             return
 
         try:
+
             controller.shapes_layer.add(verts_world, shape_type=str(roi_type))
+
+            from patari.controllers.roi_controller import RoiController
+
+            class_name = controller.segmentation.roi_class_combo.currentText()
+            RoiController.set_last_roi_position(controller, class_name)
+
         except Exception as e:
             controller.segmentation.roi_status_label.setText(
                 f"Failed to add ROI to viewer: {e}"
