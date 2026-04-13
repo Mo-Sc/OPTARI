@@ -67,10 +67,13 @@ class RoiController:
         Set the "roi_position" property of the most recently added shape to the given position string.
         """
 
-        positions = list(controller.shapes_layer.properties["roi_position"])
+        props = dict(getattr(controller.shapes_layer, "properties", {}) or {})
+        positions = list(props.get("roi_position", []))
+        if not positions:
+            return
         positions[-1] = str(position or "undefined")
-
-        controller.shapes_layer.properties["roi_position"] = positions
+        props["roi_position"] = positions
+        controller.shapes_layer.properties = props
 
     @staticmethod
     def apply_roi_colors(controller) -> None:
@@ -107,18 +110,16 @@ class RoiController:
         if controller.shapes_layer is None:
             return
 
-        # positions = controller.shapes_layer.properties["roi_position"]
-        # if len(positions) != len(controller.shapes_layer.data):
-        #     positions = ["undefined"] * len(controller.shapes_layer.data)
-        #     controller.shapes_layer.properties["roi_position"] = positions
-
+        # make sure every shape has a "roi_position" property
+        # defaulting to "undefined", for shapes that dont have it, i.e. for manually added shapes
         props = dict(getattr(controller.shapes_layer, "properties", {}) or {})
-        positions = list(props.get("roi_position", []))
         n_shapes = len(controller.shapes_layer.data)
-        if len(positions) < n_shapes:
-            positions.extend(["undefined"] * (n_shapes - len(positions)))
-        props["roi_position"] = positions[:n_shapes]
-        controller.shapes_layer.properties = props
+        positions = list(props.get("roi_position", []))
+        if len(positions) != n_shapes:
+            props["roi_position"] = (positions + ["undefined"] * n_shapes)[
+                :n_shapes
+            ]
+            controller.shapes_layer.properties = props
 
         RoiController.apply_roi_colors(controller)
         if ROI_LABELS:

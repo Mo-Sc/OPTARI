@@ -240,18 +240,15 @@ class ScanController:
         if controller.shapes_layer is None:
             return
 
-        # Disconnect the data-change handler for the duration of the bulk
-        # operation — otherwise it fires once per shape.add(), triggering
-        # redundant compute_roi_stats calls and table refreshes.
         try:
+            # Disconnect the data-change handler for the duration of the bulk
+            # operation — otherwise it fires once per shape.add(), triggering
+            # redundant compute_roi_stats calls and table refreshes.
             controller.shapes_layer.events.data.disconnect(
                 controller._on_shapes_data_changed
             )
-        except Exception:
-            pass
 
-        shapes: list = []
-        try:
+            shapes: list = []
             controller.shapes_layer.data = []
             fov = (
                 ScanController.get_fov(controller)
@@ -260,19 +257,28 @@ class ScanController:
             )
             if fov is not None:
                 shapes = napari_shapes_from_scan_rois(controller.pa_data, *fov)
-                for verts, stype in shapes:
+                for verts, stype, _ in shapes:
                     controller.shapes_layer.add(verts, shape_type=stype)
+
+                # add roi_position property to shapes layer
+                props = dict(
+                    getattr(controller.shapes_layer, "properties", {}) or {}
+                )
+                props["roi_position"] = [pos for _, _, pos in shapes]
+                controller.shapes_layer.properties = props
+
                 if shapes:
                     logger.info("loaded %s ROI(s) from scan", len(shapes))
-        finally:
-            try:
-                controller.shapes_layer.events.data.connect(
-                    controller._on_shapes_data_changed
-                )
-            except Exception:
-                pass
-            # Single refresh at the end regardless of success/failure.
-            controller._on_shapes_data_changed()
+
+            controller.shapes_layer.events.data.connect(
+                controller._on_shapes_data_changed
+            )
+
+        except Exception:
+            logging.exception("failed to initialize ROIs from scan data")
+            pass
+        # Single refresh at the end regardless of success/failure.
+        controller._on_shapes_data_changed()
 
     @staticmethod
     def export_hdf5(controller, destination: Path) -> bool:
@@ -362,7 +368,7 @@ class ScanController:
 
             fov_x_m, fov_y_m = ScanController.get_fov(controller)
             export_roi_class = (
-                f"PATARI-{dt.datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+                f"PATARI_{dt.datetime.now().strftime('%Y%m%d%H%M%S%f')}"
             )
 
             # add current ROIs from viewer to the file
