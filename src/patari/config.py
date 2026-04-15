@@ -10,7 +10,7 @@ dtype_map = {
     "roi_type": str,
     "scan_id": str,
     "frame": int,
-    "wavelength": int,
+    "channel": object,
     "mean": float,
     "median": float,
     "std": float,

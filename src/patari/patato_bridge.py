@@ -179,6 +179,8 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
                     "metadata": {
                         "type": "pa",
                         "wavelengths": wavelengths,
+                        "axis1_name": "Channel",
+                        "axis1_labels": wavelengths,
                         "timestamps": timestamps,
                         "frames": recon_frame_list,
                     },

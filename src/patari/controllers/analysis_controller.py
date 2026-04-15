@@ -26,12 +26,12 @@ class AnalysisController:
         }
 
     @staticmethod
-    def _current_frame_wavelength(controller) -> tuple[int, int]:
-        """Return current (frame, wavelength) from viewer dims with safe defaults."""
+    def _current_frame_channel(controller) -> tuple[int, int]:
+        """Return current (frame, channel) from viewer dims with safe defaults."""
         pt = list(controller.viewer.dims.point)
         frame_idx = int(round(pt[0])) if len(pt) >= 1 else 0
-        wav_idx = int(round(pt[1])) if len(pt) >= 2 else 0
-        return frame_idx, wav_idx
+        channel_idx = int(round(pt[1])) if len(pt) >= 2 else 0
+        return frame_idx, channel_idx
 
     @staticmethod
     def _clear_plot_layout(container) -> object | None:
@@ -87,13 +87,13 @@ class AnalysisController:
         plot = controller.time_analysis.plot_widget
         assert plot is not None
 
-        _, wav_idx = AnalysisController._current_frame_wavelength(controller)
+        _, channel_idx = AnalysisController._current_frame_channel(controller)
 
         controller.time_analysis.status_label.setText("Computing time series…")
         x, series = compute_roi_time_series(
             controller.shapes_layer,
             controller.active_layer,
-            wav_idx,
+            channel_idx,
             **AnalysisController._clamp_kwargs(controller),
         )
 
@@ -114,7 +114,7 @@ class AnalysisController:
             )
 
         # Re-autoscale y-axis on every refresh so ROI curves remain visible
-        # even when intensity range changes strongly between wavelengths.
+        # even when intensity range changes strongly between channels.
         vb = plot.getViewBox()
         vb.enableAutoRange(axis=getattr(vb, "YAxis", "y"), enable=True)
         vb.autoRange(padding=0.02)
@@ -148,7 +148,7 @@ class AnalysisController:
             )
             return
 
-        frame_idx, wav_idx = AnalysisController._current_frame_wavelength(
+        frame_idx, channel_idx = AnalysisController._current_frame_channel(
             controller
         )
 
@@ -158,7 +158,7 @@ class AnalysisController:
             controller.shapes_layer,
             controller.active_layer,
             frame_idx,
-            wav_idx,
+            channel_idx,
             **AnalysisController._clamp_kwargs(controller),
         )
 
@@ -203,7 +203,7 @@ class AnalysisController:
             n_plotted += 1
 
         controller.histograms.status_label.setText(
-            f"Plotted {n_plotted} histogram(s) for frame {frame_idx}, wav {wav_idx}."
+            f"Plotted {n_plotted} histogram(s) for frame {frame_idx}, channel {channel_idx}."
         )
 
     @staticmethod
@@ -225,11 +225,11 @@ class AnalysisController:
             controller.spectrum.status_label.setText("Select a PA image layer")
             return
 
-        frame_idx, _ = AnalysisController._current_frame_wavelength(controller)
+        frame_idx, _ = AnalysisController._current_frame_channel(controller)
 
         controller.spectrum.status_label.setText("Computing spectra…")
 
-        x, series = compute_roi_spectra(
+        x, series, x_tick_labels = compute_roi_spectra(
             controller.shapes_layer,
             controller.active_layer,
             frame_idx,
@@ -241,6 +241,10 @@ class AnalysisController:
         )
 
         n_plotted = 0
+        axis1_name = str(
+            controller.active_layer.metadata.get("axis1_name", "Channel")
+        )
+        x_label = "Channel" if axis1_name.lower() == "channel" else axis1_name
         for roi_index, y in series.items():
             if y.size == 0 or np.all(np.isnan(y)):
                 continue
@@ -250,7 +254,7 @@ class AnalysisController:
             plot = pg.PlotWidget()
             plot.setTitle(f"ROI {roi_index}")
             plot.showGrid(x=True, y=True)
-            plot.setLabel("bottom", "Wavelength (nm)")
+            plot.setLabel("bottom", x_label)
             plot.setLabel("left", "Mean intensity")
             plot.plot(
                 x,
@@ -261,6 +265,12 @@ class AnalysisController:
                 symbolBrush=pg.mkBrush(color),
                 symbolPen=pg.mkPen(color=color, width=1),
             )
+
+            if x_tick_labels:
+                tick_values = [
+                    (float(i), label) for i, label in enumerate(x_tick_labels)
+                ]
+                plot.getAxis("bottom").setTicks([tick_values])
 
             if layout is not None:
                 layout.addWidget(plot)

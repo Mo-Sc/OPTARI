@@ -58,6 +58,7 @@ class ScanController:
             logger.debug("failed to close current scan handle", exc_info=True)
         controller.pa_data = None
         controller._patato_objects = {}
+        controller._derived_patato_objects = {}
 
     @staticmethod
     def reset_scan_state(controller) -> None:
@@ -150,7 +151,7 @@ class ScanController:
                 kw["metadata"].setdefault("filepath", str(scan_path))
                 controller.viewer.add_labels(data, **kw)
 
-        # Create a fresh ROIs layer after image/label layers so it stays on top.
+        # Create the ROIs layer after image layers so it stays on top.
         controller.shapes_layer = controller.viewer.add_shapes(
             name="ROIs",
             edge_color=roi_color_for_index(0),
@@ -313,22 +314,22 @@ class ScanController:
         # info: dims.current_step gives discrete integer steps,
         # dims.point gives continuous position which may be between steps
         frame_idx = int(controller.viewer.dims.current_step[0])
-        wav_idx = int(controller.viewer.dims.current_step[1])
+        channel_idx = int(controller.viewer.dims.current_step[1])
 
         try:
             z = int(
                 controller.pa_data.scan_reader.get_scanner_z_position()[
-                    frame_idx, wav_idx
+                    frame_idx, channel_idx
                 ]
             )
             run = int(
                 controller.pa_data.scan_reader.get_run_numbers()[
-                    frame_idx, wav_idx
+                    frame_idx, channel_idx
                 ]
             )
             rep = int(
                 controller.pa_data.scan_reader.get_repetition_numbers()[
-                    frame_idx, wav_idx
+                    frame_idx, channel_idx
                 ]
             )
         except Exception:

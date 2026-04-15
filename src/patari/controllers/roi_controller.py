@@ -143,14 +143,14 @@ class RoiController:
             return
 
         frame_idx = int(round(pt[0]))
-        wav_idx = int(round(pt[1]))
+        channel_idx = int(round(pt[1]))
 
         try:
             df = compute_roi_stats(
                 controller.shapes_layer,
                 controller.active_layer,
                 frame_idx,
-                wav_idx,
+                channel_idx,
                 clamp_min=controller.roi_intensity_min,
                 clamp_max=controller.roi_intensity_max,
                 clamp_mode=(controller.roi_intensity_mode or "clip"),
@@ -224,11 +224,11 @@ class RoiController:
             if len(pt) < 2:
                 return
             frame_idx = int(round(pt[0]))
-            wav_idx = int(round(pt[1]))
+            channel_idx = int(round(pt[1]))
 
             data = np.asarray(controller.active_layer.data)
             if data.ndim < 2:
-                logger.info("Active layer has no frame/wavelength dimensions")
+                logger.info("Active layer has no frame/channel dimensions")
                 return
 
             if include_all_frames:
@@ -240,20 +240,20 @@ class RoiController:
                 frame_indices = [frame_idx]
 
             if include_all_wavelengths:
-                wav_indices = list(range(data.shape[1]))
+                channel_indices = list(range(data.shape[1]))
             else:
-                wav_indices = [wav_idx]
+                channel_indices = [channel_idx]
 
-            # Potentially expensive path: compute one row per (frame, wavelength)
+            # Potentially expensive path: compute one row per (frame, channel)
             # for the selected ROI only, preserving the current ROI filtering rules.
             collected: list[pd.DataFrame] = []
             for f_idx in frame_indices:
-                for w_idx in wav_indices:
+                for c_idx in channel_indices:
                     df_slice = compute_roi_stats(
                         controller.shapes_layer,
                         controller.active_layer,
                         int(f_idx),
-                        int(w_idx),
+                        int(c_idx),
                         clamp_min=controller.roi_intensity_min,
                         clamp_max=controller.roi_intensity_max,
                         clamp_mode=(controller.roi_intensity_mode or "clip"),

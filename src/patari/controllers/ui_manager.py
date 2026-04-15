@@ -278,3 +278,20 @@ class UiManager:
             controller.scan_browser.hdf5_button.clicked.connect(
                 controller.on_hdf5_export_clicked
             )
+
+        if controller.unmixing is not None:
+            controller.unmixing.preset_combo.currentIndexChanged.connect(
+                controller.on_unmixing_preset_changed
+            )
+            controller.unmixing.chromophores_list.itemChanged.connect(
+                controller.on_unmixing_chromophores_changed
+            )
+            controller.unmixing.select_all_wavelengths_button.clicked.connect(
+                controller.on_unmixing_select_all_wavelengths_clicked
+            )
+            controller.unmixing.clear_wavelengths_button.clicked.connect(
+                controller.on_unmixing_clear_wavelengths_clicked
+            )
+            controller.unmixing.run_button.clicked.connect(
+                controller.on_run_unmixing_clicked
+            )

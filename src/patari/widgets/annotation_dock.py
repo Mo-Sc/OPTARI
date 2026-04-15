@@ -109,7 +109,7 @@ def create_annotation_dock() -> AnnotationDock:
     roi_exclusion_box.toggled.connect(_on_exclusion_toggled)
 
     include_all_frames_checkbox = QCheckBox("Include all frames")
-    include_all_wavelengths_checkbox = QCheckBox("Include all wavelengths")
+    include_all_wavelengths_checkbox = QCheckBox("Include all channels")
     include_all_frames_checkbox.setChecked(False)
     include_all_wavelengths_checkbox.setChecked(False)
 

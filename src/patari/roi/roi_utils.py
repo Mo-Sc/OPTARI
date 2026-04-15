@@ -27,12 +27,12 @@ def _scale_sy_sx(active_layer) -> tuple[float, float]:
     return float(scale[-2]), float(scale[-1])
 
 
-def _clamp_wav_idx(active_layer, wav_idx: int) -> int:
+def _clamp_channel_idx(active_layer, channel_idx: int) -> int:
     data = np.asarray(active_layer.data)
     if data.ndim < 2:
         return 0
-    n_wavs = int(data.shape[1])
-    return int(np.clip(int(wav_idx), 0, max(0, n_wavs - 1)))
+    n_channels = int(data.shape[1])
+    return int(np.clip(int(channel_idx), 0, max(0, n_channels - 1)))
 
 
 def _is_reconstructed_frame(active_layer, frame_idx: int) -> bool:
@@ -137,15 +137,19 @@ def compute_roi_stats(
     shapes_layer,
     active_layer,
     frame_idx: int,
-    wav_idx: int,
+    channel_idx: int,
     *,
     clamp_min: float | None = None,
     clamp_max: float | None = None,
     clamp_mode: str = "clip",
 ):
-    """Compute ROI statistics for all shapes for a specific frame/wavelength."""
+    """Compute ROI statistics for all shapes for a specific frame/channel."""
 
-    logger.debug("compute_roi_stats for frame %s, wav %s", frame_idx, wav_idx)
+    logger.debug(
+        "compute_roi_stats for frame %s, channel %s",
+        frame_idx,
+        channel_idx,
+    )
 
     empty = pd.DataFrame(columns=list(dtype_map.keys())).astype(dtype_map)
     if active_layer is None:
@@ -156,9 +160,9 @@ def compute_roi_stats(
         # this frame was zero-padded → return empty stats
         return empty
 
-    wav_idx = _clamp_wav_idx(active_layer, wav_idx)
+    channel_idx = _clamp_channel_idx(active_layer, channel_idx)
     data = np.asarray(active_layer.data)
-    img2d = data[frame_idx, wav_idx]
+    img2d = data[frame_idx, channel_idx]
 
     timestamps = getattr(active_layer, "metadata", {}).get("timestamps")
 
@@ -167,13 +171,13 @@ def compute_roi_stats(
 
         timestamp_str = str(
             datetime(1, 1, 1)
-            + timedelta(seconds=float(timestamps[frame_idx, wav_idx]))
+            + timedelta(seconds=float(timestamps[frame_idx, channel_idx]))
         )
     except Exception:
         logger.debug(
-            "could not parse timestamp for frame %s wav %s",
+            "could not parse timestamp for frame %s channel %s",
             frame_idx,
-            wav_idx,
+            channel_idx,
         )
         timestamp_str = "N/A"
 
@@ -229,13 +233,33 @@ def compute_roi_stats(
                 max=float(np.nanmax(vals_stats)),
             )
 
-        wavelengths = active_layer.metadata.get("wavelengths", None)
-        if isinstance(wavelengths, (list, tuple)) and 0 <= wav_idx < len(
-            wavelengths
+        axis1_labels = active_layer.metadata.get("axis1_labels")
+        if isinstance(axis1_labels, (list, tuple)) and 0 <= channel_idx < len(
+            axis1_labels
         ):
-            wav_val = wavelengths[wav_idx]
+            channel_value = axis1_labels[channel_idx]
         else:
-            wav_val = wav_idx
+            wavelengths = active_layer.metadata.get("wavelengths", None)
+            if isinstance(
+                wavelengths, (list, tuple)
+            ) and 0 <= channel_idx < len(wavelengths):
+                channel_value = wavelengths[channel_idx]
+            else:
+                channel_value = channel_idx
+
+        if isinstance(channel_value, np.generic):
+            channel_value = channel_value.item()
+        if isinstance(channel_value, (bytes, bytearray)):
+            channel_value = channel_value.decode("utf-8")
+
+        if isinstance(channel_value, float) and channel_value.is_integer():
+            channel_value = int(channel_value)
+
+        if isinstance(channel_value, str):
+            try:
+                channel_value = int(channel_value)
+            except ValueError:
+                pass
 
         filepath = active_layer.metadata.get("filepath", "")
         scan_id = Path(filepath).stem.split("_")[1] if filepath else ""
@@ -243,7 +267,7 @@ def compute_roi_stats(
         stats["roi_type"] = roi.kind
         stats["scan_id"] = scan_id
         stats["frame"] = frame_idx
-        stats["wavelength"] = wav_val
+        stats["channel"] = channel_value
         stats["timestamp"] = timestamp_str
         stats["filepath"] = filepath
 
@@ -260,13 +284,13 @@ def compute_roi_stats(
 def compute_roi_time_series(
     shapes_layer,
     active_layer,
-    wav_idx: int,
+    channel_idx: int,
     *,
     clamp_min: float | None = None,
     clamp_max: float | None = None,
     clamp_mode: str = "clip",
 ):
-    """Compute per-ROI mean intensity over time for a fixed wavelength."""
+    """Compute per-ROI mean intensity over time for a fixed channel."""
 
     if active_layer is None:
         return np.asarray([]), {}
@@ -276,7 +300,7 @@ def compute_roi_time_series(
         return np.asarray([]), {}
 
     n_frames = data.shape[0]
-    wav_idx = _clamp_wav_idx(active_layer, wav_idx)
+    channel_idx = _clamp_channel_idx(active_layer, channel_idx)
 
     frames_meta = getattr(active_layer, "metadata", {}).get("frames")
     if frames_meta:
@@ -288,9 +312,9 @@ def compute_roi_time_series(
     if ts is not None:
         try:
             ts = np.asarray(ts)
-            # Use per-wavelength timestamps for the plotted wavelength,
+            # Use per-channel timestamps for the plotted channel,
             # but reference all values to scan start
-            x = ts[frames, wav_idx].astype(float)
+            x = ts[frames, channel_idx].astype(float)
             x = x - float(ts[0, 0])
         except Exception:
             x = frames.astype(float)
@@ -310,7 +334,7 @@ def compute_roi_time_series(
         for frame_idx in frames:
             if not _is_reconstructed_frame(active_layer, int(frame_idx)):
                 continue
-            img2d = data[int(frame_idx), wav_idx]
+            img2d = data[int(frame_idx), channel_idx]
             vals = img2d[mask]
             vals = _apply_clamp(
                 vals,
@@ -328,13 +352,13 @@ def extract_roi_pixels_for_slice(
     shapes_layer,
     active_layer,
     frame_idx: int,
-    wav_idx: int,
+    channel_idx: int,
     *,
     clamp_min: float | None = None,
     clamp_max: float | None = None,
     clamp_mode: str = "clip",
 ):
-    """Extract pixel values per ROI for the given frame/wavelength."""
+    """Extract pixel values per ROI for the given frame/channel."""
 
     if active_layer is None:
         return {}
@@ -343,9 +367,9 @@ def extract_roi_pixels_for_slice(
     if not _is_reconstructed_frame(active_layer, frame_idx):
         return {}
 
-    wav_idx = _clamp_wav_idx(active_layer, wav_idx)
+    channel_idx = _clamp_channel_idx(active_layer, channel_idx)
     data = np.asarray(active_layer.data)
-    img2d = data[frame_idx, wav_idx]
+    img2d = data[frame_idx, channel_idx]
     sy, sx = _scale_sy_sx(active_layer)
 
     out: dict[int, np.ndarray] = {}
@@ -372,27 +396,40 @@ def compute_roi_spectra(
     clamp_max: float | None = None,
     clamp_mode: str = "clip",
 ):
-    """Compute per-ROI mean intensity over wavelengths for a fixed frame."""
+    """Compute per-ROI mean intensity over channels for a fixed frame."""
 
     if active_layer is None:
-        return np.asarray([]), {}
+        return np.asarray([]), {}, None
 
     data = np.asarray(active_layer.data)
     if data.ndim < 2:
-        return np.asarray([]), {}
+        return np.asarray([]), {}, None
 
     frame_idx = int(frame_idx)
     if not _is_reconstructed_frame(active_layer, frame_idx):
-        return np.asarray([]), {}
+        return np.asarray([]), {}, None
 
-    n_wavs = data.shape[1]
-    wavelengths = getattr(active_layer, "metadata", {}).get(
-        "wavelengths", None
+    n_channels = data.shape[1]
+    x = np.arange(n_channels, dtype=float)
+    x_tick_labels: list[str] | None = None
+
+    axis1_labels = getattr(active_layer, "metadata", {}).get(
+        "axis1_labels", None
     )
-    if isinstance(wavelengths, (list, tuple)) and len(wavelengths) == n_wavs:
-        x = np.asarray(wavelengths, dtype=float)
+    if (
+        isinstance(axis1_labels, (list, tuple))
+        and len(axis1_labels) == n_channels
+    ):
+        x_tick_labels = [str(label) for label in axis1_labels]
     else:
-        x = np.arange(n_wavs, dtype=float)
+        wavelengths = getattr(active_layer, "metadata", {}).get(
+            "wavelengths", None
+        )
+        if (
+            isinstance(wavelengths, (list, tuple))
+            and len(wavelengths) == n_channels
+        ):
+            x = np.asarray(wavelengths, dtype=float)
 
     sy, sx = _scale_sy_sx(active_layer)
     img_shape = data.shape[-2:]
@@ -403,12 +440,12 @@ def compute_roi_spectra(
         if mask is None:
             continue
         y = []
-        for w in range(n_wavs):
-            vals = data[frame_idx, w][mask]
+        for channel in range(n_channels):
+            vals = data[frame_idx, channel][mask]
             vals = _apply_clamp(
                 vals, clamp_min, clamp_max, mode=str(clamp_mode or "clip")
             )
             y.append(float(np.nanmean(vals)) if vals.size else np.nan)
         series[int(roi.index)] = np.asarray(y, dtype=float)
 
-    return x, series
+    return x, series, x_tick_labels
