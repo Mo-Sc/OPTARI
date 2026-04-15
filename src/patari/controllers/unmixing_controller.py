@@ -205,6 +205,56 @@ class UnmixingController:
         return np.flip(np.array(image_sequence.da[:, :, :, 0, :]), axis=-2)
 
     @staticmethod
+    def _set_export_frame_attrs(
+        image_sequence,
+        export_attrs: dict,
+    ) -> None:
+        """Apply export attributes to PATATO output objects."""
+        for key, value in export_attrs.items():
+            image_sequence.attributes[key] = value
+
+    @staticmethod
+    def _build_output_metadata(
+        *,
+        source_layer_name: str,
+        output_frames: list[int],
+        axis1_labels: list[str],
+        filepath,
+        timestamps,
+        pa_kind: str,
+        frame_mode: str,
+        parameter: str | None = None,
+        include_chromophores: bool = False,
+    ) -> tuple[dict, dict]:
+        """Build synchronized layer metadata and HDF5 export attributes."""
+        layer_metadata = {
+            "type": "pa",
+            "pa_kind": pa_kind,
+            "source_layer": source_layer_name,
+            "frames": output_frames,
+            "axis1_name": "Channel",
+            "axis1_labels": axis1_labels,
+            "filepath": filepath,
+            "timestamps": timestamps,
+        }
+        if include_chromophores:
+            layer_metadata["chromophores"] = axis1_labels
+        if parameter is not None:
+            layer_metadata["parameter"] = parameter
+
+        export_attrs = {
+            "frames": np.asarray(output_frames, dtype=int),
+            "source_layer": str(source_layer_name),
+            "axis1_labels": np.asarray(axis1_labels, dtype=str),
+            "pa_kind": str(pa_kind),
+            "source_frame_mode": str(frame_mode),
+        }
+        if parameter is not None:
+            export_attrs["parameter"] = str(parameter)
+
+        return layer_metadata, export_attrs
+
+    @staticmethod
     def _expand_to_source_frames(
         data: np.ndarray,
         output_frames: list[int],
@@ -286,9 +336,7 @@ class UnmixingController:
 
         recon = controller._patato_objects.get(controller.active_layer.name)
         if recon is None:
-            dock.status_label.setText(
-                "Active layer has no reconstruction source."
-            )
+            dock.status_label.setText("Source layer must be a reconstruction.")
             return
 
         selected_wavelengths = [
@@ -317,6 +365,7 @@ class UnmixingController:
         recon_for_run = recon
         output_frames = frame_numbers
         current_frame_id = None
+        frame_mode = "all"
 
         if dock.current_frame_only_checkbox.isChecked():
             current_frame = int(controller.viewer.dims.current_step[0])
@@ -330,6 +379,7 @@ class UnmixingController:
             recon_for_run = recon[recon_idx : recon_idx + 1]
             output_frames = [current_frame]
             current_frame_id = current_frame
+            frame_mode = "current"
 
         suffix = dock.suffix_edit.text().strip()
         reduce_factor = int(dock.resolution_reduction_factor.value())
@@ -351,6 +401,20 @@ class UnmixingController:
             algorithm_id=suffix,
         )
         unmixed, _, _ = unmixer.run(recon_for_run, controller.pa_data)
+        unmixed_axis1_labels = list(map(str, unmixed.ax_1_labels))
+        unmixed_metadata, unmixed_export_attrs = (
+            UnmixingController._build_output_metadata(
+                source_layer_name=controller.active_layer.name,
+                output_frames=output_frames,
+                axis1_labels=unmixed_axis1_labels,
+                filepath=controller.active_layer.metadata.get("filepath"),
+                timestamps=controller.active_layer.metadata.get("timestamps"),
+                pa_kind="unmixed",
+                frame_mode=frame_mode,
+                include_chromophores=True,
+            )
+        )
+        UnmixingController._set_export_frame_attrs(unmixed, unmixed_export_attrs)
 
         source_name = controller.active_layer.name.replace("Recon: ", "")
         suffix_part = f"_{suffix}" if suffix else ""
@@ -368,18 +432,7 @@ class UnmixingController:
             output_frames,
             source_frame_count,
         )
-        unmixed_metadata = {
-            "type": "pa",
-            "pa_kind": "unmixed",
-            "source_layer": controller.active_layer.name,
-            "frames": output_frames,
-            # Channel labels are used by downstream spectrum displays.
-            "axis1_name": "Channel",
-            "axis1_labels": list(map(str, unmixed.ax_1_labels)),
-            "chromophores": list(map(str, unmixed.ax_1_labels)),
-            "filepath": controller.active_layer.metadata.get("filepath"),
-            "timestamps": controller.active_layer.metadata.get("timestamps"),
-        }
+        # Channel labels are used by downstream spectrum displays.
         UnmixingController._add_or_update_image_layer(
             controller,
             name=unmixed_name,
@@ -395,20 +448,20 @@ class UnmixingController:
         if dock.generate_thb_checkbox.isChecked():
             thb_calc = pat.THbCalculator(algorithm_id=suffix)
             thb, _, _ = thb_calc.run(unmixed, controller.pa_data)
+            thb_metadata, thb_export_attrs = (
+                UnmixingController._build_output_metadata(
+                    source_layer_name=controller.active_layer.name,
+                    output_frames=output_frames,
+                    axis1_labels=["thb"],
+                    filepath=controller.active_layer.metadata.get("filepath"),
+                    timestamps=controller.active_layer.metadata.get("timestamps"),
+                    pa_kind="unmixed_param",
+                    frame_mode=frame_mode,
+                    parameter="thb",
+                )
+            )
+            UnmixingController._set_export_frame_attrs(thb, thb_export_attrs)
             thb_name = f"THb: {source_name}{suffix_part}{frame_part}"
-            thb_metadata = {
-                "type": "pa",
-                "pa_kind": "unmixed_param",
-                "parameter": "thb",
-                "source_layer": controller.active_layer.name,
-                "frames": output_frames,
-                "axis1_name": "Channel",
-                "axis1_labels": ["thb"],
-                "filepath": controller.active_layer.metadata.get("filepath"),
-                "timestamps": controller.active_layer.metadata.get(
-                    "timestamps"
-                ),
-            }
             UnmixingController._add_or_update_image_layer(
                 controller,
                 name=thb_name,
@@ -426,20 +479,20 @@ class UnmixingController:
         if dock.generate_so2_checkbox.isChecked():
             so2_calc = pat.SO2Calculator(algorithm_id=suffix, nan_invalid=True)
             so2, _, _ = so2_calc.run(unmixed, controller.pa_data)
+            so2_metadata, so2_export_attrs = (
+                UnmixingController._build_output_metadata(
+                    source_layer_name=controller.active_layer.name,
+                    output_frames=output_frames,
+                    axis1_labels=["so2"],
+                    filepath=controller.active_layer.metadata.get("filepath"),
+                    timestamps=controller.active_layer.metadata.get("timestamps"),
+                    pa_kind="unmixed_param",
+                    frame_mode=frame_mode,
+                    parameter="so2",
+                )
+            )
+            UnmixingController._set_export_frame_attrs(so2, so2_export_attrs)
             so2_name = f"sO2: {source_name}{suffix_part}{frame_part}"
-            so2_metadata = {
-                "type": "pa",
-                "pa_kind": "unmixed_param",
-                "parameter": "so2",
-                "source_layer": controller.active_layer.name,
-                "frames": output_frames,
-                "axis1_name": "Channel",
-                "axis1_labels": ["so2"],
-                "filepath": controller.active_layer.metadata.get("filepath"),
-                "timestamps": controller.active_layer.metadata.get(
-                    "timestamps"
-                ),
-            }
             UnmixingController._add_or_update_image_layer(
                 controller,
                 name=so2_name,

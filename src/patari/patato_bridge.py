@@ -10,6 +10,7 @@ import logging
 from typing import TYPE_CHECKING
 
 import numpy as np
+from patato.io.attribute_tags import HDF5Tags
 
 if TYPE_CHECKING:
     import patato as pat
@@ -136,36 +137,38 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
         )
     )
 
+    def _display_data(image_sequence) -> np.ndarray:
+        return np.flip(np.array(image_sequence.da[:, :, :, 0, :]), axis=-2)
+
+    def _frame_list(image_sequence, n_frames: int) -> list[int]:
+        frames_info = image_sequence.da.attrs.get(
+            "frames", image_sequence.da.attrs.get("frame")
+        )
+        if frames_info is None:
+            return list(range(n_frames))
+        if isinstance(frames_info, (np.int64, float, int, str)):
+            return [int(frames_info)]
+        if isinstance(frames_info, (list, np.ndarray)):
+            return [int(f) for f in frames_info]
+        return list(range(n_frames))
+
+    def _expand_to_acquisition_frames(
+        raw_data: np.ndarray, frame_list: list[int]
+    ) -> np.ndarray:
+        if raw_data.shape[0] == n_acq_frames and len(frame_list) == n_acq_frames:
+            return raw_data
+
+        expanded = np.zeros((n_acq_frames, *raw_data.shape[1:]), dtype=raw_data.dtype)
+        for i, frame in enumerate(frame_list):
+            if 0 <= int(frame) < n_acq_frames and i < raw_data.shape[0]:
+                expanded[int(frame)] = raw_data[i]
+        return expanded
+
     # --- reconstructions ---
     for (recon_name, idx), recon in pa_data.get_scan_reconstructions().items():
-        recon_raw = np.flip(np.array(recon.da[:, :, :, 0, :]), axis=-2)
-
-        frames_info = recon.da.attrs.get("frames", recon.da.attrs.get("frame"))
-        if frames_info is None:
-            recon_frame_list = list(range(recon_raw.shape[0]))
-        elif isinstance(frames_info, (np.int64, float, int, str)):
-            recon_frame_list = [int(frames_info)]
-        elif isinstance(frames_info, (list, np.ndarray)):
-            recon_frame_list = [int(f) for f in frames_info]
-        else:
-            logger.debug(
-                f"unsupported 'frame' attribute type {type(frames_info)} in reconstruction {recon_name}_{idx}",
-                exc_info=True,
-            )
-            raise ValueError(
-                "Reconstruction 'frame' attribute has unsupported type."
-            )
-
-        recon_img = np.zeros(
-            (n_acq_frames, *recon_raw.shape[1:]), dtype=recon_raw.dtype
-        )
-        for i, acq_frame in enumerate(recon_frame_list):
-            if not (0 <= acq_frame < n_acq_frames):
-                raise IndexError(
-                    f"Reconstruction frame {acq_frame} out of bounds "
-                    f"(0, {n_acq_frames - 1})"
-                )
-            recon_img[acq_frame] = recon_raw[i]
+        recon_raw = _display_data(recon)
+        recon_frame_list = _frame_list(recon, recon_raw.shape[0])
+        recon_img = _expand_to_acquisition_frames(recon_raw, recon_frame_list)
 
         layer_name = f"Recon: {recon_name}_{idx}"
         patato_objects[layer_name] = recon
@@ -188,6 +191,51 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
                 "image",
             )
         )
+
+    # --- derived PA image groups that may already exist in HDF5 ---
+    derived_specs = [
+        (HDF5Tags.UNMIXED, "Unmixed", "magma", "unmixed", None),
+        (HDF5Tags.THB, "THb", "inferno", "unmixed_param", "thb"),
+        (HDF5Tags.SO2, "sO2", "turbo", "unmixed_param", "so2"),
+    ]
+    for group_name, prefix, colormap, pa_kind, parameter in derived_specs:
+        for (dataset_name, idx), image in pa_data.get_scan_images(
+            group_name, ignore_default=True
+        ).items():
+            raw = _display_data(image)
+            frame_list = _frame_list(image, raw.shape[0])
+            data = _expand_to_acquisition_frames(raw, frame_list)
+
+            axis1_labels = list(map(str, np.asarray(image.ax_1_labels).tolist()))
+            source_layer = image.da.attrs.get("source_layer")
+            if source_layer is None:
+                source_layer = f"Recon: {dataset_name}_{idx}"
+            metadata = {
+                "type": "pa",
+                "pa_kind": pa_kind,
+                "source_layer": str(source_layer),
+                "frames": frame_list,
+                "axis1_name": "Channel",
+                "axis1_labels": axis1_labels,
+                "timestamps": timestamps,
+            }
+            if pa_kind == "unmixed":
+                metadata["chromophores"] = axis1_labels
+            if parameter is not None:
+                metadata["parameter"] = parameter
+
+            layers.append(
+                (
+                    data,
+                    {
+                        "colormap": colormap,
+                        "name": f"{prefix}: {dataset_name}_{idx}",
+                        "scale": scale_from_patato_obj(image, _recon_fallback),
+                        "metadata": metadata,
+                    },
+                    "image",
+                )
+            )
 
     return layers, patato_objects
 
