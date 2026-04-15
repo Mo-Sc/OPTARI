@@ -186,8 +186,8 @@ class UiManager:
             controller.roi.delete_button.clicked.connect(
                 controller.on_delete_saved_clicked
             )
-            controller.roi.csv_button.clicked.connect(
-                controller.on_csv_export_clicked
+            controller.roi.xlsx_button.clicked.connect(
+                controller.on_xlsx_export_clicked
             )
 
         if controller.time_analysis is not None:

@@ -586,8 +586,8 @@ class PatariController:
     def on_delete_saved_clicked(self, event=None) -> None:
         RoiController.on_delete_saved_clicked(self, event)
 
-    def on_csv_export_clicked(self, event=None) -> None:
-        RoiController.on_csv_export_clicked(self, event)
+    def on_xlsx_export_clicked(self, event=None) -> None:
+        RoiController.on_xlsx_export_clicked(self, event)
 
     def on_save_roi_library_clicked(self, event=None) -> None:
         RoiController.on_save_roi_library_clicked(self, event)

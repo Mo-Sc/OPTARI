@@ -6,11 +6,29 @@ from pathlib import Path
 
 import numpy as np
 import patato as pat
+from qtpy.QtWidgets import QFileDialog
 
 from patari.patato_bridge import napari_shapes_to_patato_rois
 
 
 logger = logging.getLogger(__name__)
+
+
+def export_roi_table_to_xlsx(df_saved) -> str | None:
+    """Prompt for a file path and export the ROI table as an XLSX file."""
+    filename, _ = QFileDialog.getSaveFileName(
+        None,
+        "Save ROIs as Excel",
+        "roi_data.xlsx",
+        "Excel Files (*.xlsx)",
+    )
+    if not filename:
+        return None
+    if not filename.endswith(".xlsx"):
+        filename += ".xlsx"
+
+    df_saved.to_excel(filename, index=False)
+    return filename
 
 
 def export_scan_to_hdf5(controller, destination: Path) -> bool:

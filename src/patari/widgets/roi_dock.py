@@ -16,7 +16,7 @@ class RoiDock:
     saved_table: Table
     save_button: PushButton
     delete_button: PushButton
-    csv_button: PushButton
+    xlsx_button: PushButton
 
 
 def create_roi_dock() -> RoiDock:
@@ -27,7 +27,7 @@ def create_roi_dock() -> RoiDock:
 
     save_button = PushButton(text="Save ROI Data")
     delete_button = PushButton(text="Delete ROI Data")
-    csv_button = PushButton(text="Export XLSX")
+    xlsx_button = PushButton(text="Export XLSX")
 
     # build Qt container for the bottom dock
     container = QWidget()
@@ -43,7 +43,7 @@ def create_roi_dock() -> RoiDock:
     btn_layout.addWidget(QLabel(" "))
     btn_layout.addWidget(save_button.native)
     btn_layout.addWidget(delete_button.native)
-    btn_layout.addWidget(csv_button.native)
+    btn_layout.addWidget(xlsx_button.native)
     btn_layout.addStretch()
 
     saved_panel = QWidget()
@@ -63,5 +63,5 @@ def create_roi_dock() -> RoiDock:
         saved_table=saved_table,
         save_button=save_button,
         delete_button=delete_button,
-        csv_button=csv_button,
+        xlsx_button=xlsx_button,
     )

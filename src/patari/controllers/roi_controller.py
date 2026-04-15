@@ -9,13 +9,13 @@ from qtpy.QtGui import QColor
 from qtpy.QtWidgets import (
     QDialog,
     QDialogButtonBox,
-    QFileDialog,
     QFormLayout,
     QLineEdit,
     QMessageBox,
 )
 
 from patari.config import ROI_LABELS, dtype_map
+from patari.io.export_pipeline import export_roi_table_to_xlsx
 from patari.roi.roi_library import RoiLibrary
 from patari.roi.roi_utils import compute_roi_stats
 from patari.utils.misc import roi_color_for_index
@@ -303,7 +303,7 @@ class RoiController:
         logger.info("Deleted %s saved rows", len(selected_indices))
 
     @staticmethod
-    def on_csv_export_clicked(controller, event=None) -> None:
+    def on_xlsx_export_clicked(controller, event=None) -> None:
         if controller.roi is None:
             return
 
@@ -312,18 +312,10 @@ class RoiController:
             logger.info("Saved table empty")
             return
 
-        filename, _ = QFileDialog.getSaveFileName(
-            None,
-            "Save ROIs as Excel",
-            "roi_data.xlsx",
-            "Excel Files (*.xlsx)",
-        )
-        if not filename:
+        filename = export_roi_table_to_xlsx(df_saved)
+        if filename is None:
             return
-        if not filename.endswith(".xlsx"):
-            filename += ".xlsx"
 
-        df_saved.to_excel(filename, index=False)
         logger.info("Saved ROI table to %s", filename)
 
     @staticmethod
