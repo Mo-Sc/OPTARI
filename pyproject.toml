@@ -29,7 +29,7 @@ dependencies = [
     "scikit-image",
     "opencv-python-headless",
     "nibabel",
-    "patato @ git+https://github.com/Mo-Sc/patato.git@02f98d116d140d7e33bfa7aa194ee66b6696958f",
+    "patato @ git+https://github.com/Mo-Sc/patato.git@89665a92da19f666af9a866106e6d3c90ed0e99f",
     "openpyxl",
 ]
 
