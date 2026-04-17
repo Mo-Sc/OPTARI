@@ -145,11 +145,11 @@ def compute_roi_stats(
 ):
     """Compute ROI statistics for all shapes for a specific frame/channel."""
 
-    logger.debug(
-        "compute_roi_stats for frame %s, channel %s",
-        frame_idx,
-        channel_idx,
-    )
+    # logger.debug(
+    #     "compute_roi_stats for frame %s, channel %s",
+    #     frame_idx,
+    #     channel_idx,
+    # )
 
     empty = pd.DataFrame(columns=list(dtype_map.keys())).astype(dtype_map)
     if active_layer is None:

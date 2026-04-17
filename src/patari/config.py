@@ -1,8 +1,9 @@
 from pathlib import Path
 
 ROI_LABELS = True
+MAX_ROIS = 10
 DEFAULT_PA_LAYER = "Recon: iThera BP-40mm(res:100μm)_0"
-STARTUP_LOGO_PATH = Path(__file__).resolve().parents[2] / "startup.png"
+STARTUP_LOGO_PATH = Path(__file__).resolve().parents[2] / "docs/startup.png"
 
 dtype_map = {
     "roi_index": int,
@@ -53,6 +54,7 @@ roi_colors = [
 
 # ROI placement presets (used by Annotation dock preset buttons).
 # Each preset defines a single ROI placement configuration.
+# TODO: legacy stuff, only for segmentation
 ROI_PLACEMENT_PRESETS = [
     {
         "name": "Skin",

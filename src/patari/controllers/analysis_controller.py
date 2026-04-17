@@ -120,8 +120,13 @@ class AnalysisController:
         vb.autoRange(padding=0.02)
 
         xlabel = "Time (s)" if controller.timestamps is not None else "Frame"
+
+        axis1_value = str(
+            controller.active_layer.metadata.get("axis1_labels")[channel_idx]
+        )
+
         plot.setLabel("bottom", xlabel)
-        plot.setLabel("left", "Mean intensity")
+        plot.setLabel("left", f"Mean Int. ({axis1_value})")
 
         controller.time_analysis.status_label.setText(
             f"Plotted {len(series)} ROI(s) over {len(x)} frame(s)."

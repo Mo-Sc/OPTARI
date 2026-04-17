@@ -136,7 +136,6 @@ def create_annotation_dock() -> AnnotationDock:
     button_layout.addWidget(remove_roi_button)
     button_layout.addWidget(save_library_button)
 
-    roi_library_layout.addWidget(QLabel("ROI id"))
     roi_library_layout.addWidget(roi_library_list)
     roi_library_description_label = QLabel("")
     roi_library_description_label.setWordWrap(True)

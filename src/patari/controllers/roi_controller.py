@@ -14,7 +14,7 @@ from qtpy.QtWidgets import (
     QMessageBox,
 )
 
-from patari.config import ROI_LABELS, dtype_map
+from patari.config import MAX_ROIS, ROI_LABELS, dtype_map
 from patari.io.export_pipeline import export_roi_table_to_xlsx
 from patari.roi.roi_library import RoiLibrary
 from patari.roi.roi_utils import compute_roi_stats
@@ -110,16 +110,21 @@ class RoiController:
         if controller.shapes_layer is None:
             return
 
-        # make sure every shape has a "roi_position" property
-        # defaulting to "undefined", for shapes that dont have it, i.e. for manually added shapes
-        props = dict(getattr(controller.shapes_layer, "properties", {}) or {})
         n_shapes = len(controller.shapes_layer.data)
-        positions = list(props.get("roi_position", []))
-        if len(positions) != n_shapes:
-            props["roi_position"] = (positions + ["undefined"] * n_shapes)[
-                :n_shapes
-            ]
-            controller.shapes_layer.properties = props
+
+        # ROI limit. For now just warning, TODO: enforce
+        if n_shapes > MAX_ROIS:
+            logger.warning(
+                "ROI soft limit reached (%s ROIs); Too many ROIs may cause performance issues. Current number of ROIs: %s",
+                MAX_ROIS,
+                n_shapes,
+            )
+
+        # TODO: roi_position attribute
+        # for roi specific metadata, we have to add/update properties on the shapes layer, that would be done here
+        # props = dict(getattr(controller.shapes_layer, "properties", {}) or {})
+        # positions = list(props.get("roi_position", []))
+        # print(positions)
 
         RoiController.apply_roi_colors(controller)
         if ROI_LABELS:

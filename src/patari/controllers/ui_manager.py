@@ -61,7 +61,7 @@ class UiManager:
             controller._histograms_dock_widget = (
                 controller.viewer.window.add_dock_widget(
                     controller.histograms.widget,
-                    name="Histograms",
+                    name="Histogram",
                     area="bottom",
                 )
             )
@@ -86,15 +86,16 @@ class UiManager:
                 )
             )
 
-        if controller.segmentation is None:
-            controller.segmentation = create_segmentation_dock()
-            controller._segmentation_dock_widget = (
-                controller.viewer.window.add_dock_widget(
-                    controller.segmentation.widget,
-                    name="Segmentation",
-                    area="right",
-                )
-            )
+        # Segmentation UI is hidden until fully implemented.
+        # if controller.segmentation is None:
+        #     controller.segmentation = create_segmentation_dock()
+        #     controller._segmentation_dock_widget = (
+        #         controller.viewer.window.add_dock_widget(
+        #             controller.segmentation.widget,
+        #             name="Segmentation",
+        #             area="right",
+        #         )
+        #     )
 
         if controller.unmixing is None:
             controller.unmixing = create_unmixing_dock()
@@ -106,15 +107,16 @@ class UiManager:
                 )
             )
 
-        if controller.reconstruction is None:
-            controller.reconstruction = create_reconstruction_dock()
-            controller._reconstruction_dock_widget = (
-                controller.viewer.window.add_dock_widget(
-                    controller.reconstruction.widget,
-                    name="Reconstruction",
-                    area="right",
-                )
-            )
+        # Reconstruction UI is hidden until fully implemented.
+        # if controller.reconstruction is None:
+        #     controller.reconstruction = create_reconstruction_dock()
+        #     controller._reconstruction_dock_widget = (
+        #         controller.viewer.window.add_dock_widget(
+        #             controller.reconstruction.widget,
+        #             name="Reconstruction",
+        #             area="right",
+        #         )
+        #     )
 
         UiManager._tabify_docks(controller)
 
@@ -143,18 +145,18 @@ class UiManager:
             controller._scan_browser_dock_widget,
             controller._annotation_dock_widget,
         )
-        qt_window.tabifyDockWidget(
-            controller._scan_browser_dock_widget,
-            controller._segmentation_dock_widget,
-        )
+        # qt_window.tabifyDockWidget(
+        #     controller._scan_browser_dock_widget,
+        #     controller._segmentation_dock_widget,
+        # )
         qt_window.tabifyDockWidget(
             controller._scan_browser_dock_widget,
             controller._unmixing_dock_widget,
         )
-        qt_window.tabifyDockWidget(
-            controller._scan_browser_dock_widget,
-            controller._reconstruction_dock_widget,
-        )
+        # qt_window.tabifyDockWidget(
+        #     controller._scan_browser_dock_widget,
+        #     controller._reconstruction_dock_widget,
+        # )
 
     @staticmethod
     def connect_events(controller: "PatariController") -> None:

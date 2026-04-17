@@ -103,9 +103,13 @@ def _write_rois(controller, destination_pa_data) -> None:
         for verts in controller.shapes_layer.data
     ]
     shape_types_snapshot = list(controller.shapes_layer.shape_type)
-    roi_positions_snapshot = list(
-        controller.shapes_layer.properties["roi_position"]
-    )
+
+    # roi_position is currently not set for manual ROIs and therefore this list would be out of sync
+    # TODO: roi_position
+    # roi_positions_snapshot = list(
+    #     controller.shapes_layer.properties["roi_position"]
+    # )
+    roi_positions_snapshot = ["undefined"] * len(shapes_snapshot)
 
     # Overwrite PATARI-created ROI groups while preserving non-PATARI groups.
     existing_rois = dict(destination_pa_data.get_rois())

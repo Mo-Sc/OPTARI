@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING
 import numpy as np
 from patato.io.attribute_tags import HDF5Tags
 
+from patari import config
+
 if TYPE_CHECKING:
     import patato as pat
 
@@ -155,10 +157,15 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
     def _expand_to_acquisition_frames(
         raw_data: np.ndarray, frame_list: list[int]
     ) -> np.ndarray:
-        if raw_data.shape[0] == n_acq_frames and len(frame_list) == n_acq_frames:
+        if (
+            raw_data.shape[0] == n_acq_frames
+            and len(frame_list) == n_acq_frames
+        ):
             return raw_data
 
-        expanded = np.zeros((n_acq_frames, *raw_data.shape[1:]), dtype=raw_data.dtype)
+        expanded = np.zeros(
+            (n_acq_frames, *raw_data.shape[1:]), dtype=raw_data.dtype
+        )
         for i, frame in enumerate(frame_list):
             if 0 <= int(frame) < n_acq_frames and i < raw_data.shape[0]:
                 expanded[int(frame)] = raw_data[i]
@@ -206,7 +213,9 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
             frame_list = _frame_list(image, raw.shape[0])
             data = _expand_to_acquisition_frames(raw, frame_list)
 
-            axis1_labels = list(map(str, np.asarray(image.ax_1_labels).tolist()))
+            axis1_labels = list(
+                map(str, np.asarray(image.ax_1_labels).tolist())
+            )
             source_layer = image.da.attrs.get("source_layer")
             if source_layer is None:
                 source_layer = f"Recon: {dataset_name}_{idx}"
@@ -273,6 +282,7 @@ def napari_shapes_from_scan_rois(
     """Load ROI polygons from *pa_data* as napari ``(y_mm, x_mm)`` vertices.
 
     Silently skips individual ROIs that cannot be converted.
+    Limits ROIs to MAX_ROIS from config; logs warning if truncated.
     Returns an empty list when no ROIs exist or loading fails.
     """
     try:
@@ -281,8 +291,18 @@ def napari_shapes_from_scan_rois(
         logger.exception("could not load ROIs")
         return []
 
+    total_rois = len(rois)
+    if total_rois > config.MAX_ROIS:
+        logger.warning(
+            "data contains %d ROI(s), but MAX_ROIS is %d; only loading first %d",
+            total_rois,
+            config.MAX_ROIS,
+            config.MAX_ROIS,
+        )
+
     shapes = []
-    for (_name, _number), roi in rois.items():
+    roi_items = list(rois.items())[: config.MAX_ROIS]
+    for (_name, _number), roi in roi_items:
         try:
             pts = np.asarray(roi.points, dtype=float)  # (N, 2): (x_m, y_m)
             shapes.append(
