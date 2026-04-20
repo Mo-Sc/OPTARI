@@ -43,7 +43,8 @@ Main features (v0.2):
 
 ### Option B: For development
 
-clone this repository:
+Create a new python environment, clone this repository:
+
 ```
 git clone git@github.com:Mo-Sc/PATARI.git
 ```
@@ -61,27 +62,33 @@ pip install -e ".[all]"
 
 ## Run PATARI
 
-For development/debugging, the dedicated launcher script is the easiest:
-
-```
-python launch_patari.py
-```
-
-This opens napari and directly adds the PATARI dock widget.
-
-Alternative (standard napari workflow):
+### Option A: standalone napari App
 
 1. Start napari
 2. Open Plugins → PATARI Controls
 
+### Option B: Terminal
 
-**Note**: PATARI currently depends on a custom PATATO fork:
+For development/debugging, start PATARI via module entrypoint:
 
-- `patato @ git+https://github.com/Mo-Sc/patato.git@279481c6682e6869197ddfae3a003a0af25c2fe5`
-- Contains some minor adjustments and bug fixes. In the future, these will either be moved to PATARI or included in the public PATATO
-- Also ensures compatibility with some of my legacy hdf5 files
+```
+python -m patari.launcher
+```
 
+There is also an installed launcher entry point:
+
+```
+patari
+```
+
+This opens napari and directly adds the PATARI dock widget. To quickly create a desktop shortcut, you can use the `create_macos_desktop_launcher.py` script (mac only).
 ## Some Developer Notes
+
+- PATARI currently depends on a custom PATATO fork:
+
+    - `https://github.com/Mo-Sc/patato.git@b950b95e283b30f56cfca00bf6b1033d53ab496e`
+    - Contains some minor adjustments and bug fixes. In the future, these will either be moved to PATARI or included in the public PATATO
+    - Also ensures compatibility with some of my legacy hdf5 files
 - Thoughts, bugs, and feature ideas are tracked in Issues.
 - High-level architecture: PATARI follows a controller + dock-factory split; `PatariController` is the central state holder and delegates most things to domain controllers (`ScanController`, `RoiController`, `AnalysisController`, `UnmixingController`, `SegmentationController`).
 - Plugin startup path: `_widget.py` initializes logging, resolves the active napari viewer, creates `PatariController`, and returns the Info dock widget.

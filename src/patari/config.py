@@ -3,7 +3,9 @@ from pathlib import Path
 ROI_LABELS = True
 MAX_ROIS = 10
 DEFAULT_PA_LAYER = "Recon: iThera BP-40mm(res:100μm)_0"
-STARTUP_LOGO_PATH = Path(__file__).resolve().parents[2] / "docs/startup.png"
+STARTUP_LOGO_PATH = Path(__file__).resolve().parent / "data/startup.png"
+DEFAULT_LOG_LEVEL = "INFO"
+DEFAULT_GUI_LOG_LEVEL = "WARNING"
 
 dtype_map = {
     "roi_index": int,

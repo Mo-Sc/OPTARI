@@ -28,8 +28,7 @@ dependencies = [
     "pyqtgraph",
     "scikit-image",
     "opencv-python-headless",
-    "nibabel",
-    "patato @ git+https://github.com/Mo-Sc/patato.git@89665a92da19f666af9a866106e6d3c90ed0e99f",
+    "patato @ https://github.com/Mo-Sc/patato/archive/b950b95e283b30f56cfca00bf6b1033d53ab496e.zip",
     "openpyxl",
 ]
 
@@ -38,13 +37,16 @@ dependencies = [
 # (including Qt backend) using patari[all].
 all = ["napari[all]"]
 
+[project.gui-scripts]
+patari = "patari.launcher:main"
+
 [project.entry-points."napari.manifest"]
 patari = "patari:napari.yaml"
 
 
 
 [build-system]
-requires = ["setuptools>=42.0.0", "setuptools_scm"]
+requires = ["setuptools>=68", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
@@ -54,7 +56,7 @@ include-package-data = true
 where = ["src"]
 
 [tool.setuptools.package-data]
-"patari" = ["*.yaml", "data/*.json"]
+"patari" = ["*.yaml", "data/*.json", "data/*.png"]
 
 [tool.setuptools_scm]
 write_to = "src/patari/_version.py"

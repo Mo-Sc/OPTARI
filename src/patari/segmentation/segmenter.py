@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-import nibabel as nib
 
 
 @dataclass(frozen=True)
@@ -47,13 +46,8 @@ class DummySegmenter:
         if us_2d.ndim != 2:
             raise ValueError(f"Expected 2D US frame, got shape {us_2d.shape}")
 
-        # load dummy segmentation from file
-        nii_img = nib.load(
-            "/Users/moritzschillinger/Projects/PATARI/data/samples/demo_study19-08/MSOT-2-US-MulticlassLabels_019002.nii"
-        )
-        seg = nii_img.get_fdata()[:, :, 0].astype(np.int32)
-
-        # rot90 ccw
-        seg = np.rot90(seg, k=1)
+        # create dummy mask
+        H, W = us_2d.shape
+        seg = np.zeros((H, W), dtype=np.int32)
 
         return SegmentationResult(seg=seg, class_names=dict(self.class_names))
