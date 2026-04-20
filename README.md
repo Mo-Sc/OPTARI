@@ -10,7 +10,7 @@
 [![npe2](https://img.shields.io/badge/plugin-npe2-blue?link=https://napari.org/stable/plugins/index.html)](https://napari.org/stable/plugins/index.html) -->
 
 
-PATATO is a python based analysis tool for clinical photoacoustic studies, based on the PATATO and NAPARI frameworks.
+PATARI is a python based analysis tool for clinical photoacoustic studies, based on the PATATO and NAPARI frameworks.
 
 Main features (v0.2):
 
@@ -28,7 +28,7 @@ Main features (v0.2):
 
 ## Installation 
 
-### Option A: Source Installation
+### Option A: Source Installation (recommended)
 
 Create a new python environment, clone this repository:
 
