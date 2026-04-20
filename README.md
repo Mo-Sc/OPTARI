@@ -12,27 +12,31 @@
 
 PATATO is a python based analysis tool for clinical photoacoustic studies, based on the PATATO and NAPARI frameworks.
 
-Main features:
+Main features (v0.2):
 
-- Load iThera scan folders and HDF5 scans via PATATO.
-- Browse complete studies and quickly switch between scans.
+- Load native iThera scans (including ROIs) and HDF5 scans via PATATO.
+- Browse studies and fast switching between scans.
 - Visualize US + reconstructed PA layers.
-- Draw, edit, and save ROIs with live statistics (frame/wavelength aware).
-- Visualize intensities over time and spectrum.
-- Use segmentation-assisted ROI placement presets for faster annotation.
-- Export processed scans and ROI results (XLSX/HDF5).
-- Demo: [PATARI v0.1 PDF](PATARIv01DEMO.pdf)
-
-----------------------------------
-
-
+- Seamless scrolling through frames and wavelengths.
+- Draw, edit, and save ROIs, create a ROI Library.
+- Extract statistical features from ROIs, auto-updating analysis table.
+- Visualize ROI intensities over time and spectrum, plot histograms.
+- Spectral unmixing, including chromophore spectra and THb / sO2 calculation.
+- Export processed scans to HDF5 and ROI analysis results to XLSX.
+- Detailed instructions: [PATARI v0.2 Usage PDF](docs/PATARIv02_Instructions.pdf)
 
 
-## Installation
+## Installation 
 
+### Option A: Source Installation
 
-For local development:
+Create a new python environment, clone this repository:
 
+```
+git clone git@github.com:Mo-Sc/PATARI.git
+```
+
+Install the package (-e for editable mode):
 ```
 pip install -e .
 ```
@@ -43,44 +47,72 @@ If napari is not already installed, install with napari + Qt extras:
 pip install -e ".[all]"
 ```
 
+### Option B: napari Plugin Manager
+
+1. Install the napari app:
+    - https://napari.org/stable/getting_started/installation.html#installation-bundle-conda
+    - Select the installer that corresponds to your OS (Mac / Windows) and follow the instructions
+    - Launch napari from launchpad / start menu
+
+2. Install the PATARI plugin:
+    - In napari, click Plugins -> Install/Uninstall Plugins
+    - Drag and drop the provided .whl file into the plugin manager window
+    - Next to the Install button, select PyPI and click Install
+    - After installation is done, restart napari, and select PATARI Controls under Plugins
+
+
+
 ## Run PATARI
 
-For development/debugging, the dedicated launcher script is the easiest:
+### For Option A: Terminal
+
+Open a terminal, start PATARI via module entrypoint:
 
 ```
-python launch_patari.py
+python -m patari.launcher
 ```
 
-This opens napari and directly adds the PATARI dock widget.
+There is also an installed launcher entry point:
 
-Alternative (standard napari workflow):
+```
+patari
+```
 
-1. Start napari (`napari`)
+This opens napari and directly adds the PATARI dock widget. To quickly create a desktop shortcut, you can use the `create_macos_desktop_launcher.py` script (mac only).
+
+### For Option B: standalone napari App
+
+1. Start napari
 2. Open Plugins → PATARI Controls
 
 
-Note: PATARI currently depends on a custom PATATO fork:
 
-- `patato @ git+https://github.com/Mo-Sc/patato.git@279481c6682e6869197ddfae3a003a0af25c2fe5`
-- Contains some minor adjustments and bug fixes. In the future, these will either be moved to PATARI or included in the public PATATO
-- Also ensures compatibility with some of my legacy hdf5 files
 
-## Developer Notes
+## Some Developer Notes
 
-### Data Loading
+- PATARI currently depends on a custom PATATO fork:
 
-- PATARI loads either iThera scan folders or HDF5 scans through PATATO readers.
-- Can load individual scans as well as study folders
-- When native ithera and hdf5 versions are available for the same scan key, the scan browser prefers the HDF5 file, assuming it is an already converted version of the ithera scan.
-- HDF5 export is always to a new HDF5 file, cant export back to iThera.
-- Export uses PATATO export functionality, so all new data that is part of pa_data will be exported
-- Currently no overwrite / append functionality (PATARI fails if file exists already)
-- Export is a two-pass operation: First the loaded scan is exported, then re-opens the new file and writes the live napari ROIs back through PATATO.
-    - Necessary because PATATOs PAData doesnt really own a copy of the scan, but just wraps reader and writer
-    - so for loaded hdf5 scan, data stays tied to underlying file
-    - therefore adding data always mutates the source file, not to some internal memory which can later be exported to a new target file
-    - But I still think there should be a better way of doing this (is also relevant for future recon / unmixing features)
-- For compatibility with some previous versions of ithera import frameworks, there are some custom changes to dataset names etc. (for example `name` or `scan_name`)
+    - `https://github.com/Mo-Sc/patato.git@b950b95e283b30f56cfca00bf6b1033d53ab496e`
+    - Contains some minor adjustments and bug fixes. In the future, these will either be moved to PATARI or included in the public PATATO
+    - Also ensures compatibility with some of my legacy hdf5 files
+- Thoughts, bugs, and feature ideas are tracked in Issues.
+- High-level architecture: PATARI follows a controller + dock-factory split; `PatariController` is the central state holder and delegates most things to domain controllers (`ScanController`, `RoiController`, `AnalysisController`, `UnmixingController`, `SegmentationController`).
+- Plugin startup path: `_widget.py` initializes logging, resolves the active napari viewer, creates `PatariController`, and returns the Info dock widget.
+- UI construction path: `UiManager.setup_docks` creates dock widgets once and `UiManager.connect_events` connects all signals.
+- Rendering/data IO: `patato_bridge.py` handles PATATO <-> napari transformations, coordinate conversion, scale/FOV, and layer data construction.
+- Layer metadata: PA layers rely on metadata keys such as `type`, `pa_kind`, `frames`, `timestamps`, `axis1_name`, `axis1_labels`, and `source_layer`. Many downstream features (info labels, analysis, export/reload symmetry) depend on these.
+- ROI model: ROI stats are recomputed from `shapes_layer.events.data`. Initial ROI loading temporarily disconnects this handler to avoid repeated per-shape computation during initialization.
+- Coordinate conventions: ROIs are represented in napari as `(y_mm, x_mm)` and converted to PATATO `(x_m, y_m)` at export/import. Conversion logic is in `patato_bridge.py`.
+- Data loading: PATARI loads either iThera scan folders or HDF5 scans via PATATO readers and supports loading both individual scans and study folders.
+- Scan preference rule: if both iThera and HDF5 exist for the same scan key, scan discovery prefers HDF5 (treated as previously converted version).
+- Export model: HDF5 export is write-to-new-file only (no overwrite/append), cannot export back to iThera, and currently fails if target file already exists.
+- Export implementation: export is a two-pass workflow (save base scan first, reopen, then write live ROIs and derived images). This is a workaround for PATATO reader/writer ownership where loaded data stays tied to its source file.
+- Derived layers: unmixing outputs (unmixed, THb, sO2) are stored in `_derived_patato_objects` and exported with synchronized attributes so they can be reloaded as normal PA layers.
+- Sparse layers: data data that only contain selected frames are expanded to acquisition-frame indexing for viewer consistency; Frame id is carried in metadata and used on reload.
+- Current ROI position state: `roi_position` metadata for manual ROIs is not fully synchronized yet. Future work includes fully synchronized shape specific metadata dict
+- Hidden features: Segmentation and Reconstruction docks are currently disabled.
+- Logging behavior: `PATARI_LOG_LEVEL` controls terminal log. `PATARI_GUI_LOG_LEVEL` controls napari GUI notification.
+- Compatibility note: custom PATATO fork and import/export workarounds are currently required for some personal legacy datasets.
 
 
 ## License

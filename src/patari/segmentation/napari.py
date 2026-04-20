@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import numpy as np
 from napari.layers import Labels
 from napari.viewer import Viewer
+
+
+logger = logging.getLogger(__name__)
 
 
 def ensure_segmentation_labels_layer(
@@ -45,13 +49,18 @@ def set_segmentation_2d(
             if ref_scale is not None:
                 labels_layer.scale = tuple(ref_scale[-2:])
         except Exception:
-            pass
+            logger.debug(
+                "failed to copy reference scale to segmentation", exc_info=True
+            )
         try:
             ref_translate = getattr(reference_layer, "translate", None)
             if ref_translate is not None:
                 labels_layer.translate = tuple(ref_translate[-2:])
         except Exception:
-            pass
+            logger.debug(
+                "failed to copy reference translate to segmentation",
+                exc_info=True,
+            )
 
     # Store class names for later UX (optional).
     if class_names is not None:

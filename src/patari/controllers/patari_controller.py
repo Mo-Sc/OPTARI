@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -27,6 +28,10 @@ from patari.controllers.scan_controller import ScanController
 from patari.controllers.roi_controller import RoiController
 from patari.controllers.segmentation_controller import SegmentationController
 from patari.controllers.analysis_controller import AnalysisController
+from patari.controllers.unmixing_controller import UnmixingController
+
+
+logger = logging.getLogger(__name__)
 
 
 class PatariController:
@@ -44,6 +49,7 @@ class PatariController:
         self._scans: dict[Path, str] = {}
         self.pa_data: pat.PAData | None = None
         self._patato_objects: dict[str, pat.ImageSequence] = {}
+        self._derived_patato_objects: dict[str, pat.ImageSequence] = {}
 
         self.shapes_layer: Shapes | None = None
         self.active_layer: Image | None = None
@@ -55,10 +61,12 @@ class PatariController:
         # --- right elements ---
         self.scan_browser: ScanBrowserDock | None = None
         self.annotation: AnnotationDock | None = None
+        self.segmentation = None
         self.unmixing: UnmixingDock | None = None
         self.reconstruction: ReconstructionDock | None = None
         self._scan_browser_dock_widget = None
         self._annotation_dock_widget = None
+        self._segmentation_dock_widget = None
         self._unmixing_dock_widget = None
         self._reconstruction_dock_widget = None
 
@@ -81,7 +89,9 @@ class PatariController:
 
         self._setup_viewer()
         self._ensure_docks()
+        self._initialize_roi_library()
         self._connect_events()
+        UnmixingController.initialize_ui(self)
 
         # If a path is provided, populate scan browser / load scan.
         # Otherwise, the Scan Browser dock drives loading.
@@ -100,7 +110,7 @@ class PatariController:
         self.viewer.grid.enabled = False
         self.viewer.scale_bar.visible = True
         self.viewer.scale_bar.unit = "mm"
-        self.viewer.dims.axis_labels = ("Frame", "Wavelength", "z", "x")
+        self.viewer.dims.axis_labels = ("Frame", "Channel", "z", "x")
 
     def _ensure_docks(self) -> None:
         UiManager.setup_docks(self)
@@ -128,8 +138,26 @@ class PatariController:
     def _apply_roi_labels(self) -> None:
         RoiController.apply_roi_labels(self)
 
+    def _initialize_roi_library(self) -> None:
+        RoiController.initialize_roi_library(self)
+
     def _on_shapes_data_changed(self, event=None) -> None:
         RoiController.on_shapes_data_changed(self, event)
+
+    def _ensure_shapes_layer_on_top(self) -> None:
+        """
+        Moves ROI layer to top. Necessary because some operations (e.g. unmixing) add new image layers on top of the ROI layer
+        ROI layer should always be on top of the layer stack to be visible and interactive.
+        """
+        if self.shapes_layer is None:
+            return
+
+        current_index = self.viewer.layers.index(self.shapes_layer)
+        top_index = len(self.viewer.layers)
+        if current_index != top_index:
+            # Layer order defines draw order; top index renders above image layers.
+            self.viewer.layers.move(current_index, top_index)
+            logger.debug("moved ROI layer to top index %s", top_index)
 
     # ---------------- scans / loading ----------------
     def _close_current_scan(self) -> None:
@@ -273,7 +301,7 @@ class PatariController:
                 return
 
             self.active_layer = selected_layer
-            print(f"active layer set to {self.active_layer.name}")
+            logger.info("active layer set to %s", self.active_layer.name)
             # keep PA layers visually consistent; show only the active PA layer
             # set all other PA layers to invisible
             # set blending and auto contrast for all PA layers
@@ -336,25 +364,21 @@ class PatariController:
 
     def on_selection_changed(self, event=None) -> None:
         self._resolve_active_layer()
+        UnmixingController.refresh_ui(self)
+        if self._snap_dims_to_active_layer():
+            return
         self.refresh_all()
 
     def on_dims_changed(self, event=None) -> None:
-        # snap frames for sparse recon and refresh
+        # snap dims to what is available in the selected PA layer
         try:
-            pt = list(self.viewer.dims.point)
-            if len(pt) < 2:
-                return
-
-            frame_idx = int(round(pt[0]))
-            snapped = self.snap_to_reconstructed_frame(frame_idx)
-            if snapped != frame_idx:
-                self.viewer.dims.set_point(0, snapped)
+            if self._snap_dims_to_active_layer():
                 return
 
             self.refresh_all()
 
-        except Exception as e:
-            print("on_dims_changed:", e)
+        except Exception:
+            logger.exception("on_dims_changed failed")
 
     # ---------------- time analysis ----------------
     def on_generate_time_analysis_clicked(self, event=None) -> None:
@@ -376,7 +400,26 @@ class PatariController:
         self.update_info_labels()
         self.update_live_table()
 
+    # ---------------- unmixing ----------------
+    def on_unmixing_preset_changed(self, event=None) -> None:
+        UnmixingController.on_preset_changed(self)
+
+    def on_unmixing_chromophores_changed(self, event=None) -> None:
+        UnmixingController.on_chromophores_changed(self)
+
+    def on_unmixing_select_all_wavelengths_clicked(self, event=None) -> None:
+        UnmixingController.on_select_all_wavelengths_clicked(self)
+
+    def on_unmixing_clear_wavelengths_clicked(self, event=None) -> None:
+        UnmixingController.on_clear_wavelengths_clicked(self)
+
+    def on_run_unmixing_clicked(self, event=None) -> None:
+        UnmixingController.on_run_unmixing_clicked(self)
+
     def snap_to_reconstructed_frame(self, frame_idx: int) -> int:
+        """
+        snap the given frame index to the closest available frame in the active layer's metadata
+        """
         if self.active_layer is None:
             return frame_idx
         frames = self.active_layer.metadata.get("frames", None)
@@ -385,18 +428,69 @@ class PatariController:
         frames = np.asarray(frames, dtype=int)
         return int(frames[np.argmin(np.abs(frames - frame_idx))])
 
-    def timestamp_for_slice(self, frame_idx: int, wav_idx: int):
+    def snap_to_available_channel(self, channel_idx: int) -> int:
+        """
+        snap the given channel index to a valid channel index based on the active layer's metadata
+        """
+        if self.active_layer is None:
+            return channel_idx
+
+        data = np.asarray(self.active_layer.data)
+        if data.ndim < 2:
+            return 0
+
+        n_channels = data.shape[1]
+        return int(np.clip(channel_idx, 0, max(0, n_channels - 1)))
+
+    def _snap_dims_to_active_layer(self) -> bool:
+        if self.active_layer is None:
+            return False
+
+        pt = list(self.viewer.dims.point)
+        if len(pt) < 2:
+            return False
+
+        frame_idx = int(round(pt[0]))
+        channel_idx = int(round(pt[1]))
+
+        snapped_frame = self.snap_to_reconstructed_frame(frame_idx)
+        snapped_channel = self.snap_to_available_channel(channel_idx)
+
+        changed = False
+        # Enforce valid index support of the active layer to avoid sampling zero-padded channels.
+        if snapped_frame != frame_idx:
+            self.viewer.dims.set_point(0, snapped_frame)
+            changed = True
+        if snapped_channel != channel_idx:
+            self.viewer.dims.set_point(1, snapped_channel)
+            changed = True
+
+        if changed:
+            logger.debug(
+                "snapped dims for layer %s to frame=%s, channel=%s",
+                self.active_layer.name,
+                snapped_frame,
+                snapped_channel,
+            )
+
+        return changed
+
+    def timestamp_for_slice(self, frame_idx: int, channel_idx: int):
         if self.active_layer is None:
             return "N/A", 0.0
 
-        ts = self.timestamps
+        ts = self.active_layer.metadata.get("timestamps")
+        if ts is not None:
+            ts = np.asarray(ts)
+        else:
+            ts = self.timestamps
         if ts is None:
             return "N/A", 0.0
 
-        if frame_idx >= ts.shape[0] or wav_idx >= ts.shape[1]:
+        if frame_idx >= ts.shape[0] or channel_idx >= ts.shape[1]:
             return "N/A", 0.0
 
-        ts_seconds = ts[frame_idx, wav_idx]
+        ts_seconds = ts[frame_idx, channel_idx]
         ts_start_seconds = ts[0, 0]
 
         # iThera uses .NET DateTime ticks
@@ -404,10 +498,10 @@ class PatariController:
             from datetime import datetime, timedelta
 
             dt = datetime(1, 1, 1) + timedelta(seconds=float(ts_seconds))
-        except Exception as e:
-            print(
-                "DEBUG: timestamp_for_slice: failed to convert timestamp to datetime:",
-                e,
+        except Exception:
+            logger.debug(
+                "timestamp_for_slice failed to convert timestamp to datetime",
+                exc_info=True,
             )
             dt = "N/A"
 
@@ -426,15 +520,25 @@ class PatariController:
             return
 
         frame_idx = int(round(pt[0]))
-        wav_idx = int(round(pt[1]))
+        channel_idx = int(round(pt[1]))
 
-        wavelengths = self.wavelengths
-        wav_label = (
-            f"{wavelengths[wav_idx]} nm"
-            if isinstance(wavelengths, (list, tuple))
-            and 0 <= wav_idx < len(wavelengths)
-            else str(wav_idx)
+        axis1_name = str(
+            self.active_layer.metadata.get("axis1_name", "Channel")
         )
+        axis1_labels = self.active_layer.metadata.get("axis1_labels")
+
+        if isinstance(axis1_labels, (list, tuple)) and 0 <= channel_idx < len(
+            axis1_labels
+        ):
+            axis1_value = str(axis1_labels[channel_idx])
+        else:
+            wavelengths = self.wavelengths
+            if isinstance(
+                wavelengths, (list, tuple)
+            ) and 0 <= channel_idx < len(wavelengths):
+                axis1_value = f"{wavelengths[channel_idx]} nm"
+            else:
+                axis1_value = str(channel_idx)
 
         frames = self.active_layer.metadata.get("frames")
         is_reconstructed = frames is None or frame_idx in frames
@@ -446,12 +550,12 @@ class PatariController:
 
         self.viewer.dims.axis_labels = (
             frame_label,
-            f"Wavelength: {wav_label}",
+            f"{axis1_name}: {axis1_value}",
             "z",
             "x",
         )
 
-        ts, ts_delta = self.timestamp_for_slice(frame_idx, wav_idx)
+        ts, ts_delta = self.timestamp_for_slice(frame_idx, channel_idx)
         scan_str = (
             str(self.path.stem) if getattr(self, "path", None) else "N/A"
         )
@@ -463,7 +567,7 @@ class PatariController:
         self.info.label.setText(
             f"Study: {study_str} | Scan: {scan_str}\n"
             f"Layer: {self.active_layer.name}\n"
-            f"Frame: {frame_idx} | Wavelength: {wav_label}\n"
+            f"Frame: {frame_idx} | {axis1_name}: {axis1_value}\n"
             f"Timestamp: {ts} ({ts_delta:.2f} s)"
         )
 
@@ -482,8 +586,23 @@ class PatariController:
     def on_delete_saved_clicked(self, event=None) -> None:
         RoiController.on_delete_saved_clicked(self, event)
 
-    def on_csv_export_clicked(self, event=None) -> None:
-        RoiController.on_csv_export_clicked(self, event)
+    def on_xlsx_export_clicked(self, event=None) -> None:
+        RoiController.on_xlsx_export_clicked(self, event)
+
+    def on_save_roi_library_clicked(self, event=None) -> None:
+        RoiController.on_save_roi_library_clicked(self, event)
+
+    def on_remove_roi_library_clicked(self, event=None) -> None:
+        RoiController.on_remove_roi_library_clicked(self, event)
+
+    def on_save_roi_library_file_clicked(self, event=None) -> None:
+        RoiController.on_save_roi_library_file_clicked(self, event)
+
+    def on_roi_library_item_clicked(self, roi_id: str) -> None:
+        RoiController.on_roi_library_item_clicked(self, roi_id)
+
+    def on_roi_library_item_selected(self, roi_id: str) -> None:
+        RoiController.on_roi_library_item_selected(self, roi_id)
 
     def on_hdf5_export_clicked(self, event=None) -> None:
         destination = self._choose_export_path()
@@ -493,7 +612,7 @@ class PatariController:
 
     def _choose_export_path(self) -> Path | None:
         if self.pa_data is None:
-            print("PATARI: no scan loaded")
+            logger.warning("no scan loaded")
             return None
 
         default_name = (

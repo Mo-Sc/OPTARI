@@ -16,7 +16,7 @@ class RoiDock:
     saved_table: Table
     save_button: PushButton
     delete_button: PushButton
-    csv_button: PushButton
+    xlsx_button: PushButton
 
 
 def create_roi_dock() -> RoiDock:
@@ -25,9 +25,9 @@ def create_roi_dock() -> RoiDock:
     live_table = Table(value=df_empty.copy())
     saved_table = Table(value=df_empty.copy())
 
-    save_button = PushButton(text="Save ROI")
-    delete_button = PushButton(text="Delete Saved")
-    csv_button = PushButton(text="Export XLSX")
+    save_button = PushButton(text="Save ROI Data")
+    delete_button = PushButton(text="Delete ROI Data")
+    xlsx_button = PushButton(text="Export XLSX")
 
     # build Qt container for the bottom dock
     container = QWidget()
@@ -35,7 +35,7 @@ def create_roi_dock() -> RoiDock:
 
     live_panel = QWidget()
     live_layout = QVBoxLayout(live_panel)
-    live_layout.addWidget(QLabel("Live ROIs"))
+    live_layout.addWidget(QLabel("Live Analysis"))
     live_layout.addWidget(live_table.native)
 
     btn_panel = QWidget()
@@ -43,12 +43,12 @@ def create_roi_dock() -> RoiDock:
     btn_layout.addWidget(QLabel(" "))
     btn_layout.addWidget(save_button.native)
     btn_layout.addWidget(delete_button.native)
-    btn_layout.addWidget(csv_button.native)
+    btn_layout.addWidget(xlsx_button.native)
     btn_layout.addStretch()
 
     saved_panel = QWidget()
     saved_layout = QVBoxLayout(saved_panel)
-    saved_layout.addWidget(QLabel("Saved ROIs"))
+    saved_layout.addWidget(QLabel("Saved Analysis"))
     saved_layout.addWidget(saved_table.native)
 
     layout.addWidget(live_panel)
@@ -63,5 +63,5 @@ def create_roi_dock() -> RoiDock:
         saved_table=saved_table,
         save_button=save_button,
         delete_button=delete_button,
-        csv_button=csv_button,
+        xlsx_button=xlsx_button,
     )
