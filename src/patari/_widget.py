@@ -1,8 +1,7 @@
 import logging
 
 from napari.viewer import Viewer
-from qtpy.QtCore import QTimer, Qt
-from qtpy.QtWidgets import QWidget
+from qtpy.QtWidgets import QWidget, QLabel, QVBoxLayout
 from imageio.v3 import imread
 
 from .config import STARTUP_LOGO_PATH
@@ -10,6 +9,24 @@ from .logging_utils import configure_logging
 from patari.controllers.patari_controller import PatariController
 
 logger = logging.getLogger(__name__)
+
+
+from . import __version__
+
+
+def disclaimer_widget() -> QWidget:
+    """simple disclaimer widget."""
+    disclaimer = QWidget()
+    layout = QVBoxLayout(disclaimer)
+
+    version = QLabel(f"PATARI v{__version__.split('+')[0]}")
+    # upper_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+    layout.addWidget(version)
+
+    warn = QLabel("INTERNAL USE ONLY")
+    warn.setStyleSheet("color: red;")
+    layout.addWidget(warn)
+    return disclaimer
 
 
 def patari_controls(napari_viewer: Viewer | None = None) -> QWidget:
@@ -34,21 +51,7 @@ def patari_controls(napari_viewer: Viewer | None = None) -> QWidget:
         logger.warning(f"Startup logo not found: {STARTUP_LOGO_PATH}")
 
     if not hasattr(patari_controls, "_controller"):
-        print("Initializing PATARI controller...")
         patari_controls._controller = PatariController(napari_viewer, None)
 
-    return patari_controls._controller.info.widget
-    # widget = patari_controls._controller.info.widget
-
-    # # Minimal hack to force left docking after napari wraps the widget
-    # def _dock_left():
-    #     dock = widget.parentWidget()
-    #     while dock and not dock.inherits("QDockWidget"):
-    #         dock = dock.parentWidget()
-    #     if dock and hasattr(napari_viewer.window, "_qt_window"):
-    #         napari_viewer.window._qt_window.addDockWidget(
-    #             Qt.LeftDockWidgetArea, dock
-    #         )
-
-    # QTimer.singleShot(0, _dock_left)
-    # return widget
+    # Return a simple widget to satisfy npe2's return requirement
+    return disclaimer_widget()

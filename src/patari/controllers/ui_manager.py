@@ -35,6 +35,11 @@ class UiManager:
 
         if controller.info is None:
             controller.info = create_info_dock()
+            controller.viewer.window.add_dock_widget(
+                controller.info.widget,
+                name="PATARI Info",
+                area="left",
+            )
 
         if controller.roi is None:
             controller.roi = create_roi_dock()
