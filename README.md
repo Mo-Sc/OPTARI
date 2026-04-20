@@ -23,25 +23,12 @@ Main features (v0.2):
 - Visualize ROI intensities over time and spectrum, plot histograms.
 - Spectral unmixing, including chromophore spectra and THb / sO2 calculation.
 - Export processed scans to HDF5 and ROI analysis results to XLSX.
-- Detailed instructions: [PATARI v0.2 Usage PDF]()
+- Detailed instructions: [PATARI v0.2 Usage PDF](docs/PATARIv02_Instructions.pdf)
 
 
 ## Installation 
 
-### Option A: napari Plugin Manager
-
-1. Install the napari app:
-    - https://napari.org/stable/getting_started/installation.html#installation-bundle-conda
-    - Select the installer that corresponds to your OS (Mac / Windows) and follow the instructions
-    - Launch napari from launchpad / start menu
-
-2. Install the PATARI plugin:
-    - In napari, click Plugins -> Install/Uninstall Plugins
-    - Drag and drop the .whl file into the plugin manager window
-    - Next to the Install button, select PyPI and click Install
-    - After installation is done, restart napari, and select PATARI Controls under Plugins
-
-### Option B: For development
+### Option A: Source Installation
 
 Create a new python environment, clone this repository:
 
@@ -49,7 +36,7 @@ Create a new python environment, clone this repository:
 git clone git@github.com:Mo-Sc/PATARI.git
 ```
 
-Install the package in editable mode:
+Install the package (-e for editable mode):
 ```
 pip install -e .
 ```
@@ -60,16 +47,26 @@ If napari is not already installed, install with napari + Qt extras:
 pip install -e ".[all]"
 ```
 
+### Option B: napari Plugin Manager
+
+1. Install the napari app:
+    - https://napari.org/stable/getting_started/installation.html#installation-bundle-conda
+    - Select the installer that corresponds to your OS (Mac / Windows) and follow the instructions
+    - Launch napari from launchpad / start menu
+
+2. Install the PATARI plugin:
+    - In napari, click Plugins -> Install/Uninstall Plugins
+    - Drag and drop the provided .whl file into the plugin manager window
+    - Next to the Install button, select PyPI and click Install
+    - After installation is done, restart napari, and select PATARI Controls under Plugins
+
+
+
 ## Run PATARI
 
-### Option A: standalone napari App
+### For Option A: Terminal
 
-1. Start napari
-2. Open Plugins → PATARI Controls
-
-### Option B: Terminal
-
-For development/debugging, start PATARI via module entrypoint:
+Open a terminal, start PATARI via module entrypoint:
 
 ```
 python -m patari.launcher
@@ -82,6 +79,15 @@ patari
 ```
 
 This opens napari and directly adds the PATARI dock widget. To quickly create a desktop shortcut, you can use the `create_macos_desktop_launcher.py` script (mac only).
+
+### For Option B: standalone napari App
+
+1. Start napari
+2. Open Plugins → PATARI Controls
+
+
+
+
 ## Some Developer Notes
 
 - PATARI currently depends on a custom PATATO fork:
