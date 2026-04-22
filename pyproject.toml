@@ -32,6 +32,11 @@ dependencies = [
     "openpyxl",
 ]
 
+
+# Windows binaries: patato @ https://github.com/Mo-Sc/patato/releases/download/patari-v0.2-test/patato-0.7.1.dev1+gb950b95e2-cp311-cp311-win_amd64.whl",
+# source: "patato @ https://github.com/Mo-Sc/patato/archive/b950b95e283b30f56cfca00bf6b1033d53ab496e.zip",
+
+
 [project.optional-dependencies]
 # Allow easily installation with the full, default napari installation
 # (including Qt backend) using patari[all].
