@@ -37,7 +37,7 @@ class UiManager:
             controller.info = create_info_dock()
             controller.viewer.window.add_dock_widget(
                 controller.info.widget,
-                name="PATARI Info",
+                name="Active Slice Info",
                 area="left",
             )
 
