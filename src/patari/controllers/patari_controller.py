@@ -7,14 +7,15 @@ import numpy as np
 import patato as pat
 from napari.layers import Image, Shapes
 from napari.viewer import Viewer
+from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QFileDialog
 
 from patari.config import (
     DEFAULT_PA_LAYER,
 )
 from patari.segmentation.segmenter import (
-    OnnxModelSpec,
-    OnnxSegmenter,
+    SegmentationModelSpec,
+    create_segmenter,
     load_onnx_model_registry,
 )
 from patari.utils.misc import parse_float_input
@@ -86,7 +87,7 @@ class PatariController:
         self._active_segmentation_model_id = (
             self._default_segmentation_model_id
         )
-        self._segmenter: OnnxSegmenter | None = None
+        self._segmenter = None
         self._segmenter_model_id: str | None = None
 
         # -- bottom elements --
@@ -368,17 +369,40 @@ class PatariController:
             raise ValueError(f"Unknown segmentation model: {model_id}")
         self._active_segmentation_model_id = model_id
 
-    def _active_segmentation_model_spec(self) -> OnnxModelSpec:
+    def _active_segmentation_model_spec(self) -> SegmentationModelSpec:
         return self._segmentation_model_registry[
             self._active_segmentation_model_id
         ]
 
-    def get_segmenter(self) -> OnnxSegmenter:
+    def active_segmentation_class_items(self) -> list[tuple[int, str]]:
+        return sorted(
+            (
+                int(class_id),
+                str(class_name),
+            )
+            for class_id, class_name in self._active_segmentation_model_spec().class_names.items()
+        )
+
+    def selected_segmentation_class_ids(self) -> set[int]:
+        if self.segmentation is None:
+            return set()
+
+        class_ids: set[int] = set()
+        classes_list = self.segmentation.segmentation_classes_list
+        for i in range(classes_list.count()):
+            item = classes_list.item(i)
+            if item is None:
+                continue
+            if item.checkState() == Qt.Checked:
+                class_ids.add(int(item.data(Qt.UserRole)))
+        return class_ids
+
+    def get_segmenter(self):
         if (
             self._segmenter is None
             or self._segmenter_model_id != self._active_segmentation_model_id
         ):
-            self._segmenter = OnnxSegmenter(
+            self._segmenter = create_segmenter(
                 self._active_segmentation_model_spec()
             )
             self._segmenter_model_id = self._active_segmentation_model_id
@@ -386,6 +410,12 @@ class PatariController:
 
     def on_segmentation_model_changed(self, event=None) -> None:
         SegmentationController.on_segmentation_model_changed(self)
+
+    def on_segmentation_select_all_classes_clicked(self, event=None) -> None:
+        SegmentationController.on_segmentation_select_all_classes_clicked(self)
+
+    def on_segmentation_clear_classes_clicked(self, event=None) -> None:
+        SegmentationController.on_segmentation_clear_classes_clicked(self)
 
     def on_generate_tissue_segmentation_clicked(self) -> None:
         SegmentationController.on_generate_tissue_segmentation_clicked(self)

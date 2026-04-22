@@ -103,6 +103,7 @@ class UiManager:
                     area="right",
                 )
             )
+            controller.on_segmentation_model_changed()
 
         if controller.unmixing is None:
             controller.unmixing = create_unmixing_dock()
@@ -263,6 +264,12 @@ class UiManager:
         if controller.segmentation is not None:
             controller.segmentation.segmentation_model_combo.currentIndexChanged.connect(
                 controller.on_segmentation_model_changed
+            )
+            controller.segmentation.select_all_classes_button.clicked.connect(
+                controller.on_segmentation_select_all_classes_clicked
+            )
+            controller.segmentation.clear_classes_button.clicked.connect(
+                controller.on_segmentation_clear_classes_clicked
             )
             controller.segmentation.generate_tissue_segmentation_button.clicked.connect(
                 controller.on_generate_tissue_segmentation_clicked

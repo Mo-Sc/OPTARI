@@ -4,10 +4,11 @@ from dataclasses import dataclass
 
 from qtpy.QtCore import Qt
 from qtpy.QtWidgets import (
+    QHBoxLayout,
     QComboBox,
-    QFormLayout,
     QGroupBox,
     QLabel,
+    QListWidget,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -20,6 +21,9 @@ from qtpy.QtWidgets import (
 class SegmentationDock:
     widget: QWidget
     segmentation_model_combo: QComboBox
+    segmentation_classes_list: QListWidget
+    select_all_classes_button: QPushButton
+    clear_classes_button: QPushButton
     generate_tissue_segmentation_button: QPushButton
     segmentation_status_label: QLabel
 
@@ -44,7 +48,7 @@ def create_segmentation_dock(
     outer = QVBoxLayout(content_widget)
 
     seg_box = QGroupBox("Segmentation")
-    seg_form = QFormLayout(seg_box)
+    seg_layout = QVBoxLayout(seg_box)
 
     segmentation_model_combo = QComboBox()
     for model_id, display_name in model_options:
@@ -55,14 +59,30 @@ def create_segmentation_dock(
             segmentation_model_combo.setCurrentIndex(i)
             break
 
+    segmentation_classes_list = QListWidget()
+    segmentation_classes_list.setSelectionMode(QListWidget.NoSelection)
+    segmentation_classes_list.setMinimumHeight(140)
+
+    classes_button_row = QWidget()
+    classes_button_layout = QHBoxLayout(classes_button_row)
+    classes_button_layout.setContentsMargins(0, 0, 0, 0)
+    select_all_classes_button = QPushButton("Select all")
+    clear_classes_button = QPushButton("Clear")
+    classes_button_layout.addWidget(select_all_classes_button)
+    classes_button_layout.addWidget(clear_classes_button)
+
     generate_tissue_segmentation_button = QPushButton(
         "Generate Tissue Segmentation"
     )
     segmentation_status_label = QLabel("Select a model and run segmentation.")
 
-    seg_form.addRow("Model", segmentation_model_combo)
-    seg_form.addRow(generate_tissue_segmentation_button)
-    seg_form.addRow(segmentation_status_label)
+    seg_layout.addWidget(QLabel("Model"))
+    seg_layout.addWidget(segmentation_model_combo)
+    seg_layout.addWidget(QLabel("Classes"))
+    seg_layout.addWidget(segmentation_classes_list)
+    seg_layout.addWidget(classes_button_row)
+    seg_layout.addWidget(generate_tissue_segmentation_button)
+    seg_layout.addWidget(segmentation_status_label)
 
     outer.addWidget(seg_box)
     outer.addStretch()
@@ -70,6 +90,9 @@ def create_segmentation_dock(
     return SegmentationDock(
         widget=widget,
         segmentation_model_combo=segmentation_model_combo,
+        segmentation_classes_list=segmentation_classes_list,
+        select_all_classes_button=select_all_classes_button,
+        clear_classes_button=clear_classes_button,
         generate_tissue_segmentation_button=generate_tissue_segmentation_button,
         segmentation_status_label=segmentation_status_label,
     )

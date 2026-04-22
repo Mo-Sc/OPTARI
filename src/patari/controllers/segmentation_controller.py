@@ -1,12 +1,19 @@
 from __future__ import annotations
 
+import logging
+
 import numpy as np
 from napari.layers import Image
+from qtpy.QtCore import Qt
+from qtpy.QtWidgets import QListWidgetItem
 
 from patari.segmentation.napari import (
     ensure_segmentation_labels_layer,
     set_segmentation_2d,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class SegmentationController:
@@ -51,8 +58,60 @@ class SegmentationController:
             return
 
         controller.set_active_segmentation_model(str(model_id))
+        SegmentationController.populate_segmentation_classes(controller)
         controller.segmentation.segmentation_status_label.setText(
             f"Model: {controller.segmentation.segmentation_model_combo.currentText()}"
+        )
+
+    @staticmethod
+    def populate_segmentation_classes(controller) -> None:
+        if controller.segmentation is None:
+            return
+
+        classes_list = controller.segmentation.segmentation_classes_list
+        classes_list.blockSignals(True)
+        try:
+            classes_list.clear()
+            for (
+                class_id,
+                class_name,
+            ) in controller.active_segmentation_class_items():
+                item = QListWidgetItem(f"{class_id}: {class_name}")
+                item.setData(Qt.UserRole, int(class_id))
+                item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+                item.setCheckState(Qt.Checked)
+                classes_list.addItem(item)
+        finally:
+            classes_list.blockSignals(False)
+
+    @staticmethod
+    def set_all_segmentation_classes_checked(
+        controller, checked: bool
+    ) -> None:
+        if controller.segmentation is None:
+            return
+
+        classes_list = controller.segmentation.segmentation_classes_list
+        check_state = Qt.Checked if checked else Qt.Unchecked
+        classes_list.blockSignals(True)
+        try:
+            for i in range(classes_list.count()):
+                item = classes_list.item(i)
+                if item is not None:
+                    item.setCheckState(check_state)
+        finally:
+            classes_list.blockSignals(False)
+
+    @staticmethod
+    def on_segmentation_select_all_classes_clicked(controller) -> None:
+        SegmentationController.set_all_segmentation_classes_checked(
+            controller, checked=True
+        )
+
+    @staticmethod
+    def on_segmentation_clear_classes_clicked(controller) -> None:
+        SegmentationController.set_all_segmentation_classes_checked(
+            controller, checked=False
         )
 
     @staticmethod
@@ -92,12 +151,32 @@ class SegmentationController:
             )
             return
 
+        selected_class_ids = controller.selected_segmentation_class_ids()
+        if selected_class_ids:
+            selected_ids = np.asarray(
+                sorted(selected_class_ids), dtype=np.int32
+            )
+            keep_mask = np.isin(result.seg, selected_ids)
+            seg_filtered = np.where(keep_mask, result.seg, 0).astype(
+                np.int32, copy=False
+            )
+        else:
+            seg_filtered = np.zeros_like(result.seg, dtype=np.int32)
+
+        class_names = {
+            int(class_id): str(name)
+            for class_id, name in result.class_names.items()
+            if int(class_id) == 0 or int(class_id) in selected_class_ids
+        }
+        if 0 not in class_names:
+            class_names[0] = "background"
+
         labels = ensure_segmentation_labels_layer(controller.viewer)
         try:
             set_segmentation_2d(
                 labels,
-                result.seg,
-                class_names=result.class_names,
+                seg_filtered,
+                class_names=class_names,
                 reference_layer=us_layer,
             )
         except Exception as e:
@@ -105,6 +184,13 @@ class SegmentationController:
                 f"Failed to show labels: {e}"
             )
             return
+
+        logger.info(
+            "segmentation generated model=%s selected_classes=%s shape=%s",
+            controller.active_segmentation_model_id,
+            sorted(selected_class_ids),
+            tuple(seg_filtered.shape),
+        )
         controller.segmentation.segmentation_status_label.setText(
-            "Segmentation layer added."
+            f"Segmentation layer added ({len(selected_class_ids)} classes)."
         )

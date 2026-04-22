@@ -411,16 +411,23 @@ class RoiController:
         logger.info("Saved ROI Library to %s", _roi_library_file())
 
     @staticmethod
-    def on_roi_library_item_clicked(controller, roi_id: str) -> None:
-        if controller.shapes_layer is None:
-            return
-        library = RoiController._ensure_roi_library_loaded(controller)
-        entry = library.get_by_id(roi_id)
-        if entry is None:
-            if controller.annotation is not None:
-                controller.annotation.roi_library_description_label.setText("")
-            return
+    def _roi_library_placement_mode(controller) -> str:
+        if controller.annotation is None:
+            return "static"
 
+        combo = getattr(
+            controller.annotation, "roi_placement_mode_combo", None
+        )
+        if combo is None:
+            return "static"
+
+        mode = combo.currentData()
+        if mode is None:
+            mode = combo.currentText()
+        return str(mode or "static").strip().lower()
+
+    @staticmethod
+    def _place_library_entry_static(controller, entry, roi_id: str) -> None:
         target_fov = controller._get_fov()
         if target_fov is not None:
             target_fov_mm = (
@@ -461,6 +468,115 @@ class RoiController:
         RoiController.set_last_roi_position(controller, entry.position)
         controller._apply_roi_colors()
         controller.update_live_table()
+
+    @staticmethod
+    def _place_library_entry_auto(controller, entry, roi_id: str) -> None:
+        if "Segmentation" not in controller.viewer.layers:
+            QMessageBox.critical(
+                None,
+                "Auto ROI",
+                "No segmentation mask found. Generate segmentation first.",
+            )
+            return
+
+        seg_layer = controller.viewer.layers["Segmentation"]
+        seg = np.asarray(seg_layer.data)
+        if seg.ndim != 2:
+            QMessageBox.critical(
+                None,
+                "Auto ROI",
+                "Segmentation mask must be 2D.",
+            )
+            return
+
+        class_names = dict(getattr(seg_layer, "metadata", {}) or {}).get(
+            "class_names", {}
+        )
+        class_name_to_id = {
+            str(name): int(class_id) for class_id, name in class_names.items()
+        }
+
+        target_class_name = str(entry.position or "").strip()
+        if target_class_name not in class_name_to_id:
+            QMessageBox.critical(
+                None,
+                "Auto ROI",
+                f"ROI position '{target_class_name}' not found in segmentation classes.",
+            )
+            return
+
+        class_id = class_name_to_id[target_class_name]
+        class_mask = seg == int(class_id)
+        if not np.any(class_mask):
+            QMessageBox.critical(
+                None,
+                "Auto ROI",
+                f"Class '{target_class_name}' is not present in the current segmentation mask.",
+            )
+            return
+
+        verts = np.asarray(entry.vertices, dtype=float)
+        if verts.ndim != 2 or verts.shape[1] < 2:
+            logger.info("ROI '%s' has invalid vertices", roi_id)
+            return
+
+        verts = verts[:, -2:]
+        y_min = float(np.min(verts[:, 0]))
+        x_min = float(np.min(verts[:, 1]))
+        x_max = float(np.max(verts[:, 1]))
+        source_center_x = 0.5 * (x_min + x_max)
+
+        center_col = int(seg.shape[1] // 2)
+        center_column_mask = class_mask[:, center_col]
+        center_rows = np.where(center_column_mask)[0]
+        if center_rows.size == 0:
+            QMessageBox.critical(
+                None,
+                "Auto ROI",
+                f"Class '{target_class_name}' is not present at image center.",
+            )
+            return
+        top_row = int(center_rows[0])
+
+        scale = tuple(getattr(seg_layer, "scale", (1.0, 1.0)))
+        translate = tuple(getattr(seg_layer, "translate", (0.0, 0.0)))
+        sy = float(scale[-2])
+        sx = float(scale[-1])
+        ty = float(translate[-2])
+        tx = float(translate[-1])
+
+        target_center_x = tx + float(center_col) * sx
+        target_top_y = ty + float(top_row) * sy
+
+        dy = target_top_y - y_min
+        dx = target_center_x - source_center_x
+        verts_shifted = verts + np.asarray([dy, dx], dtype=float)
+
+        controller.shapes_layer.add(
+            verts_shifted,
+            shape_type=entry.shape_type,
+        )
+        RoiController.set_last_roi_position(controller, entry.position)
+        controller._apply_roi_colors()
+        controller.update_live_table()
+
+    @staticmethod
+    def on_roi_library_item_clicked(controller, roi_id: str) -> None:
+        if controller.shapes_layer is None:
+            return
+        library = RoiController._ensure_roi_library_loaded(controller)
+        entry = library.get_by_id(roi_id)
+        if entry is None:
+            if controller.annotation is not None:
+                controller.annotation.roi_library_description_label.setText("")
+            return
+
+        mode = RoiController._roi_library_placement_mode(controller)
+        if mode == "auto":
+            RoiController._place_library_entry_auto(controller, entry, roi_id)
+            return
+
+        RoiController._place_library_entry_static(controller, entry, roi_id)
 
     @staticmethod
     def on_roi_library_item_selected(controller, roi_id: str) -> None:

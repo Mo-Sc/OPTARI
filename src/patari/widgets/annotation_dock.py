@@ -13,6 +13,7 @@ from qtpy.QtWidgets import (
     QLabel,
     QLineEdit,
     QListWidget,
+    QComboBox,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -34,6 +35,7 @@ class AnnotationDock:
     include_all_wavelengths_checkbox: QCheckBox
     roi_library_list: QListWidget
     roi_library_description_label: QLabel
+    roi_placement_mode_combo: QComboBox
     save_roi_button: QPushButton
     remove_roi_button: QPushButton
     save_library_button: QPushButton
@@ -140,6 +142,13 @@ def create_annotation_dock() -> AnnotationDock:
     roi_library_description_label = QLabel("")
     roi_library_description_label.setWordWrap(True)
     roi_library_layout.addWidget(roi_library_description_label)
+
+    roi_placement_mode_combo = QComboBox()
+    roi_placement_mode_combo.addItem("static", userData="static")
+    roi_placement_mode_combo.addItem("auto", userData="auto")
+    roi_library_layout.addWidget(QLabel("Placement mode"))
+    roi_library_layout.addWidget(roi_placement_mode_combo)
+
     roi_library_layout.addWidget(button_row)
 
     outer.addWidget(roi_library_box)
@@ -158,6 +167,7 @@ def create_annotation_dock() -> AnnotationDock:
         include_all_wavelengths_checkbox=include_all_wavelengths_checkbox,
         roi_library_list=roi_library_list,
         roi_library_description_label=roi_library_description_label,
+        roi_placement_mode_combo=roi_placement_mode_combo,
         save_roi_button=save_roi_button,
         remove_roi_button=remove_roi_button,
         save_library_button=save_library_button,

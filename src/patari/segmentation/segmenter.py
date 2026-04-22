@@ -4,7 +4,6 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-import cv2
 import numpy as np
 
 
@@ -23,17 +22,17 @@ class SegmentationResult:
 
 
 @dataclass(frozen=True)
-class OnnxModelSpec:
-    """ONNX model configuration loaded from a JSON registry."""
+class SegmentationModelSpec:
+    """Segmentation model configuration loaded from a JSON registry."""
 
     model_id: str
     display_name: str
+    class_names: dict[int, str]
     onnx_path: Path
     input_name: str
     output_name: str
     input_height: int
     input_width: int
-    class_names: dict[int, str]
 
 
 DEFAULT_MODELS_CONFIG = (
@@ -45,33 +44,33 @@ DEFAULT_MODELS_CONFIG = (
 
 def load_onnx_model_registry(
     config_path: Path | None = None,
-) -> tuple[str, dict[str, OnnxModelSpec]]:
+) -> tuple[str, dict[str, SegmentationModelSpec]]:
     path = (
         Path(config_path) if config_path is not None else DEFAULT_MODELS_CONFIG
     )
     raw = json.loads(path.read_text(encoding="utf-8"))
     base_dir = path.parent
 
-    models: dict[str, OnnxModelSpec] = {}
+    models: dict[str, SegmentationModelSpec] = {}
     for item in raw["models"]:
-        model_path = Path(item["onnx_path"])
-        if not model_path.is_absolute():
-            model_path = (base_dir / model_path).resolve()
-
         class_names = {
             int(class_id): str(name)
             for class_id, name in item["class_names"].items()
         }
 
-        spec = OnnxModelSpec(
+        model_path = Path(item["onnx_path"])
+        if not model_path.is_absolute():
+            model_path = (base_dir / model_path).resolve()
+
+        spec = SegmentationModelSpec(
             model_id=str(item["id"]),
             display_name=str(item["display_name"]),
+            class_names=class_names,
             onnx_path=model_path,
             input_name=str(item["input_name"]),
             output_name=str(item["output_name"]),
             input_height=int(item["input_height"]),
             input_width=int(item["input_width"]),
-            class_names=class_names,
         )
         models[spec.model_id] = spec
 
@@ -85,49 +84,43 @@ def load_onnx_model_registry(
 
 
 class OnnxSegmenter:
-    """ONNX Runtime segmenter for a single US tissue model.
+    """Single-model segmenter.
 
-    Expects model output logits as (1, C, H, W).
+    The real ONNX inference is temporarily replaced by a deterministic dummy
+    mask generator so the widget can be exercised without a trained model.
     """
 
-    def __init__(self, model: OnnxModelSpec) -> None:
-        import onnxruntime as ort  # pyright: ignore[reportMissingImports]
-
+    def __init__(self, model: SegmentationModelSpec) -> None:
         self.model = model
         self.class_names = dict(model.class_names)
-        self._session = ort.InferenceSession(
-            str(model.onnx_path),
-            providers=["CPUExecutionProvider"],
-        )
 
     def predict(self, us_2d: np.ndarray) -> SegmentationResult:
-        us_2d = np.asarray(us_2d, dtype=np.float32)
+        us_2d = np.asarray(us_2d)
         if us_2d.ndim != 2:
             raise ValueError(f"Expected 2D US frame, got shape {us_2d.shape}")
 
-        h_in, w_in = us_2d.shape
+        h, w = us_2d.shape
+        if h <= 0 or w <= 0:
+            raise ValueError("Expected non-empty US frame")
 
-        us_min = float(us_2d.min())
-        us_range = float(us_2d.max() - us_min)
-        us_norm = (us_2d - us_min) / (us_range if us_range > 0.0 else 1.0)
+        class_ids = sorted(int(class_id) for class_id in self.class_names)
+        seg = np.zeros((h, w), dtype=np.int32)
 
-        resized = cv2.resize(
-            us_norm,
-            (self.model.input_width, self.model.input_height),
-            interpolation=cv2.INTER_LINEAR,
-        )
-        model_input = resized[None, None, :, :].astype(np.float32, copy=False)
+        if len(class_ids) == 1:
+            seg[:, :] = class_ids[0]
+        else:
+            edges = np.linspace(0, h, num=len(class_ids) + 1, dtype=int)
+            for i, class_id in enumerate(class_ids):
+                y0 = int(edges[i])
+                y1 = int(edges[i + 1])
+                if y1 > y0:
+                    seg[y0:y1, :] = class_id
 
-        logits = self._session.run(
-            [self.model.output_name],
-            {self.model.input_name: model_input},
-        )[0]
-        seg_small = np.argmax(logits, axis=1)[0].astype(np.int32, copy=False)
-
-        seg = cv2.resize(
-            seg_small,
-            (w_in, h_in),
-            interpolation=cv2.INTER_NEAREST,
-        ).astype(np.int32, copy=False)
+            for i, class_id in enumerate(class_ids):
+                seg[min(i, h - 1), 0] = class_id
 
         return SegmentationResult(seg=seg, class_names=dict(self.class_names))
+
+
+def create_segmenter(model: SegmentationModelSpec) -> OnnxSegmenter:
+    return OnnxSegmenter(model)
