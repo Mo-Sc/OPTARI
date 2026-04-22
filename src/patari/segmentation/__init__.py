@@ -1,6 +1,11 @@
 """Segmentation utilities and model wrappers."""
 
-from patari.segmentation.segmenter import DummySegmenter, SegmentationResult
+from patari.segmentation.segmenter import (
+    OnnxModelSpec,
+    OnnxSegmenter,
+    SegmentationResult,
+    load_onnx_model_registry,
+)
 from patari.segmentation.napari import (
     ensure_segmentation_labels_layer,
     set_segmentation_2d,
@@ -16,8 +21,10 @@ from patari.segmentation.napari import (
 # )
 
 __all__ = [
-    "DummySegmenter",
+    "OnnxModelSpec",
+    "OnnxSegmenter",
     "SegmentationResult",
+    "load_onnx_model_registry",
     "ensure_segmentation_labels_layer",
     "set_segmentation_2d",
     # "class_mask",

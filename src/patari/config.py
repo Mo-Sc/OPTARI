@@ -52,34 +52,3 @@ roi_colors = [
     "#FFA500",
     "#FF7F50",
 ]
-
-
-# ROI placement presets (used by Annotation dock preset buttons).
-# Each preset defines a single ROI placement configuration.
-# TODO: legacy stuff, only for segmentation
-ROI_PLACEMENT_PRESETS = [
-    {
-        "name": "Skin",
-        "segmentation_class": "Haut",
-        "roi_type": "ellipse",
-        "width_mm": 5.0,
-        "height_mm": 1.0,
-        "depth_mm": 0.0,
-    },
-    {
-        "name": "Fat",
-        "segmentation_class": "fat",
-        "roi_type": "ellipse",
-        "width_mm": 3.0,
-        "height_mm": 1.5,
-        "depth_mm": 0.5,
-    },
-    {
-        "name": "Muscle",
-        "segmentation_class": "Muskel1",
-        "roi_type": "ellipse",
-        "width_mm": 7.0,
-        "height_mm": 2.0,
-        "depth_mm": 0.0,
-    },
-]

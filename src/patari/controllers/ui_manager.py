@@ -91,16 +91,18 @@ class UiManager:
                 )
             )
 
-        # Segmentation UI is hidden until fully implemented.
-        # if controller.segmentation is None:
-        #     controller.segmentation = create_segmentation_dock()
-        #     controller._segmentation_dock_widget = (
-        #         controller.viewer.window.add_dock_widget(
-        #             controller.segmentation.widget,
-        #             name="Segmentation",
-        #             area="right",
-        #         )
-        #     )
+        if controller.segmentation is None:
+            controller.segmentation = create_segmentation_dock(
+                model_options=controller.segmentation_model_options(),
+                default_model_id=controller.active_segmentation_model_id,
+            )
+            controller._segmentation_dock_widget = (
+                controller.viewer.window.add_dock_widget(
+                    controller.segmentation.widget,
+                    name="Segmentation",
+                    area="right",
+                )
+            )
 
         if controller.unmixing is None:
             controller.unmixing = create_unmixing_dock()
@@ -150,10 +152,10 @@ class UiManager:
             controller._scan_browser_dock_widget,
             controller._annotation_dock_widget,
         )
-        # qt_window.tabifyDockWidget(
-        #     controller._scan_browser_dock_widget,
-        #     controller._segmentation_dock_widget,
-        # )
+        qt_window.tabifyDockWidget(
+            controller._scan_browser_dock_widget,
+            controller._segmentation_dock_widget,
+        )
         qt_window.tabifyDockWidget(
             controller._scan_browser_dock_widget,
             controller._unmixing_dock_widget,
@@ -259,21 +261,12 @@ class UiManager:
             )
 
         if controller.segmentation is not None:
+            controller.segmentation.segmentation_model_combo.currentIndexChanged.connect(
+                controller.on_segmentation_model_changed
+            )
             controller.segmentation.generate_tissue_segmentation_button.clicked.connect(
                 controller.on_generate_tissue_segmentation_clicked
             )
-            controller.segmentation.place_roi_button.clicked.connect(
-                controller.on_place_roi_clicked
-            )
-
-            for btn in getattr(
-                controller.segmentation, "roi_preset_buttons", []
-            ):
-                btn.clicked.connect(
-                    lambda checked=False, b=btn: controller.on_roi_preset_clicked(
-                        b
-                    )
-                )
 
         if controller.scan_browser is not None:
             controller.scan_browser.browse_button.clicked.connect(

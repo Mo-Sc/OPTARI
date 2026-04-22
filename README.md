@@ -110,7 +110,8 @@ This opens napari and directly adds the PATARI dock widget. To quickly create a 
 - Derived layers: unmixing outputs (unmixed, THb, sO2) are stored in `_derived_patato_objects` and exported with synchronized attributes so they can be reloaded as normal PA layers.
 - Sparse layers: data data that only contain selected frames are expanded to acquisition-frame indexing for viewer consistency; Frame id is carried in metadata and used on reload.
 - Current ROI position state: `roi_position` metadata for manual ROIs is not fully synchronized yet. Future work includes fully synchronized shape specific metadata dict
-- Hidden features: Segmentation and Reconstruction docks are currently disabled.
+- Segmentation models are configured in `src/patari/data/segmentation_models.json` (ONNX path + model IO metadata).
+- Hidden features: Reconstruction dock is currently disabled.
 - Logging behavior: `PATARI_LOG_LEVEL` controls terminal log. `PATARI_GUI_LOG_LEVEL` controls napari GUI notification.
 - Compatibility note: custom PATATO fork and import/export workarounds are currently required for some personal legacy datasets.
 

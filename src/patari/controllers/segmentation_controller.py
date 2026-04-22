@@ -1,24 +1,16 @@
 from __future__ import annotations
 
-import logging
-
 import numpy as np
-from napari.layers import Image, Labels
+from napari.layers import Image
 
-from patari.config import ROI_PLACEMENT_PRESETS
-from patari.roi.roi_shapes import EllipseConfig, ShapeFactory
 from patari.segmentation.napari import (
     ensure_segmentation_labels_layer,
     set_segmentation_2d,
 )
-from patari.utils.misc import parse_float_input
-
-
-logger = logging.getLogger(__name__)
 
 
 class SegmentationController:
-    """Segmentation generation and auto-ROI placement helpers."""
+    """Segmentation generation helpers."""
 
     @staticmethod
     def resolve_us_layer(controller) -> Image | None:
@@ -34,16 +26,8 @@ class SegmentationController:
         if data.ndim == 2:
             return data
 
-        # Use current frame index when US has a frame axis.
-        try:
-            pt = list(controller.viewer.dims.point)
-            frame_idx = int(round(pt[0])) if len(pt) >= 1 else 0
-        except Exception:
-            logger.debug(
-                "failed to read viewer dims point for US frame; using frame 0",
-                exc_info=True,
-            )
-            frame_idx = 0
+        pt = list(controller.viewer.dims.point)
+        frame_idx = int(round(pt[0])) if len(pt) >= 1 else 0
 
         frame_idx = int(np.clip(frame_idx, 0, max(0, data.shape[0] - 1)))
 
@@ -56,87 +40,31 @@ class SegmentationController:
         return None
 
     @staticmethod
-    def set_roi_class_choices(controller, class_names: dict[int, str]) -> None:
+    def on_segmentation_model_changed(controller) -> None:
         if controller.segmentation is None:
             return
 
-        combo = controller.segmentation.roi_class_combo
-        combo.blockSignals(True)
-        try:
-            combo.clear()
-            for class_id, name in sorted(
-                class_names.items(), key=lambda kv: int(kv[0])
-            ):
-                combo.addItem(str(name), userData=int(class_id))
-            combo.setEnabled(combo.count() > 0)
-        finally:
-            combo.blockSignals(False)
-
-    @staticmethod
-    def select_roi_class_by_name(controller, class_name: str) -> None:
-        if controller.segmentation is None:
-            return
-
-        combo = controller.segmentation.roi_class_combo
-        target = (class_name or "").strip()
-        if not target:
-            return
-
-        for i in range(combo.count()):
-            txt = (combo.itemText(i) or "").strip()
-            if txt == target:
-                combo.setCurrentIndex(i)
-                return
-
-    @staticmethod
-    def on_roi_preset_clicked(controller, button) -> None:
-        if controller.segmentation is None:
-            return
-
-        try:
-            preset_index = int(button.property("roi_preset_index"))
-        except Exception:
-            return
-
-        if not (0 <= preset_index < len(ROI_PLACEMENT_PRESETS)):
-            return
-
-        preset = ROI_PLACEMENT_PRESETS[preset_index]
-        roi_type = str(preset.get("roi_type", "ellipse"))
-
-        # ROI type dropdown (currently only ellipse).
-        for i in range(controller.segmentation.roi_type_combo.count()):
-            if controller.segmentation.roi_type_combo.itemData(i) == roi_type:
-                controller.segmentation.roi_type_combo.setCurrentIndex(i)
-                break
-
-        # Numeric fields
-        controller.segmentation.roi_width_edit.setText(
-            str(preset.get("width_mm", ""))
+        model_id = (
+            controller.segmentation.segmentation_model_combo.currentData()
         )
-        controller.segmentation.roi_height_edit.setText(
-            str(preset.get("height_mm", ""))
-        )
-        controller.segmentation.roi_depth_edit.setText(
-            str(preset.get("depth_mm", ""))
-        )
-
-        seg_class = str(preset.get("segmentation_class", "")).strip()
-        if not seg_class:
+        if model_id is None:
             return
 
-        if (
-            controller.segmentation.roi_class_combo.isEnabled()
-            and controller.segmentation.roi_class_combo.count() > 0
-        ):
-            SegmentationController.select_roi_class_by_name(
-                controller, seg_class
-            )
+        controller.set_active_segmentation_model(str(model_id))
+        controller.segmentation.segmentation_status_label.setText(
+            f"Model: {controller.segmentation.segmentation_model_combo.currentText()}"
+        )
 
     @staticmethod
     def on_generate_tissue_segmentation_clicked(controller) -> None:
         if controller.segmentation is None:
             return
+
+        model_id = (
+            controller.segmentation.segmentation_model_combo.currentData()
+        )
+        if model_id is not None:
+            controller.set_active_segmentation_model(str(model_id))
 
         us_layer = SegmentationController.resolve_us_layer(controller)
         if us_layer is None:
@@ -157,7 +85,7 @@ class SegmentationController:
         )
 
         try:
-            result = controller._segmenter.predict(us_2d)
+            result = controller.get_segmenter().predict(us_2d)
         except Exception as e:
             controller.segmentation.segmentation_status_label.setText(
                 f"Segmentation failed: {e}"
@@ -177,125 +105,6 @@ class SegmentationController:
                 f"Failed to show labels: {e}"
             )
             return
-
-        SegmentationController.set_roi_class_choices(
-            controller, result.class_names
-        )
-        controller.segmentation.roi_status_label.setText(
-            "Segmentation generated. Choose class and place ROI."
-        )
         controller.segmentation.segmentation_status_label.setText(
             "Segmentation layer added."
         )
-
-    @staticmethod
-    def on_place_roi_clicked(controller) -> None:
-        if controller.segmentation is None:
-            return
-        if controller.shapes_layer is None:
-            controller.segmentation.roi_status_label.setText("No ROIs layer")
-            return
-
-        # Must have segmentation layer first.
-        seg_layer = (
-            controller.viewer.layers["Segmentation"]
-            if "Segmentation" in controller.viewer.layers
-            else None
-        )
-
-        if seg_layer is None or not isinstance(seg_layer, Labels):
-            controller.segmentation.roi_status_label.setText(
-                "Generate tissue segmentation first"
-            )
-            return
-
-        seg = np.asarray(seg_layer.data)
-
-        if seg.ndim != 2:
-            controller.segmentation.roi_status_label.setText(
-                "Segmentation layer must be 2D"
-            )
-            return
-
-        class_id = controller.segmentation.roi_class_combo.currentData()
-        if class_id is None:
-            controller.segmentation.roi_status_label.setText("Select a class")
-            return
-
-        roi_type = (
-            controller.segmentation.roi_type_combo.currentData() or "ellipse"
-        )
-
-        width_mm = parse_float_input(
-            controller.segmentation.roi_width_edit.text()
-        )
-        height_mm = parse_float_input(
-            controller.segmentation.roi_height_edit.text()
-        )
-        depth_mm = parse_float_input(
-            controller.segmentation.roi_depth_edit.text()
-        )
-
-        if width_mm is None or height_mm is None:
-            controller.segmentation.roi_status_label.setText(
-                "Enter ROI width and height (mm)"
-            )
-            return
-        if depth_mm is None:
-            depth_mm = 0.0
-
-        # Placement is done in world coordinates (mm), so we need US scale/translate
-        # to convert from segmentation pixels to napari-world ROI vertices.
-        us_layer = SegmentationController.resolve_us_layer(controller)
-        if us_layer is None:
-            controller.segmentation.roi_status_label.setText(
-                "No US layer found"
-            )
-            return
-
-        ref_scale = getattr(us_layer, "scale", (1.0, 1.0))
-        sy, sx = float(ref_scale[-2]), float(ref_scale[-1])
-
-        ref_translate = getattr(us_layer, "translate", (0.0, 0.0))
-        ty, tx = float(ref_translate[-2]), float(ref_translate[-1])
-
-        class_mask = seg == int(class_id)
-        config = EllipseConfig(
-            width_mm=float(width_mm),
-            height_mm=float(height_mm),
-            depth_mm=float(depth_mm),
-        )
-
-        try:
-            placer = ShapeFactory.create_shape(str(roi_type), config)
-            verts_world = placer.to_napari_verts_world(
-                class_mask=class_mask,
-                sy=sy,
-                sx=sx,
-                ty=ty,
-                tx=tx,
-            )
-        except Exception as e:
-            controller.segmentation.roi_status_label.setText(
-                f"ROI placement failed: {e}"
-            )
-            return
-
-        try:
-
-            controller.shapes_layer.add(verts_world, shape_type=str(roi_type))
-
-            from patari.controllers.roi_controller import RoiController
-
-            class_name = controller.segmentation.roi_class_combo.currentText()
-            RoiController.set_last_roi_position(controller, class_name)
-
-        except Exception as e:
-            controller.segmentation.roi_status_label.setText(
-                f"Failed to add ROI to viewer: {e}"
-            )
-            return
-
-        controller._apply_roi_colors()
-        controller.update_live_table()
-        controller.segmentation.roi_status_label.setText("ROI placed.")

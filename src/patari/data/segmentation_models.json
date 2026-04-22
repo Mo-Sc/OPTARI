@@ -1,0 +1,26 @@
+{
+  "default_model": "us_tissue_v1",
+  "models": [
+    {
+      "id": "us_tissue_v1",
+      "display_name": "US Tissue v1",
+      "onnx_path": "models/us_tissue_v1.onnx",
+      "input_name": "input",
+      "output_name": "output",
+      "input_height": 256,
+      "input_width": 256,
+      "class_names": {
+        "0": "background",
+        "1": "Haut",
+        "2": "Faszie1",
+        "3": "Muskel1",
+        "4": "Muskel2",
+        "5": "Membran",
+        "6": "Faszie2",
+        "7": "Vorlaufstrecke",
+        "8": "SAT",
+        "9": "Gel"
+      }
+    }
+  ]
+}

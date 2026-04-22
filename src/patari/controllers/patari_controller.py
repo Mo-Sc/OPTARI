@@ -5,14 +5,18 @@ from pathlib import Path
 
 import numpy as np
 import patato as pat
-from napari.layers import Image, Labels, Shapes
+from napari.layers import Image, Shapes
 from napari.viewer import Viewer
 from qtpy.QtWidgets import QFileDialog
 
 from patari.config import (
     DEFAULT_PA_LAYER,
 )
-from patari.segmentation.segmenter import DummySegmenter
+from patari.segmentation.segmenter import (
+    OnnxModelSpec,
+    OnnxSegmenter,
+    load_onnx_model_registry,
+)
 from patari.utils.misc import parse_float_input
 from patari.widgets.info_dock import InfoDock
 from patari.widgets.roi_dock import RoiDock
@@ -75,7 +79,15 @@ class PatariController:
         self.roi_intensity_mode: str | None = "clip"
 
         # segmentation
-        self._segmenter = DummySegmenter()
+        (
+            self._default_segmentation_model_id,
+            self._segmentation_model_registry,
+        ) = load_onnx_model_registry()
+        self._active_segmentation_model_id = (
+            self._default_segmentation_model_id
+        )
+        self._segmenter: OnnxSegmenter | None = None
+        self._segmenter_model_id: str | None = None
 
         # -- bottom elements --
         self.roi: RoiDock | None = None
@@ -341,26 +353,42 @@ class PatariController:
         self.update_live_table()
 
     # ---------------- segmentation ----------------
-    def _resolve_us_layer(self) -> Image | None:
-        return SegmentationController.resolve_us_layer(self)
+    def segmentation_model_options(self) -> list[tuple[str, str]]:
+        return [
+            (spec.model_id, spec.display_name)
+            for spec in self._segmentation_model_registry.values()
+        ]
 
-    def _us_slice_2d(self, us_layer: Image) -> np.ndarray | None:
-        return SegmentationController.us_slice_2d(self, us_layer)
+    @property
+    def active_segmentation_model_id(self) -> str:
+        return self._active_segmentation_model_id
 
-    def _set_roi_class_choices(self, class_names: dict[int, str]) -> None:
-        SegmentationController.set_roi_class_choices(self, class_names)
+    def set_active_segmentation_model(self, model_id: str) -> None:
+        if model_id not in self._segmentation_model_registry:
+            raise ValueError(f"Unknown segmentation model: {model_id}")
+        self._active_segmentation_model_id = model_id
 
-    def _select_roi_class_by_name(self, class_name: str) -> None:
-        SegmentationController.select_roi_class_by_name(self, class_name)
+    def _active_segmentation_model_spec(self) -> OnnxModelSpec:
+        return self._segmentation_model_registry[
+            self._active_segmentation_model_id
+        ]
 
-    def on_roi_preset_clicked(self, button) -> None:
-        SegmentationController.on_roi_preset_clicked(self, button)
+    def get_segmenter(self) -> OnnxSegmenter:
+        if (
+            self._segmenter is None
+            or self._segmenter_model_id != self._active_segmentation_model_id
+        ):
+            self._segmenter = OnnxSegmenter(
+                self._active_segmentation_model_spec()
+            )
+            self._segmenter_model_id = self._active_segmentation_model_id
+        return self._segmenter
+
+    def on_segmentation_model_changed(self, event=None) -> None:
+        SegmentationController.on_segmentation_model_changed(self)
 
     def on_generate_tissue_segmentation_clicked(self) -> None:
         SegmentationController.on_generate_tissue_segmentation_clicked(self)
-
-    def on_place_roi_clicked(self) -> None:
-        SegmentationController.on_place_roi_clicked(self)
 
     def on_selection_changed(self, event=None) -> None:
         self._resolve_active_layer()
