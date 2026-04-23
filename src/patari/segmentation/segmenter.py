@@ -22,7 +22,7 @@ class SegmentationResult:
 
 
 @dataclass(frozen=True)
-class SegmentationModelSpec:
+class SegmentationModelConfig:
     """Segmentation model configuration loaded from a JSON registry."""
 
     model_id: str
@@ -44,14 +44,15 @@ DEFAULT_MODELS_CONFIG = (
 
 def load_onnx_model_registry(
     config_path: Path | None = None,
-) -> tuple[str, dict[str, SegmentationModelSpec]]:
+) -> tuple[str, dict[str, SegmentationModelConfig]]:
+    """Load ONNX model configs and return the default model id plus registry."""
     path = (
         Path(config_path) if config_path is not None else DEFAULT_MODELS_CONFIG
     )
     raw = json.loads(path.read_text(encoding="utf-8"))
     base_dir = path.parent
 
-    models: dict[str, SegmentationModelSpec] = {}
+    models: dict[str, SegmentationModelConfig] = {}
     for item in raw["models"]:
         class_names = {
             int(class_id): str(name)
@@ -62,7 +63,7 @@ def load_onnx_model_registry(
         if not model_path.is_absolute():
             model_path = (base_dir / model_path).resolve()
 
-        spec = SegmentationModelSpec(
+        config = SegmentationModelConfig(
             model_id=str(item["id"]),
             display_name=str(item["display_name"]),
             class_names=class_names,
@@ -72,7 +73,7 @@ def load_onnx_model_registry(
             input_height=int(item["input_height"]),
             input_width=int(item["input_width"]),
         )
-        models[spec.model_id] = spec
+        models[config.model_id] = config
 
     default_model_id = str(raw["default_model"])
     if default_model_id not in models:
@@ -90,11 +91,12 @@ class OnnxSegmenter:
     mask generator so the widget can be exercised without a trained model.
     """
 
-    def __init__(self, model: SegmentationModelSpec) -> None:
+    def __init__(self, model: SegmentationModelConfig) -> None:
         self.model = model
         self.class_names = dict(model.class_names)
 
     def predict(self, us_2d: np.ndarray) -> SegmentationResult:
+        """Return a deterministic class-id map for one 2D US frame."""
         us_2d = np.asarray(us_2d)
         if us_2d.ndim != 2:
             raise ValueError(f"Expected 2D US frame, got shape {us_2d.shape}")
@@ -122,5 +124,6 @@ class OnnxSegmenter:
         return SegmentationResult(seg=seg, class_names=dict(self.class_names))
 
 
-def create_segmenter(model: SegmentationModelSpec) -> OnnxSegmenter:
+def create_segmenter(model: SegmentationModelConfig) -> OnnxSegmenter:
+    """Create the currently configured ONNX segmenter wrapper."""
     return OnnxSegmenter(model)

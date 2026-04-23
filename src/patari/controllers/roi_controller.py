@@ -61,19 +61,19 @@ def _roi_name_popup() -> tuple[str, str, str] | None:
 class RoiController:
     """ROI visualization, table management, and ROI export helpers."""
 
-    @staticmethod
-    def set_last_roi_position(controller, position: str) -> None:
-        """
-        Set the "roi_position" property of the most recently added shape to the given position string.
-        """
-
-        props = dict(getattr(controller.shapes_layer, "properties", {}) or {})
-        positions = list(props.get("roi_position", []))
-        if not positions:
-            return
-        positions[-1] = str(position or "undefined")
-        props["roi_position"] = positions
-        controller.shapes_layer.properties = props
+    # @staticmethod
+    # def set_last_roi_position(controller, position: str) -> None:
+    #     """Tag the most recently added ROI with a semantic position string."""
+    # Disabled for now: roi_position metadata is currently not consumed by
+    # export/stats and adds maintenance overhead.
+    # props = dict(getattr(controller.shapes_layer, "properties", {}) or {})
+    # positions = list(props.get("roi_position", []))
+    # if not positions:
+    #     return
+    # positions[-1] = str(position or "undefined")
+    # props["roi_position"] = positions
+    # controller.shapes_layer.properties = props
+    # return
 
     @staticmethod
     def apply_roi_colors(controller) -> None:
@@ -421,14 +421,16 @@ class RoiController:
 
     @staticmethod
     def _place_library_entry_static(controller, entry) -> None:
+        """Place a saved ROI entry at its stored coordinates."""
         verts = np.asarray(entry.vertices, dtype=float)[:, -2:]
         controller.shapes_layer.add(verts, shape_type=entry.shape_type)
-        RoiController.set_last_roi_position(controller, entry.position)
-        controller._apply_roi_colors()
-        controller.update_live_table()
+        # Keep roi_position metadata aligned with the newly added shape index.
+        # RoiController.set_last_roi_position(controller, entry.position)
+        # Colors and live table are refreshed by shapes_layer.data event.
 
     @staticmethod
     def _place_library_entry_auto(controller, entry) -> None:
+        """Place a saved ROI by aligning it to the selected segmentation class."""
         if "Segmentation" not in controller.viewer.layers:
             QMessageBox.critical(
                 None,
@@ -504,9 +506,8 @@ class RoiController:
             verts_shifted,
             shape_type=entry.shape_type,
         )
-        RoiController.set_last_roi_position(controller, entry.position)
-        controller._apply_roi_colors()
-        controller.update_live_table()
+        # RoiController.set_last_roi_position(controller, entry.position)
+        # Colors and live table are refreshed by shapes_layer.data event.
 
     @staticmethod
     def on_roi_library_item_clicked(controller, roi_id: str) -> None:

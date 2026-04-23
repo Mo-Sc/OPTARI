@@ -14,7 +14,7 @@ from patari.config import (
     DEFAULT_PA_LAYER,
 )
 from patari.segmentation.segmenter import (
-    SegmentationModelSpec,
+    SegmentationModelConfig,
     create_segmenter,
     load_onnx_model_registry,
 )
@@ -79,7 +79,8 @@ class PatariController:
         self.roi_intensity_max: float | None = None
         self.roi_intensity_mode: str | None = "clip"
 
-        # segmentation
+        # Segmentation keeps model registry + active model state in the root
+        # controller because widget setup and event handlers need shared access.
         (
             self._default_segmentation_model_id,
             self._segmentation_model_registry,
@@ -355,6 +356,7 @@ class PatariController:
 
     # ---------------- segmentation ----------------
     def segmentation_model_options(self) -> list[tuple[str, str]]:
+        """Return ``(model_id, display_name)`` pairs for the model combo."""
         return [
             (spec.model_id, spec.display_name)
             for spec in self._segmentation_model_registry.values()
@@ -369,18 +371,20 @@ class PatariController:
             raise ValueError(f"Unknown segmentation model: {model_id}")
         self._active_segmentation_model_id = model_id
 
-    def _active_segmentation_model_spec(self) -> SegmentationModelSpec:
+    def _active_segmentation_model_config(self) -> SegmentationModelConfig:
+        """Return config for the currently selected segmentation model."""
         return self._segmentation_model_registry[
             self._active_segmentation_model_id
         ]
 
     def active_segmentation_class_items(self) -> list[tuple[int, str]]:
+        """Return sorted ``(class_id, class_name)`` entries for the active model."""
         return sorted(
             (
                 int(class_id),
                 str(class_name),
             )
-            for class_id, class_name in self._active_segmentation_model_spec().class_names.items()
+            for class_id, class_name in self._active_segmentation_model_config().class_names.items()
         )
 
     def selected_segmentation_class_ids(self) -> set[int]:
@@ -398,12 +402,13 @@ class PatariController:
         return class_ids
 
     def get_segmenter(self):
+        """Lazily create/cache the segmenter for the active model selection."""
         if (
             self._segmenter is None
             or self._segmenter_model_id != self._active_segmentation_model_id
         ):
             self._segmenter = create_segmenter(
-                self._active_segmentation_model_spec()
+                self._active_segmentation_model_config()
             )
             self._segmenter_model_id = self._active_segmentation_model_id
         return self._segmenter
@@ -416,6 +421,9 @@ class PatariController:
 
     def on_segmentation_clear_classes_clicked(self, event=None) -> None:
         SegmentationController.on_segmentation_clear_classes_clicked(self)
+
+    def on_generate_roi_from_mask_clicked(self, event=None) -> None:
+        SegmentationController.on_generate_roi_from_mask_clicked(self)
 
     def on_generate_tissue_segmentation_clicked(self) -> None:
         SegmentationController.on_generate_tissue_segmentation_clicked(self)

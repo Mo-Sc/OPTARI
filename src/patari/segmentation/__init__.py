@@ -2,7 +2,7 @@
 
 from patari.segmentation.segmenter import (
     OnnxSegmenter,
-    SegmentationModelSpec,
+    SegmentationModelConfig,
     create_segmenter,
     SegmentationResult,
     load_onnx_model_registry,
@@ -22,7 +22,7 @@ from patari.segmentation.napari import (
 # )
 
 __all__ = [
-    "SegmentationModelSpec",
+    "SegmentationModelConfig",
     "OnnxSegmenter",
     "create_segmenter",
     "SegmentationResult",

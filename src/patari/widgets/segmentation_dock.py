@@ -3,11 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from qtpy.QtCore import Qt
+from qtpy.QtGui import QDoubleValidator
 from qtpy.QtWidgets import (
     QHBoxLayout,
     QComboBox,
     QGroupBox,
     QLabel,
+    QLineEdit,
     QListWidget,
     QPushButton,
     QScrollArea,
@@ -19,11 +21,18 @@ from qtpy.QtWidgets import (
 
 @dataclass
 class SegmentationDock:
+    """Widget references used by segmentation-related controller callbacks."""
+
     widget: QWidget
     segmentation_model_combo: QComboBox
     segmentation_classes_list: QListWidget
     select_all_classes_button: QPushButton
     clear_classes_button: QPushButton
+    roi_class_id_combo: QComboBox
+    roi_width_edit: QLineEdit
+    roi_height_edit: QLineEdit
+    roi_top_margin_edit: QLineEdit
+    generate_roi_button: QPushButton
     generate_tissue_segmentation_button: QPushButton
     segmentation_status_label: QLabel
 
@@ -32,6 +41,11 @@ def create_segmentation_dock(
     model_options: list[tuple[str, str]],
     default_model_id: str,
 ) -> SegmentationDock:
+    """Create the segmentation dock with model/class and ROI-from-mask controls.
+
+    ``model_options`` and ``default_model_id`` are injected at construction so
+    the model combo is ready before signal wiring.
+    """
     widget = QWidget()
     shell_layout = QVBoxLayout(widget)
     shell_layout.setContentsMargins(0, 0, 0, 0)
@@ -66,10 +80,22 @@ def create_segmentation_dock(
     classes_button_row = QWidget()
     classes_button_layout = QHBoxLayout(classes_button_row)
     classes_button_layout.setContentsMargins(0, 0, 0, 0)
-    select_all_classes_button = QPushButton("Select all")
+    select_all_classes_button = QPushButton("Select All")
     clear_classes_button = QPushButton("Clear")
     classes_button_layout.addWidget(select_all_classes_button)
     classes_button_layout.addWidget(clear_classes_button)
+
+    roi_class_id_combo = QComboBox()
+    roi_width_edit = QLineEdit()
+    roi_height_edit = QLineEdit()
+    roi_top_margin_edit = QLineEdit()
+
+    for edit in (roi_width_edit, roi_height_edit, roi_top_margin_edit):
+        edit.setValidator(QDoubleValidator(0.0, 9999.0, 2))
+        edit.setClearButtonEnabled(True)
+        edit.setPlaceholderText("mm")
+
+    generate_roi_button = QPushButton("Generate ROI from Mask")
 
     generate_tissue_segmentation_button = QPushButton(
         "Generate Tissue Segmentation"
@@ -81,10 +107,23 @@ def create_segmentation_dock(
     seg_layout.addWidget(QLabel("Classes"))
     seg_layout.addWidget(segmentation_classes_list)
     seg_layout.addWidget(classes_button_row)
+
     seg_layout.addWidget(generate_tissue_segmentation_button)
     seg_layout.addWidget(segmentation_status_label)
 
     outer.addWidget(seg_box)
+    roi_settings_box = QGroupBox("ROI from Mask")
+    roi_settings_layout = QVBoxLayout(roi_settings_box)
+    roi_settings_layout.addWidget(QLabel("Class ID"))
+    roi_settings_layout.addWidget(roi_class_id_combo)
+    roi_settings_layout.addWidget(QLabel("Width"))
+    roi_settings_layout.addWidget(roi_width_edit)
+    roi_settings_layout.addWidget(QLabel("Height"))
+    roi_settings_layout.addWidget(roi_height_edit)
+    roi_settings_layout.addWidget(QLabel("Top Margin"))
+    roi_settings_layout.addWidget(roi_top_margin_edit)
+    roi_settings_layout.addWidget(generate_roi_button)
+    outer.addWidget(roi_settings_box)
     outer.addStretch()
 
     return SegmentationDock(
@@ -93,6 +132,11 @@ def create_segmentation_dock(
         segmentation_classes_list=segmentation_classes_list,
         select_all_classes_button=select_all_classes_button,
         clear_classes_button=clear_classes_button,
+        roi_class_id_combo=roi_class_id_combo,
+        roi_width_edit=roi_width_edit,
+        roi_height_edit=roi_height_edit,
+        roi_top_margin_edit=roi_top_margin_edit,
+        generate_roi_button=generate_roi_button,
         generate_tissue_segmentation_button=generate_tissue_segmentation_button,
         segmentation_status_label=segmentation_status_label,
     )

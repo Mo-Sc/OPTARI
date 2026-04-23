@@ -92,6 +92,9 @@ class UiManager:
             )
 
         if controller.segmentation is None:
+            # Segmentation dock builds the model combo during construction,
+            # so model entries and the current default model id are provided
+            # up front instead of filled later by a separate init step.
             controller.segmentation = create_segmentation_dock(
                 model_options=controller.segmentation_model_options(),
                 default_model_id=controller.active_segmentation_model_id,
@@ -270,6 +273,9 @@ class UiManager:
             )
             controller.segmentation.clear_classes_button.clicked.connect(
                 controller.on_segmentation_clear_classes_clicked
+            )
+            controller.segmentation.generate_roi_button.clicked.connect(
+                controller.on_generate_roi_from_mask_clicked
             )
             controller.segmentation.generate_tissue_segmentation_button.clicked.connect(
                 controller.on_generate_tissue_segmentation_clicked
