@@ -146,8 +146,13 @@ def create_annotation_dock() -> AnnotationDock:
     roi_placement_mode_combo = QComboBox()
     roi_placement_mode_combo.addItem("static", userData="static")
     roi_placement_mode_combo.addItem("auto", userData="auto")
-    roi_library_layout.addWidget(QLabel("Placement mode"))
-    roi_library_layout.addWidget(roi_placement_mode_combo)
+
+    placement_row = QWidget()
+    placement_layout = QHBoxLayout(placement_row)
+    placement_layout.setContentsMargins(0, 0, 0, 0)
+    placement_layout.addWidget(QLabel("Placement"))
+    placement_layout.addWidget(roi_placement_mode_combo)
+    roi_library_layout.addWidget(placement_row)
 
     roi_library_layout.addWidget(button_row)
 

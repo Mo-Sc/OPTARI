@@ -415,62 +415,20 @@ class RoiController:
         if controller.annotation is None:
             return "static"
 
-        combo = getattr(
-            controller.annotation, "roi_placement_mode_combo", None
+        return str(
+            controller.annotation.roi_placement_mode_combo.currentData()
         )
-        if combo is None:
-            return "static"
-
-        mode = combo.currentData()
-        if mode is None:
-            mode = combo.currentText()
-        return str(mode or "static").strip().lower()
 
     @staticmethod
-    def _place_library_entry_static(controller, entry, roi_id: str) -> None:
-        target_fov = controller._get_fov()
-        if target_fov is not None:
-            target_fov_mm = (
-                float(target_fov[0]) * 1000.0,
-                float(target_fov[1]) * 1000.0,
-            )
-        else:
-            target_fov_mm = None
-
-        source_fov_mm = (
-            (entry.source_fov_x_mm, entry.source_fov_y_mm)
-            if entry.source_fov_x_mm is not None
-            and entry.source_fov_y_mm is not None
-            else None
-        )
-        if (
-            source_fov_mm is not None
-            and target_fov_mm is not None
-            and not np.allclose(
-                np.asarray(source_fov_mm, dtype=float),
-                np.asarray(target_fov_mm, dtype=float),
-                rtol=0.0,
-                atol=1e-3,
-            )
-        ):
-            QMessageBox.warning(
-                None,
-                "ROI Library",
-                "ROI was created for a different FOV. It will still be placed literally.",
-            )
-
-        verts = np.asarray(entry.vertices, dtype=float)
-        if verts.ndim != 2 or verts.shape[1] < 2:
-            logger.info("ROI '%s' has invalid vertices", roi_id)
-            return
-
-        controller.shapes_layer.add(verts[:, -2:], shape_type=entry.shape_type)
+    def _place_library_entry_static(controller, entry) -> None:
+        verts = np.asarray(entry.vertices, dtype=float)[:, -2:]
+        controller.shapes_layer.add(verts, shape_type=entry.shape_type)
         RoiController.set_last_roi_position(controller, entry.position)
         controller._apply_roi_colors()
         controller.update_live_table()
 
     @staticmethod
-    def _place_library_entry_auto(controller, entry, roi_id: str) -> None:
+    def _place_library_entry_auto(controller, entry) -> None:
         if "Segmentation" not in controller.viewer.layers:
             QMessageBox.critical(
                 None,
@@ -481,13 +439,6 @@ class RoiController:
 
         seg_layer = controller.viewer.layers["Segmentation"]
         seg = np.asarray(seg_layer.data)
-        if seg.ndim != 2:
-            QMessageBox.critical(
-                None,
-                "Auto ROI",
-                "Segmentation mask must be 2D.",
-            )
-            return
 
         class_names = dict(getattr(seg_layer, "metadata", {}) or {}).get(
             "class_names", {}
@@ -515,12 +466,7 @@ class RoiController:
             )
             return
 
-        verts = np.asarray(entry.vertices, dtype=float)
-        if verts.ndim != 2 or verts.shape[1] < 2:
-            logger.info("ROI '%s' has invalid vertices", roi_id)
-            return
-
-        verts = verts[:, -2:]
+        verts = np.asarray(entry.vertices, dtype=float)[:, -2:]
         y_min = float(np.min(verts[:, 0]))
         x_min = float(np.min(verts[:, 1]))
         x_max = float(np.max(verts[:, 1]))
@@ -548,6 +494,8 @@ class RoiController:
         target_center_x = tx + float(center_col) * sx
         target_top_y = ty + float(top_row) * sy
 
+        # Shift the stored ROI so its horizontal center aligns with the image
+        # center and its top edge aligns with the target class top border.
         dy = target_top_y - y_min
         dx = target_center_x - source_center_x
         verts_shifted = verts + np.asarray([dy, dx], dtype=float)
@@ -573,10 +521,10 @@ class RoiController:
 
         mode = RoiController._roi_library_placement_mode(controller)
         if mode == "auto":
-            RoiController._place_library_entry_auto(controller, entry, roi_id)
+            RoiController._place_library_entry_auto(controller, entry)
             return
 
-        RoiController._place_library_entry_static(controller, entry, roi_id)
+        RoiController._place_library_entry_static(controller, entry)
 
     @staticmethod
     def on_roi_library_item_selected(controller, roi_id: str) -> None:

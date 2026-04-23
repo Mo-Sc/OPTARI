@@ -54,9 +54,6 @@ class SegmentationController:
         model_id = (
             controller.segmentation.segmentation_model_combo.currentData()
         )
-        if model_id is None:
-            return
-
         controller.set_active_segmentation_model(str(model_id))
         SegmentationController.populate_segmentation_classes(controller)
         controller.segmentation.segmentation_status_label.setText(
@@ -69,20 +66,16 @@ class SegmentationController:
             return
 
         classes_list = controller.segmentation.segmentation_classes_list
-        classes_list.blockSignals(True)
-        try:
-            classes_list.clear()
-            for (
-                class_id,
-                class_name,
-            ) in controller.active_segmentation_class_items():
-                item = QListWidgetItem(f"{class_id}: {class_name}")
-                item.setData(Qt.UserRole, int(class_id))
-                item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-                item.setCheckState(Qt.Checked)
-                classes_list.addItem(item)
-        finally:
-            classes_list.blockSignals(False)
+        classes_list.clear()
+        for (
+            class_id,
+            class_name,
+        ) in controller.active_segmentation_class_items():
+            item = QListWidgetItem(f"{class_id}: {class_name}")
+            item.setData(Qt.UserRole, int(class_id))
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setCheckState(Qt.Checked)
+            classes_list.addItem(item)
 
     @staticmethod
     def set_all_segmentation_classes_checked(
@@ -93,14 +86,10 @@ class SegmentationController:
 
         classes_list = controller.segmentation.segmentation_classes_list
         check_state = Qt.Checked if checked else Qt.Unchecked
-        classes_list.blockSignals(True)
-        try:
-            for i in range(classes_list.count()):
-                item = classes_list.item(i)
-                if item is not None:
-                    item.setCheckState(check_state)
-        finally:
-            classes_list.blockSignals(False)
+        for i in range(classes_list.count()):
+            item = classes_list.item(i)
+            if item is not None:
+                item.setCheckState(check_state)
 
     @staticmethod
     def on_segmentation_select_all_classes_clicked(controller) -> None:
@@ -122,8 +111,7 @@ class SegmentationController:
         model_id = (
             controller.segmentation.segmentation_model_combo.currentData()
         )
-        if model_id is not None:
-            controller.set_active_segmentation_model(str(model_id))
+        controller.set_active_segmentation_model(str(model_id))
 
         us_layer = SegmentationController.resolve_us_layer(controller)
         if us_layer is None:
@@ -143,19 +131,14 @@ class SegmentationController:
             "Running segmentation…"
         )
 
-        try:
-            result = controller.get_segmenter().predict(us_2d)
-        except Exception as e:
-            controller.segmentation.segmentation_status_label.setText(
-                f"Segmentation failed: {e}"
-            )
-            return
+        result = controller.get_segmenter().predict(us_2d)
 
         selected_class_ids = controller.selected_segmentation_class_ids()
         if selected_class_ids:
             selected_ids = np.asarray(
                 sorted(selected_class_ids), dtype=np.int32
             )
+            # Keep only checked classes; everything else becomes background.
             keep_mask = np.isin(result.seg, selected_ids)
             seg_filtered = np.where(keep_mask, result.seg, 0).astype(
                 np.int32, copy=False
@@ -172,18 +155,12 @@ class SegmentationController:
             class_names[0] = "background"
 
         labels = ensure_segmentation_labels_layer(controller.viewer)
-        try:
-            set_segmentation_2d(
-                labels,
-                seg_filtered,
-                class_names=class_names,
-                reference_layer=us_layer,
-            )
-        except Exception as e:
-            controller.segmentation.segmentation_status_label.setText(
-                f"Failed to show labels: {e}"
-            )
-            return
+        set_segmentation_2d(
+            labels,
+            seg_filtered,
+            class_names=class_names,
+            reference_layer=us_layer,
+        )
 
         logger.info(
             "segmentation generated model=%s selected_classes=%s shape=%s",
