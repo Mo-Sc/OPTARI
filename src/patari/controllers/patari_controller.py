@@ -13,11 +13,6 @@ from qtpy.QtWidgets import QFileDialog
 from patari.config import (
     DEFAULT_PA_LAYER,
 )
-from patari.segmentation.segmenter import (
-    SegmentationModelConfig,
-    create_segmenter,
-    load_onnx_model_registry,
-)
 from patari.utils.misc import parse_float_input
 from patari.widgets.info_dock import InfoDock
 from patari.widgets.roi_dock import RoiDock
@@ -79,17 +74,7 @@ class PatariController:
         self.roi_intensity_max: float | None = None
         self.roi_intensity_mode: str | None = "clip"
 
-        # Segmentation keeps model registry + active model state in the root
-        # controller because widget setup and event handlers need shared access.
-        (
-            self._default_segmentation_model_id,
-            self._segmentation_model_registry,
-        ) = load_onnx_model_registry()
-        self._active_segmentation_model_id = (
-            self._default_segmentation_model_id
-        )
-        self._segmenter = None
-        self._segmenter_model_id: str | None = None
+        self.segmentation_ctrl = SegmentationController(self)
 
         # -- bottom elements --
         self.roi: RoiDock | None = None
@@ -355,78 +340,27 @@ class PatariController:
         self.update_live_table()
 
     # ---------------- segmentation ----------------
+    def on_segmentation_model_changed(self, event=None) -> None:
+        self.segmentation_ctrl.on_segmentation_model_changed()
+
+    def on_segmentation_select_all_classes_clicked(self, event=None) -> None:
+        self.segmentation_ctrl.on_segmentation_select_all_classes_clicked()
+
+    def on_segmentation_clear_classes_clicked(self, event=None) -> None:
+        self.segmentation_ctrl.on_segmentation_clear_classes_clicked()
+
+    def on_generate_roi_from_mask_clicked(self, event=None) -> None:
+        self.segmentation_ctrl.on_generate_roi_from_mask_clicked()
+
+    def on_generate_tissue_segmentation_clicked(self, event=None) -> None:
+        self.segmentation_ctrl.on_generate_tissue_segmentation_clicked()
+
     def segmentation_model_options(self) -> list[tuple[str, str]]:
-        """Return ``(model_id, display_name)`` pairs for the model combo."""
-        return [
-            (spec.model_id, spec.display_name)
-            for spec in self._segmentation_model_registry.values()
-        ]
+        return self.segmentation_ctrl.segmentation_model_options()
 
     @property
     def active_segmentation_model_id(self) -> str:
-        return self._active_segmentation_model_id
-
-    def set_active_segmentation_model(self, model_id: str) -> None:
-        if model_id not in self._segmentation_model_registry:
-            raise ValueError(f"Unknown segmentation model: {model_id}")
-        self._active_segmentation_model_id = model_id
-
-    def _active_segmentation_model_config(self) -> SegmentationModelConfig:
-        """Return config for the currently selected segmentation model."""
-        return self._segmentation_model_registry[
-            self._active_segmentation_model_id
-        ]
-
-    def active_segmentation_class_items(self) -> list[tuple[int, str]]:
-        """Return sorted ``(class_id, class_name)`` entries for the active model."""
-        return sorted(
-            (
-                int(class_id),
-                str(class_name),
-            )
-            for class_id, class_name in self._active_segmentation_model_config().class_names.items()
-        )
-
-    def selected_segmentation_class_ids(self) -> set[int]:
-        if self.segmentation is None:
-            return set()
-
-        class_ids: set[int] = set()
-        classes_list = self.segmentation.segmentation_classes_list
-        for i in range(classes_list.count()):
-            item = classes_list.item(i)
-            if item is None:
-                continue
-            if item.checkState() == Qt.Checked:
-                class_ids.add(int(item.data(Qt.UserRole)))
-        return class_ids
-
-    def get_segmenter(self):
-        """Lazily create/cache the segmenter for the active model selection."""
-        if (
-            self._segmenter is None
-            or self._segmenter_model_id != self._active_segmentation_model_id
-        ):
-            self._segmenter = create_segmenter(
-                self._active_segmentation_model_config()
-            )
-            self._segmenter_model_id = self._active_segmentation_model_id
-        return self._segmenter
-
-    def on_segmentation_model_changed(self, event=None) -> None:
-        SegmentationController.on_segmentation_model_changed(self)
-
-    def on_segmentation_select_all_classes_clicked(self, event=None) -> None:
-        SegmentationController.on_segmentation_select_all_classes_clicked(self)
-
-    def on_segmentation_clear_classes_clicked(self, event=None) -> None:
-        SegmentationController.on_segmentation_clear_classes_clicked(self)
-
-    def on_generate_roi_from_mask_clicked(self, event=None) -> None:
-        SegmentationController.on_generate_roi_from_mask_clicked(self)
-
-    def on_generate_tissue_segmentation_clicked(self) -> None:
-        SegmentationController.on_generate_tissue_segmentation_clicked(self)
+        return self.segmentation_ctrl.active_segmentation_model_id
 
     def on_selection_changed(self, event=None) -> None:
         self._resolve_active_layer()

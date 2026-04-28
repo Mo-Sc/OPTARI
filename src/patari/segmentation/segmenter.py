@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -23,16 +27,12 @@ class SegmentationResult:
 
 @dataclass(frozen=True)
 class SegmentationModelConfig:
-    """Segmentation model configuration loaded from a JSON registry."""
-
+    """Config for a single ONNX segmentation model."""
     model_id: str
-    display_name: str
-    class_names: dict[int, str]
     onnx_path: Path
-    input_name: str
-    output_name: str
     input_height: int
     input_width: int
+    class_names: dict[int, str]
 
 
 DEFAULT_MODELS_CONFIG = (
@@ -44,86 +44,110 @@ DEFAULT_MODELS_CONFIG = (
 
 def load_onnx_model_registry(
     config_path: Path | None = None,
-) -> tuple[str, dict[str, SegmentationModelConfig]]:
-    """Load ONNX model configs and return the default model id plus registry."""
-    path = (
-        Path(config_path) if config_path is not None else DEFAULT_MODELS_CONFIG
-    )
+) -> dict[str, SegmentationModelConfig]:
+    """Load model configs and return a mapping of model_id -> config."""
+    path = config_path if config_path is not None else DEFAULT_MODELS_CONFIG
     raw = json.loads(path.read_text(encoding="utf-8"))
     base_dir = path.parent
 
     models: dict[str, SegmentationModelConfig] = {}
     for item in raw["models"]:
-        class_names = {
-            int(class_id): str(name)
-            for class_id, name in item["class_names"].items()
-        }
-
+        model_id = str(item["id"])
         model_path = Path(item["onnx_path"])
         if not model_path.is_absolute():
             model_path = (base_dir / model_path).resolve()
 
-        config = SegmentationModelConfig(
-            model_id=str(item["id"]),
-            display_name=str(item["display_name"]),
-            class_names=class_names,
+        models[model_id] = SegmentationModelConfig(
+            model_id=model_id,
             onnx_path=model_path,
-            input_name=str(item["input_name"]),
-            output_name=str(item["output_name"]),
+            class_names={
+                int(k): str(v) for k, v in item["class_names"].items()
+            },
             input_height=int(item["input_height"]),
             input_width=int(item["input_width"]),
         )
-        models[config.model_id] = config
 
-    default_model_id = str(raw["default_model"])
-    if default_model_id not in models:
-        raise ValueError(
-            f"Unknown default model '{default_model_id}' in {path}"
-        )
-
-    return default_model_id, models
+    return models
 
 
-class OnnxSegmenter:
-    """Single-model segmenter.
+def dummy_mask(us_2d: np.ndarray, class_names: dict[int, str]) -> np.ndarray:
+    """Deterministic dummy mask generator for testing without an ONNX model."""
+    h, w = us_2d.shape
+    class_ids = sorted(class_names.keys())
+    seg = np.zeros((h, w), dtype=np.int32)
+    
+    if len(class_ids) == 1:
+        seg[:, :] = class_ids[0]
+    else:
+        edges = np.linspace(0, h, num=len(class_ids) + 1, dtype=int)
+        for i, class_id in enumerate(class_ids):
+            y0 = int(edges[i])
+            y1 = int(edges[i + 1])
+            if y1 > y0:
+                seg[y0:y1, :] = class_id
 
-    The real ONNX inference is temporarily replaced by a deterministic dummy
-    mask generator so the widget can be exercised without a trained model.
+        for i, class_id in enumerate(class_ids):
+            seg[min(i, h - 1), 0] = class_id
+            
+    return seg
+
+def create_segmenter(model_config: SegmentationModelConfig) -> Segmenter:
+    """Factory to create a Segmenter from a config."""
+    return Segmenter(model_config)
+
+class Segmenter:
+    """ONNX-based Segmenter wrapper.
+    
+    Currently returns dummy masks for testing layout. Uncomment ONNX code 
+    to enable proper inference.
     """
 
-    def __init__(self, model: SegmentationModelConfig) -> None:
-        self.model = model
-        self.class_names = dict(model.class_names)
+    def __init__(self, model_config: SegmentationModelConfig) -> None:
+        self.model_config = model_config
+        self.class_names = model_config.class_names
+        self.onnx_path = model_config.onnx_path
+        self.input_shape = (model_config.input_height, model_config.input_width)
+        
+        # import onnxruntime as ort
+        # if not self.onnx_path.exists():
+        #     logger.warning(f"ONNX model missing at {self.onnx_path}")
+        # else:
+        #     self.session = ort.InferenceSession(str(self.onnx_path), providers=["CPUExecutionProvider"])
+        #     self.input_name = self.session.get_inputs()[0].name
+        #     self.output_name = self.session.get_outputs()[0].name
+
+    def preprocess(self, us_2d: np.ndarray) -> tuple[np.ndarray, tuple[int, ...]]:
+        from scipy.ndimage import zoom
+        orig_shape = us_2d.shape
+        us_norm = us_2d.astype(np.float32)
+        v_min, v_max = us_norm.min(), us_norm.max()
+        if v_max > v_min:
+            us_norm = (us_norm - v_min) / (v_max - v_min)
+
+        target_h, target_w = self.input_shape
+        zoom_factors = (target_h / orig_shape[0], target_w / orig_shape[1])
+        us_resized = zoom(us_norm, zoom_factors, order=1)
+        
+        us_tensor = np.expand_dims(us_resized, axis=(0, 1))
+        return us_tensor, orig_shape
 
     def predict(self, us_2d: np.ndarray) -> SegmentationResult:
-        """Return a deterministic class-id map for one 2D US frame."""
-        us_2d = np.asarray(us_2d)
-        if us_2d.ndim != 2:
-            raise ValueError(f"Expected 2D US frame, got shape {us_2d.shape}")
-
-        h, w = us_2d.shape
-        if h <= 0 or w <= 0:
-            raise ValueError("Expected non-empty US frame")
-
-        class_ids = sorted(int(class_id) for class_id in self.class_names)
-        seg = np.zeros((h, w), dtype=np.int32)
-
-        if len(class_ids) == 1:
-            seg[:, :] = class_ids[0]
-        else:
-            edges = np.linspace(0, h, num=len(class_ids) + 1, dtype=int)
-            for i, class_id in enumerate(class_ids):
-                y0 = int(edges[i])
-                y1 = int(edges[i + 1])
-                if y1 > y0:
-                    seg[y0:y1, :] = class_id
-
-            for i, class_id in enumerate(class_ids):
-                seg[min(i, h - 1), 0] = class_id
-
+        """Run ONNX inference and return the upscaled segmentation map."""
+        
+        # --- DUMMY MASK IMPLEMENTATION ---
+        seg = dummy_mask(us_2d, self.class_names)
         return SegmentationResult(seg=seg, class_names=dict(self.class_names))
 
-
-def create_segmenter(model: SegmentationModelConfig) -> OnnxSegmenter:
-    """Create the currently configured ONNX segmenter wrapper."""
-    return OnnxSegmenter(model)
+        # --- REAL ONNX IMPLEMENTATION ---
+        # from scipy.ndimage import zoom
+        # tensor, orig_shape = self.preprocess(us_2d)
+        # outputs = self.session.run([self.output_name], {self.input_name: tensor})
+        # logits = outputs[0]
+        # pred_mask = np.argmax(logits, axis=1).squeeze(0)
+        # target_h, target_w = self.input_shape
+        # zoom_factors = (orig_shape[0] / target_h, orig_shape[1] / target_w)
+        # pred_mask_orig = zoom(pred_mask.astype(np.float32), zoom_factors, order=0)
+        # return SegmentationResult(
+        #     seg=pred_mask_orig.astype(np.int32), 
+        #     class_names=dict(self.class_names)
+        # )

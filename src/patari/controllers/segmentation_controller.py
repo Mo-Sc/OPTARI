@@ -7,6 +7,7 @@ from napari.layers import Image
 from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QListWidgetItem
 
+from patari.segmentation.segmenter import create_segmenter, load_onnx_model_registry, SegmentationModelConfig
 from patari.segmentation.napari import (
     ensure_segmentation_labels_layer,
     set_segmentation_2d,
@@ -20,11 +21,71 @@ class SegmentationController:
     """Segmentation-related UI actions and geometry helpers.
 
     This controller keeps segmentation event handlers and ROI-from-mask
-    geometry logic together, while shared app state remains on
-    ``PatariController``.
+    geometry logic together.
     """
 
-    @staticmethod
+    def __init__(self, parent_controller):
+        self.controller = parent_controller
+        self._segmentation_model_registry = load_onnx_model_registry()
+        self._active_segmentation_model_id = next(iter(self._segmentation_model_registry))
+        self._segmenter = None
+        self._segmenter_model_id = None
+
+    def segmentation_model_options(self) -> list[tuple[str, str]]:
+        """Return ``(model_id, display_name)`` pairs for the model combo."""
+        return [
+            (spec.model_id, spec.model_id)
+            for spec in self._segmentation_model_registry.values()
+        ]
+
+    @property
+    def active_segmentation_model_id(self) -> str:
+        return self._active_segmentation_model_id
+
+    def set_active_segmentation_model(self, model_id: str) -> None:
+        if model_id not in self._segmentation_model_registry:
+            raise ValueError(f"Unknown segmentation model: {model_id}")
+        self._active_segmentation_model_id = model_id
+
+    def _active_segmentation_model_config(self) -> SegmentationModelConfig:
+        """Return config for the currently selected segmentation model."""
+        return self._segmentation_model_registry[
+            self._active_segmentation_model_id
+        ]
+
+    def active_segmentation_class_items(self) -> list[tuple[int, str]]:
+        """Return sorted ``(class_id, class_name)`` entries for the active model."""
+        items = list(self._active_segmentation_model_config().class_names.items())
+        return sorted(
+            (int(class_id), str(class_name)) for class_id, class_name in items
+        )
+
+    def selected_segmentation_class_ids(self) -> set[int]:
+        if self.controller.segmentation is None:
+            return set()
+
+        class_ids: set[int] = set()
+        classes_list = self.controller.segmentation.segmentation_classes_list
+        for i in range(classes_list.count()):
+            item = classes_list.item(i)
+            if item is None:
+                continue
+            if item.checkState() == Qt.CheckState.Checked:
+                class_ids.add(int(item.data(Qt.ItemDataRole.UserRole)))
+        return class_ids
+
+    def get_segmenter(self):
+        """Lazily create/cache the segmenter for the active model selection."""
+        if (
+            self._segmenter is None
+            or self._segmenter_model_id != self._active_segmentation_model_id
+        ):
+            self._segmenter = create_segmenter(
+                self._active_segmentation_model_config()
+            )
+            self._segmenter_model_id = self._active_segmentation_model_id
+        return self._segmenter
+
     def _compute_roi_box_from_mask(
         class_mask: np.ndarray,
         *,
@@ -103,37 +164,35 @@ class SegmentationController:
 
         return None
 
-    @staticmethod
-    def on_segmentation_model_changed(controller) -> None:
-        if controller.segmentation is None:
+    def on_segmentation_model_changed(self) -> None:
+        if self.controller.segmentation is None:
             return
 
         model_id = (
-            controller.segmentation.segmentation_model_combo.currentData()
+            self.controller.segmentation.segmentation_model_combo.currentData()
         )
-        controller.set_active_segmentation_model(str(model_id))
-        SegmentationController.populate_segmentation_controls(controller)
-        controller.segmentation.segmentation_status_label.setText(
-            f"Model: {controller.segmentation.segmentation_model_combo.currentText()}"
+        self.set_active_segmentation_model(str(model_id))
+        self.populate_segmentation_controls()
+        self.controller.segmentation.segmentation_status_label.setText(
+            f"Model: {self.controller.segmentation.segmentation_model_combo.currentText()}"
         )
 
-    @staticmethod
-    def populate_segmentation_controls(controller) -> None:
-        if controller.segmentation is None:
+    def populate_segmentation_controls(self) -> None:
+        if self.controller.segmentation is None:
             return
 
-        classes_list = controller.segmentation.segmentation_classes_list
-        class_combo = controller.segmentation.roi_class_id_combo
+        classes_list = self.controller.segmentation.segmentation_classes_list
+        class_combo = self.controller.segmentation.roi_class_id_combo
         classes_list.clear()
         class_combo.clear()
         for (
             class_id,
             class_name,
-        ) in controller.active_segmentation_class_items():
+        ) in self.active_segmentation_class_items():
             item = QListWidgetItem(f"{class_id}: {class_name}")
-            item.setData(Qt.UserRole, int(class_id))
-            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-            item.setCheckState(Qt.Checked)
+            item.setData(Qt.ItemDataRole.UserRole, int(class_id))
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(Qt.CheckState.Checked)
             classes_list.addItem(item)
             class_combo.addItem(
                 f"{class_id}: {class_name}", userData=int(class_id)
@@ -145,59 +204,51 @@ class SegmentationController:
                     class_combo.setCurrentIndex(i)
                     break
 
-    @staticmethod
     def set_all_segmentation_classes_checked(
-        controller, checked: bool
+        self, checked: bool
     ) -> None:
-        if controller.segmentation is None:
+        if self.controller.segmentation is None:
             return
 
-        classes_list = controller.segmentation.segmentation_classes_list
-        check_state = Qt.Checked if checked else Qt.Unchecked
+        classes_list = self.controller.segmentation.segmentation_classes_list
+        check_state = Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked
         for i in range(classes_list.count()):
             item = classes_list.item(i)
             if item is not None:
                 item.setCheckState(check_state)
 
-    @staticmethod
-    def on_segmentation_select_all_classes_clicked(controller) -> None:
-        SegmentationController.set_all_segmentation_classes_checked(
-            controller, checked=True
-        )
+    def on_segmentation_select_all_classes_clicked(self) -> None:
+        self.set_all_segmentation_classes_checked(checked=True)
 
-    @staticmethod
-    def on_segmentation_clear_classes_clicked(controller) -> None:
-        SegmentationController.set_all_segmentation_classes_checked(
-            controller, checked=False
-        )
+    def on_segmentation_clear_classes_clicked(self) -> None:
+        self.set_all_segmentation_classes_checked(checked=False)
 
-    @staticmethod
-    def on_generate_roi_from_mask_clicked(controller) -> None:
+    def on_generate_roi_from_mask_clicked(self) -> None:
         """Generate one rectangular ROI from the selected segmentation class."""
-        if controller.segmentation is None:
+        if self.controller.segmentation is None:
             return
 
-        if "Segmentation" not in controller.viewer.layers:
-            controller.segmentation.segmentation_status_label.setText(
+        if "Segmentation" not in self.controller.viewer.layers:
+            self.controller.segmentation.segmentation_status_label.setText(
                 "No segmentation mask found"
             )
             return
 
-        seg_layer = controller.viewer.layers["Segmentation"]
+        seg_layer = self.controller.viewer.layers["Segmentation"]
         seg = np.asarray(seg_layer.data)
         class_names = dict(getattr(seg_layer, "metadata", {}) or {}).get(
             "class_names", {}
         )
-        class_id = controller.segmentation.roi_class_id_combo.currentData()
+        class_id = self.controller.segmentation.roi_class_id_combo.currentData()
         if class_id is None:
-            controller.segmentation.segmentation_status_label.setText(
+            self.controller.segmentation.segmentation_status_label.setText(
                 "Select a class id"
             )
             return
 
         class_mask = seg == int(class_id)
         if not np.any(class_mask):
-            controller.segmentation.segmentation_status_label.setText(
+            self.controller.segmentation.segmentation_status_label.setText(
                 "Selected class is not present in the mask"
             )
             return
@@ -210,9 +261,9 @@ class SegmentationController:
         ty = float(translate[-2])
         tx = float(translate[-1])
 
-        top_margin_text = controller.segmentation.roi_top_margin_edit.text()
-        width_text = controller.segmentation.roi_width_edit.text()
-        height_text = controller.segmentation.roi_height_edit.text()
+        top_margin_text = self.controller.segmentation.roi_top_margin_edit.text()
+        width_text = self.controller.segmentation.roi_width_edit.text()
+        height_text = self.controller.segmentation.roi_height_edit.text()
 
         top_margin_mm = (
             float(top_margin_text) if top_margin_text.strip() else None
@@ -221,7 +272,7 @@ class SegmentationController:
         height_mm = float(height_text) if height_text.strip() else None
 
         roi_box, error_text = (
-            SegmentationController._compute_roi_box_from_mask(
+            self._compute_roi_box_from_mask(
                 class_mask,
                 sx=sx,
                 sy=sy,
@@ -231,7 +282,7 @@ class SegmentationController:
             )
         )
         if roi_box is None:
-            controller.segmentation.segmentation_status_label.setText(
+            self.controller.segmentation.segmentation_status_label.setText(
                 str(error_text or "Failed to compute ROI")
             )
             return
@@ -249,21 +300,80 @@ class SegmentationController:
             dtype=float,
         )
 
-        controller.shapes_layer.add(verts, shape_type="polygon")
+        self.controller.shapes_layer.add(verts, shape_type="polygon")
         # from patari.controllers.roi_controller import RoiController
         # RoiController.set_last_roi_position(
-        #     controller,
+        #     self.controller,
         #     str(class_names.get(int(class_id), int(class_id))),
         # )
         # Colors and live table are refreshed by shapes_layer.data event.
-        controller.segmentation.segmentation_status_label.setText(
+        self.controller.segmentation.segmentation_status_label.setText(
             f"ROI generated from class {class_names.get(int(class_id), int(class_id))}"
         )
 
-    @staticmethod
-    def on_generate_tissue_segmentation_clicked(controller) -> None:
+    def on_generate_tissue_segmentation_clicked(self) -> None:
         """Run segmentation on the currently visible US slice and update labels."""
-        if controller.segmentation is None:
+        if self.controller.segmentation is None:
+            return
+
+        us_layer = self.resolve_us_layer(self.controller)
+        if us_layer is None:
+            self.controller.segmentation.segmentation_status_label.setText(
+                "No US layer found"
+            )
+            return
+
+        data_slice = self.us_slice_2d(self.controller, us_layer)
+        if data_slice is None:
+            self.controller.segmentation.segmentation_status_label.setText(
+                "Invalid US volume dimension"
+            )
+            return
+
+        selected_ids = self.selected_segmentation_class_ids()
+        if not selected_ids:
+            self.controller.segmentation.segmentation_status_label.setText(
+                "No classes selected"
+            )
+            return
+
+        try:
+            segmenter = self.get_segmenter()
+        except ValueError as err:
+            logger.exception("Failed to load Segmentation model")
+            self.controller.segmentation.segmentation_status_label.setText(
+                f"Error: {err}"
+            )
+            return
+
+        try:
+            self.controller.segmentation.segmentation_status_label.setText(
+                f"Generating mask with {self.active_segmentation_model_id}..."
+            )
+            self.controller.viewer.window.qt_viewer.setCursor(Qt.CursorShape.WaitCursor)
+            self.controller.viewer.window.qt_viewer.repaint()
+
+            mask = segmenter.predict(data_slice, selected_ids)
+
+            label_layer = ensure_segmentation_labels_layer(
+                self.controller.viewer,
+                target_mask_shape=data_slice.shape,
+                class_names=self._active_segmentation_model_config().class_names,
+            )
+            set_segmentation_2d(
+                self.controller, us_layer, label_layer, mask
+            )
+
+            self.controller.segmentation.segmentation_status_label.setText(
+                "Segmentation finished successfully"
+            )
+        except Exception as e:
+            logger.exception("Segmentation inference failed")
+            self.controller.segmentation.segmentation_status_label.setText(
+                f"Error updating segmentation mask: {e}"
+            )
+        finally:
+            self.controller.viewer.window.qt_viewer.unsetCursor()
             return
 
         model_id = (
