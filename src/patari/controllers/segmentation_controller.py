@@ -7,7 +7,11 @@ from napari.layers import Image
 from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QListWidgetItem
 
-from patari.segmentation.segmenter import create_segmenter, load_onnx_model_registry, SegmentationModelConfig
+from patari.segmentation.segmenter import (
+    create_segmenter,
+    load_onnx_model_registry,
+    SegmentationModelConfig,
+)
 from patari.segmentation.napari import (
     ensure_segmentation_labels_layer,
     set_segmentation_2d,
@@ -27,7 +31,9 @@ class SegmentationController:
     def __init__(self, parent_controller):
         self.controller = parent_controller
         self._segmentation_model_registry = load_onnx_model_registry()
-        self._active_segmentation_model_id = next(iter(self._segmentation_model_registry))
+        self._active_segmentation_model_id = next(
+            iter(self._segmentation_model_registry)
+        )
         self._segmenter = None
         self._segmenter_model_id = None
 
@@ -55,7 +61,9 @@ class SegmentationController:
 
     def active_segmentation_class_items(self) -> list[tuple[int, str]]:
         """Return sorted ``(class_id, class_name)`` entries for the active model."""
-        items = list(self._active_segmentation_model_config().class_names.items())
+        items = list(
+            self._active_segmentation_model_config().class_names.items()
+        )
         return sorted(
             (int(class_id), str(class_name)) for class_id, class_name in items
         )
@@ -204,14 +212,14 @@ class SegmentationController:
                     class_combo.setCurrentIndex(i)
                     break
 
-    def set_all_segmentation_classes_checked(
-        self, checked: bool
-    ) -> None:
+    def set_all_segmentation_classes_checked(self, checked: bool) -> None:
         if self.controller.segmentation is None:
             return
 
         classes_list = self.controller.segmentation.segmentation_classes_list
-        check_state = Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked
+        check_state = (
+            Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked
+        )
         for i in range(classes_list.count()):
             item = classes_list.item(i)
             if item is not None:
@@ -239,7 +247,9 @@ class SegmentationController:
         class_names = dict(getattr(seg_layer, "metadata", {}) or {}).get(
             "class_names", {}
         )
-        class_id = self.controller.segmentation.roi_class_id_combo.currentData()
+        class_id = (
+            self.controller.segmentation.roi_class_id_combo.currentData()
+        )
         if class_id is None:
             self.controller.segmentation.segmentation_status_label.setText(
                 "Select a class id"
@@ -261,7 +271,9 @@ class SegmentationController:
         ty = float(translate[-2])
         tx = float(translate[-1])
 
-        top_margin_text = self.controller.segmentation.roi_top_margin_edit.text()
+        top_margin_text = (
+            self.controller.segmentation.roi_top_margin_edit.text()
+        )
         width_text = self.controller.segmentation.roi_width_edit.text()
         height_text = self.controller.segmentation.roi_height_edit.text()
 
@@ -271,15 +283,13 @@ class SegmentationController:
         width_mm = float(width_text) if width_text.strip() else None
         height_mm = float(height_text) if height_text.strip() else None
 
-        roi_box, error_text = (
-            self._compute_roi_box_from_mask(
-                class_mask,
-                sx=sx,
-                sy=sy,
-                top_margin_mm=top_margin_mm,
-                width_mm=width_mm,
-                height_mm=height_mm,
-            )
+        roi_box, error_text = self._compute_roi_box_from_mask(
+            class_mask,
+            sx=sx,
+            sy=sy,
+            top_margin_mm=top_margin_mm,
+            width_mm=width_mm,
+            height_mm=height_mm,
         )
         if roi_box is None:
             self.controller.segmentation.segmentation_status_label.setText(
@@ -350,7 +360,9 @@ class SegmentationController:
             self.controller.segmentation.segmentation_status_label.setText(
                 f"Generating mask with {self.active_segmentation_model_id}..."
             )
-            self.controller.viewer.window.qt_viewer.setCursor(Qt.CursorShape.WaitCursor)
+            self.controller.viewer.window.qt_viewer.setCursor(
+                Qt.CursorShape.WaitCursor
+            )
             self.controller.viewer.window.qt_viewer.repaint()
 
             mask = segmenter.predict(data_slice, selected_ids)
@@ -360,9 +372,7 @@ class SegmentationController:
                 target_mask_shape=data_slice.shape,
                 class_names=self._active_segmentation_model_config().class_names,
             )
-            set_segmentation_2d(
-                self.controller, us_layer, label_layer, mask
-            )
+            set_segmentation_2d(self.controller, us_layer, label_layer, mask)
 
             self.controller.segmentation.segmentation_status_label.setText(
                 "Segmentation finished successfully"

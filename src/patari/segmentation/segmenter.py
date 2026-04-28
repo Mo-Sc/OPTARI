@@ -28,6 +28,7 @@ class SegmentationResult:
 @dataclass(frozen=True)
 class SegmentationModelConfig:
     """Config for a single ONNX segmentation model."""
+
     model_id: str
     onnx_path: Path
     input_height: int
@@ -75,7 +76,7 @@ def dummy_mask(us_2d: np.ndarray, class_names: dict[int, str]) -> np.ndarray:
     h, w = us_2d.shape
     class_ids = sorted(class_names.keys())
     seg = np.zeros((h, w), dtype=np.int32)
-    
+
     if len(class_ids) == 1:
         seg[:, :] = class_ids[0]
     else:
@@ -88,17 +89,19 @@ def dummy_mask(us_2d: np.ndarray, class_names: dict[int, str]) -> np.ndarray:
 
         for i, class_id in enumerate(class_ids):
             seg[min(i, h - 1), 0] = class_id
-            
+
     return seg
+
 
 def create_segmenter(model_config: SegmentationModelConfig) -> Segmenter:
     """Factory to create a Segmenter from a config."""
     return Segmenter(model_config)
 
+
 class Segmenter:
     """ONNX-based Segmenter wrapper.
-    
-    Currently returns dummy masks for testing layout. Uncomment ONNX code 
+
+    Currently returns dummy masks for testing layout. Uncomment ONNX code
     to enable proper inference.
     """
 
@@ -106,8 +109,11 @@ class Segmenter:
         self.model_config = model_config
         self.class_names = model_config.class_names
         self.onnx_path = model_config.onnx_path
-        self.input_shape = (model_config.input_height, model_config.input_width)
-        
+        self.input_shape = (
+            model_config.input_height,
+            model_config.input_width,
+        )
+
         # import onnxruntime as ort
         # if not self.onnx_path.exists():
         #     logger.warning(f"ONNX model missing at {self.onnx_path}")
@@ -116,8 +122,11 @@ class Segmenter:
         #     self.input_name = self.session.get_inputs()[0].name
         #     self.output_name = self.session.get_outputs()[0].name
 
-    def preprocess(self, us_2d: np.ndarray) -> tuple[np.ndarray, tuple[int, ...]]:
+    def preprocess(
+        self, us_2d: np.ndarray
+    ) -> tuple[np.ndarray, tuple[int, ...]]:
         from scipy.ndimage import zoom
+
         orig_shape = us_2d.shape
         us_norm = us_2d.astype(np.float32)
         v_min, v_max = us_norm.min(), us_norm.max()
@@ -127,13 +136,13 @@ class Segmenter:
         target_h, target_w = self.input_shape
         zoom_factors = (target_h / orig_shape[0], target_w / orig_shape[1])
         us_resized = zoom(us_norm, zoom_factors, order=1)
-        
+
         us_tensor = np.expand_dims(us_resized, axis=(0, 1))
         return us_tensor, orig_shape
 
     def predict(self, us_2d: np.ndarray) -> SegmentationResult:
         """Run ONNX inference and return the upscaled segmentation map."""
-        
+
         # --- DUMMY MASK IMPLEMENTATION ---
         seg = dummy_mask(us_2d, self.class_names)
         return SegmentationResult(seg=seg, class_names=dict(self.class_names))
@@ -148,6 +157,6 @@ class Segmenter:
         # zoom_factors = (orig_shape[0] / target_h, orig_shape[1] / target_w)
         # pred_mask_orig = zoom(pred_mask.astype(np.float32), zoom_factors, order=0)
         # return SegmentationResult(
-        #     seg=pred_mask_orig.astype(np.int32), 
+        #     seg=pred_mask_orig.astype(np.int32),
         #     class_names=dict(self.class_names)
         # )
