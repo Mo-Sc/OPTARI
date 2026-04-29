@@ -37,14 +37,10 @@ class SegmentationDock:
     segmentation_status_label: QLabel
 
 
-def create_segmentation_dock(
-    model_options: list[tuple[str, str]],
-    default_model_id: str,
-) -> SegmentationDock:
+def create_segmentation_dock() -> SegmentationDock:
     """Create the segmentation dock with model/class and ROI-from-mask controls.
 
-    ``model_options`` and ``default_model_id`` are injected at construction so
-    the model combo is ready before signal wiring.
+    Model combo is initially empty; populate via controller.initialize_ui().
     """
     widget = QWidget()
     shell_layout = QVBoxLayout(widget)
@@ -65,13 +61,6 @@ def create_segmentation_dock(
     seg_layout = QVBoxLayout(seg_box)
 
     segmentation_model_combo = QComboBox()
-    for model_id, display_name in model_options:
-        segmentation_model_combo.addItem(display_name, userData=model_id)
-
-    for i in range(segmentation_model_combo.count()):
-        if segmentation_model_combo.itemData(i) == default_model_id:
-            segmentation_model_combo.setCurrentIndex(i)
-            break
 
     segmentation_classes_list = QListWidget()
     segmentation_classes_list.setSelectionMode(QListWidget.NoSelection)

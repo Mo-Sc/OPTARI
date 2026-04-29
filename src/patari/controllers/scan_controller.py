@@ -7,6 +7,7 @@ import re
 import numpy as np
 import patato as pat
 from patato.io.ithera.read_ithera import iTheraMSOT
+from qtpy.QtWidgets import QFileDialog
 
 from patari.patato_bridge import (
     build_napari_layers,
@@ -15,100 +16,182 @@ from patari.patato_bridge import (
 )
 from patari.io.export_pipeline import export_scan_to_hdf5
 from patari.utils.misc import roi_color_for_index
+from patari.controllers.base import TaskControllerBase
 
 
 logger = logging.getLogger(__name__)
 
 
-class ScanController:
+class ScanController(TaskControllerBase):
     """Scan/session lifecycle and data-loading helpers for PATARI."""
 
-    @staticmethod
-    def wavelengths(controller) -> "list[int] | None":
+    def __init__(self, parent_controller):
+        super().__init__(parent_controller)
+
+    def bind_events(self) -> None:
+        """Connect scan browser signals."""
+        self.patari_controller.scan_browser.browse_button.clicked.connect(
+            self.on_browse_folder_clicked
+        )
+        self.patari_controller.scan_browser.scans_list.currentRowChanged.connect(
+            self.on_scan_selected
+        )
+        self.patari_controller.scan_browser.hdf5_button.clicked.connect(
+            self.on_hdf5_export_clicked
+        )
+
+    def unbind_events(self) -> None:
+        """Disconnect scan browser signals."""
+        try:
+            self.patari_controller.scan_browser.browse_button.clicked.disconnect(
+                self.on_browse_folder_clicked
+            )
+            self.patari_controller.scan_browser.scans_list.currentRowChanged.disconnect(
+                self.on_scan_selected
+            )
+            self.patari_controller.scan_browser.hdf5_button.clicked.disconnect(
+                self.on_hdf5_export_clicked
+            )
+        except Exception as e:
+            logger.exception("Error unbinding scan browser signals: %s", e)
+
+    def wavelengths(self) -> "list[int] | None":
         """Return scan wavelengths in nm, or ``None`` if unavailable."""
-        if controller.pa_data is None:
+        if self.patari_controller.pa_data is None:
             return None
         try:
-            return [int(w) for w in controller.pa_data.get_wavelengths()]
+            return [
+                int(w)
+                for w in self.patari_controller.pa_data.get_wavelengths()
+            ]
         except Exception:
             logger.exception("failed to read wavelengths from scan metadata")
             return None
 
-    @staticmethod
-    def timestamps(controller) -> "np.ndarray | None":
+    def timestamps(self) -> "np.ndarray | None":
         """Return scan timestamps array, or ``None`` if unavailable."""
-        if controller.pa_data is None:
+        if self.patari_controller.pa_data is None:
             return None
         try:
-            return np.array(controller.pa_data.get_timestamps())
+            return np.array(self.patari_controller.pa_data.get_timestamps())
         except Exception:
             logger.exception("failed to read timestamps from scan metadata")
             return None
 
-    @staticmethod
-    def close_current_scan(controller) -> None:
+    def close_current_scan(self) -> None:
         """Close the HDF5 handle for the current scan."""
-        if controller.pa_data is None:
+        if self.patari_controller.pa_data is None:
             return
         try:
-            controller.pa_data.close()
+            self.patari_controller.pa_data.close()
         except Exception:
             logger.debug("failed to close current scan handle", exc_info=True)
-        controller.pa_data = None
-        controller._patato_objects = {}
-        controller._derived_patato_objects = {}
+        self.patari_controller.pa_data = None
+        self.patari_controller._patato_objects = {}
+        self.patari_controller._derived_patato_objects = {}
 
-    @staticmethod
-    def reset_scan_state(controller) -> None:
+    def reset_scan_state(self) -> None:
         """Clear current scan state and remove all viewer layers."""
-        ScanController.close_current_scan(controller)
+        self.close_current_scan()
 
-        for layer in list(controller.viewer.layers):
-            controller.viewer.layers.remove(layer)
-        controller.active_layer = None
-        controller.shapes_layer = None
+        for layer in list(self.viewer.layers):
+            self.viewer.layers.remove(layer)
+        self.patari_controller.active_layer = None
+        self.patari_controller.shapes_layer = None
 
-    @staticmethod
-    def init_path(controller, path: Path) -> None:
+    def init_path(self, path: Path) -> None:
         if path.is_dir():
-            ScanController.set_scan_folder(controller, path)
+            self.set_scan_folder(path)
             return
 
         if path.is_file():
-            ScanController.load_scan(controller, path)
+            self.load_scan(path)
             return
 
         # Not a real path yet (e.g. in tests). Leave UI usable.
-        if controller.scan_browser is not None:
-            controller.scan_browser.set_folder(path)
+        if self.patari_controller.scan_browser is not None:
+            self.patari_controller.scan_browser.set_folder(path)
 
-    @staticmethod
-    def set_scan_folder(controller, folder: Path) -> None:
+    def on_browse_folder_clicked(self) -> None:
+        start_path = str(
+            self.patari_controller.path
+            if self.patari_controller.path.exists()
+            else Path.cwd()
+        )
+
+        dialog = QFileDialog(
+            None,
+            "Select folder or HDF5 scan",
+            start_path,
+        )
+        dialog.setFileMode(QFileDialog.AnyFile)
+        dialog.setNameFilters(
+            [
+                "HDF5 scans (*.hdf5 *.h5)",
+                "All files (*)",
+            ]
+        )
+
+        if not dialog.exec():
+            return
+
+        selected = dialog.selectedFiles()
+        if not selected:
+            return
+
+        target = Path(selected[0])
+        if target.is_dir():
+            self.set_scan_folder(target)
+            return
+
+        if target.is_file():
+            self.set_scan_folder(target.parent)
+            scan_paths = list(self.patari_controller._scans.keys())
+            try:
+                idx = scan_paths.index(target)
+                if self.patari_controller.scan_browser is not None:
+                    self.patari_controller.scan_browser.scans_list.setCurrentRow(
+                        idx
+                    )
+            except ValueError:
+                self.load_scan(target)
+
+    def on_scan_selected(self, row: int) -> None:
+        scan_paths = list(self.patari_controller._scans.keys())
+        if row < 0 or row >= len(scan_paths):
+            return
+        self.load_scan(scan_paths[row])
+
+    def set_scan_folder(self, folder: Path) -> None:
         folder = Path(folder)
-        controller.study_path = folder
+        self.patari_controller.study_path = folder
 
-        controller._scans = ScanController.discover_scans(folder)
+        self.patari_controller._scans = self.discover_scans(folder)
 
-        if controller.scan_browser is not None:
-            controller.scan_browser.set_folder(folder)
-            controller.scan_browser.set_scans(list(controller._scans.keys()))
+        if self.patari_controller.scan_browser is not None:
+            self.patari_controller.scan_browser.set_folder(folder)
+            self.patari_controller.scan_browser.set_scans(
+                list(self.patari_controller._scans.keys())
+            )
 
         # Auto-select first scan if available.
-        if controller._scans and controller.scan_browser is not None:
-            controller.scan_browser.scans_list.setCurrentRow(0)
+        if (
+            self.patari_controller._scans
+            and self.patari_controller.scan_browser is not None
+        ):
+            self.patari_controller.scan_browser.scans_list.setCurrentRow(0)
 
-    @staticmethod
-    def load_scan(controller, scan_path: Path) -> None:
+    def load_scan(self, scan_path: Path) -> None:
         scan_path = Path(scan_path)
-        controller.path = scan_path
-        ScanController.reset_scan_state(controller)
+        self.patari_controller.path = scan_path
+        self.reset_scan_state()
 
         if not scan_path.exists():
             logger.warning("scan not found: %s", scan_path)
-            controller.refresh_all()
+            self.patari_controller.refresh_all()
             return
 
-        scan_kind = controller._scans.get(
+        scan_kind = self.patari_controller._scans.get(
             scan_path,
             (
                 "hdf5"
@@ -119,22 +202,24 @@ class ScanController:
 
         try:
             if scan_kind == "hdf5":
-                controller.pa_data = pat.PAData.from_hdf5(
+                self.patari_controller.pa_data = pat.PAData.from_hdf5(
                     str(scan_path), mode="r"
                 )
             else:
-                controller.pa_data = pat.PAData(iTheraMSOT(str(scan_path)))
+                self.patari_controller.pa_data = pat.PAData(
+                    iTheraMSOT(str(scan_path))
+                )
         except Exception:
             logger.exception("failed to open scan '%s'", scan_path)
-            controller.refresh_all()
+            self.patari_controller.refresh_all()
             return
 
         try:
-            layers = ScanController.layers_from_pa_data(controller)
+            layers = self.layers_from_pa_data()
         except Exception:
             logger.exception("failed to load '%s'", scan_path)
-            ScanController.close_current_scan(controller)
-            controller.refresh_all()
+            self.close_current_scan()
+            self.patari_controller.refresh_all()
             return
 
         for data, kw, lt in layers:
@@ -142,15 +227,15 @@ class ScanController:
                 kw = dict(kw)
                 kw.setdefault("metadata", {})
                 kw["metadata"].setdefault("filepath", str(scan_path))
-                controller.viewer.add_image(data, **kw)
+                self.viewer.add_image(data, **kw)
             else:
                 kw = dict(kw)
                 kw.setdefault("metadata", {})
                 kw["metadata"].setdefault("filepath", str(scan_path))
-                controller.viewer.add_labels(data, **kw)
+                self.viewer.add_labels(data, **kw)
 
         # Create the ROIs layer after image layers so it stays on top.
-        controller.shapes_layer = controller.viewer.add_shapes(
+        self.patari_controller.shapes_layer = self.viewer.add_shapes(
             name="ROIs",
             edge_color=roi_color_for_index(0),
             face_color="transparent",
@@ -158,31 +243,27 @@ class ScanController:
             ndim=2,
             metadata={"type": "roi"},
         )
-        controller._connect_shapes_layer_events()
+        self.patari_controller._connect_shapes_layer_events()
 
         # After adding layers, pick a sensible default selected layer.
-        controller._select_default_pa_layer()
-        controller._resolve_active_layer()
+        self.patari_controller._select_default_pa_layer()
+        self.patari_controller._resolve_active_layer()
 
         # Initialize viewer position to middle frame/wav for each scan.
         try:
-            data = np.asarray(controller.active_layer.data)
+            data = np.asarray(self.patari_controller.active_layer.data)
             if data.ndim >= 2:
-                controller.viewer.dims.set_point(
-                    0, int((data.shape[0] - 1) // 2)
-                )
-                controller.viewer.dims.set_point(
-                    1, int((data.shape[1] - 1) // 2)
-                )
+                self.viewer.dims.set_point(0, int((data.shape[0] - 1) // 2))
+                self.viewer.dims.set_point(1, int((data.shape[1] - 1) // 2))
         except Exception:
             logger.exception("failed to set initial viewer position")
 
         # Populate ROIs after dims are initialized to avoid computing stats before the viewer is ready.
-        ScanController.init_shapes_from_scan(controller)
+        self.init_shapes_from_scan()
 
         # Fit view to the newly loaded data (prevents "zoomed out" state).
         try:
-            controller.viewer.reset_view()
+            self.viewer.reset_view()
         except Exception:
             logger.debug("failed to reset viewer view", exc_info=True)
 
@@ -220,66 +301,102 @@ class ScanController:
         entries.sort(key=lambda item: ScanController.scan_sort_key(item[0]))
         return {p: k for p, k in entries}
 
-    @staticmethod
-    def layers_from_pa_data(controller) -> list[tuple]:
+    def layers_from_pa_data(self) -> list[tuple]:
         """Build napari LayerData tuples from the open ``controller.pa_data`` handle."""
-        layers, controller._patato_objects = build_napari_layers(
-            controller.pa_data
+        layers, self.patari_controller._patato_objects = build_napari_layers(
+            self.patari_controller.pa_data
         )
         return layers
 
-    @staticmethod
-    def get_fov(controller) -> "tuple[float, float] | None":
+    def get_fov(self) -> "tuple[float, float] | None":
         """Return ``(fov_x_m, fov_y_m)`` from stored PATATO objects, or ``None``."""
-        return fov_from_objects(controller._patato_objects)
+        return fov_from_objects(self.patari_controller._patato_objects)
 
-    @staticmethod
-    def init_shapes_from_scan(controller) -> None:
+    def init_shapes_from_scan(self) -> None:
         """Clear the ROIs layer and populate it with any ROIs stored in the scan."""
-        if controller.shapes_layer is None:
+        if self.patari_controller.shapes_layer is None:
             return
 
         try:
             # Disconnect the data-change handler for the duration of the bulk
             # operation — otherwise it fires once per shape.add(), triggering
             # redundant compute_roi_stats calls and table refreshes.
-            controller.shapes_layer.events.data.disconnect(
-                controller._on_shapes_data_changed
+            self.patari_controller.shapes_layer.events.data.disconnect(
+                self.patari_controller._on_shapes_data_changed
             )
 
             shapes: list = []
-            controller.shapes_layer.data = []
+            self.patari_controller.shapes_layer.data = []
             fov = (
-                ScanController.get_fov(controller)
-                if controller.pa_data is not None
+                self.get_fov()
+                if self.patari_controller.pa_data is not None
                 else None
             )
             if fov is not None:
-                shapes = napari_shapes_from_scan_rois(controller.pa_data, *fov)
+                shapes = napari_shapes_from_scan_rois(
+                    self.patari_controller.pa_data, *fov
+                )
                 for verts, stype, _ in shapes:
-                    controller.shapes_layer.add(verts, shape_type=stype)
+                    self.patari_controller.shapes_layer.add(
+                        verts, shape_type=stype
+                    )
 
                 # add roi_position property to shapes layer
                 props = dict(
-                    getattr(controller.shapes_layer, "properties", {}) or {}
+                    getattr(
+                        self.patari_controller.shapes_layer, "properties", {}
+                    )
+                    or {}
                 )
                 props["roi_position"] = [pos for _, _, pos in shapes]
-                controller.shapes_layer.properties = props
+                self.patari_controller.shapes_layer.properties = props
 
                 if shapes:
                     logger.info("loaded %s ROI(s) from scan", len(shapes))
 
-            controller.shapes_layer.events.data.connect(
-                controller._on_shapes_data_changed
+            self.patari_controller.shapes_layer.events.data.connect(
+                self.patari_controller._on_shapes_data_changed
             )
 
         except Exception:
             logging.exception("failed to initialize ROIs from scan data")
             pass
         # Single refresh at the end regardless of success/failure.
-        controller._on_shapes_data_changed()
+        self.patari_controller._on_shapes_data_changed()
 
-    @staticmethod
-    def export_hdf5(controller, destination: Path) -> bool:
+    def export_hdf5(self, destination: Path) -> bool:
         """Export scan to HDF5 including PATARI ROIs and derived datasets."""
-        return export_scan_to_hdf5(controller, destination)
+        return export_scan_to_hdf5(self.patari_controller, destination)
+
+    def on_hdf5_export_clicked(self, event=None) -> None:
+        destination = self._choose_export_path()
+        if destination is None:
+            return
+        self.export_hdf5(destination)
+
+    def _choose_export_path(self) -> Path | None:
+        if self.patari_controller.pa_data is None:
+            logger.warning("no scan loaded")
+            return None
+
+        default_name = (
+            f"{Path(self.patari_controller.path).stem}.hdf5"
+            if getattr(self.patari_controller, "path", None)
+            else "export.hdf5"
+        )
+        filename, _ = QFileDialog.getSaveFileName(
+            None,
+            "Export scan as HDF5",
+            str(
+                (
+                    Path(self.patari_controller.path).parent
+                    if getattr(self.patari_controller, "path", None)
+                    else Path.cwd()
+                )
+                / default_name
+            ),
+            "HDF5 files (*.hdf5 *.h5)",
+        )
+        if not filename:
+            return None
+        return Path(filename)

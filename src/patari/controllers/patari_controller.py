@@ -7,8 +7,6 @@ import numpy as np
 import patato as pat
 from napari.layers import Image, Shapes
 from napari.viewer import Viewer
-from qtpy.QtCore import Qt
-from qtpy.QtWidgets import QFileDialog
 
 from patari.config import (
     DEFAULT_PA_LAYER,
@@ -74,7 +72,11 @@ class PatariController:
         self.roi_intensity_max: float | None = None
         self.roi_intensity_mode: str | None = "clip"
 
+        self.scan_ctrl = ScanController(self)
+        self.roi_ctrl = RoiController(self)
         self.segmentation_ctrl = SegmentationController(self)
+        self.analysis_ctrl = AnalysisController(self)
+        self.unmixing_ctrl = UnmixingController(self)
 
         # -- bottom elements --
         self.roi: RoiDock | None = None
@@ -90,7 +92,9 @@ class PatariController:
         self._ensure_docks()
         self._initialize_roi_library()
         self._connect_events()
-        UnmixingController.initialize_ui(self)
+        # some tasks require UI initialization based on the data (e.g. segmentation model list, unmixing reference spectra)
+        self.segmentation_ctrl.initialize_ui()
+        self.unmixing_ctrl.initialize_ui()
 
         # If a path is provided, populate scan browser / load scan.
         # Otherwise, the Scan Browser dock drives loading.
@@ -102,7 +106,7 @@ class PatariController:
 
         self.refresh_all()
 
-    # ---------------- setup ----------------
+    # ============ viewer setup ============
     def _setup_viewer(self) -> None:
         self.viewer.axes.visible = True
         self.viewer.axes.labels = True
@@ -131,17 +135,18 @@ class PatariController:
         except Exception:
             pass
 
+    # ============ ROI layer management ============
     def _apply_roi_colors(self) -> None:
-        RoiController.apply_roi_colors(self)
+        self.roi_ctrl.apply_roi_colors()
 
     def _apply_roi_labels(self) -> None:
-        RoiController.apply_roi_labels(self)
+        self.roi_ctrl.apply_roi_labels()
 
     def _initialize_roi_library(self) -> None:
-        RoiController.initialize_roi_library(self)
+        self.roi_ctrl.initialize_roi_library()
 
     def _on_shapes_data_changed(self, event=None) -> None:
-        RoiController.on_shapes_data_changed(self, event)
+        self.roi_ctrl.on_shapes_data_changed(event)
 
     def _ensure_shapes_layer_on_top(self) -> None:
         """
@@ -158,39 +163,19 @@ class PatariController:
             self.viewer.layers.move(current_index, top_index)
             logger.debug("moved ROI layer to top index %s", top_index)
 
-    # ---------------- scans / loading ----------------
+    # ============ scan loading ============
     def _close_current_scan(self) -> None:
-        ScanController.close_current_scan(self)
-
-    def _reset_scan_state(self) -> None:
-        ScanController.reset_scan_state(self)
+        self.scan_ctrl.close_current_scan()
 
     def _init_path(self, path: Path) -> None:
-        ScanController.init_path(self, path)
-
-    def set_scan_folder(self, folder: Path) -> None:
-        ScanController.set_scan_folder(self, folder)
-
-    def load_scan(self, scan_path: Path) -> None:
-        ScanController.load_scan(self, scan_path)
-
-    @staticmethod
-    def _scan_key(scan_path: Path) -> str:
-        return ScanController.scan_key(scan_path)
-
-    @staticmethod
-    def _scan_sort_key(scan_path: Path):
-        return ScanController.scan_sort_key(scan_path)
-
-    def _discover_scans(self, folder: Path) -> dict[Path, str]:
-        return ScanController.discover_scans(folder)
+        self.scan_ctrl.init_path(path)
 
     @property
     def wavelengths(self) -> "list[int] | None":
         """
         Wavelengths (nm) for the current scan
         """
-        return ScanController.wavelengths(self)
+        return self.scan_ctrl.wavelengths()
 
     @property
     def timestamps(self) -> "np.ndarray | None":
@@ -199,16 +184,10 @@ class PatariController:
         Returns a 2-D ``np.ndarray`` of shape ``(n_frames, n_wavelengths)`` in
         seconds
         """
-        return ScanController.timestamps(self)
-
-    def _layers_from_pa_data(self) -> list[tuple]:
-        return ScanController.layers_from_pa_data(self)
+        return self.scan_ctrl.timestamps()
 
     def _get_fov(self) -> "tuple[float, float] | None":
-        return ScanController.get_fov(self)
-
-    def _init_shapes_from_scan(self) -> None:
-        ScanController.init_shapes_from_scan(self)
+        return self.scan_ctrl.get_fov()
 
     def _select_default_pa_layer(self) -> None:
 
@@ -231,54 +210,7 @@ class PatariController:
             f"No PA image layer found (looking for '{DEFAULT_PA_LAYER}')"
         )
 
-    def on_browse_folder_clicked(self) -> None:
-        start_path = str(self.path if self.path.exists() else Path.cwd())
-
-        dialog = QFileDialog(
-            None,
-            "Select folder or HDF5 scan",
-            start_path,
-        )
-        # Allow selecting either a directory or a specific file.
-        # dialog.setOption(QFileDialog.DontUseNativeDialog, True)
-        dialog.setFileMode(QFileDialog.AnyFile)
-        dialog.setNameFilters(
-            [
-                "HDF5 scans (*.hdf5 *.h5)",
-                "All files (*)",
-            ]
-        )
-
-        if not dialog.exec():
-            return
-
-        selected = dialog.selectedFiles()
-        if not selected:
-            return
-
-        target = Path(selected[0])
-        if target.is_dir():
-            self.set_scan_folder(target)
-            return
-
-        if target.is_file():
-            # Keep browser list in sync when opening a single scan.
-            self.set_scan_folder(target.parent)
-            scan_paths = list(self._scans.keys())
-            try:
-                idx = scan_paths.index(target)
-                if self.scan_browser is not None:
-                    self.scan_browser.scans_list.setCurrentRow(idx)
-            except ValueError:
-                self.load_scan(target)
-
-    def on_scan_selected(self, row: int) -> None:
-        scan_paths = list(self._scans.keys())
-        if row < 0 or row >= len(scan_paths):
-            return
-        self.load_scan(scan_paths[row])
-
-    # ---------------- layer selection ----------------
+    # ============ layer selection ============
     def _resolve_active_layer(self) -> None:
         """Set `active_layer` to the selected PA image layer (if exactly one is selected)."""
 
@@ -313,6 +245,7 @@ class PatariController:
                     layer._keep_auto_contrast = True
                     layer.visible = layer is self.active_layer
 
+    # ============ ROI intensity settings ============
     def _on_roi_intensity_settings_changed(self) -> None:
         if self.annotation is None:
             return
@@ -337,34 +270,12 @@ class PatariController:
             self.roi_intensity_mode = None
             self.roi_intensity_min = None
             self.roi_intensity_max = None
-        self.update_live_table()
+        self.roi_ctrl.update_live_table()
 
-    # ---------------- segmentation ----------------
-    def on_segmentation_model_changed(self, event=None) -> None:
-        self.segmentation_ctrl.on_segmentation_model_changed()
-
-    def on_segmentation_select_all_classes_clicked(self, event=None) -> None:
-        self.segmentation_ctrl.on_segmentation_select_all_classes_clicked()
-
-    def on_segmentation_clear_classes_clicked(self, event=None) -> None:
-        self.segmentation_ctrl.on_segmentation_clear_classes_clicked()
-
-    def on_generate_roi_from_mask_clicked(self, event=None) -> None:
-        self.segmentation_ctrl.on_generate_roi_from_mask_clicked()
-
-    def on_generate_tissue_segmentation_clicked(self, event=None) -> None:
-        self.segmentation_ctrl.on_generate_tissue_segmentation_clicked()
-
-    def segmentation_model_options(self) -> list[tuple[str, str]]:
-        return self.segmentation_ctrl.segmentation_model_options()
-
-    @property
-    def active_segmentation_model_id(self) -> str:
-        return self.segmentation_ctrl.active_segmentation_model_id
-
+    # ============ viewer events ============
     def on_selection_changed(self, event=None) -> None:
         self._resolve_active_layer()
-        UnmixingController.refresh_ui(self)
+        self.unmixing_ctrl.refresh_ui()
         if self._snap_dims_to_active_layer():
             return
         self.refresh_all()
@@ -380,42 +291,15 @@ class PatariController:
         except Exception:
             logger.exception("on_dims_changed failed")
 
-    # ---------------- time analysis ----------------
-    def on_generate_time_analysis_clicked(self, event=None) -> None:
-        AnalysisController.on_generate_time_analysis_clicked(self, event)
-
-    # ---------------- histograms ----------------
-    def on_refresh_histograms_clicked(self, event=None) -> None:
-        AnalysisController.on_refresh_histograms_clicked(self, event)
-
-    # ---------------- spectrum ----------------
-    def on_refresh_spectrum_clicked(self, event=None) -> None:
-        AnalysisController.on_refresh_spectrum_clicked(self, event)
-
-    # ---------------- info/roi updates ----------------
+    # ============ update everything ============
     def refresh_all(self) -> None:
         """
         refresh all info that should be live updated
         """
         self.update_info_labels()
-        self.update_live_table()
+        self.roi_ctrl.update_live_table()
 
-    # ---------------- unmixing ----------------
-    def on_unmixing_preset_changed(self, event=None) -> None:
-        UnmixingController.on_preset_changed(self)
-
-    def on_unmixing_chromophores_changed(self, event=None) -> None:
-        UnmixingController.on_chromophores_changed(self)
-
-    def on_unmixing_select_all_wavelengths_clicked(self, event=None) -> None:
-        UnmixingController.on_select_all_wavelengths_clicked(self)
-
-    def on_unmixing_clear_wavelengths_clicked(self, event=None) -> None:
-        UnmixingController.on_clear_wavelengths_clicked(self)
-
-    def on_run_unmixing_clicked(self, event=None) -> None:
-        UnmixingController.on_run_unmixing_clicked(self)
-
+    # ============ layer snappin & constraints ============
     def snap_to_reconstructed_frame(self, frame_idx: int) -> int:
         """
         snap the given frame index to the closest available frame in the active layer's metadata
@@ -475,6 +359,7 @@ class PatariController:
 
         return changed
 
+    # ============ timestamps & display ============
     def timestamp_for_slice(self, frame_idx: int, channel_idx: int):
         if self.active_layer is None:
             return "N/A", 0.0
@@ -570,69 +455,3 @@ class PatariController:
             f"Frame: {frame_idx} | {axis1_name}: {axis1_value}\n"
             f"Timestamp: {ts} ({ts_delta:.2f} s)"
         )
-
-    def update_live_table(self, event=None) -> None:
-        RoiController.update_live_table(self, event)
-
-    # ---------------- table helpers ----------------
-    @staticmethod
-    def _table_value_to_df(table: object):
-        return RoiController.table_value_to_df(table)
-
-    # ---------------- button callbacks ----------------
-    def on_save_clicked(self, event=None) -> None:
-        RoiController.on_save_clicked(self, event)
-
-    def on_delete_saved_clicked(self, event=None) -> None:
-        RoiController.on_delete_saved_clicked(self, event)
-
-    def on_xlsx_export_clicked(self, event=None) -> None:
-        RoiController.on_xlsx_export_clicked(self, event)
-
-    def on_save_roi_library_clicked(self, event=None) -> None:
-        RoiController.on_save_roi_library_clicked(self, event)
-
-    def on_remove_roi_library_clicked(self, event=None) -> None:
-        RoiController.on_remove_roi_library_clicked(self, event)
-
-    def on_save_roi_library_file_clicked(self, event=None) -> None:
-        RoiController.on_save_roi_library_file_clicked(self, event)
-
-    def on_roi_library_item_clicked(self, roi_id: str) -> None:
-        RoiController.on_roi_library_item_clicked(self, roi_id)
-
-    def on_roi_library_item_selected(self, roi_id: str) -> None:
-        RoiController.on_roi_library_item_selected(self, roi_id)
-
-    def on_hdf5_export_clicked(self, event=None) -> None:
-        destination = self._choose_export_path()
-        if destination is None:
-            return
-        ScanController.export_hdf5(self, destination)
-
-    def _choose_export_path(self) -> Path | None:
-        if self.pa_data is None:
-            logger.warning("no scan loaded")
-            return None
-
-        default_name = (
-            f"{Path(self.path).stem}.hdf5"
-            if getattr(self, "path", None)
-            else "export.hdf5"
-        )
-        filename, _ = QFileDialog.getSaveFileName(
-            None,
-            "Export scan as HDF5",
-            str(
-                (
-                    Path(self.path).parent
-                    if getattr(self, "path", None)
-                    else Path.cwd()
-                )
-                / default_name
-            ),
-            "HDF5 files (*.hdf5 *.h5)",
-        )
-        if not filename:
-            return None
-        return Path(filename)

@@ -96,24 +96,35 @@ This opens napari and directly adds the PATARI dock widget. To quickly create a 
     - Contains some minor adjustments and bug fixes. In the future, these will either be moved to PATARI or included in the public PATATO
     - Also ensures compatibility with some of my legacy hdf5 files
 - Thoughts, bugs, and feature ideas are tracked in Issues.
-- High-level architecture: PATARI follows a controller + dock-factory split; `PatariController` is the central state holder and delegates most things to domain controllers (`ScanController`, `RoiController`, `AnalysisController`, `UnmixingController`, `SegmentationController`).
-- Plugin startup path: `_widget.py` initializes logging, resolves the active napari viewer, creates `PatariController`, and returns the Info dock widget.
-- UI construction path: `UiManager.setup_docks` creates dock widgets once and `UiManager.connect_events` connects all signals.
-- Rendering/data IO: `patato_bridge.py` handles PATATO <-> napari transformations, coordinate conversion, scale/FOV, and layer data construction.
-- Layer metadata: PA layers rely on metadata keys such as `type`, `pa_kind`, `frames`, `timestamps`, `axis1_name`, `axis1_labels`, and `source_layer`. Many downstream features (info labels, analysis, export/reload symmetry) depend on these.
-- ROI model: ROI stats are recomputed from `shapes_layer.events.data`. Initial ROI loading temporarily disconnects this handler to avoid repeated per-shape computation during initialization.
-- Coordinate conventions: ROIs are represented in napari as `(y_mm, x_mm)` and converted to PATATO `(x_m, y_m)` at export/import. Conversion logic is in `patato_bridge.py`.
-- Data loading: PATARI loads either iThera scan folders or HDF5 scans via PATATO readers and supports loading both individual scans and study folders.
-- Scan preference rule: if both iThera and HDF5 exist for the same scan key, scan discovery prefers HDF5 (treated as previously converted version).
-- Export model: HDF5 export is write-to-new-file only (no overwrite/append), cannot export back to iThera, and currently fails if target file already exists.
-- Export implementation: export is a two-pass workflow (save base scan first, reopen, then write live ROIs and derived images). This is a workaround for PATATO reader/writer ownership where loaded data stays tied to its source file.
-- Derived layers: unmixing outputs (unmixed, THb, sO2) are stored in `_derived_patato_objects` and exported with synchronized attributes so they can be reloaded as normal PA layers.
-- Sparse layers: data data that only contain selected frames are expanded to acquisition-frame indexing for viewer consistency; Frame id is carried in metadata and used on reload.
-- Current ROI position state: `roi_position` metadata for manual ROIs is not fully synchronized yet. Future work includes fully synchronized shape specific metadata dict
-- Segmentation models are configured in `src/patari/data/segmentation_models.json` (ONNX path + model IO metadata).
-- Hidden features: Reconstruction dock is currently disabled.
-- Logging behavior: `PATARI_LOG_LEVEL` controls terminal log. `PATARI_GUI_LOG_LEVEL` controls napari GUI notification.
-- Compatibility note: custom PATATO fork and import/export workarounds are currently required for some personal legacy datasets.
+
+### Architecture
+
+- **High-level design**: PATARI follows a controller + dock split with a task-controller pattern (see [architecture diagram](architecture.md))
+  - `PatariController`: central session/app controller holding viewer state, scan data, and ROI geometry. Instantiates and coordinates feature controllers.
+  - **Task Controllers** (all inherit from `TaskControllerBase`): domain-specific controllers that own their UI state, behavior, and signal lifecycle:
+    - `ScanController`: scan lifecycle, loading, discovery, export, scan browser signals
+    - `RoiController`: ROI table, shapes layer, labeling, colors, library management signals
+    - `SegmentationController`: tissue segmentation, model selection, ROI-from-mask signals (+ model cleanup via `teardown()`)
+    - `AnalysisController`: time analysis, histograms, spectra signals
+    - `UnmixingController`: spectral unmixing, chromophore derived layers signals
+  - `UIManager`: factory for dock creation and delegation to task controller signal wiring
+- **Plugin startup path**: `_widget.py` initializes logging, resolves the active napari viewer, creates `PatariController`, and returns the Info dock widget.
+- **UI construction path**: `UiManager.setup_docks()` creates dock widgets; `UiManager.connect_events()` delegates signal wiring to each controller's `bind_events()`.
+- **Rendering/data IO**: `patato_bridge.py` handles PATATO <-> napari transformations, coordinate conversion, scale/FOV, and layer data construction.
+- **Layer metadata**: PA layers rely on metadata keys such as `type`, `pa_kind`, `frames`, `timestamps`, `axis1_name`, `axis1_labels`, and `source_layer`. Many downstream features (info labels, analysis, export/reload symmetry) depend on these.
+- **ROI model**: ROI stats are recomputed from `shapes_layer.events.data`. Initial ROI loading temporarily disconnects this handler to avoid repeated per-shape computation during initialization.
+- **Coordinate conventions**: ROIs are represented in napari as `(y_mm, x_mm)` and converted to PATATO `(x_m, y_m)` at export/import. Conversion logic is in `patato_bridge.py`.
+- **Data loading**: PATARI loads either iThera scan folders or HDF5 scans via PATATO readers and supports loading both individual scans and study folders.
+- **Scan preference rule**: if both iThera and HDF5 exist for the same scan key, scan discovery prefers HDF5 (treated as previously converted version).
+- **Export model**: HDF5 export is write-to-new-file only (no overwrite/append), cannot export back to iThera, and currently fails if target file already exists.
+- **Export implementation**: export is a two-pass workflow (save base scan first, reopen, then write live ROIs and derived images). This is a workaround for PATATO reader/writer ownership where loaded data stays tied to its source file.
+- **Derived layers**: unmixing outputs (unmixed, THb, sO2) are stored in `_derived_patato_objects` and exported with synchronized attributes so they can be reloaded as normal PA layers.
+- **Sparse layers**: data that only contain selected frames are expanded to acquisition-frame indexing for viewer consistency; Frame id is carried in metadata and used on reload.
+- **Current ROI position state**: `roi_position` metadata for manual ROIs is not fully synchronized yet. Future work includes fully synchronized shape specific metadata dict.
+- **Segmentation models**: configured in `src/patari/data/segmentation_models.json` (ONNX path + model IO metadata).
+- **Hidden features**: Reconstruction dock is currently disabled.
+- **Logging behavior**: `PATARI_LOG_LEVEL` controls terminal log. `PATARI_GUI_LOG_LEVEL` controls napari GUI notification.
+- **Compatibility note**: custom PATATO fork and import/export workarounds are currently required for some personal legacy datasets.
 
 
 ## License
