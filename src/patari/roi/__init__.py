@@ -1,8 +1,13 @@
 """ROI utilities and shape placement."""
 
-from patari.roi.roi_shapes import EllipseConfig, ShapeFactory
+from patari.roi.roi_shapes import (
+    Ellipse,
+    Rectangle,
+    ROIPlacementConfig,
+)
 
 __all__ = [
-    "EllipseConfig",
-    "ShapeFactory",
+    "Ellipse",
+    "Rectangle",
+    "ROIPlacementConfig",
 ]

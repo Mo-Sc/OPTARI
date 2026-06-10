@@ -122,6 +122,7 @@ This opens napari and directly adds the PATARI dock widget. To quickly create a 
 - **Sparse layers**: data that only contain selected frames are expanded to acquisition-frame indexing for viewer consistency; Frame id is carried in metadata and used on reload.
 - **Current ROI position state**: `roi_position` metadata for manual ROIs is not fully synchronized yet. Future work includes fully synchronized shape specific metadata dict.
 - **Segmentation models**: configured in `src/patari/data/segmentation_models.json` (ONNX path + model IO metadata).
+- **Segmentation model training**: Code for training and evaluating different segmentation models can be found in [this repo](https://github.com/Mo-Sc/OA-US-Segmentation-Public/tree/us_segmentation_algos) (private, access after request).
 - **Hidden features**: Reconstruction dock is currently disabled.
 - **Logging behavior**: `PATARI_LOG_LEVEL` controls terminal log. `PATARI_GUI_LOG_LEVEL` controls napari GUI notification.
 - **Compatibility note**: custom PATATO fork and import/export workarounds are currently required for some personal legacy datasets.

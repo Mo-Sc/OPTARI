@@ -9,14 +9,12 @@ from qtpy.QtWidgets import QListWidgetItem
 
 from patari.segmentation.segmenter import (
     create_segmenter,
-    load_onnx_model_registry,
+    load_model_registry,
     SegmentationModelConfig,
 )
-from patari.segmentation.napari import (
-    ensure_segmentation_labels_layer,
-    set_segmentation_2d,
-)
+from napari.layers import Labels
 from patari.controllers.base import TaskControllerBase
+from patari.roi import Ellipse, Rectangle, ROIPlacementConfig
 
 
 logger = logging.getLogger(__name__)
@@ -27,7 +25,7 @@ class SegmentationController(TaskControllerBase):
 
     def __init__(self, parent_controller):
         super().__init__(parent_controller)
-        self._segmentation_model_registry = load_onnx_model_registry()
+        self._segmentation_model_registry = load_model_registry()
         self._active_segmentation_model_id = next(
             iter(self._segmentation_model_registry)
         )
@@ -54,26 +52,21 @@ class SegmentationController(TaskControllerBase):
 
     def unbind_events(self) -> None:
         """Disconnect segmentation dock signals."""
-        try:
-            self.patari_controller.segmentation.segmentation_model_combo.currentIndexChanged.disconnect(
-                self.on_segmentation_model_changed
-            )
-            self.patari_controller.segmentation.select_all_classes_button.clicked.disconnect(
-                self.on_segmentation_select_all_classes_clicked
-            )
-            self.patari_controller.segmentation.clear_classes_button.clicked.disconnect(
-                self.on_segmentation_clear_classes_clicked
-            )
-            self.patari_controller.segmentation.generate_roi_button.clicked.disconnect(
-                self.on_generate_roi_from_mask_clicked
-            )
-            self.patari_controller.segmentation.generate_tissue_segmentation_button.clicked.disconnect(
-                self.on_generate_tissue_segmentation_clicked
-            )
-        except Exception as e:
-            logger.exception(
-                "Error unbinding segmentation dock signals: %s", e
-            )
+        self.patari_controller.segmentation.segmentation_model_combo.currentIndexChanged.disconnect(
+            self.on_segmentation_model_changed
+        )
+        self.patari_controller.segmentation.select_all_classes_button.clicked.disconnect(
+            self.on_segmentation_select_all_classes_clicked
+        )
+        self.patari_controller.segmentation.clear_classes_button.clicked.disconnect(
+            self.on_segmentation_clear_classes_clicked
+        )
+        self.patari_controller.segmentation.generate_roi_button.clicked.disconnect(
+            self.on_generate_roi_from_mask_clicked
+        )
+        self.patari_controller.segmentation.generate_tissue_segmentation_button.clicked.disconnect(
+            self.on_generate_tissue_segmentation_clicked
+        )
 
     def initialize_ui(self) -> None:
         """Initialize model combo and populate default classes once."""
@@ -146,7 +139,7 @@ class SegmentationController(TaskControllerBase):
         return class_ids
 
     def get_segmenter(self):
-        """Lazily create/cache the segmenter for the active model selection."""
+        """get the segmenter for the active model selection."""
         if (
             self._segmenter is None
             or self._segmenter_model_id != self._active_segmentation_model_id
@@ -157,57 +150,6 @@ class SegmentationController(TaskControllerBase):
             self._segmenter_model_id = self._active_segmentation_model_id
         return self._segmenter
 
-    @staticmethod
-    def _compute_roi_box_from_mask(
-        class_mask: np.ndarray,
-        *,
-        sx: float,
-        sy: float,
-        top_margin_mm: float | None,
-        width_mm: float | None,
-        height_mm: float | None,
-    ) -> tuple[tuple[int, int, int, int] | None, str | None]:
-        """Return a cropped ROI box ``(top, bottom, left, right)`` in px.
-
-        ROI placement semantics:
-        - anchor the top edge to the selected class at image center,
-        - apply top margin in mm (downwards),
-        - crop width symmetrically to final width in mm,
-        - crop height from the bottom only to final height in mm.
-        """
-        ys, xs = np.where(class_mask)
-        bottom = int(ys.max())
-        left = int(xs.min())
-        right = int(xs.max())
-
-        center_col = int(class_mask.shape[1] // 2)
-        center_rows = np.where(class_mask[:, center_col])[0]
-        if center_rows.size == 0:
-            return None, "Selected class is not present at image center"
-        top = int(center_rows[0])
-
-        if top_margin_mm is not None:
-            top += int(round(top_margin_mm / sy))
-
-        if width_mm is not None:
-            current_width_mm = float(right - left) * sx
-            trim_x = int(
-                round(max(0.0, current_width_mm - width_mm) / (2.0 * sx))
-            )
-            left += trim_x
-            right -= trim_x
-
-        if height_mm is not None:
-            current_height_mm = float(bottom - top) * sy
-            trim_bottom = int(
-                round(max(0.0, current_height_mm - height_mm) / sy)
-            )
-            bottom -= trim_bottom
-
-        if right <= left or bottom <= top:
-            return None, "ROI settings collapse the class region"
-
-        return (top, bottom, left, right), None
 
     @staticmethod
     def resolve_us_layer(controller) -> Image | None:
@@ -251,30 +193,22 @@ class SegmentationController(TaskControllerBase):
 
     def populate_segmentation_controls(self) -> None:
         seg_dock = self.patari_controller.segmentation
-        if seg_dock is None:
-            return
-
+        default_class = self._active_segmentation_model_config().default_class
         seg_dock.segmentation_classes_list.clear()
-        seg_dock.roi_class_id_combo.clear()
 
         for class_id, class_name in self.active_segmentation_class_items():
             # Add to classes list
             item = QListWidgetItem(f"{class_id}: {class_name}")
             item.setData(Qt.ItemDataRole.UserRole, class_id)
             item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
-            item.setCheckState(Qt.CheckState.Checked)
-            seg_dock.segmentation_classes_list.addItem(item)
-
-            # Add to class combo
-            seg_dock.roi_class_id_combo.addItem(
-                f"{class_id}: {class_name}", userData=class_id
+            item.setCheckState(
+                Qt.CheckState.Checked
+                if default_class == class_name
+                else Qt.CheckState.Unchecked
             )
 
-        # Set default to first non-background class (skip class 0)
-        for i in range(seg_dock.roi_class_id_combo.count()):
-            if seg_dock.roi_class_id_combo.itemData(i) != 0:
-                seg_dock.roi_class_id_combo.setCurrentIndex(i)
-                break
+            seg_dock.segmentation_classes_list.addItem(item)
+
 
     def set_all_segmentation_classes_checked(self, checked: bool) -> None:
         seg_dock = self.patari_controller.segmentation
@@ -296,7 +230,7 @@ class SegmentationController(TaskControllerBase):
         self.set_all_segmentation_classes_checked(checked=False)
 
     def on_generate_roi_from_mask_clicked(self) -> None:
-        """Generate one rectangular ROI from the selected segmentation class."""
+        """Generate one ROI from the selected segmentation class."""
         seg_dock = self.patari_controller.segmentation
         if seg_dock is None:
             return
@@ -322,47 +256,53 @@ class SegmentationController(TaskControllerBase):
             return
 
         # Extract scale and translate directly as floats from layer attributes
-        scale = getattr(seg_layer, "scale", (1.0, 1.0))
-        translate = getattr(seg_layer, "translate", (0.0, 0.0))
-        sy, sx = float(scale[-2]), float(scale[-1])
-        ty, tx = float(translate[-2]), float(translate[-1])
+        sy, sx = float(seg_layer.scale[-2]), float(seg_layer.scale[-1])
+        ty, tx = float(seg_layer.translate[-2]), float(seg_layer.translate[-1])
 
         # Parse ROI parameters from UI, allowing empty fields
         def parse_roi_param(text: str) -> float | None:
             return float(text) if text.strip() else None
 
+        shape_type = str(
+            seg_dock.roi_shape_combo.currentData() or "rectangle"
+        )
         top_margin_mm = parse_roi_param(seg_dock.roi_top_margin_edit.text())
         width_mm = parse_roi_param(seg_dock.roi_width_edit.text())
         height_mm = parse_roi_param(seg_dock.roi_height_edit.text())
 
-        roi_box, error_text = self._compute_roi_box_from_mask(
-            class_mask,
-            sx=sx,
-            sy=sy,
-            top_margin_mm=top_margin_mm,
-            width_mm=width_mm,
-            height_mm=height_mm,
-        )
-        if roi_box is None:
+        if width_mm is None or height_mm is None:
             seg_dock.segmentation_status_label.setText(
-                str(error_text or "Failed to compute ROI")
+                "Width and height are required"
             )
             return
 
-        top, bottom, left, right = roi_box
-
-        # Convert the cropped class box into world coordinates and add it as a polygon.
-        verts = np.asarray(
-            [
-                [ty + top * sy, tx + left * sx],
-                [ty + top * sy, tx + right * sx],
-                [ty + bottom * sy, tx + right * sx],
-                [ty + bottom * sy, tx + left * sx],
-            ],
-            dtype=float,
+        config = ROIPlacementConfig(
+            width_mm=width_mm,
+            height_mm=height_mm,
+            depth_mm=top_margin_mm or 0.0,
         )
+        if shape_type == "ellipse":
+            shape = Ellipse(config)
+        elif shape_type == "rectangle":
+            shape = Rectangle(config)
+        else:
+            logger.exception("Unknown ROI shape type: %s", shape_type)
+            raise ValueError(f"Unknown ROI shape type: {shape_type}")
+        try:
+            verts = shape.to_napari_verts_world(
+                class_mask=class_mask,
+                sy=sy,
+                sx=sx,
+                ty=ty,
+                tx=tx,
+            )
+        except Exception as exc:
+            seg_dock.segmentation_status_label.setText(str(exc))
+            return
 
-        self.patari_controller.shapes_layer.add(verts, shape_type="polygon")
+        self.patari_controller.shapes_layer.add(
+            verts, shape_type=shape.shape_type
+        )
         # Colors and live table are refreshed by shapes_layer.data event.
         seg_dock.segmentation_status_label.setText(
             f"ROI generated from class {class_id}"
@@ -391,42 +331,53 @@ class SegmentationController(TaskControllerBase):
             seg_dock.segmentation_status_label.setText("No classes selected")
             return
 
-        try:
-            segmenter = self.get_segmenter()
-        except ValueError as err:
-            logger.exception("Failed to load Segmentation model")
-            seg_dock.segmentation_status_label.setText(f"Error: {err}")
-            return
+        segmenter = self.get_segmenter()
+        seg_dock.segmentation_status_label.setText(
+            f"Generating mask with {self.active_segmentation_model_id}..."
+        )
 
         try:
-            seg_dock.segmentation_status_label.setText(
-                f"Generating mask with {self.active_segmentation_model_id}..."
-            )
-            self.viewer.window.qt_viewer.setCursor(Qt.CursorShape.WaitCursor)
-            self.viewer.window.qt_viewer.repaint()
-
             seg_result = segmenter.predict(data_slice)
             mask = np.asarray(seg_result.seg)
             mask = np.where(np.isin(mask, list(selected_ids)), mask, 0)
 
-            label_layer = ensure_segmentation_labels_layer(
-                self.viewer,
-                name="Segmentation",
-            )
-            set_segmentation_2d(
-                label_layer,
-                mask,
-                class_names=seg_result.class_names,
-                reference_layer=us_layer,
-            )
+            if "Segmentation" in self.viewer.layers and isinstance(
+                self.viewer.layers["Segmentation"], Labels
+            ):
+                label_layer = self.viewer.layers["Segmentation"]
+            else:
+                label_layer = self.viewer.add_labels(
+                    np.zeros((1, 1), dtype=np.int32),
+                    name="Segmentation",
+                    opacity=0.5,
+                    metadata={"type": "segmentation"},
+                )
+
+            label_layer.data = mask.astype(np.int32, copy=False)
+            label_layer.scale = tuple(us_layer.scale[-2:])
+            label_layer.translate = tuple(us_layer.translate[-2:])
+            label_layer.metadata = {
+                **label_layer.metadata,
+                "class_names": dict(seg_result.class_names),
+            }
+
+
+            # populate class ID combo for ROI generation with classes present in the predicted mask
+            seg_dock.roi_class_id_combo.clear()
+            class_ids = sorted(int(class_id) for class_id in np.unique(label_layer.data))
+            for class_id in class_ids:
+                class_name = seg_result.class_names.get(class_id, str(class_id))
+                seg_dock.roi_class_id_combo.addItem(
+                    f"{class_id}: {class_name}", userData=class_id
+                )
+            # default to first non-background class
+            seg_dock.roi_class_id_combo.setCurrentIndex(1)
 
             seg_dock.segmentation_status_label.setText(
                 "Segmentation finished successfully"
             )
+
         except Exception as e:
-            logger.exception("Segmentation inference failed")
-            seg_dock.segmentation_status_label.setText(
-                f"Error updating segmentation mask: {e}"
-            )
-        finally:
-            self.viewer.window.qt_viewer.unsetCursor()
+            logger.exception("Segmentation failed with error: %s", e)
+            seg_dock.segmentation_status_label.setText("Segmentation failed")
+            return

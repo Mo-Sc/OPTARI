@@ -1,18 +1,14 @@
 """Segmentation utilities and model wrappers."""
 
 from patari.segmentation.segmenter import (
-    Segmenter,
+    ModelAdapterBase,
+    OnnxSegmentationAdapter,
     SegmentationResult,
     SegmentationModelConfig,
-    load_onnx_model_registry,
+    load_model_registry,
     create_segmenter,
-    dummy_mask,
+    # dummy_mask,
 )
-from patari.segmentation.napari import (
-    ensure_segmentation_labels_layer,
-    set_segmentation_2d,
-)
-
 # TODO: check what postprocessing functions are still needed
 # Should be same as in pipeline
 # from patari.segmentation.postprocessing import (
@@ -23,11 +19,13 @@ from patari.segmentation.napari import (
 # )
 
 __all__ = [
-    "Segmenter",
+    "ModelAdapterBase",
+    "OnnxSegmentationAdapter",
     "SegmentationResult",
-    "load_segmentation_models",
-    "ensure_segmentation_labels_layer",
-    "set_segmentation_2d",
+    "SegmentationModelConfig",
+    "load_model_registry",
+    "create_segmenter",
+    # "dummy_mask",
     # "class_mask",
     # "keep_largest_component",
     # "mask_to_largest_contour_polygon_rc",

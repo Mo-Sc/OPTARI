@@ -29,6 +29,7 @@ class SegmentationDock:
     select_all_classes_button: QPushButton
     clear_classes_button: QPushButton
     roi_class_id_combo: QComboBox
+    roi_shape_combo: QComboBox
     roi_width_edit: QLineEdit
     roi_height_edit: QLineEdit
     roi_top_margin_edit: QLineEdit
@@ -75,6 +76,10 @@ def create_segmentation_dock() -> SegmentationDock:
     classes_button_layout.addWidget(clear_classes_button)
 
     roi_class_id_combo = QComboBox()
+    roi_shape_combo = QComboBox()
+    roi_shape_combo.addItem("Rectangle", userData="rectangle")
+    roi_shape_combo.addItem("Ellipse", userData="ellipse")
+    roi_shape_combo.setCurrentIndex(0)
     roi_width_edit = QLineEdit()
     roi_height_edit = QLineEdit()
     roi_top_margin_edit = QLineEdit()
@@ -105,6 +110,8 @@ def create_segmentation_dock() -> SegmentationDock:
     roi_settings_layout = QVBoxLayout(roi_settings_box)
     roi_settings_layout.addWidget(QLabel("Class ID"))
     roi_settings_layout.addWidget(roi_class_id_combo)
+    roi_settings_layout.addWidget(QLabel("Shape"))
+    roi_settings_layout.addWidget(roi_shape_combo)
     roi_settings_layout.addWidget(QLabel("Width"))
     roi_settings_layout.addWidget(roi_width_edit)
     roi_settings_layout.addWidget(QLabel("Height"))
@@ -122,6 +129,7 @@ def create_segmentation_dock() -> SegmentationDock:
         select_all_classes_button=select_all_classes_button,
         clear_classes_button=clear_classes_button,
         roi_class_id_combo=roi_class_id_combo,
+        roi_shape_combo=roi_shape_combo,
         roi_width_edit=roi_width_edit,
         roi_height_edit=roi_height_edit,
         roi_top_margin_edit=roi_top_margin_edit,

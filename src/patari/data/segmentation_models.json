@@ -1,11 +1,12 @@
 {
-  "default_model": "us_tissue_v1",
+  "default_model": "unet_msot_2_ta",
   "models": [
     {
-      "id": "us_tissue_v1",
-      "onnx_path": "models/us_tissue_v1.onnx",
-      "input_height": 256,
-      "input_width": 256,
+      "id": "unet_msot_2_ta",
+      "description": "trained on all MSOT2 samples, structural loss weight: 0.0",
+      "model_path": "model.onnx",
+      "input_height": 224,
+      "input_width": 224,
       "class_names": {
         "0": "background",
         "1": "Haut",
@@ -17,7 +18,9 @@
         "7": "Vorlaufstrecke",
         "8": "SAT",
         "9": "Gel"
-      }
+      },
+      "default_class": "Muskel1"
+
     }
   ]
 }
