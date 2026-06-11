@@ -120,24 +120,24 @@ class UnmixingController(TaskControllerBase):
             return
 
         dock = self.patari_controller.unmixing
-        active_layer = self.patari_controller.active_layer
+        active_recon_layer = self.patari_controller.active_recon_layer
 
-        if active_layer is None:
+        if active_recon_layer is None:
             dock.source_layer_label.setText("Select a PA reconstruction layer")
             dock.wavelengths_list.clear()
             return
 
-        if active_layer.name not in self.patari_controller._patato_objects:
+        if active_recon_layer.name not in self.patari_controller._patato_objects:
             dock.source_layer_label.setText(
                 "Select a reconstruction layer as source"
             )
             dock.wavelengths_list.clear()
             return
 
-        dock.source_layer_label.setText(active_layer.name)
+        dock.source_layer_label.setText(active_recon_layer.name)
 
-        wavelengths = active_layer.metadata.get("wavelengths") or []
-        source_name = active_layer.name
+        wavelengths = active_recon_layer.metadata.get("wavelengths") or []
+        source_name = active_recon_layer.name
         last_source = dock.widget.property("_unmixing_source_name")
 
         # Keep manual wavelength selections while the same source stays active.
@@ -322,11 +322,11 @@ class UnmixingController(TaskControllerBase):
         TODO: refactor to a more general layer management utility if needed by other controllers.
         """
         source_shape = np.asarray(
-            self.patari_controller.active_layer.data
+            self.patari_controller.active_recon_layer.data
         ).shape
         target_shape = np.asarray(data).shape
 
-        scale = list(self.patari_controller.active_layer.scale)
+        scale = list(self.patari_controller.active_recon_layer.scale)
         # Preserve world-space extent after grid reduction by rescaling pixel spacing.
         scale[-2] = (
             float(scale[-2])
@@ -339,7 +339,7 @@ class UnmixingController(TaskControllerBase):
             / float(target_shape[-1])
         )
         scale = tuple(scale)
-        translate = tuple(self.patari_controller.active_layer.translate)
+        translate = tuple(self.patari_controller.active_recon_layer.translate)
 
         if name in self.viewer.layers and isinstance(
             self.viewer.layers[name], Image
@@ -370,12 +370,12 @@ class UnmixingController(TaskControllerBase):
 
         dock = self.patari_controller.unmixing
 
-        if self.patari_controller.active_layer is None:
+        if self.patari_controller.active_recon_layer is None:
             dock.status_label.setText("Select a PA reconstruction layer.")
             return
 
         recon = self.patari_controller._patato_objects.get(
-            self.patari_controller.active_layer.name
+            self.patari_controller.active_recon_layer.name
         )
         if recon is None:
             dock.status_label.setText("Source layer must be a reconstruction.")
@@ -400,7 +400,7 @@ class UnmixingController(TaskControllerBase):
             return
 
         frame_numbers = list(
-            self.patari_controller.active_layer.metadata.get("frames")
+            self.patari_controller.active_recon_layer.metadata.get("frames")
             or range(recon.shape[0])
         )
         # Run against all reconstructed frames by default.
@@ -430,7 +430,7 @@ class UnmixingController(TaskControllerBase):
 
         logger.info(
             "running unmixing for %s with %s wavelength(s), %s chromophore(s), reduce=%s",
-            self.patari_controller.active_layer.name,
+            self.patari_controller.active_recon_layer.name,
             len(selected_wavelengths),
             len(selected_chromophores),
             reduce_factor,
@@ -447,13 +447,13 @@ class UnmixingController(TaskControllerBase):
         )
         unmixed_axis1_labels = list(map(str, unmixed.ax_1_labels))
         unmixed_metadata, unmixed_export_attrs = self._build_output_metadata(
-            source_layer_name=self.patari_controller.active_layer.name,
+            source_layer_name=self.patari_controller.active_recon_layer.name,
             output_frames=output_frames,
             axis1_labels=unmixed_axis1_labels,
-            filepath=self.patari_controller.active_layer.metadata.get(
+            filepath=self.patari_controller.active_recon_layer.metadata.get(
                 "filepath"
             ),
-            timestamps=self.patari_controller.active_layer.metadata.get(
+            timestamps=self.patari_controller.active_recon_layer.metadata.get(
                 "timestamps"
             ),
             pa_kind="unmixed",
@@ -462,7 +462,7 @@ class UnmixingController(TaskControllerBase):
         )
         self._set_export_frame_attrs(unmixed, unmixed_export_attrs)
 
-        source_name = self.patari_controller.active_layer.name.replace(
+        source_name = self.patari_controller.active_recon_layer.name.replace(
             "Recon: ", ""
         )
         suffix_part = f"_{suffix}" if suffix else ""
@@ -473,7 +473,7 @@ class UnmixingController(TaskControllerBase):
 
         unmixed_name = f"Unmixed: {source_name}{suffix_part}{frame_part}"
         source_frame_count = int(
-            np.asarray(self.patari_controller.active_layer.data).shape[0]
+                np.asarray(self.patari_controller.active_recon_layer.data).shape[0]
         )
         unmixed_data = self._expand_to_source_frames(
             self._extract_display_data(unmixed),
@@ -496,13 +496,13 @@ class UnmixingController(TaskControllerBase):
             thb_calc = pat.THbCalculator(algorithm_id=suffix)
             thb, _, _ = thb_calc.run(unmixed, self.patari_controller.pa_data)
             thb_metadata, thb_export_attrs = self._build_output_metadata(
-                source_layer_name=self.patari_controller.active_layer.name,
+                source_layer_name=self.patari_controller.active_recon_layer.name,
                 output_frames=output_frames,
                 axis1_labels=["thb"],
-                filepath=self.patari_controller.active_layer.metadata.get(
+                filepath=self.patari_controller.active_recon_layer.metadata.get(
                     "filepath"
                 ),
-                timestamps=self.patari_controller.active_layer.metadata.get(
+                timestamps=self.patari_controller.active_recon_layer.metadata.get(
                     "timestamps"
                 ),
                 pa_kind="unmixed_param",
@@ -528,13 +528,13 @@ class UnmixingController(TaskControllerBase):
             so2_calc = pat.SO2Calculator(algorithm_id=suffix, nan_invalid=True)
             so2, _, _ = so2_calc.run(unmixed, self.patari_controller.pa_data)
             so2_metadata, so2_export_attrs = self._build_output_metadata(
-                source_layer_name=self.patari_controller.active_layer.name,
+                source_layer_name=self.patari_controller.active_recon_layer.name,
                 output_frames=output_frames,
                 axis1_labels=["so2"],
-                filepath=self.patari_controller.active_layer.metadata.get(
+                filepath=self.patari_controller.active_recon_layer.metadata.get(
                     "filepath"
                 ),
-                timestamps=self.patari_controller.active_layer.metadata.get(
+                timestamps=self.patari_controller.active_recon_layer.metadata.get(
                     "timestamps"
                 ),
                 pa_kind="unmixed_param",

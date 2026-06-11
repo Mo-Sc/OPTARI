@@ -50,7 +50,8 @@ class PatariController:
         self._derived_patato_objects: dict[str, pat.ImageSequence] = {}
 
         self.shapes_layer: Shapes | None = None
-        self.active_layer: Image | None = None
+        self.active_recon_layer: Image | None = None
+        self.active_us_layer: Image | None = None
 
         # --- left elements ---
         self.info: InfoDock | None = None
@@ -211,8 +212,8 @@ class PatariController:
         )
 
     # ============ layer selection ============
-    def _resolve_active_layer(self) -> None:
-        """Set `active_layer` to the selected PA image layer (if exactly one is selected)."""
+    def _resolve_active_recon_layer(self) -> None:
+        """Set `active_recon_layer` to the selected PA image layer (if exactly one is selected)."""
 
         selection = self.viewer.layers.selection
 
@@ -228,11 +229,11 @@ class PatariController:
             and selected_layer.metadata.get("type") == "pa"
         ):
             # No-op if nothing changed (avoids duplicate work/logging).
-            if self.active_layer is selected_layer:
+            if self.active_recon_layer is selected_layer:
                 return
 
-            self.active_layer = selected_layer
-            logger.info("active layer set to %s", self.active_layer.name)
+            self.active_recon_layer = selected_layer
+            logger.info("active layer set to %s", self.active_recon_layer.name)
             # keep PA layers visually consistent; show only the active PA layer
             # set all other PA layers to invisible
             # set blending and auto contrast for all PA layers
@@ -243,7 +244,7 @@ class PatariController:
                 ):
                     layer.blending = "multiplicative"
                     layer._keep_auto_contrast = True
-                    layer.visible = layer is self.active_layer
+                    layer.visible = layer is self.active_recon_layer
 
     # ============ ROI intensity settings ============
     def _on_roi_intensity_settings_changed(self) -> None:
@@ -274,7 +275,7 @@ class PatariController:
 
     # ============ viewer events ============
     def on_selection_changed(self, event=None) -> None:
-        self._resolve_active_layer()
+        self._resolve_active_recon_layer()
         self.unmixing_ctrl.refresh_ui()
         if self._snap_dims_to_active_layer():
             return
@@ -304,9 +305,9 @@ class PatariController:
         """
         snap the given frame index to the closest available frame in the active layer's metadata
         """
-        if self.active_layer is None:
+        if self.active_recon_layer is None:
             return frame_idx
-        frames = self.active_layer.metadata.get("frames", None)
+        frames = self.active_recon_layer.metadata.get("frames", None)
         if not frames:
             return frame_idx
         frames = np.asarray(frames, dtype=int)
@@ -316,10 +317,10 @@ class PatariController:
         """
         snap the given channel index to a valid channel index based on the active layer's metadata
         """
-        if self.active_layer is None:
+        if self.active_recon_layer is None:
             return channel_idx
 
-        data = np.asarray(self.active_layer.data)
+        data = np.asarray(self.active_recon_layer.data)
         if data.ndim < 2:
             return 0
 
@@ -327,7 +328,7 @@ class PatariController:
         return int(np.clip(channel_idx, 0, max(0, n_channels - 1)))
 
     def _snap_dims_to_active_layer(self) -> bool:
-        if self.active_layer is None:
+        if self.active_recon_layer is None:
             return False
 
         pt = list(self.viewer.dims.point)
@@ -352,7 +353,7 @@ class PatariController:
         if changed:
             logger.debug(
                 "snapped dims for layer %s to frame=%s, channel=%s",
-                self.active_layer.name,
+                self.active_recon_layer.name,
                 snapped_frame,
                 snapped_channel,
             )
@@ -361,10 +362,10 @@ class PatariController:
 
     # ============ timestamps & display ============
     def timestamp_for_slice(self, frame_idx: int, channel_idx: int):
-        if self.active_layer is None:
+        if self.active_recon_layer is None:
             return "N/A", 0.0
 
-        ts = self.active_layer.metadata.get("timestamps")
+        ts = self.active_recon_layer.metadata.get("timestamps")
         if ts is not None:
             ts = np.asarray(ts)
         else:
@@ -395,22 +396,22 @@ class PatariController:
     def update_info_labels(self, event=None) -> None:
         if self.info is None:
             return
-        if self.active_layer is None:
+        if self.active_recon_layer is None:
             self.info.label.setText("Select a PA image layer")
             return
 
         pt = list(self.viewer.dims.point)
         if len(pt) < 2:
-            self.info.label.setText(f"Layer: {self.active_layer.name}")
+            self.info.label.setText(f"Layer: {self.active_recon_layer.name}")
             return
 
         frame_idx = int(round(pt[0]))
         channel_idx = int(round(pt[1]))
 
         axis1_name = str(
-            self.active_layer.metadata.get("axis1_name", "Channel")
+            self.active_recon_layer.metadata.get("axis1_name", "Channel")
         )
-        axis1_labels = self.active_layer.metadata.get("axis1_labels")
+        axis1_labels = self.active_recon_layer.metadata.get("axis1_labels")
 
         if isinstance(axis1_labels, (list, tuple)) and 0 <= channel_idx < len(
             axis1_labels
@@ -425,7 +426,7 @@ class PatariController:
             else:
                 axis1_value = str(channel_idx)
 
-        frames = self.active_layer.metadata.get("frames")
+        frames = self.active_recon_layer.metadata.get("frames")
         is_reconstructed = frames is None or frame_idx in frames
         frame_label = (
             f"Frame: {frame_idx} (reconstructed)"
@@ -451,7 +452,7 @@ class PatariController:
         )
         self.info.label.setText(
             f"Study: {study_str} | Scan: {scan_str}\n"
-            f"Layer: {self.active_layer.name}\n"
+            f"Layer: {self.active_recon_layer.name}\n"
             f"Frame: {frame_idx} | {axis1_name}: {axis1_value}\n"
             f"Timestamp: {ts} ({ts_delta:.2f} s)"
         )

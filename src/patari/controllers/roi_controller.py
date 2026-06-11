@@ -242,7 +242,7 @@ class RoiController(TaskControllerBase):
         ):
             return
 
-        if self.patari_controller.active_layer is None:
+        if self.patari_controller.active_recon_layer is None:
             self.patari_controller.roi.live_table.value = pd.DataFrame(
                 columns=list(dtype_map.keys())
             ).astype(dtype_map)
@@ -258,7 +258,7 @@ class RoiController(TaskControllerBase):
         try:
             df = compute_roi_stats(
                 self.patari_controller.shapes_layer,
-                self.patari_controller.active_layer,
+                self.patari_controller.active_recon_layer,
                 frame_idx,
                 channel_idx,
                 clamp_min=self.patari_controller.roi_intensity_min,
@@ -336,7 +336,7 @@ class RoiController(TaskControllerBase):
         if not include_all_frames and not include_all_wavelengths:
             rows_to_add = df_live.iloc[[roi_idx]].astype(dtype_map)
         else:
-            if self.patari_controller.active_layer is None:
+            if self.patari_controller.active_recon_layer is None:
                 logger.info("Select an image layer to save ROI stats")
                 return
 
@@ -346,14 +346,14 @@ class RoiController(TaskControllerBase):
             frame_idx = int(round(pt[0]))
             channel_idx = int(round(pt[1]))
 
-            data = np.asarray(self.patari_controller.active_layer.data)
+            data = np.asarray(self.patari_controller.active_recon_layer.data)
             if data.ndim < 2:
                 logger.info("Active layer has no frame/channel dimensions")
                 return
 
             if include_all_frames:
                 frames_meta = getattr(
-                    self.patari_controller.active_layer, "metadata", {}
+                    self.patari_controller.active_recon_layer, "metadata", {}
                 ).get("frames")
                 frame_indices = [int(f) for f in frames_meta]
             else:
@@ -371,7 +371,7 @@ class RoiController(TaskControllerBase):
                 for c_idx in channel_indices:
                     df_slice = compute_roi_stats(
                         self.patari_controller.shapes_layer,
-                        self.patari_controller.active_layer,
+                        self.patari_controller.active_recon_layer,
                         int(f_idx),
                         int(c_idx),
                         clamp_min=self.patari_controller.roi_intensity_min,
@@ -558,20 +558,16 @@ class RoiController(TaskControllerBase):
     @staticmethod
     def _place_library_entry_auto(controller, entry) -> None:
         """Place a saved ROI by aligning it to the selected segmentation class."""
-        if "Segmentation" not in controller.viewer.layers:
+        result = controller.segmentation_ctrl.active_seg_mask_2d()
+        if result is None:
             QMessageBox.critical(
-                None,
-                "Auto ROI",
+                None, "Auto ROI",
                 "No segmentation mask found. Generate segmentation first.",
             )
             return
 
-        seg_layer = controller.viewer.layers["Segmentation"]
-        seg = np.asarray(seg_layer.data)
-
-        class_names = dict(getattr(seg_layer, "metadata", {}) or {}).get(
-            "class_names", {}
-        )
+        seg, seg_layer = result
+        class_names = (seg_layer.metadata or {}).get("class_names", {})
         class_name_to_id = {
             str(name): int(class_id) for class_id, name in class_names.items()
         }
@@ -579,8 +575,7 @@ class RoiController(TaskControllerBase):
         target_class_name = str(entry.position or "").strip()
         if target_class_name not in class_name_to_id:
             QMessageBox.critical(
-                None,
-                "Auto ROI",
+                None, "Auto ROI",
                 f"ROI position '{target_class_name}' not found in segmentation classes.",
             )
             return
@@ -589,9 +584,8 @@ class RoiController(TaskControllerBase):
         class_mask = seg == int(class_id)
         if not np.any(class_mask):
             QMessageBox.critical(
-                None,
-                "Auto ROI",
-                f"Class '{target_class_name}' is not present in the current segmentation mask.",
+                None, "Auto ROI",
+                f"Class '{target_class_name}' is not present in the current frame.",
             )
             return
 
@@ -601,40 +595,27 @@ class RoiController(TaskControllerBase):
         x_max = float(np.max(verts[:, 1]))
         source_center_x = 0.5 * (x_min + x_max)
 
+        # seg is (H, W) — shape[1] is now reliably image width
         center_col = int(seg.shape[1] // 2)
-        center_column_mask = class_mask[:, center_col]
-        center_rows = np.where(center_column_mask)[0]
+        center_rows = np.where(class_mask[:, center_col])[0]
         if center_rows.size == 0:
             QMessageBox.critical(
-                None,
-                "Auto ROI",
+                None, "Auto ROI",
                 f"Class '{target_class_name}' is not present at image center.",
             )
             return
         top_row = int(center_rows[0])
 
-        scale = tuple(getattr(seg_layer, "scale", (1.0, 1.0)))
-        translate = tuple(getattr(seg_layer, "translate", (0.0, 0.0)))
-        sy = float(scale[-2])
-        sx = float(scale[-1])
-        ty = float(translate[-2])
-        tx = float(translate[-1])
+        sy = float(seg_layer.scale[-2])
+        sx = float(seg_layer.scale[-1])
+        ty = float(seg_layer.translate[-2])
+        tx = float(seg_layer.translate[-1])
 
-        target_center_x = tx + float(center_col) * sx
-        target_top_y = ty + float(top_row) * sy
-
-        # Shift the stored ROI so its horizontal center aligns with the image
-        # center and its top edge aligns with the target class top border.
-        dy = target_top_y - y_min
-        dx = target_center_x - source_center_x
+        dy = ty + float(top_row) * sy - y_min
+        dx = tx + float(center_col) * sx - source_center_x
         verts_shifted = verts + np.asarray([dy, dx], dtype=float)
 
-        controller.shapes_layer.add(
-            verts_shifted,
-            shape_type=entry.shape_type,
-        )
-        # RoiController.set_last_roi_position(controller, entry.position)
-        # Colors and live table are refreshed by shapes_layer.data event.
+        controller.shapes_layer.add(verts_shifted, shape_type=entry.shape_type)
 
     def on_roi_library_item_clicked(self, roi_id: str) -> None:
         if self.patari_controller.shapes_layer is None:

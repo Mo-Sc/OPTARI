@@ -12,6 +12,7 @@ from patari.segmentation.segmenter import (
     load_model_registry,
     SegmentationModelConfig,
 )
+from patari.utils.viewer import current_frame_idx
 from napari.layers import Labels
 from patari.controllers.base import TaskControllerBase
 from patari.roi import Ellipse, Rectangle, ROIPlacementConfig
@@ -31,6 +32,7 @@ class SegmentationController(TaskControllerBase):
         )
         self._segmenter = None
         self._segmenter_model_id = None
+        self._seg_layer: Labels | None = None
 
     def bind_events(self) -> None:
         """Connect segmentation dock signals."""
@@ -94,12 +96,9 @@ class SegmentationController(TaskControllerBase):
 
     def teardown(self) -> None:
         """Release cached segmentation model to free memory."""
-        if self._segmenter is not None:
-            logger.info(
-                "Releasing segmentation model %s", self._segmenter_model_id
-            )
-            self._segmenter = None
-            self._segmenter_model_id = None
+        self._segmenter = None
+        self._segmenter_model_id = None
+        self._seg_layer = None
 
     def segmentation_model_options(self) -> list[str]:
         """Return model IDs for the model combo."""
@@ -151,32 +150,18 @@ class SegmentationController(TaskControllerBase):
         return self._segmenter
 
 
-    @staticmethod
-    def resolve_us_layer(controller) -> Image | None:
-        """Find US image layer for segmentation (segmentation always runs on US)."""
-        for layer in controller.viewer.layers:
-            if isinstance(layer, Image) and layer.metadata.get("type") == "us":
-                return layer
-        return None
-
-    @staticmethod
-    def us_slice_2d(controller, us_layer: Image) -> np.ndarray | None:
-        data = np.asarray(us_layer.data)
-        if data.ndim == 2:
-            return data
-
-        pt = list(controller.viewer.dims.point)
-        frame_idx = int(round(pt[0])) if len(pt) >= 1 else 0
-
-        frame_idx = int(np.clip(frame_idx, 0, max(0, data.shape[0] - 1)))
-
-        if data.ndim == 3:
-            return data[frame_idx]
-        if data.ndim >= 4:
-            # e.g. (frame, channel, y, x)
-            return data[frame_idx, 0]
-
-        return None
+    def active_seg_mask_2d(self) -> tuple[np.ndarray, "Labels"] | None:
+        """Return (H, W) segmentation mask for the current viewer frame, or None."""
+        if (
+            self._seg_layer is None
+            or self._seg_layer not in self.viewer.layers
+        ):
+            self._seg_layer = None
+            return None
+        seg_layer = self._seg_layer
+        seg = np.asarray(seg_layer.data)
+        frame_idx = current_frame_idx(self.viewer, seg.shape[0])
+        return seg[frame_idx, 0], seg_layer
 
     def on_segmentation_model_changed(self) -> None:
         if self.patari_controller.segmentation is None:
@@ -230,50 +215,35 @@ class SegmentationController(TaskControllerBase):
         self.set_all_segmentation_classes_checked(checked=False)
 
     def on_generate_roi_from_mask_clicked(self) -> None:
-        """Generate one ROI from the selected segmentation class."""
+        """Generate one ROI from the current frame of the segmentation mask."""
         seg_dock = self.patari_controller.segmentation
         if seg_dock is None:
             return
 
-        if "Segmentation" not in self.viewer.layers:
-            seg_dock.segmentation_status_label.setText(
-                "No segmentation mask found"
-            )
+        result = self.active_seg_mask_2d()
+        if result is None:
+            seg_dock.segmentation_status_label.setText("No segmentation mask found")
             return
+        seg_2d, seg_layer = result
 
-        seg_layer = self.viewer.layers["Segmentation"]
         class_id = seg_dock.roi_class_id_combo.currentData()
         if class_id is None:
             seg_dock.segmentation_status_label.setText("Select a class id")
             return
 
-        seg = np.asarray(seg_layer.data)
-        class_mask = seg == int(class_id)
-        if not np.any(class_mask):
-            seg_dock.segmentation_status_label.setText(
-                "Selected class is not present in the mask"
-            )
-            return
-
-        # Extract scale and translate directly as floats from layer attributes
         sy, sx = float(seg_layer.scale[-2]), float(seg_layer.scale[-1])
         ty, tx = float(seg_layer.translate[-2]), float(seg_layer.translate[-1])
 
-        # Parse ROI parameters from UI, allowing empty fields
         def parse_roi_param(text: str) -> float | None:
             return float(text) if text.strip() else None
 
-        shape_type = str(
-            seg_dock.roi_shape_combo.currentData() or "rectangle"
-        )
+        shape_type = str(seg_dock.roi_shape_combo.currentData() or "rectangle")
         top_margin_mm = parse_roi_param(seg_dock.roi_top_margin_edit.text())
         width_mm = parse_roi_param(seg_dock.roi_width_edit.text())
         height_mm = parse_roi_param(seg_dock.roi_height_edit.text())
 
         if width_mm is None or height_mm is None:
-            seg_dock.segmentation_status_label.setText(
-                "Width and height are required"
-            )
+            seg_dock.segmentation_status_label.setText("Width and height are required")
             return
 
         config = ROIPlacementConfig(
@@ -286,15 +256,19 @@ class SegmentationController(TaskControllerBase):
         elif shape_type == "rectangle":
             shape = Rectangle(config)
         else:
-            logger.exception("Unknown ROI shape type: %s", shape_type)
             raise ValueError(f"Unknown ROI shape type: {shape_type}")
+
+        frame_idx = current_frame_idx(self.viewer, np.asarray(seg_layer.data).shape[0])
+        class_mask = seg_2d == int(class_id)
+        if not np.any(class_mask):
+            seg_dock.segmentation_status_label.setText(
+                "Selected class is not present in the current frame"
+            )
+            return
+
         try:
             verts = shape.to_napari_verts_world(
-                class_mask=class_mask,
-                sy=sy,
-                sx=sx,
-                ty=ty,
-                tx=tx,
+                class_mask=class_mask, sy=sy, sx=sx, ty=ty, tx=tx
             )
         except Exception as exc:
             seg_dock.segmentation_status_label.setText(str(exc))
@@ -303,27 +277,19 @@ class SegmentationController(TaskControllerBase):
         self.patari_controller.shapes_layer.add(
             verts, shape_type=shape.shape_type
         )
-        # Colors and live table are refreshed by shapes_layer.data event.
         seg_dock.segmentation_status_label.setText(
-            f"ROI generated from class {class_id}"
+            f"ROI generated from class {class_id} in frame {frame_idx}"
         )
 
     def on_generate_tissue_segmentation_clicked(self) -> None:
-        """Run segmentation on the currently visible US slice and update labels."""
+        """Run segmentation on the current frame or all frames and update labels."""
         seg_dock = self.patari_controller.segmentation
         if seg_dock is None:
             return
 
-        us_layer = self.resolve_us_layer(self.patari_controller)
+        us_layer = self.patari_controller.active_us_layer
         if us_layer is None:
             seg_dock.segmentation_status_label.setText("No US layer found")
-            return
-
-        data_slice = self.us_slice_2d(self.patari_controller, us_layer)
-        if data_slice is None:
-            seg_dock.segmentation_status_label.setText(
-                "Invalid US volume dimension"
-            )
             return
 
         selected_ids = self.selected_segmentation_class_ids()
@@ -331,53 +297,76 @@ class SegmentationController(TaskControllerBase):
             seg_dock.segmentation_status_label.setText("No classes selected")
             return
 
+        us_raw = np.asarray(us_layer.data)
+        us_data = us_raw[:, 0]
+        n_frames, n_channels = us_raw.shape[:2]
+        segment_all_frames = seg_dock.segment_all_frames_checkbox.isChecked()
+
+        if segment_all_frames:
+            frame_idx = None
+            frame_ids = list(range(n_frames))
+            frame_mode = "all"
+        else:
+            frame_idx = current_frame_idx(self.viewer, n_frames)
+            us_data = us_data[frame_idx : frame_idx + 1]
+            frame_ids = [frame_idx]
+            frame_mode = "current"
+
         segmenter = self.get_segmenter()
         seg_dock.segmentation_status_label.setText(
-            f"Generating mask with {self.active_segmentation_model_id}..."
+            f"Segmenting {len(frame_ids)} frame(s) with {self.active_segmentation_model_id}..."
         )
 
         try:
-            seg_result = segmenter.predict(data_slice)
-            mask = np.asarray(seg_result.seg)
-            mask = np.where(np.isin(mask, list(selected_ids)), mask, 0)
+            results = segmenter.predict(us_data)
+            class_names = results[0].class_names
 
-            if "Segmentation" in self.viewer.layers and isinstance(
-                self.viewer.layers["Segmentation"], Labels
-            ):
-                label_layer = self.viewer.layers["Segmentation"]
-            else:
-                label_layer = self.viewer.add_labels(
-                    np.zeros((1, 1), dtype=np.int32),
-                    name="Segmentation",
-                    opacity=0.5,
-                    metadata={"type": "segmentation"},
-                )
+            filtered = [
+                np.where(np.isin(r.seg, list(selected_ids)), r.seg, 0).astype(np.int32)
+                for r in results
+            ]
+            mask_3d = np.stack(filtered)
+            mask = np.repeat(mask_3d[:, np.newaxis], n_channels, axis=1)
+            if frame_idx is not None:
+                full_mask = np.zeros(us_raw.shape, dtype=np.int32)
+                full_mask[frame_idx] = mask[0]
+                mask = full_mask
 
-            label_layer.data = mask.astype(np.int32, copy=False)
-            label_layer.scale = tuple(us_layer.scale[-2:])
-            label_layer.translate = tuple(us_layer.translate[-2:])
-            label_layer.metadata = {
-                **label_layer.metadata,
-                "class_names": dict(seg_result.class_names),
-            }
+            if self._seg_layer is not None and self._seg_layer in self.viewer.layers:
+                self.viewer.layers.remove(self._seg_layer)
+            self._seg_layer = None
+            label_layer = self.viewer.add_labels(
+                mask,
+                name="Segmentation",
+                scale=tuple(us_layer.scale),
+                translate=tuple(us_layer.translate),
+                opacity=0.5,
+                metadata={
+                    "type": "segmentation",
+                    "frame_mode": frame_mode,
+                    "frames": frame_ids,
+                    "class_names": class_names,
+                    "source_model_id": self.active_segmentation_model_id,
+                },
+            )
+            self._seg_layer = label_layer
 
-
-            # populate class ID combo for ROI generation with classes present in the predicted mask
+            # Populate ROI class combo from classes present in the output mask.
             seg_dock.roi_class_id_combo.clear()
-            class_ids = sorted(int(class_id) for class_id in np.unique(label_layer.data))
-            for class_id in class_ids:
-                class_name = seg_result.class_names.get(class_id, str(class_id))
+            for class_id in sorted(int(c) for c in np.unique(mask)):
                 seg_dock.roi_class_id_combo.addItem(
-                    f"{class_id}: {class_name}", userData=class_id
+                    f"{class_id}: {class_names.get(class_id, str(class_id))}",
+                    userData=class_id,
                 )
-            # default to first non-background class
-            seg_dock.roi_class_id_combo.setCurrentIndex(1)
+            # Default to first non-background class if present
+            seg_dock.roi_class_id_combo.setCurrentIndex(
+                min(1, seg_dock.roi_class_id_combo.count() - 1)
+            )
 
             seg_dock.segmentation_status_label.setText(
-                "Segmentation finished successfully"
+                f"Segmentation done ({len(frame_ids)} frame(s))"
             )
 
         except Exception as e:
-            logger.exception("Segmentation failed with error: %s", e)
+            logger.exception("Segmentation failed: %s", e)
             seg_dock.segmentation_status_label.setText("Segmentation failed")
-            return

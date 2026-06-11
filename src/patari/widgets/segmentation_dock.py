@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from qtpy.QtCore import Qt
 from qtpy.QtGui import QDoubleValidator
 from qtpy.QtWidgets import (
+    QCheckBox,
     QHBoxLayout,
     QComboBox,
     QGroupBox,
@@ -35,6 +36,7 @@ class SegmentationDock:
     roi_top_margin_edit: QLineEdit
     generate_roi_button: QPushButton
     generate_tissue_segmentation_button: QPushButton
+    segment_all_frames_checkbox: QCheckBox
     segmentation_status_label: QLabel
 
 
@@ -94,6 +96,7 @@ def create_segmentation_dock() -> SegmentationDock:
     generate_tissue_segmentation_button = QPushButton(
         "Generate Tissue Segmentation"
     )
+    segment_all_frames_checkbox = QCheckBox("Segment all frames")
     segmentation_status_label = QLabel("Select a model and run segmentation.")
 
     seg_layout.addWidget(QLabel("Model"))
@@ -103,6 +106,7 @@ def create_segmentation_dock() -> SegmentationDock:
     seg_layout.addWidget(classes_button_row)
 
     seg_layout.addWidget(generate_tissue_segmentation_button)
+    seg_layout.addWidget(segment_all_frames_checkbox)
     seg_layout.addWidget(segmentation_status_label)
 
     outer.addWidget(seg_box)
@@ -135,5 +139,6 @@ def create_segmentation_dock() -> SegmentationDock:
         roi_top_margin_edit=roi_top_margin_edit,
         generate_roi_button=generate_roi_button,
         generate_tissue_segmentation_button=generate_tissue_segmentation_button,
+        segment_all_frames_checkbox=segment_all_frames_checkbox,
         segmentation_status_label=segmentation_status_label,
     )

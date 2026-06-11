@@ -22,21 +22,21 @@ class ROI:
     verts: np.ndarray  # (N, 2) in layer coordinates (mm)
 
 
-def _scale_sy_sx(active_layer) -> tuple[float, float]:
-    scale = getattr(active_layer, "scale", (1.0, 1.0, 1.0))
+def _scale_sy_sx(active_recon_layer) -> tuple[float, float]:
+    scale = getattr(active_recon_layer, "scale", (1.0, 1.0, 1.0))
     return float(scale[-2]), float(scale[-1])
 
 
-def _clamp_channel_idx(active_layer, channel_idx: int) -> int:
-    data = np.asarray(active_layer.data)
+def _clamp_channel_idx(active_recon_layer, channel_idx: int) -> int:
+    data = np.asarray(active_recon_layer.data)
     if data.ndim < 2:
         return 0
     n_channels = int(data.shape[1])
     return int(np.clip(int(channel_idx), 0, max(0, n_channels - 1)))
 
 
-def _is_reconstructed_frame(active_layer, frame_idx: int) -> bool:
-    frames = getattr(active_layer, "metadata", {}).get("frames")
+def _is_reconstructed_frame(active_recon_layer, frame_idx: int) -> bool:
+    frames = getattr(active_recon_layer, "metadata", {}).get("frames")
     return frames is None or frame_idx in frames
 
 
@@ -135,7 +135,7 @@ def ellipse_mask(verts_px, image_shape):
 
 def compute_roi_stats(
     shapes_layer,
-    active_layer,
+    active_recon_layer,
     frame_idx: int,
     channel_idx: int,
     *,
@@ -152,19 +152,19 @@ def compute_roi_stats(
     # )
 
     empty = pd.DataFrame(columns=list(dtype_map.keys())).astype(dtype_map)
-    if active_layer is None:
+    if active_recon_layer is None:
         return empty
 
     frame_idx = int(frame_idx)
-    if not _is_reconstructed_frame(active_layer, frame_idx):
+    if not _is_reconstructed_frame(active_recon_layer, frame_idx):
         # this frame was zero-padded → return empty stats
         return empty
 
-    channel_idx = _clamp_channel_idx(active_layer, channel_idx)
-    data = np.asarray(active_layer.data)
+    channel_idx = _clamp_channel_idx(active_recon_layer, channel_idx)
+    data = np.asarray(active_recon_layer.data)
     img2d = data[frame_idx, channel_idx]
 
-    timestamps = getattr(active_layer, "metadata", {}).get("timestamps")
+    timestamps = getattr(active_recon_layer, "metadata", {}).get("timestamps")
 
     try:
         from datetime import datetime, timedelta
@@ -181,7 +181,7 @@ def compute_roi_stats(
         )
         timestamp_str = "N/A"
 
-    sy, sx = _scale_sy_sx(active_layer)
+    sy, sx = _scale_sy_sx(active_recon_layer)
 
     rows = []
     for roi in _iter_rois(shapes_layer):
@@ -233,13 +233,13 @@ def compute_roi_stats(
                 max=float(np.nanmax(vals_stats)),
             )
 
-        axis1_labels = active_layer.metadata.get("axis1_labels")
+        axis1_labels = active_recon_layer.metadata.get("axis1_labels")
         if isinstance(axis1_labels, (list, tuple)) and 0 <= channel_idx < len(
             axis1_labels
         ):
             channel_value = axis1_labels[channel_idx]
         else:
-            wavelengths = active_layer.metadata.get("wavelengths", None)
+            wavelengths = active_recon_layer.metadata.get("wavelengths", None)
             if isinstance(
                 wavelengths, (list, tuple)
             ) and 0 <= channel_idx < len(wavelengths):
@@ -261,9 +261,9 @@ def compute_roi_stats(
             except ValueError:
                 pass
 
-        filepath = active_layer.metadata.get("filepath", "")
+        filepath = active_recon_layer.metadata.get("filepath", "")
         scan_id = Path(filepath).stem.split("_")[1] if filepath else ""
-        stats["source_layer"] = active_layer.name
+        stats["source_layer"] = active_recon_layer.name
         stats["roi_type"] = roi.kind
         stats["scan_id"] = scan_id
         stats["frame"] = frame_idx
@@ -283,7 +283,7 @@ def compute_roi_stats(
 
 def compute_roi_time_series(
     shapes_layer,
-    active_layer,
+    active_recon_layer,
     channel_idx: int,
     *,
     clamp_min: float | None = None,
@@ -292,23 +292,23 @@ def compute_roi_time_series(
 ):
     """Compute per-ROI mean intensity over time for a fixed channel."""
 
-    if active_layer is None:
+    if active_recon_layer is None:
         return np.asarray([]), {}
 
-    data = np.asarray(active_layer.data)
+    data = np.asarray(active_recon_layer.data)
     if data.ndim < 3:
         return np.asarray([]), {}
 
     n_frames = data.shape[0]
-    channel_idx = _clamp_channel_idx(active_layer, channel_idx)
+    channel_idx = _clamp_channel_idx(active_recon_layer, channel_idx)
 
-    frames_meta = getattr(active_layer, "metadata", {}).get("frames")
+    frames_meta = getattr(active_recon_layer, "metadata", {}).get("frames")
     if frames_meta:
         frames = np.asarray(frames_meta, dtype=int)
     else:
         frames = np.arange(n_frames, dtype=int)
 
-    ts = getattr(active_layer, "metadata", {}).get("timestamps")
+    ts = getattr(active_recon_layer, "metadata", {}).get("timestamps")
     if ts is not None:
         try:
             ts = np.asarray(ts)
@@ -321,7 +321,7 @@ def compute_roi_time_series(
     else:
         x = frames.astype(float)
 
-    sy, sx = _scale_sy_sx(active_layer)
+    sy, sx = _scale_sy_sx(active_recon_layer)
     img_shape = data.shape[-2:]
 
     series: dict[int, np.ndarray] = {}
@@ -332,7 +332,7 @@ def compute_roi_time_series(
 
         y = []
         for frame_idx in frames:
-            if not _is_reconstructed_frame(active_layer, int(frame_idx)):
+            if not _is_reconstructed_frame(active_recon_layer, int(frame_idx)):
                 continue
             img2d = data[int(frame_idx), channel_idx]
             vals = img2d[mask]
@@ -350,7 +350,7 @@ def compute_roi_time_series(
 
 def extract_roi_pixels_for_slice(
     shapes_layer,
-    active_layer,
+    active_recon_layer,
     frame_idx: int,
     channel_idx: int,
     *,
@@ -360,17 +360,17 @@ def extract_roi_pixels_for_slice(
 ):
     """Extract pixel values per ROI for the given frame/channel."""
 
-    if active_layer is None:
+    if active_recon_layer is None:
         return {}
 
     frame_idx = int(frame_idx)
-    if not _is_reconstructed_frame(active_layer, frame_idx):
+    if not _is_reconstructed_frame(active_recon_layer, frame_idx):
         return {}
 
-    channel_idx = _clamp_channel_idx(active_layer, channel_idx)
-    data = np.asarray(active_layer.data)
+    channel_idx = _clamp_channel_idx(active_recon_layer, channel_idx)
+    data = np.asarray(active_recon_layer.data)
     img2d = data[frame_idx, channel_idx]
-    sy, sx = _scale_sy_sx(active_layer)
+    sy, sx = _scale_sy_sx(active_recon_layer)
 
     out: dict[int, np.ndarray] = {}
     for roi in _iter_rois(shapes_layer):
@@ -389,7 +389,7 @@ def extract_roi_pixels_for_slice(
 
 def compute_roi_spectra(
     shapes_layer,
-    active_layer,
+    active_recon_layer,
     frame_idx: int,
     *,
     clamp_min: float | None = None,
@@ -398,22 +398,22 @@ def compute_roi_spectra(
 ):
     """Compute per-ROI mean intensity over channels for a fixed frame."""
 
-    if active_layer is None:
+    if active_recon_layer is None:
         return np.asarray([]), {}, None
 
-    data = np.asarray(active_layer.data)
+    data = np.asarray(active_recon_layer.data)
     if data.ndim < 2:
         return np.asarray([]), {}, None
 
     frame_idx = int(frame_idx)
-    if not _is_reconstructed_frame(active_layer, frame_idx):
+    if not _is_reconstructed_frame(active_recon_layer, frame_idx):
         return np.asarray([]), {}, None
 
     n_channels = data.shape[1]
     x = np.arange(n_channels, dtype=float)
     x_tick_labels: list[str] | None = None
 
-    axis1_labels = getattr(active_layer, "metadata", {}).get(
+    axis1_labels = getattr(active_recon_layer, "metadata", {}).get(
         "axis1_labels", None
     )
     if (
@@ -422,7 +422,7 @@ def compute_roi_spectra(
     ):
         x_tick_labels = [str(label) for label in axis1_labels]
     else:
-        wavelengths = getattr(active_layer, "metadata", {}).get(
+        wavelengths = getattr(active_recon_layer, "metadata", {}).get(
             "wavelengths", None
         )
         if (
@@ -431,7 +431,7 @@ def compute_roi_spectra(
         ):
             x = np.asarray(wavelengths, dtype=float)
 
-    sy, sx = _scale_sy_sx(active_layer)
+    sy, sx = _scale_sy_sx(active_recon_layer)
     img_shape = data.shape[-2:]
 
     series: dict[int, np.ndarray] = {}

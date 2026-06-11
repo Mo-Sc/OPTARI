@@ -91,11 +91,11 @@ class AnalysisController(TaskControllerBase):
 
         if self.patari_controller.shapes_layer is None:
             error_msg = "No ROIs layer"
-        elif self.patari_controller.active_layer is None:
+        elif self.patari_controller.active_recon_layer is None:
             error_msg = "Select a PA image layer"
         elif len(self.patari_controller.shapes_layer.data) == 0:
             error_msg = "No ROIs defined"
-        elif len(self.patari_controller.active_layer.metadata["frames"]) < 2:
+        elif len(self.patari_controller.active_recon_layer.metadata["frames"]) < 2:
             error_msg = "PA image layer has less than 2 frames"
 
         if error_msg:
@@ -127,7 +127,7 @@ class AnalysisController(TaskControllerBase):
         )
         x, series = compute_roi_time_series(
             self.patari_controller.shapes_layer,
-            self.patari_controller.active_layer,
+            self.patari_controller.active_recon_layer,
             channel_idx,
             **self._clamp_kwargs(),
         )
@@ -159,7 +159,7 @@ class AnalysisController(TaskControllerBase):
         )
 
         axis1_value = str(
-            self.patari_controller.active_layer.metadata.get("axis1_labels")[
+            self.patari_controller.active_recon_layer.metadata.get("axis1_labels")[
                 channel_idx
             ]
         )
@@ -187,7 +187,7 @@ class AnalysisController(TaskControllerBase):
                 self.patari_controller.histograms.plots_container
             )
             return
-        if self.patari_controller.active_layer is None:
+        if self.patari_controller.active_recon_layer is None:
             self.patari_controller.histograms.status_label.setText(
                 "Select a PA image layer"
             )
@@ -201,7 +201,7 @@ class AnalysisController(TaskControllerBase):
 
         roi_vals = extract_roi_pixels_for_slice(
             self.patari_controller.shapes_layer,
-            self.patari_controller.active_layer,
+            self.patari_controller.active_recon_layer,
             frame_idx,
             channel_idx,
             **self._clamp_kwargs(),
@@ -265,7 +265,7 @@ class AnalysisController(TaskControllerBase):
                 self.patari_controller.spectrum.plots_container
             )
             return
-        if self.patari_controller.active_layer is None:
+        if self.patari_controller.active_recon_layer is None:
             self.patari_controller.spectrum.status_label.setText(
                 "Select a PA image layer"
             )
@@ -279,7 +279,7 @@ class AnalysisController(TaskControllerBase):
 
         x, series, x_tick_labels = compute_roi_spectra(
             self.patari_controller.shapes_layer,
-            self.patari_controller.active_layer,
+            self.patari_controller.active_recon_layer,
             frame_idx,
             **self._clamp_kwargs(),
         )
@@ -290,7 +290,7 @@ class AnalysisController(TaskControllerBase):
 
         n_plotted = 0
         axis1_name = str(
-            self.patari_controller.active_layer.metadata.get(
+            self.patari_controller.active_recon_layer.metadata.get(
                 "axis1_name", "Channel"
             )
         )

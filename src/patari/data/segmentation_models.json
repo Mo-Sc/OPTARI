@@ -2,9 +2,10 @@
   "default_model": "unet_msot_2_ta",
   "models": [
     {
+      "adapter_class": "UKErUSSegAdapter",
       "id": "unet_msot_2_ta",
       "description": "trained on all MSOT2 samples, structural loss weight: 0.0",
-      "model_path": "model.onnx",
+      "model_path": "/Users/moritzschillinger/Projects/PATARI/data/models/unet_msot_2_ta_sl0_20260430-172821/unet_msot_2_ta_sl0_20260430-172821.onnx",
       "input_height": 224,
       "input_width": 224,
       "class_names": {

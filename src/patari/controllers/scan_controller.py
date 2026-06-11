@@ -6,6 +6,7 @@ import re
 
 import numpy as np
 import patato as pat
+from napari.layers import Image
 from patato.io.ithera.read_ithera import iTheraMSOT
 from qtpy.QtWidgets import QFileDialog
 
@@ -93,10 +94,12 @@ class ScanController(TaskControllerBase):
     def reset_scan_state(self) -> None:
         """Clear current scan state and remove all viewer layers."""
         self.close_current_scan()
+        self.patari_controller.segmentation_ctrl.teardown()
 
         for layer in list(self.viewer.layers):
             self.viewer.layers.remove(layer)
-        self.patari_controller.active_layer = None
+        self.patari_controller.active_recon_layer = None
+        self.patari_controller.active_us_layer = None
         self.patari_controller.shapes_layer = None
 
     def init_path(self, path: Path) -> None:
@@ -247,11 +250,21 @@ class ScanController(TaskControllerBase):
 
         # After adding layers, pick a sensible default selected layer.
         self.patari_controller._select_default_pa_layer()
-        self.patari_controller._resolve_active_layer()
+        
+        # Set the active US layer if available.
+        self.patari_controller.active_us_layer = next(
+            (
+                l
+                for l in self.viewer.layers
+                if isinstance(l, Image) and l.metadata.get("type") == "us"
+            ),
+            None,
+        )
+        self.patari_controller._resolve_active_recon_layer()
 
         # Initialize viewer position to middle frame/wav for each scan.
         try:
-            data = np.asarray(self.patari_controller.active_layer.data)
+            data = np.asarray(self.patari_controller.active_recon_layer.data)
             if data.ndim >= 2:
                 self.viewer.dims.set_point(0, int((data.shape[0] - 1) // 2))
                 self.viewer.dims.set_point(1, int((data.shape[1] - 1) // 2))
