@@ -79,8 +79,9 @@ def create_segmentation_dock() -> SegmentationDock:
 
     roi_class_id_combo = QComboBox()
     roi_shape_combo = QComboBox()
-    roi_shape_combo.addItem("Rectangle", userData="rectangle")
     roi_shape_combo.addItem("Ellipse", userData="ellipse")
+    roi_shape_combo.addItem("Rectangle", userData="rectangle")
+    roi_shape_combo.addItem("Polygon", userData="polygon")
     roi_shape_combo.setCurrentIndex(0)
     roi_width_edit = QLineEdit()
     roi_height_edit = QLineEdit()

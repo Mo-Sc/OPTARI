@@ -15,7 +15,7 @@ from patari.segmentation.segmenter import (
 from patari.utils.viewer import current_frame_idx
 from napari.layers import Labels
 from patari.controllers.base import TaskControllerBase
-from patari.roi import Ellipse, Rectangle, ROIPlacementConfig
+from patari.roi import Ellipse, Rectangle, Polygon, ROIPlacementConfig
 
 
 logger = logging.getLogger(__name__)
@@ -242,12 +242,12 @@ class SegmentationController(TaskControllerBase):
         def parse_roi_param(text: str) -> float | None:
             return float(text) if text.strip() else None
 
-        shape_type = str(seg_dock.roi_shape_combo.currentData() or "rectangle")
+        shape_type = str(seg_dock.roi_shape_combo.currentData() or "ellipse")
         top_margin_mm = parse_roi_param(seg_dock.roi_top_margin_edit.text())
         width_mm = parse_roi_param(seg_dock.roi_width_edit.text())
         height_mm = parse_roi_param(seg_dock.roi_height_edit.text())
 
-        if width_mm is None or height_mm is None:
+        if (width_mm is None or height_mm is None) and shape_type in ("rectangle", "ellipse"):
             seg_dock.segmentation_status_label.setText("Width and height are required")
             return
 
@@ -260,6 +260,8 @@ class SegmentationController(TaskControllerBase):
             shape = Ellipse(config)
         elif shape_type == "rectangle":
             shape = Rectangle(config)
+        elif shape_type == "polygon":
+            shape = Polygon(config)
         else:
             raise ValueError(f"Unknown ROI shape type: {shape_type}")
 
