@@ -8,7 +8,8 @@ from pathlib import Path
 
 import numpy as np
 import onnxruntime as ort
-from scipy.ndimage import zoom
+
+from patari.segmentation.processing_utils import resize_img, resize_mask, normalize_img, combine_classes, keep_largest_region, reassign_freed_pixels_row_based, remove_small_objects, reassign_freed_pixels
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ class SegmentationModelConfig:
     class_names: dict[int, str]
     default_class: str
     adapter_class: str
+    postprocessing_config: dict | None = None
 
 
 DEFAULT_MODELS_CONFIG = (
@@ -65,6 +67,7 @@ def load_model_registry(
             input_width=int(item["input_width"]),
             default_class=str(item["default_class"]),
             adapter_class=str(item["adapter_class"]),
+            postprocessing_config=item.get("postprocessing_config", None),
         )
 
     return models
@@ -73,7 +76,7 @@ class ModelAdapterBase(ABC):
     """
     Base class for the segmentation adapters.
     Adapters have to implement preprocess, infer and postprocess methods,
-    operating on single 2D US frames.
+    operating on single 2D grayscale frames.
     """
 
     def __init__(self, model_config: SegmentationModelConfig) -> None:
@@ -82,32 +85,30 @@ class ModelAdapterBase(ABC):
 
     @abstractmethod
     def preprocess(
-        self, us_2d: np.ndarray
+        self, frame_2d: np.ndarray
     ) -> tuple[np.ndarray, tuple[int, int]]:
         raise NotImplementedError
 
     @abstractmethod
-    def infer(self, input_tensor: np.ndarray) -> np.ndarray:
+    def infer(self, frame_2d: np.ndarray) -> np.ndarray:
         raise NotImplementedError
 
     @abstractmethod
     def postprocess(
-        self, model_output: np.ndarray, orig_shape: tuple[int, int]
-    ) -> np.ndarray:
+        self, mask_2d: np.ndarray)-> np.ndarray:
         raise NotImplementedError
 
-    def predict(self, us_data: np.ndarray) -> list[SegmentationResult]:
+    def predict(self, frames: np.ndarray) -> list[SegmentationResult]:
         """Segment a batch of frames.
 
         us_data: (nframes, H, W) — use us_data[np.newaxis] for a single frame.
         """
-        if us_data.ndim != 3:
-            raise ValueError(f"Expected (nframes, H, W), got {us_data.ndim}D")
         results = []
-        for frame in us_data:
-            tensor, orig_shape = self.preprocess(frame)
-            mask = self.postprocess(self.infer(tensor), orig_shape)
-            results.append(SegmentationResult(seg=mask, class_names=dict(self.class_names)))
+        for frame_2d in frames:
+            frame_2d_pre = self.preprocess(frame_2d)
+            mask_2d = self.infer(frame_2d_pre)
+            mask_2d_post = self.postprocess(mask_2d)
+            results.append(SegmentationResult(seg=mask_2d_post, class_names=dict(self.class_names)))
         return results
 
 
@@ -136,55 +137,52 @@ class UKErUSSegAdapter(ModelAdapterBase):
         self.output_name = self.session.get_outputs()[0].name
 
     def preprocess(
-        self, us_2d: np.ndarray
+        self, frame_2d: np.ndarray
     ) -> tuple[np.ndarray, tuple[int, int]]:
-        orig_shape = us_2d.shape
-        us_norm = us_2d.astype(np.float32)
-        mean = us_norm.mean()
-        std = us_norm.std()
-        if std > 0:
-            us_norm = (us_norm - mean) / std
+        
+        self.frame_orig_shape = frame_2d.shape
 
-        target_h, target_w = self.input_shape
-        zoom_factors = (target_h / orig_shape[0], target_w / orig_shape[1])
-        us_resized = zoom(us_norm, zoom_factors, order=1)
+        # resize to model input shape
+        # TODO: check resize vs padding
+        frame_2d = resize_img(frame_2d, self.input_shape)
 
-        us_tensor = np.expand_dims(us_resized, axis=(0, 1))
-        return us_tensor, orig_shape
+        # z score normalization
+        # TODO: check global mean/std vs per-frame
+        frame_2d = normalize_img(frame_2d)
+        
+        return frame_2d
 
-    def infer(self, input_tensor: np.ndarray) -> np.ndarray:
+    def infer(self, frame_2d: np.ndarray) -> np.ndarray:
+        # add leading dim and run inference
+        frame_tensor = np.expand_dims(frame_2d, axis=(0, 1))
         outputs = self.session.run(
-            [self.output_name], {self.input_name: input_tensor}
+            [self.output_name], {self.input_name: frame_tensor}
         )
-        return np.asarray(outputs[0])
+        mask_2d = np.argmax(outputs[0], axis=1).squeeze() 
 
-    def postprocess(
-        self, model_output: np.ndarray, orig_shape: tuple[int, int]
-    ) -> np.ndarray:
+        return mask_2d
+
+    def postprocess(self, mask_2d: np.ndarray) -> np.ndarray:
         """
-        in the future, these can be moved to separate postprocessing utilities if needed, but for now we can keep it here
-        since we only have one adapter anyways
+        Perform custom postprocessing on the segmentation masks
         """
-        logits = np.asarray(model_output)
-        if logits.ndim != 4:
-            raise ValueError(
-                f"Expected 4D logits from model, got shape {logits.shape}"
-            )
+        post_cfg = self.model_config.postprocessing_config
+        # resize back to original frame shape
+        mask_2d = resize_mask(mask_2d, self.frame_orig_shape)
+        # only keep the largest connected component for the given class ids
+        mask_2d = keep_largest_region(mask_2d, post_cfg["keep_largest_per_class"])
+        # reassign freed pixels row-wise to the nearest remaining class in that row
+        mask_2d = reassign_freed_pixels_row_based(mask_2d)
+        # combine given classes into one class (here fascia classes)
+        mask_2d = combine_classes(mask_2d, post_cfg["combine_class_groups"])
+        for class_id, min_size in post_cfg["remove_small_objects_config"]:
+            class_mask = mask_2d == class_id
+            processed_class = remove_small_objects(class_mask, min_size=min_size)
+            mask_2d[class_mask & ~processed_class] = 0
+        # reassign any remaining freed pixels to the nearest class
+        mask_2d = reassign_freed_pixels(mask_2d)
 
-        if logits.shape[1] <= logits.shape[-1]:
-            pred_mask = np.argmax(logits, axis=1).squeeze(0)
-        else:
-            pred_mask = np.argmax(logits, axis=-1).squeeze(0)
-
-        zoom_factors = (
-            orig_shape[0] / pred_mask.shape[0],
-            orig_shape[1] / pred_mask.shape[1],
-        )
-        pred_mask_orig = zoom(
-            pred_mask.astype(np.float32), zoom_factors, order=0
-        )
-
-        return pred_mask_orig.astype(np.int32)
+        return mask_2d
 
 
 def create_segmenter(

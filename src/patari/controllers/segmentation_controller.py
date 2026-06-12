@@ -22,7 +22,12 @@ logger = logging.getLogger(__name__)
 
 
 class SegmentationController(TaskControllerBase):
-    """Segmentation-related UI actions and geometry helpers."""
+    """
+    Segmentation-related UI actions and geometry helpers.
+    Segmentation masks are generated either for a single frame or all frames, depending on the checkbox state in the UI.
+    For single frame, the mask will be shown only on the current frame.
+    In any case, the mask is padded to the full shape of the US data and repeated across the channel dimension for correct napari display.
+    """
 
     def __init__(self, parent_controller):
         super().__init__(parent_controller)
@@ -326,6 +331,8 @@ class SegmentationController(TaskControllerBase):
                 for r in results
             ]
             mask_3d = np.stack(filtered)
+            # Repeat across channel dimension for correct napari display;
+            # segmenter output is (nframes, H, W) but napari expects (nframes, n_channels, H, W)
             mask = np.repeat(mask_3d[:, np.newaxis], n_channels, axis=1)
             if frame_idx is not None:
                 full_mask = np.zeros(us_raw.shape, dtype=np.int32)
