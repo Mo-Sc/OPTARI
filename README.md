@@ -24,6 +24,7 @@ Main features (v0.2):
 - Spectral unmixing, including chromophore spectra and THb / sO2 calculation.
 - Export processed scans to HDF5 and ROI analysis results to XLSX.
 - Detailed instructions: [PATARI v0.2 Usage PDF](docs/PATARIv02_Instructions.pdf)
+- Keyboard shortcuts (version>=0.3): [PATARI Keyboard Shortcuts Guide](docs/shortcuts.md)
 
 
 ## Installation 
