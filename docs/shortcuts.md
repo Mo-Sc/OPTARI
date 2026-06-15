@@ -29,15 +29,20 @@ Browse through scan data, frames, and toggle between different image layers.
 
 | Action | Windows / Linux | macOS |
 | :--- | :--- | :--- |
-| **Draw Polygon ROI** | `P` | `P` |
-| **Draw Rectangle ROI** | `R` | `R` |
 | **Draw Ellipse ROI** | `E` | `E` |
+| **Draw Rectangle ROI** | `R` | `R` |
+| **Draw Polygon ROI** | `P` | `P` |
 | **Finish Drawing Polygon** | `Double-Click` | `Double-Click` |
+| **Modify Polygon Vertices** | `D` | `D` |
 | **Pan & Zoom Mid-Draw** (Hold key) | `Spacebar` | `Spacebar` |
-| **Select a Shape** (Move/Resize mode) | `S` | `S` |
-| **Select All Shapes** | `A` | `A` |
-| **Copy Selected Shape(s)** | `Ctrl` + `C` | `Cmd` + `C` |
-| **Paste Selected Shape(s)** | `Ctrl` + `V` | `Cmd` + `V` |
-| **Delete Selected Shape(s)** | `Delete` or `Backspace` | `Delete` or `Backspace` |
+| **Select a ROI** (Move/Resize mode) | `S` | `S` |
+| **Select All ROIs** | `A` | `A` |
+| **Copy Selected ROI(s)** | `Ctrl` + `C` | `Cmd` + `C` |
+| **Paste Selected ROI(s)** | `Ctrl` + `V` | `Cmd` + `V` |
+| **Delete Selected ROI(s)** | `Delete` or `Backspace` | `Delete` or `Backspace` |
+| **Save ROI Data*** | `Shift` + `Ctrl` + `S` | `Shift` + `Cmd` + `S` |
 
----
+
+
+>*not napari native
+

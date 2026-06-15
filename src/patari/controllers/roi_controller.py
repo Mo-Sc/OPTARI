@@ -14,7 +14,7 @@ from qtpy.QtWidgets import (
     QMessageBox,
 )
 
-from patari.config import MAX_ROIS, ROI_LABELS, dtype_map
+from patari.config import MAX_ROIS, dtype_map
 from patari.io.export_pipeline import export_roi_table_to_xlsx
 from patari.roi.roi_library import RoiLibrary
 from patari.roi.roi_utils import compute_roi_stats
@@ -222,6 +222,10 @@ class RoiController(TaskControllerBase):
                 MAX_ROIS,
                 n_shapes,
             )
+        
+        # disable the save button when no ROIs are present
+        selected = self.patari_controller.shapes_layer.selected_data
+        self.patari_controller.roi.save_button.enabled = (len(selected) > 0)
 
         # TODO: roi_position attribute
         # for roi specific metadata, we have to add/update properties on the shapes layer, that would be done here
@@ -230,8 +234,7 @@ class RoiController(TaskControllerBase):
         # print(positions)
 
         self.apply_roi_colors()
-        if ROI_LABELS:
-            self.apply_roi_labels()
+        self.apply_roi_labels()
 
         self.update_live_table()
 
@@ -294,22 +297,24 @@ class RoiController(TaskControllerBase):
         if isinstance(val, dict) and "data" in val and "columns" in val:
             return pd.DataFrame(val["data"], columns=val["columns"])
         return pd.DataFrame()
-
     def on_save_clicked(self, event=None) -> None:
+        """
+        Save selected ROIs from the live table to the saved table.
+        If "include all frames/channels" is enabled, compute stats for all frames/channels of the active recon layer and include rows for all selected ROIs.
+        """
         if (
             self.patari_controller.roi is None
             or self.patari_controller.shapes_layer is None
         ):
             return
 
-        selected = self.patari_controller.shapes_layer.selected_data
-        if len(selected) != 1:
-            logger.info("Select one ROI to save")
+        selected_indices = list(self.patari_controller.shapes_layer.selected_data)
+        if not selected_indices:
+            logger.info("Select at least one ROI to save")
             return
 
-        roi_idx = list(selected)[0]
         df_live = self.table_value_to_df(self.patari_controller.roi.live_table)
-        if df_live.empty or roi_idx >= len(df_live):
+        if df_live.empty:
             logger.info("Nothing to save")
             return
 
@@ -333,8 +338,11 @@ class RoiController(TaskControllerBase):
                 bool(cb_wavs.isChecked()) if cb_wavs is not None else False
             )
 
+        # just save for the current frame and channel
         if not include_all_frames and not include_all_wavelengths:
-            rows_to_add = df_live.iloc[[roi_idx]].astype(dtype_map)
+            rows_to_add = df_live.iloc[selected_indices].astype(dtype_map)
+        
+        # looping through frames/channels
         else:
             if self.patari_controller.active_recon_layer is None:
                 logger.info("Select an image layer to save ROI stats")
@@ -364,8 +372,7 @@ class RoiController(TaskControllerBase):
             else:
                 channel_indices = [channel_idx]
 
-            # Potentially expensive path: compute one row per (frame, channel)
-            # for the selected ROI only, preserving the current ROI filtering rules.
+            # not very efficient: compute one row per (frame, channel)
             collected: list[pd.DataFrame] = []
             for f_idx in frame_indices:
                 for c_idx in channel_indices:
@@ -381,11 +388,14 @@ class RoiController(TaskControllerBase):
                         ),
                     )
 
+                    # Filter the computed slice to include ALL selected ROIs
                     roi_index_numeric = pd.to_numeric(
                         df_slice["roi_index"], errors="coerce"
                     )
-                    df_row = df_slice[roi_index_numeric == int(roi_idx)]
-                    collected.append(df_row.iloc[[0]].astype(dtype_map))
+                    df_rows = df_slice[roi_index_numeric.isin(selected_indices)]
+                    
+                    if not df_rows.empty:
+                        collected.append(df_rows.astype(dtype_map))
 
             if not collected:
                 logger.info("Nothing to save")
@@ -406,7 +416,7 @@ class RoiController(TaskControllerBase):
         self.patari_controller.roi.saved_table.value = df_saved.astype(
             dtype_map
         )
-        logger.info("Saved ROI %s (%s row(s))", roi_idx, len(rows_to_add))
+        logger.info("Saved %s ROI(s) (%s total row(s))", len(selected_indices), len(rows_to_add))
 
     def on_delete_saved_clicked(self, event=None) -> None:
         if self.patari_controller.roi is None:

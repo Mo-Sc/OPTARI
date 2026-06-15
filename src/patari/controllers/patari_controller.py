@@ -22,6 +22,7 @@ from patari.widgets.unmixing_dock import UnmixingDock
 from patari.widgets.histogram_dock import HistogramDock
 from patari.widgets.spectrum_dock import SpectrumDock
 from patari.controllers.ui_manager import UiManager
+from patari.controllers.shortcut_manager import ShortcutManager
 from patari.controllers.scan_controller import ScanController
 from patari.controllers.roi_controller import RoiController
 from patari.controllers.segmentation_controller import SegmentationController
@@ -93,6 +94,7 @@ class PatariController:
         self._ensure_docks()
         self._initialize_roi_library()
         self._connect_events()
+        self.register_shortcuts()
         # some tasks require UI initialization based on the data (e.g. segmentation model list, unmixing reference spectra)
         self.segmentation_ctrl.initialize_ui()
         self.unmixing_ctrl.initialize_ui()
@@ -121,6 +123,9 @@ class PatariController:
 
     def _connect_events(self) -> None:
         UiManager.connect_events(self)
+
+    def register_shortcuts(self) -> None:
+        ShortcutManager.register_all(self)
 
     def _connect_shapes_layer_events(self) -> None:
         if self.shapes_layer is None:
