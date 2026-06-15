@@ -14,6 +14,20 @@ logger = logging.getLogger(__name__)
 from . import __version__
 
 
+
+def configure_napari_preferences() -> None:
+    """configure PATRI specific napari settings (playback fps, save window state, grid stride)."""
+    try:
+        import napari
+        settings = napari.settings.get_settings()
+        
+        settings.application.playback_fps = 5
+        settings.application.save_window_state = True
+        settings.application.grid_stride = -2
+        logger.info("PATARI: Clinical environment preferences applied successfully.")
+    except Exception as e:
+        logger.warning(f"Could not apply Napari preferences: {e}")
+
 def disclaimer_widget() -> QWidget:
     """simple disclaimer widget."""
     disclaimer = QWidget()
@@ -32,6 +46,7 @@ def disclaimer_widget() -> QWidget:
 def patari_controls(napari_viewer: Viewer | None = None) -> QWidget:
     """Instantiate PATARI UI and return the primary info widget."""
     configure_logging()
+    configure_napari_preferences()
 
     if napari_viewer is None:
         import napari

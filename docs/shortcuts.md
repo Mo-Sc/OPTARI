@@ -18,6 +18,7 @@ Browse through scan data, frames, and toggle between different image layers.
 | **Switch Layer & Hide All Others** (Solo View) | `Shift` + `Alt` + `Up` / `Down` Arrow | `Shift` + `Option` + `Up` / `Down` Arrow |
 | **Toggle Active Layer Visibility** (Hide/Show) | `V` | `V` |
 | **Toggle Grid Mode** | `Ctrl` + `G` | `Cmd` + `G` |
+| **Reset View to Original State** | `Ctrl` + `R` | `Cmd` + `R` |
 | **Undo Last Action** | `Ctrl` + `Z` | `Cmd` + `Z` |
 | **Quick Select Layer by Initial** | `First Letter` of layer name *(Layer list must be selected)* | `First Letter` of layer name *(Layer list must be selected)* |
 
