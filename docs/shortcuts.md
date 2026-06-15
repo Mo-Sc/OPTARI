@@ -43,6 +43,11 @@ Browse through scan data, frames, and toggle between different image layers.
 | **Save ROI Data*** | `Shift` + `Ctrl` + `S` | `Shift` + `Cmd` + `S` |
 
 
+## Image Processing
+
+| Action | Windows / Linux | macOS |
+| :--- | :--- | :--- |
+| **Unmix using Default Preset*** | `Shift` + `Ctrl` + `U` | `Shift` + `Cmd` + `U` |
 
 >*not napari native
 

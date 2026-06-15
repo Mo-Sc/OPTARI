@@ -188,6 +188,7 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
                     "scale": scale_from_patato_obj(recon, _recon_fallback),
                     "metadata": {
                         "type": "pa",
+                        "pa_kind": "recon",
                         "wavelengths": wavelengths,
                         "axis1_name": "Channel",
                         "axis1_labels": wavelengths,

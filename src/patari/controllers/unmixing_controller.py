@@ -122,19 +122,17 @@ class UnmixingController(TaskControllerBase):
         dock = self.patari_controller.unmixing
         active_recon_layer = self.patari_controller.active_recon_layer
 
-        if active_recon_layer is None:
+        if active_recon_layer is None or active_recon_layer.metadata["pa_kind"] != "recon":
             dock.source_layer_label.setText("Select a PA reconstruction layer")
             dock.wavelengths_list.clear()
-            return
-
-        if active_recon_layer.name not in self.patari_controller._patato_objects:
-            dock.source_layer_label.setText(
-                "Select a reconstruction layer as source"
-            )
-            dock.wavelengths_list.clear()
+            # disable unmixing button when no valid source is active
+            dock.run_button.setEnabled(False)
             return
 
         dock.source_layer_label.setText(active_recon_layer.name)
+
+        # Enable unmixing button
+        dock.run_button.setEnabled(True)
 
         wavelengths = active_recon_layer.metadata.get("wavelengths") or []
         source_name = active_recon_layer.name
@@ -217,7 +215,10 @@ class UnmixingController(TaskControllerBase):
         self.on_chromophores_changed()
 
     def on_chromophores_changed(self) -> None:
-        """Enable THb and sO2 options only when Hb and HbO2 are selected."""
+        """
+        Enable THb and sO2 options only when Hb and HbO2 are selected.
+        so2 is activated by default 
+        """
         if self.patari_controller.unmixing is None:
             return
 
@@ -231,6 +232,7 @@ class UnmixingController(TaskControllerBase):
 
         dock.generate_so2_checkbox.setEnabled(hb_pair_available)
         dock.generate_thb_checkbox.setEnabled(hb_pair_available)
+        dock.generate_so2_checkbox.setChecked(hb_pair_available)
 
         if not hb_pair_available:
             dock.generate_so2_checkbox.setChecked(False)
