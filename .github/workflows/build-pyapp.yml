@@ -67,13 +67,12 @@ jobs:
       - name: Prepare Release Package
         shell: bash
         run: |
-          ls -R
-          mkdir release_package
-          cp pyapp-source/target/release/${{ matrix.exe_name }} release_package/
-          docs/PATARI_Instructions.pdf release_package/ || true
-          docs/PATARI_Shortcuts.pdf release_package/ || true
-          scripts/UNINSTALL_MACOS.txt release_package/ || true
-          scripts/UNINSTALL_WINDOWS.bat release_package/ || true
+          mkdir -p "$GITHUB_WORKSPACE/release_package"
+          mv "$GITHUB_WORKSPACE/pyapp-source/target/release/${{ matrix.exe_name }}" "$GITHUB_WORKSPACE/release_package/"
+          cp "$GITHUB_WORKSPACE/docs/PATARI_Instructions.pdf" "$GITHUB_WORKSPACE/release_package/" || true
+          cp "$GITHUB_WORKSPACE/docs/PATARI_Shortcuts.pdf" "$GITHUB_WORKSPACE/release_package/" || true
+          cp "$GITHUB_WORKSPACE/scripts/UNINSTALL_MACOS.txt" "$GITHUB_WORKSPACE/release_package/" || true
+          cp "$GITHUB_WORKSPACE/scripts/UNINSTALL_WINDOWS.bat" "$GITHUB_WORKSPACE/release_package/" || true
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
