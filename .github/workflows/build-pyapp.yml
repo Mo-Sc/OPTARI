@@ -1,7 +1,7 @@
 name: Build PATARI Binaries
 
 on:
-  workflow_dispatch: # Allows to trigger this manually from the GitHub Actions tab
+  push: #workflow_dispatch: # Allows to trigger this manually from the GitHub Actions tab
 
 jobs:
   build-pyapp:
