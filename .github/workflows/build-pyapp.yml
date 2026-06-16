@@ -1,0 +1,65 @@
+name: Build PATARI Binaries
+
+on:
+  workflow_dispatch: # Allows to trigger this manually from the GitHub Actions tab
+
+jobs:
+  build-pyapp:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            artifact_name: patari-windows.exe
+            binary_path: target/release/pyapp.exe
+          - os: macos-latest
+            artifact_name: patari-macos
+            binary_path: target/release/pyapp
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build PATARI Wheel
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --wheel
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Download PyApp Source
+        shell: bash
+        run: |
+          curl -L https://github.com/ofek/pyapp/releases/latest/download/source.tar.gz -o pyapp-source.tar.gz
+          tar -xzf pyapp-source.tar.gz
+          mv pyapp-v* pyapp-source
+
+      - name: Build PyApp Wrapper
+        shell: bash
+        env:
+          PYAPP_PROJECT_NAME: "patari"
+          PYAPP_EXEC_SPEC: "patari.launcher:main"
+          PYAPP_PYTHON_VERSION: "3.12"
+          PYAPP_PIP_EXTRA_ARGS: "napari[all]"  # Todo: better here or using optional-dependencies in pyproject.toml? 
+        run: |
+          # Find the built wheel file dynamically
+          export PYAPP_PROJECT_PATH=$(ls dist/patari-*.whl | head -n 1)
+          
+          # Move into the PyApp directory and compile
+          cd pyapp-source
+          # Use absolute path for the wheel
+          export PYAPP_PROJECT_PATH="../$PYAPP_PROJECT_PATH"
+          cargo build --release
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: pyapp-source/${{ matrix.binary_path }}
