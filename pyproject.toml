@@ -36,7 +36,7 @@ dependencies = [
     # macOS Intel (TODO: compile patato)
     # "patato @ https://github.com/Mo-Sc/patato/releases/download/patari-v0.2-test/patato-[...]-macosx_10_9_x86_64.whl ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
     # Linux (compile from source) (for now also mac)
-    "patato @ https://github.com/Mo-Sc/patato/archive/b950b95e283b30f56cfca00bf6b1033d53ab496e.zip ; sys_platform == 'linux'" or sys_platform == 'darwin'",
+    "patato @ https://github.com/Mo-Sc/patato/archive/b950b95e283b30f56cfca00bf6b1033d53ab496e.zip ; sys_platform == 'linux' or sys_platform == 'darwin'",
     "openpyxl",
 ]
 
