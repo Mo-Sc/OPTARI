@@ -204,7 +204,7 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
     derived_specs = [
         (HDF5Tags.UNMIXED, "Unmixed", "magma", "unmixed", None),
         (HDF5Tags.THB, "THb", "inferno", "unmixed_param", "thb"),
-        (HDF5Tags.SO2, "sO2", "turbo", "unmixed_param", "so2"),
+        (HDF5Tags.SO2, "sO2", "twilight_shifted", "unmixed_param", "so2"),
     ]
     for group_name, prefix, colormap, pa_kind, parameter in derived_specs:
         for (dataset_name, idx), image in pa_data.get_scan_images(

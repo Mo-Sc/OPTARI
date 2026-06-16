@@ -31,6 +31,7 @@ class AnnotationDock:
     roi_exclusion_box: QGroupBox
     roi_exclude_min_edit: QLineEdit
     roi_exclude_max_edit: QLineEdit
+    include_all_layers_checkbox: QCheckBox
     include_all_frames_checkbox: QCheckBox
     include_all_wavelengths_checkbox: QCheckBox
     roi_library_list: QListWidget
@@ -65,9 +66,7 @@ def create_annotation_dock() -> AnnotationDock:
     scroll.setWidget(content_widget)
     outer = QVBoxLayout(content_widget)
 
-    # ------------------------------------------------------------------ #
-    # ROI Settings section                                                 #
-    # ------------------------------------------------------------------ #
+    # ROI Settings section                                                 
     roi_box = QGroupBox("ROI Settings")
     roi_layout = QVBoxLayout(roi_box)
 
@@ -110,13 +109,16 @@ def create_annotation_dock() -> AnnotationDock:
     roi_clipping_box.toggled.connect(_on_clipping_toggled)
     roi_exclusion_box.toggled.connect(_on_exclusion_toggled)
 
+    include_all_layers_checkbox = QCheckBox("Include all layers")
     include_all_frames_checkbox = QCheckBox("Include all frames")
     include_all_wavelengths_checkbox = QCheckBox("Include all channels")
+    include_all_layers_checkbox.setChecked(False)
     include_all_frames_checkbox.setChecked(False)
     include_all_wavelengths_checkbox.setChecked(False)
 
     roi_layout.addWidget(roi_clipping_box)
     roi_layout.addWidget(roi_exclusion_box)
+    roi_layout.addWidget(include_all_layers_checkbox)
     roi_layout.addWidget(include_all_frames_checkbox)
     roi_layout.addWidget(include_all_wavelengths_checkbox)
 
@@ -168,6 +170,7 @@ def create_annotation_dock() -> AnnotationDock:
         roi_exclusion_box=roi_exclusion_box,
         roi_exclude_min_edit=roi_exclude_min_edit,
         roi_exclude_max_edit=roi_exclude_max_edit,
+        include_all_layers_checkbox=include_all_layers_checkbox,
         include_all_frames_checkbox=include_all_frames_checkbox,
         include_all_wavelengths_checkbox=include_all_wavelengths_checkbox,
         roi_library_list=roi_library_list,

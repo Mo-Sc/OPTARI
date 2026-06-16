@@ -553,7 +553,7 @@ class UnmixingController(TaskControllerBase):
                     source_frame_count,
                 ),
                 metadata=so2_metadata,
-                colormap="turbo",
+                colormap="twilight_shifted",
             )
             self.patari_controller._derived_patato_objects[so2_name] = so2
             generated.append("so2")

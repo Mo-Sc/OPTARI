@@ -297,6 +297,7 @@ class RoiController(TaskControllerBase):
         if isinstance(val, dict) and "data" in val and "columns" in val:
             return pd.DataFrame(val["data"], columns=val["columns"])
         return pd.DataFrame()
+    
     def on_save_clicked(self, event=None) -> None:
         """
         Save selected ROIs from the live table to the saved table.
@@ -318,25 +319,17 @@ class RoiController(TaskControllerBase):
             logger.info("Nothing to save")
             return
 
+        include_all_layers = False
         include_all_frames = False
         include_all_wavelengths = False
+
         if self.patari_controller.annotation is not None:
-            cb_frames = getattr(
-                self.patari_controller.annotation,
-                "include_all_frames_checkbox",
-                None,
-            )
-            cb_wavs = getattr(
-                self.patari_controller.annotation,
-                "include_all_wavelengths_checkbox",
-                None,
-            )
-            include_all_frames = (
-                bool(cb_frames.isChecked()) if cb_frames is not None else False
-            )
-            include_all_wavelengths = (
-                bool(cb_wavs.isChecked()) if cb_wavs is not None else False
-            )
+            include_all_layers = self.patari_controller.annotation.include_all_layers_checkbox.isChecked()
+            include_all_frames = self.patari_controller.annotation.include_all_frames_checkbox.isChecked()
+            include_all_wavelengths = self.patari_controller.annotation.include_all_wavelengths_checkbox.isChecked()
+  
+
+        # TODO: from here on include_all_layers is not yet implemented
 
         # just save for the current frame and channel
         if not include_all_frames and not include_all_wavelengths:
