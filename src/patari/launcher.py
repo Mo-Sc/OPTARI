@@ -20,7 +20,14 @@ def main() -> None:
 
     from napari import Viewer, run
 
-    viewer = Viewer()
+    # once custom logo is ready
+    # from qtpy.QtGui import QIcon 
+    # logo_path = os.path.join(os.path.dirname(__file__), "data", "patari_logo.png")
+    # if os.path.exists(logo_path):
+    #     viewer.window._qt_window.setWindowIcon(QIcon(logo_path))
+
+    viewer = Viewer(title="PATARI (Clinical PA Analysis)") 
+
     viewer.window.add_plugin_dock_widget("patari", "PATARI Controls")
     run()
 
