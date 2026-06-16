@@ -64,12 +64,12 @@ jobs:
         shell: bash
         run: |
           mv pyapp-source/${{ matrix.binary_path }} pyapp-source/target/release/${{ matrix.exe_name }}
-
       - name: Prepare Release Package
         shell: bash
         run: |
+          ls -R
           mkdir release_package
-          cp pyapp-source/${{ matrix.binary_path }} release_package/${{ matrix.exe_name }}
+          cp pyapp-source/target/release/${{ matrix.exe_name }} release_package/
           docs/PATARI_Instructions.pdf release_package/ || true
           docs/PATARI_Shortcuts.pdf release_package/ || true
           scripts/UNINSTALL_MACOS.txt release_package/ || true
