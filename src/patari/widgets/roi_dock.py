@@ -6,7 +6,7 @@ import pandas as pd
 from magicgui.widgets import PushButton, Table
 from qtpy.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
-from patari.config import dtype_map
+from patari.roi.roi_utils import dtype_map
 
 
 @dataclass

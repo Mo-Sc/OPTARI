@@ -1,13 +1,14 @@
 {
     "general": {
-        "DEFAULT_LOG_LEVEL" : "INFO",
-        "DEFAULT_GUI_LOG_LEVEL" : "WARNING",
+        "LOG_LEVEL" : "INFO",
+        "GUI_LOG_LEVEL" : "WARNING",
         "DEFAULT_PA_LAYER": "Recon: iThera BP-40mm(res:100μm)_0",
+        "PA_FALLBACK_SCALE": [1, 0.1, 0.1],
         "DEFAULT_US_LAYER": "",
-        "DEFAULT_FRAME_INDEX": 0,
+        "US_FALLBACK_SCALE": [1, 0.19, 0.19],
+        "DEFAULT_FRAME_INDEX": 11,
         "DEFAULT_CHANNEL_INDEX": 0,
-        "DEFAULT_COLOR_MAPS":{}
-
+        "LAYER_COLOR_MAPS":{} 
     },
     "annotation": {
         "max_rois": 10,

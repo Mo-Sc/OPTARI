@@ -23,7 +23,7 @@ def get_user_dir() -> Path:
         (user_dir / "models").mkdir(exist_ok=True)
 
         # copy default config files from patari/src/patari/data/default_configs
-        default_configs_dir = Path(__file__).resolve().parent.parent / "data" / "default_configs"
+        default_configs_dir = Path(__file__).resolve().parent.parent / "config" / "default_configs"
 
         if not default_configs_dir.exists():
             raise FileNotFoundError(f"Default configs directory not found at {default_configs_dir}")
@@ -58,11 +58,11 @@ def configure_napari_preferences() -> None:
     """configure PATRI specific napari settings (playback fps, save window state, grid stride)."""
     try:
         import napari
-        settings = napari.settings.get_settings()
+        napari_settings = napari.settings.get_settings()
         
-        settings.application.playback_fps = 5
-        settings.application.save_window_state = True
-        settings.application.grid_stride = -2
+        napari_settings.application.playback_fps = 5
+        napari_settings.application.save_window_state = True
+        napari_settings.application.grid_stride = -2
         logger.info("PATARI: Clinical environment preferences applied successfully.")
     except Exception as e:
         logger.warning(f"Could not apply Napari preferences: {e}")

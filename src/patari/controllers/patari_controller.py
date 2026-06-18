@@ -8,9 +8,6 @@ import patato as pat
 from napari.layers import Image, Shapes
 from napari.viewer import Viewer
 
-from patari.config import (
-    DEFAULT_PA_LAYER,
-)
 from patari.utils.misc import parse_float_input
 from patari.widgets.info_dock import InfoDock
 from patari.widgets.roi_dock import RoiDock
@@ -29,6 +26,7 @@ from patari.controllers.segmentation_controller import SegmentationController
 from patari.controllers.analysis_controller import AnalysisController
 from patari.controllers.unmixing_controller import UnmixingController
 
+from patari.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -167,7 +165,7 @@ class PatariController:
         if current_index != top_index:
             # Layer order defines draw order; top index renders above image layers.
             self.viewer.layers.move(current_index, top_index)
-            logger.debug("moved ROI layer to top index %s", top_index)
+            logger.info("moved ROI layer to top index %s", top_index)
 
     # ============ scan loading ============
     def _close_current_scan(self) -> None:
@@ -197,12 +195,13 @@ class PatariController:
 
     def _select_default_pa_layer(self) -> None:
 
-        # Find layer named DEFAULT_PA_LAYER, otherwise pick first PA layer found
+        # Find layer default PA layer, otherwise pick first PA layer found
         first_pa = None
+        default_pa = settings.general.DEFAULT_PA_LAYER
         for layer in self.viewer.layers:
             if not isinstance(layer, Image):
                 continue
-            if layer.name == DEFAULT_PA_LAYER:
+            if layer.name == default_pa:
                 self.viewer.layers.selection.select_only(layer)
                 return
             if first_pa is None and layer.metadata.get("type") == "pa":
@@ -213,7 +212,7 @@ class PatariController:
             return
 
         raise RuntimeError(
-            f"No PA image layer found (looking for '{DEFAULT_PA_LAYER}')"
+            f"No PA image layer found (looking for '{default_pa}')"
         )
 
     # ============ layer selection ============
@@ -356,7 +355,7 @@ class PatariController:
             changed = True
 
         if changed:
-            logger.debug(
+            logger.info(
                 "snapped dims for layer %s to frame=%s, channel=%s",
                 self.active_recon_layer.name,
                 snapped_frame,
@@ -390,7 +389,7 @@ class PatariController:
 
             dt = datetime(1, 1, 1) + timedelta(seconds=float(ts_seconds))
         except Exception:
-            logger.debug(
+            logger.info(
                 "timestamp_for_slice failed to convert timestamp to datetime",
                 exc_info=True,
             )

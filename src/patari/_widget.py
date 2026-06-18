@@ -36,7 +36,7 @@ def patari_controls(napari_viewer: Viewer | None = None) -> QWidget:
 
         napari_viewer = napari.current_viewer()
 
-    startup_logo_path = Path(__file__).resolve().parent / "data/startup.png"
+    startup_logo_path = Path(__file__).resolve().parent / "config/startup.png"
 
     if startup_logo_path.exists():
         napari_viewer.add_image(

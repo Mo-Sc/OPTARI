@@ -186,6 +186,7 @@ class UnmixingController(TaskControllerBase):
         if preset_path is None:
             return
 
+        # TODO: presets should be moved to user dir
         # Presets map directly to PATATO unmixing attribute tags.
         settings = json.loads(Path(preset_path).read_text())
 

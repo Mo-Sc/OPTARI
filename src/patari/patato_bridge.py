@@ -12,11 +12,10 @@ from typing import TYPE_CHECKING
 import numpy as np
 from patato.io.attribute_tags import HDF5Tags
 
-from patari import config
-
 if TYPE_CHECKING:
     import patato as pat
 
+from patari.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +43,7 @@ def scale_from_patato_obj(obj, fallback: tuple) -> tuple:
             return fallback
         return (fallback[0], fov_y_m / ny * 1000, fov_x_m / nx * 1000)
     except Exception:
-        logger.debug(
+        logger.warning(
             f"could not derive scale from object {obj}, using fallback {fallback}",
             exc_info=True,
         )
@@ -106,8 +105,8 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
         Maps napari layer name → PATATO ``ImageSequence`` for later use
         (e.g. FOV queries, scale derivation).
     """
-    _us_fallback = (1, 0.19, 0.19)
-    _recon_fallback = (1, 0.1, 0.1)
+    _us_fallback = settings.general.US_FALLBACK_SCALE
+    _pa_fallback = settings.general.PA_FALLBACK_SCALE
 
     patato_objects: dict = {}
     layers: list = []
@@ -185,7 +184,7 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
                 {
                     "colormap": "viridis",
                     "name": layer_name,
-                    "scale": scale_from_patato_obj(recon, _recon_fallback),
+                    "scale": scale_from_patato_obj(recon, _pa_fallback),
                     "metadata": {
                         "type": "pa",
                         "pa_kind": "recon",
@@ -240,7 +239,7 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
                     {
                         "colormap": colormap,
                         "name": f"{prefix}: {dataset_name}_{idx}",
-                        "scale": scale_from_patato_obj(image, _recon_fallback),
+                        "scale": scale_from_patato_obj(image, _pa_fallback),
                         "metadata": metadata,
                     },
                     "image",
@@ -292,17 +291,18 @@ def napari_shapes_from_scan_rois(
         logger.exception("could not load ROIs")
         return []
 
+    max_rois = settings.annotation.max_rois
     total_rois = len(rois)
-    if total_rois > config.MAX_ROIS:
+    if total_rois > max_rois:
         logger.warning(
             "data contains %d ROI(s), but MAX_ROIS is %d; only loading first %d",
             total_rois,
-            config.MAX_ROIS,
-            config.MAX_ROIS,
+            max_rois,
+            max_rois,
         )
 
     shapes = []
-    roi_items = list(rois.items())[: config.MAX_ROIS]
+    roi_items = list(rois.items())[: max_rois]
     for (_name, _number), roi in roi_items:
         try:
             pts = np.asarray(roi.points, dtype=float)  # (N, 2): (x_m, y_m)

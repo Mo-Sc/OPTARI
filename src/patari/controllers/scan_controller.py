@@ -20,6 +20,8 @@ from patari.utils.misc import roi_color_for_index
 from patari.controllers.base import TaskControllerBase
 
 
+from patari.config import settings
+
 logger = logging.getLogger(__name__)
 
 
@@ -86,7 +88,7 @@ class ScanController(TaskControllerBase):
         try:
             self.patari_controller.pa_data.close()
         except Exception:
-            logger.debug("failed to close current scan handle", exc_info=True)
+            logger.info("failed to close current scan handle", exc_info=True)
         self.patari_controller.pa_data = None
         self.patari_controller._patato_objects = {}
         self.patari_controller._derived_patato_objects = {}
@@ -262,14 +264,13 @@ class ScanController(TaskControllerBase):
         )
         self.patari_controller._resolve_active_recon_layer()
 
-        # Initialize viewer position to middle frame/wav for each scan.
+        # Initialize viewer position to DEFAULT_FRAME_INDEX and DEFAULT_CHANNEL_INDEX
         try:
-            data = np.asarray(self.patari_controller.active_recon_layer.data)
-            if data.ndim >= 2:
-                self.viewer.dims.set_point(0, int((data.shape[0] - 1) // 2))
-                self.viewer.dims.set_point(1, int((data.shape[1] - 1) // 2))
+            self.viewer.dims.set_point(0, settings.general.DEFAULT_FRAME_INDEX)
+            self.viewer.dims.set_point(1, settings.general.DEFAULT_CHANNEL_INDEX)
         except Exception:
-            logger.exception("failed to set initial viewer position")
+            logger.warning("failed to set initial viewer position. Setting to (0, 0)", exc_info=True)
+
 
         # Populate ROIs after dims are initialized to avoid computing stats before the viewer is ready.
         self.init_shapes_from_scan()
@@ -278,7 +279,7 @@ class ScanController(TaskControllerBase):
         try:
             self.viewer.reset_view()
         except Exception:
-            logger.debug("failed to reset viewer view", exc_info=True)
+            logger.info("failed to reset viewer view", exc_info=True)
 
     @staticmethod
     def scan_key(scan_path: Path) -> str:

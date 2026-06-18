@@ -9,11 +9,28 @@ import numpy as np
 import pandas as pd
 from skimage.draw import polygon
 
-from patari.config import dtype_map
-
-
 logger = logging.getLogger(__name__)
 
+
+dtype_map = {
+    "roi_index": int,
+    "source_layer": str,
+    "roi_type": str,
+    "scan_id": str,
+    "frame": int,
+    "channel": object,
+    "mean": float,
+    "median": float,
+    "std": float,
+    "p10": float,
+    "p90": float,
+    "min": float,
+    "max": float,
+    "n_pixels": int,
+    "area_mm2": float,
+    "timestamp": str,
+    "filepath": str,
+}
 
 @dataclass
 class ROI:
@@ -145,7 +162,7 @@ def compute_roi_stats(
 ):
     """Compute ROI statistics for all shapes for a specific frame/channel."""
 
-    # logger.debug(
+    # logger.info(
     #     "compute_roi_stats for frame %s, channel %s",
     #     frame_idx,
     #     channel_idx,
@@ -174,7 +191,7 @@ def compute_roi_stats(
             + timedelta(seconds=float(timestamps[frame_idx, channel_idx]))
         )
     except Exception:
-        logger.debug(
+        logger.info(
             "could not parse timestamp for frame %s channel %s",
             frame_idx,
             channel_idx,

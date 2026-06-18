@@ -110,7 +110,7 @@ class UKErUSSegAdapter(ModelAdapterBase):
     """
     Ultrasound segmentation adapter for scans taken at the university hospital of Erlangen
     using itheras Acuity Echo MSOT scanners. 
-    Requires trained ONNX model files to be placed in the data/segmentation_models directory, and a config entry in segmentation_models.json.
+    Requires trained ONNX model file and a config entry in segmentation_models.json.
     
     """
 

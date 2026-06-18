@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 
-from ..config import DEFAULT_GUI_LOG_LEVEL, DEFAULT_LOG_LEVEL
+from patari.config import settings
 
 
 class _NapariNotificationHandler(logging.Handler):
@@ -36,7 +36,7 @@ def configure_logging() -> None:
     namespace only, and keep the root logger at ``WARNING`` to avoid
     debug output from other packages (e.g. napari/matplotlib).
     """
-    level_name = os.getenv("PATARI_LOG_LEVEL", DEFAULT_LOG_LEVEL).upper()
+    level_name = os.getenv("PATARI_LOG_LEVEL", settings.general.LOG_LEVEL).upper()
     level = getattr(logging, level_name, logging.INFO)
 
     root = logging.getLogger()
@@ -58,7 +58,7 @@ def configure_logging() -> None:
         patari_logger.addHandler(stream_handler)
 
     gui_level_name = os.getenv(
-        "PATARI_GUI_LOG_LEVEL", DEFAULT_GUI_LOG_LEVEL
+        "PATARI_GUI_LOG_LEVEL", settings.general.GUI_LOG_LEVEL
     ).upper()
     gui_level = getattr(logging, gui_level_name, logging.WARNING)
 

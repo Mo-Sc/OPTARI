@@ -5,7 +5,7 @@ from .utils.logging import configure_logging
 from .utils.setup import configure_napari_preferences
 logger = logging.getLogger(__name__)
 
-from .config import DEFAULT_GUI_LOG_LEVEL, DEFAULT_LOG_LEVEL
+from patari.config import settings
 
 
 def main() -> None:
@@ -17,15 +17,15 @@ def main() -> None:
     matplotlib.font_manager.findfont(matplotlib.font_manager.FontProperties(), fallback_to_default=True)
 
     
-    print(f"Starting PATARI... (GUI log level: {DEFAULT_LOG_LEVEL}, general log level: {DEFAULT_GUI_LOG_LEVEL})")
+    print(f"Starting PATARI... (GUI log level: {settings.general.GUI_LOG_LEVEL}, general log level: {settings.general.LOG_LEVEL})")
     configure_logging()
 
     # Set up user directory
     user_dir = get_user_dir()
 
     os.environ.setdefault("PATARI_USER_DIR", str(user_dir))
-    os.environ.setdefault("PATARI_LOG_LEVEL", DEFAULT_LOG_LEVEL)
-    os.environ.setdefault("PATARI_GUI_LOG_LEVEL", DEFAULT_GUI_LOG_LEVEL)
+    os.environ.setdefault("PATARI_LOG_LEVEL", settings.general.LOG_LEVEL)
+    os.environ.setdefault("PATARI_GUI_LOG_LEVEL", settings.general.GUI_LOG_LEVEL)
 
     
 

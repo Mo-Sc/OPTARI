@@ -14,15 +14,14 @@ from qtpy.QtWidgets import (
     QMessageBox,
 )
 
-from patari.config import MAX_ROIS, dtype_map
+from patari.controllers.base import TaskControllerBase
 from patari.io.export_pipeline import export_roi_table_to_xlsx
 from patari.roi.roi_library import RoiLibrary
-from patari.roi.roi_utils import compute_roi_stats
+from patari.roi.roi_utils import compute_roi_stats, dtype_map
 from patari.utils.misc import roi_color_for_index
 from patari.utils.setup import get_user_roi_library_file
 
-from patari.controllers.base import TaskControllerBase
-
+from patari.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -214,10 +213,11 @@ class RoiController(TaskControllerBase):
         n_shapes = len(self.patari_controller.shapes_layer.data)
 
         # ROI limit. For now just warning, TODO: enforce
-        if n_shapes > MAX_ROIS:
+        max_rois = settings.annotation.max_rois
+        if n_shapes > max_rois:
             logger.warning(
                 "ROI soft limit reached (%s ROIs); Too many ROIs may cause performance issues. Current number of ROIs: %s",
-                MAX_ROIS,
+                max_rois,
                 n_shapes,
             )
         

@@ -1,8 +1,8 @@
 import requests
 from pathlib import Path
 from napari.utils import progress
-from patari.config import roi_colors
 
+from patari.config import settings
 
 def parse_float_input(text: str) -> float | None:
     """
@@ -20,6 +20,9 @@ def parse_float_input(text: str) -> float | None:
 
 def roi_color_for_index(roi_index: int) -> str:
     """Return the configured display color for a given ROI index."""
+
+    roi_colors = settings.annotation.roi_colors
+
     if not roi_colors:
         return "#aa0000ff"
     try:
