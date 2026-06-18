@@ -1,8 +1,11 @@
 import os
 import logging
-from .config import DEFAULT_GUI_LOG_LEVEL, DEFAULT_LOG_LEVEL
-
+from .utils.setup import get_user_dir
+from .utils.logging import configure_logging
+from .utils.setup import configure_napari_preferences
 logger = logging.getLogger(__name__)
+
+from .config import DEFAULT_GUI_LOG_LEVEL, DEFAULT_LOG_LEVEL
 
 
 def main() -> None:
@@ -13,12 +16,22 @@ def main() -> None:
     print("Ensuring font cache is ready (this may take a moment on first launch)")
     matplotlib.font_manager.findfont(matplotlib.font_manager.FontProperties(), fallback_to_default=True)
 
+    
+    print(f"Starting PATARI... (GUI log level: {DEFAULT_LOG_LEVEL}, general log level: {DEFAULT_GUI_LOG_LEVEL})")
+    configure_logging()
+
+    # Set up user directory
+    user_dir = get_user_dir()
+
+    os.environ.setdefault("PATARI_USER_DIR", str(user_dir))
     os.environ.setdefault("PATARI_LOG_LEVEL", DEFAULT_LOG_LEVEL)
     os.environ.setdefault("PATARI_GUI_LOG_LEVEL", DEFAULT_GUI_LOG_LEVEL)
 
-    print(f"Starting PATARI... (GUI log level: {os.environ['PATARI_GUI_LOG_LEVEL']}, general log level: {os.environ['PATARI_LOG_LEVEL']})")
+    
 
     from napari import Viewer, run
+
+    configure_napari_preferences()
 
     # once custom logo is ready
     # from qtpy.QtGui import QIcon 

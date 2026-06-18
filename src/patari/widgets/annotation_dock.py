@@ -66,8 +66,45 @@ def create_annotation_dock() -> AnnotationDock:
     scroll.setWidget(content_widget)
     outer = QVBoxLayout(content_widget)
 
-    # ROI Settings section                                                 
-    roi_box = QGroupBox("ROI Settings")
+    # ROI Library section
+    roi_library_box = QGroupBox("ROI Library")
+    roi_library_layout = QVBoxLayout(roi_library_box)
+
+    roi_library_list = QListWidget()
+    roi_library_list.setSelectionMode(QAbstractItemView.SingleSelection)
+
+    button_row = QWidget()
+    button_layout = QHBoxLayout(button_row)
+    button_layout.setContentsMargins(0, 0, 0, 0)
+
+    save_roi_button = QPushButton("Save ROI")
+    remove_roi_button = QPushButton("Remove ROI")
+    save_library_button = QPushButton("Save Library")
+
+    button_layout.addWidget(save_roi_button)
+    button_layout.addWidget(remove_roi_button)
+    button_layout.addWidget(save_library_button)
+
+    roi_library_layout.addWidget(roi_library_list)
+    roi_library_description_label = QLabel("")
+    roi_library_description_label.setWordWrap(True)
+    roi_library_layout.addWidget(roi_library_description_label)
+
+    roi_placement_mode_combo = QComboBox()
+    roi_placement_mode_combo.addItem("static", userData="static")
+    roi_placement_mode_combo.addItem("auto", userData="auto")
+
+    placement_row = QWidget()
+    placement_layout = QHBoxLayout(placement_row)
+    placement_layout.setContentsMargins(0, 0, 0, 0)
+    placement_layout.addWidget(QLabel("Placement"))
+    placement_layout.addWidget(roi_placement_mode_combo)
+    roi_library_layout.addWidget(placement_row)
+
+    roi_library_layout.addWidget(button_row)
+
+    # ROI clipping and exclusion section                                                 
+    roi_box = QGroupBox("ROI Intensity")
     roi_layout = QVBoxLayout(roi_box)
 
     def _make_range_edits() -> tuple[QLineEdit, QLineEdit]:
@@ -109,6 +146,13 @@ def create_annotation_dock() -> AnnotationDock:
     roi_clipping_box.toggled.connect(_on_clipping_toggled)
     roi_exclusion_box.toggled.connect(_on_exclusion_toggled)
 
+    roi_layout.addWidget(roi_clipping_box)
+    roi_layout.addWidget(roi_exclusion_box)
+    
+    # ROI data saving options
+    save_roi_box = QGroupBox("Save ROI Data")
+    save_roi_layout = QVBoxLayout(save_roi_box)
+
     include_all_layers_checkbox = QCheckBox("Include all layers")
     include_all_frames_checkbox = QCheckBox("Include all frames")
     include_all_wavelengths_checkbox = QCheckBox("Include all channels")
@@ -116,50 +160,14 @@ def create_annotation_dock() -> AnnotationDock:
     include_all_frames_checkbox.setChecked(False)
     include_all_wavelengths_checkbox.setChecked(False)
 
-    roi_layout.addWidget(roi_clipping_box)
-    roi_layout.addWidget(roi_exclusion_box)
-    roi_layout.addWidget(include_all_layers_checkbox)
-    roi_layout.addWidget(include_all_frames_checkbox)
-    roi_layout.addWidget(include_all_wavelengths_checkbox)
-
-    roi_library_box = QGroupBox("ROI Library")
-    roi_library_layout = QVBoxLayout(roi_library_box)
-
-    roi_library_list = QListWidget()
-    roi_library_list.setSelectionMode(QAbstractItemView.SingleSelection)
-
-    button_row = QWidget()
-    button_layout = QHBoxLayout(button_row)
-    button_layout.setContentsMargins(0, 0, 0, 0)
-
-    save_roi_button = QPushButton("Save ROI")
-    remove_roi_button = QPushButton("Remove ROI")
-    save_library_button = QPushButton("Save Library")
-
-    button_layout.addWidget(save_roi_button)
-    button_layout.addWidget(remove_roi_button)
-    button_layout.addWidget(save_library_button)
-
-    roi_library_layout.addWidget(roi_library_list)
-    roi_library_description_label = QLabel("")
-    roi_library_description_label.setWordWrap(True)
-    roi_library_layout.addWidget(roi_library_description_label)
-
-    roi_placement_mode_combo = QComboBox()
-    roi_placement_mode_combo.addItem("static", userData="static")
-    roi_placement_mode_combo.addItem("auto", userData="auto")
-
-    placement_row = QWidget()
-    placement_layout = QHBoxLayout(placement_row)
-    placement_layout.setContentsMargins(0, 0, 0, 0)
-    placement_layout.addWidget(QLabel("Placement"))
-    placement_layout.addWidget(roi_placement_mode_combo)
-    roi_library_layout.addWidget(placement_row)
-
-    roi_library_layout.addWidget(button_row)
+    save_roi_layout.addWidget(include_all_layers_checkbox)
+    save_roi_layout.addWidget(include_all_frames_checkbox)
+    save_roi_layout.addWidget(include_all_wavelengths_checkbox)
+    
 
     outer.addWidget(roi_library_box)
     outer.addWidget(roi_box)
+    outer.addWidget(save_roi_box)
     outer.addStretch()
 
     return AnnotationDock(

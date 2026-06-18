@@ -157,22 +157,19 @@ jobs:
 #           # This creates e.g., patari_v0.2_windows.exe
 #           mv pyapp-source/${{ matrix.binary_path }} patari_${{ github.ref_name }}_${{ matrix.os_name }}${{ matrix.ext }}
 # 
-#   - name: Prepare Release Package
-#     shell: bash
-#     run: |
-#       mkdir release_package
-#       # Move binary to package folder
-#       mv pyapp-source/${{ matrix.binary_path }} release_package/patari${{ matrix.ext }}
-#       # Copy auxiliary files
-#       docs/PATARI_Instructions.pdf release_package/ || true
-#       docs/PATARI_Shortcuts.pdf release_package/ || true
-#       scripts/UNINSTALL_MACOS.txt release_package/ || true
-#       scripts/UNINSTALL_WINDOWS.bat release_package/ || true
-#       # Create a versioned zip for release
-#       cd release_package && zip -r ../patari_${{ github.ref_name }}_${{ matrix.os_name }}.zip .
+      # - name: Prepare Release Package
+      #   shell: bash
+      #   run: |
+      #     mkdir -p "$GITHUB_WORKSPACE/release_package"
+      #     mv "$GITHUB_WORKSPACE/pyapp-source/${{ matrix.binary_path }}" "$GITHUB_WORKSPACE/release_package/patari${{ matrix.ext }}"
+      #     cp "$GITHUB_WORKSPACE/docs/PATARI_Instructions.pdf" "$GITHUB_WORKSPACE/release_package/" || true
+      #     cp "$GITHUB_WORKSPACE/docs/PATARI_Shortcuts.pdf" "$GITHUB_WORKSPACE/release_package/" || true
+      #     cp "$GITHUB_WORKSPACE/scripts/UNINSTALL_MACOS.txt" "$GITHUB_WORKSPACE/release_package/" || true
+      #     cp "$GITHUB_WORKSPACE/scripts/UNINSTALL_WINDOWS.bat" "$GITHUB_WORKSPACE/release_package/" || true
+      #     cd "$GITHUB_WORKSPACE/release_package" && zip -r "../patari_${{ github.ref_name }}_${{ matrix.os_name }}.zip" .
 
-#   - name: Upload to GitHub Release
-#     uses: softprops/action-gh-release@v2
-#     with:
-#       files: patari_${{ github.ref_name }}_${{ matrix.os_name }}.zip
-#       generate_release_notes: true
+      # - name: Upload to GitHub Release
+      #   uses: softprops/action-gh-release@v2
+      #   with:
+      #     files: patari_${{ github.ref_name }}_${{ matrix.os_name }}.zip
+      #     generate_release_notes: true

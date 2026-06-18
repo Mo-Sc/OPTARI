@@ -1,9 +1,6 @@
-from pathlib import Path
-
-ROI_LABELS = True
 MAX_ROIS = 10
 DEFAULT_PA_LAYER = "Recon: iThera BP-40mm(res:100μm)_0"
-STARTUP_LOGO_PATH = Path(__file__).resolve().parent / "data/startup.png"
+DEFAULT_US_LAYER = ""
 DEFAULT_LOG_LEVEL = "INFO"
 DEFAULT_GUI_LOG_LEVEL = "WARNING"
 
@@ -27,19 +24,6 @@ dtype_map = {
     "filepath": str,
 }
 
-# TODO: better color maps
-roi_colors_ordered = [
-    "#8B0000",
-    "#B22222",
-    "#DC143C",
-    "#FF4500",
-    "#FF6347",
-    "#FF7F50",
-    "#FF8C00",
-    "#FFA500",
-    "#FFD700",
-    "#FFFF00",
-]
 roi_colors = [
     "#8B0000",
     "#FFD700",

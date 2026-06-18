@@ -4,11 +4,11 @@ import logging
 import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from pathlib import Path
 
 import numpy as np
 import onnxruntime as ort
 
+from patari.utils.setup import get_user_seg_models_config_file, get_user_models_dir
 from patari.segmentation.processing_utils import resize_img, resize_mask, normalize_img, combine_classes, keep_largest_region, reassign_freed_pixels_row_based, remove_small_objects, reassign_freed_pixels
 
 logger = logging.getLogger(__name__)
@@ -31,43 +31,37 @@ class SegmentationResult:
 class SegmentationModelConfig:
     """Config for a segmentation model."""
     model_id: str
-    model_path: Path
+    filename: str
     input_height: int
     input_width: int
     class_names: dict[int, str]
     default_class: str
     adapter_class: str
     postprocessing_config: dict | None = None
+    url: str | None = None
 
 
-DEFAULT_MODELS_CONFIG = (
-    Path(__file__).resolve().parent.parent
-    / "data"
-    / "segmentation_models.json"
-)
 
-
-def load_model_registry(
-    config_path: Path | None = None,
-) -> dict[str, SegmentationModelConfig]:
+def load_model_registry() -> dict[str, SegmentationModelConfig]:
     """Load model configs and return a mapping of model_id -> config."""
-    path = config_path if config_path is not None else DEFAULT_MODELS_CONFIG
-    raw = json.loads(path.read_text(encoding="utf-8"))
+
+    model_config = json.loads(get_user_seg_models_config_file().read_text())
     models: dict[str, SegmentationModelConfig] = {}
-    for item in raw["models"]:
+    for item in model_config["models"]:
         model_id = str(item["id"])
         class_names = {
             int(k): str(v) for k, v in item["class_names"].items()
         }
         models[model_id] = SegmentationModelConfig(
             model_id=model_id,
-            model_path=Path(item["model_path"]),
+            filename=str(item["filename"]),
             class_names=class_names,
             input_height=int(item["input_height"]),
             input_width=int(item["input_width"]),
             default_class=str(item["default_class"]),
             adapter_class=str(item["adapter_class"]),
             postprocessing_config=item.get("postprocessing_config", None),
+            url=item.get("url", None),
         )
 
     return models
@@ -122,16 +116,34 @@ class UKErUSSegAdapter(ModelAdapterBase):
 
     def __init__(self, model_config: SegmentationModelConfig) -> None:
         super().__init__(model_config)
-        self.model_path = model_config.model_path
+
+
         self.input_shape = (
             model_config.input_height,
             model_config.input_width,
         )
-        if not self.model_path.exists():
-            raise FileNotFoundError(f"Model missing at {self.model_path}")
+
+        model_path = get_user_models_dir() / model_config.filename
+
+       # check if model exists in user dir, if not, try to download
+        if not model_path.exists():
+            if not model_config.url:
+                raise FileNotFoundError(
+                    f"Model file {model_config.filename} not found and no download URL provided in config."
+                )
+            
+            logger.info(f"Model {model_config.filename} missing. Attempting auto-download from {model_config.url}")
+            try:
+                from patari.utils.misc import download_file
+                download_file(model_config.url, model_path)
+                logger.info(f"Successfully downloaded model {model_config.filename} to {model_path}")
+            except Exception as e:
+                msg = f"Failed to download model {model_config.filename} from {model_config.url}: {e}"
+                logger.error(msg)
+                raise RuntimeError(msg)
 
         self.session = ort.InferenceSession(
-            str(self.model_path), providers=["CPUExecutionProvider"]
+            str(model_path), providers=["CPUExecutionProvider"]
         )
         self.input_name = self.session.get_inputs()[0].name
         self.output_name = self.session.get_outputs()[0].name

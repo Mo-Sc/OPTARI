@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 
-from .config import DEFAULT_GUI_LOG_LEVEL, DEFAULT_LOG_LEVEL
+from ..config import DEFAULT_GUI_LOG_LEVEL, DEFAULT_LOG_LEVEL
 
 
 class _NapariNotificationHandler(logging.Handler):

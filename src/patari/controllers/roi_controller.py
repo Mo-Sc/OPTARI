@@ -19,14 +19,12 @@ from patari.io.export_pipeline import export_roi_table_to_xlsx
 from patari.roi.roi_library import RoiLibrary
 from patari.roi.roi_utils import compute_roi_stats
 from patari.utils.misc import roi_color_for_index
+from patari.utils.setup import get_user_roi_library_file
+
 from patari.controllers.base import TaskControllerBase
 
 
 logger = logging.getLogger(__name__)
-
-
-def _roi_library_file() -> Path:
-    return Path(__file__).resolve().parents[1] / "data" / "roi_library.json"
 
 
 def _roi_name_popup() -> tuple[str, str, str] | None:
@@ -456,7 +454,7 @@ class RoiController(TaskControllerBase):
     def _ensure_roi_library_loaded(self) -> RoiLibrary:
         library = getattr(self.patari_controller, "_roi_library", None)
         if library is None:
-            library = RoiLibrary(_roi_library_file())
+            library = RoiLibrary(get_user_roi_library_file())
             library.load()
             self.patari_controller._roi_library = library
         return library
