@@ -1,19 +1,14 @@
-"""patato_bridge — pure helpers bridging PATATO ↔ napari/PATARI.
-
-No napari viewer or Qt state here; all functions are pure and can be
-tested independently of the plugin runtime.
+"""patato_bridge: functions to convert between PATATO and napari data structures
 """
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 
 import numpy as np
-from patato.io.attribute_tags import HDF5Tags
 
-if TYPE_CHECKING:
-    import patato as pat
+from patato.io.attribute_tags import HDF5Tags # type: ignore[import]
+import patato as pat  # type: ignore[import]
 
 from patari.config import settings
 
@@ -108,6 +103,17 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
     _us_fallback = settings.general.US_FALLBACK_SCALE
     _pa_fallback = settings.general.PA_FALLBACK_SCALE
 
+    _user_cmaps = settings.general.LAYER_COLOR_MAPS
+    # fallback to hardcoded defaults if any of the configured cmaps are missing
+    _default_cmaps = {
+            HDF5Tags.ULTRASOUND: "gray",
+            HDF5Tags.RECONSTRUCTION: "viridis",
+            HDF5Tags.UNMIXED: "magma",
+            HDF5Tags.SO2: "twilight_shifted",
+            HDF5Tags.THB: "inferno",
+        }  
+
+
     patato_objects: dict = {}
     layers: list = []
 
@@ -129,7 +135,7 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
         (
             us_img,
             {
-                "colormap": "gray",
+                "colormap": _user_cmaps.get(HDF5Tags.ULTRASOUND, _default_cmaps[HDF5Tags.ULTRASOUND]),
                 "name": "US",
                 "scale": scale_from_patato_obj(us_obj, _us_fallback),
                 "metadata": {"type": "us", "timestamps": timestamps},
@@ -182,7 +188,7 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
             (
                 recon_img,
                 {
-                    "colormap": "viridis",
+                    "colormap": _user_cmaps.get(HDF5Tags.RECONSTRUCTION, _default_cmaps[HDF5Tags.RECONSTRUCTION]),
                     "name": layer_name,
                     "scale": scale_from_patato_obj(recon, _pa_fallback),
                     "metadata": {
@@ -201,11 +207,11 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
 
     # --- derived PA image groups that may already exist in HDF5 ---
     derived_specs = [
-        (HDF5Tags.UNMIXED, "Unmixed", "magma", "unmixed", None),
-        (HDF5Tags.THB, "THb", "inferno", "unmixed_param", "thb"),
-        (HDF5Tags.SO2, "sO2", "twilight_shifted", "unmixed_param", "so2"),
+        (HDF5Tags.UNMIXED, "Unmixed", "unmixed", None),
+        (HDF5Tags.THB, "THb", "unmixed_param", "thb"),
+        (HDF5Tags.SO2, "sO2", "unmixed_param", "so2"),
     ]
-    for group_name, prefix, colormap, pa_kind, parameter in derived_specs:
+    for group_name, prefix, pa_kind, parameter in derived_specs:
         for (dataset_name, idx), image in pa_data.get_scan_images(
             group_name, ignore_default=True
         ).items():
@@ -237,7 +243,7 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
                 (
                     data,
                     {
-                        "colormap": colormap,
+                        "colormap": _user_cmaps.get(group_name, _default_cmaps.get(group_name, "viridis")),
                         "name": f"{prefix}: {dataset_name}_{idx}",
                         "scale": scale_from_patato_obj(image, _pa_fallback),
                         "metadata": metadata,
