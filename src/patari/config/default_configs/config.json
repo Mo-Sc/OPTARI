@@ -8,7 +8,13 @@
         "US_FALLBACK_SCALE": [1, 0.19, 0.19],
         "DEFAULT_FRAME_INDEX": 11,
         "DEFAULT_CHANNEL_INDEX": 0,
-        "LAYER_COLOR_MAPS":{} 
+        "LAYER_COLOR_MAPS":{
+            "ultrasounds": "gray",
+            "reconstructions": "viridis",
+            "unmixed": "magma",
+            "so2": "twilight_shifted",
+            "thb": "inferno"
+        }
     },
     "annotation": {
         "max_rois": 10,
