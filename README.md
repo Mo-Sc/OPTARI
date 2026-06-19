@@ -12,24 +12,37 @@
 
 PATARI is a python based analysis tool for clinical photoacoustic studies, based on the PATATO and NAPARI frameworks.
 
-Main features (v0.2):
+Key features (v0.3):
 
-- Load native iThera scans (including ROIs) and HDF5 scans via PATATO.
+- Load native iThera scans (including ROIs), PATATO HDF5 scans and more.
 - Browse studies and fast switching between scans.
 - Visualize US + reconstructed PA layers.
 - Seamless scrolling through frames and wavelengths.
 - Draw, edit, and save ROIs, create a ROI Library.
-- Extract statistical features from ROIs, auto-updating analysis table.
+- Extract customizable statistical features from ROIs, auto-updating analysis table, export to XLSX.
+- Fast intensity extraction over multiple layers, frames, wavelengths or chromophores.
 - Visualize ROI intensities over time and spectrum, plot histograms.
+- AI-based tissue segmentation and automatic ROI placement in target class.
 - Spectral unmixing, including chromophore spectra and THb / sO2 calculation.
-- Export processed scans to HDF5 and ROI analysis results to XLSX.
-- Detailed instructions: [PATARI v0.2 Usage PDF](docs/PATARIv02_Instructions.pdf)
-- Keyboard shortcuts (version>=0.3): [PATARI Keyboard Shortcuts Guide](docs/shortcuts.md)
+- Export processed scans to HDF5.
+- Usage instructions: [PATARI v0.2 Usage PDF](docs/PATARIv02_Instructions.pdf) (TODO: update)
+- Keyboard shortcuts: [PATARI Keyboard Shortcuts Guide](docs/shortcuts.md)
 
 
 ## Installation 
 
-### Option A: Source Installation (recommended)
+### Option A: Executable (recommended for clinical use)
+
+1. Download the executable file of the [current release (v3)](tbd) for your operating system (macOS or windows).
+2. Unpack the zip folder and run the patari file.
+3. [Optional, on first run] If you get a warning, give your OS permission to run it:
+    * For windows: Click weitere infos and then trotzdem ausführen TODO
+    * For macOS: Open `System Settings` -> `Privacy & Security` -> Open Patari TODO
+4. At first run, PATARI will download all the required files, so make sure your computer is connected to the internet. The installation can take a few minutes.
+5. Once the installation is done, PATARI launches automatically. If patari is closed, you can simply launch it again by clicking on the same patari file.
+
+
+### Option B: Installation from source (recommended for development)
 
 Create a new python environment, clone this repository:
 
@@ -48,26 +61,7 @@ If napari is not already installed, install with napari + Qt extras:
 pip install -e ".[all]"
 ```
 
-### Option B: napari Plugin Manager
-
-1. Install the napari app:
-    - https://napari.org/stable/getting_started/installation.html#installation-bundle-conda
-    - Select the installer that corresponds to your OS (Mac / Windows) and follow the instructions
-    - Launch napari from launchpad / start menu
-
-2. Install the PATARI plugin:
-    - In napari, click Plugins -> Install/Uninstall Plugins
-    - Drag and drop the provided .whl file into the plugin manager window
-    - Next to the Install button, select PyPI and click Install
-    - After installation is done, restart napari, and select  under Plugins
-
-
-
-## Run PATARI
-
-### For Option A: Terminal
-
-Open a terminal, start PATARI via module entrypoint:
+To run patari, open a terminal, start PATARI via module entrypoint:
 
 ```
 python -m patari.launcher
@@ -81,24 +75,27 @@ patari
 
 This opens napari and directly adds the PATARI dock widget. To quickly create a desktop shortcut, you can use the `create_macos_desktop_launcher.py` script (mac only).
 
-### For Option B: standalone napari App
+## Configuration
 
-1. Start napari
-2. Open Plugins → PATARI Controls
+At installation, PATARI creates a `.patari` folder in the users home directory and copies all the relevant configuration files into it. It also contains a `models` folder, where PATARI auto-downloads pretrained segmentation models, once the segmentation adapter is run for the first time. 
 
+To change settings in PATARI, edit the respective json file (requires restart):
+- `config.json`: main configuration file. Contains general settings, as well as task-specific settings for the different modules.
+- `roi_library.json`: Contains all the ROIs in the ROI Library. Entries can be manually added or deleted.
+- `segmentation_models.json`: Configuration for the automatic segmentation. See segmentation reference for more info (tbd)
 
+In a future version, these settings will be editable from the GUI as well.
 
+## Development Stuff 
 
-## Some Developer Notes
 
 - PATARI currently depends on a custom PATATO fork:
 
     - `https://github.com/Mo-Sc/patato.git@b950b95e283b30f56cfca00bf6b1033d53ab496e`
     - Contains some minor adjustments and bug fixes. In the future, these will either be moved to PATARI or included in the public PATATO
     - Also ensures compatibility with some of my legacy hdf5 files
-- Thoughts, bugs, and feature ideas are tracked in Issues.
 
-### Architecture
+### Architecture Notes (v0.2, todo: update)
 
 - **High-level design**: PATARI follows a controller + dock split with a task-controller pattern (see [architecture diagram](architecture.md))
   - `PatariController`: central session/app controller holding viewer state, scan data, and ROI geometry. Instantiates and coordinates feature controllers.
