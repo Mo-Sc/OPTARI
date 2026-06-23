@@ -29,8 +29,31 @@
             "#FF4500",
             "#FFA500",
             "#FF7F50"
-        ]
-
+        ],
+        "roi_features": {
+            "roi_index": 1,
+            "mean": 1,
+            "median": 1,
+            "std": 1,
+            "p10": 0,
+            "p90": 0,
+            "iqr": 1,
+            "min": 1,
+            "max": 1,
+            "snr": 0,
+            "n_pixels": 0,
+            "area_mm2": 1,
+            "src_layers": 0,
+            "roi_type": 0,
+            "study": 0,
+            "scan": 0,
+            "frame": 0,
+            "channel": 0,
+            "roi_ts": 0,
+            "scan_ts": 0,
+            "roi_centroid": 1,
+            "filepath": 0
+        }
     },
     "segmentation":{}
 }

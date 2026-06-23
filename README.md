@@ -111,6 +111,9 @@ In a future version, these settings will be editable from the GUI as well.
 - **Rendering/data IO**: `patato_bridge.py` handles PATATO <-> napari transformations, coordinate conversion, scale/FOV, and layer data construction.
 - **Layer metadata**: PA layers rely on metadata keys such as `type`, `pa_kind`, `frames`, `timestamps`, `axis1_name`, `axis1_labels`, and `source_layer`. Many downstream features (info labels, analysis, export/reload symmetry) depend on these.
 - **ROI model**: ROI stats are recomputed from `shapes_layer.events.data`. Initial ROI loading temporarily disconnects this handler to avoid repeated per-shape computation during initialization.
+- **ROI feature configuration**: available ROI metrics and source fields are defined in a central feature registry and can be toggled in `config.json` via `annotation.roi_features`.
+- **Visible columns**: the live and saved table views are column-filtered from that feature map, while saved/source columns keep a fixed order for consistent export schemas.
+- **Live vs save computation**: for interactivity, live updates compute only currently visible live columns; on save/export, PATARI always computes the full feature set.
 - **Coordinate conventions**: ROIs are represented in napari as `(y_mm, x_mm)` and converted to PATATO `(x_m, y_m)` at export/import. Conversion logic is in `patato_bridge.py`.
 - **Data loading**: PATARI loads either iThera scan folders or HDF5 scans via PATATO readers and supports loading both individual scans and study folders.
 - **Scan preference rule**: if both iThera and HDF5 exist for the same scan key, scan discovery prefers HDF5 (treated as previously converted version).

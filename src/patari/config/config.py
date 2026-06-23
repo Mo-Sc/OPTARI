@@ -19,6 +19,7 @@ class GeneralConfig:
 class AnnotationConfig:
     max_rois: int
     roi_colors: list = field(default_factory=list)
+    roi_features: dict[str, int] = field(default_factory=dict)
 
 @dataclass(frozen=True)
 class PatariConfig:
@@ -33,5 +34,5 @@ class PatariConfig:
         
         return cls(
             general=GeneralConfig(**data["general"]),
-            annotation=AnnotationConfig(**data["annotation"])
+            annotation=AnnotationConfig(**data["annotation"]),
         )

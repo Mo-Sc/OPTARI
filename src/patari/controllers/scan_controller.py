@@ -350,7 +350,7 @@ class ScanController(TaskControllerBase):
                 shapes = napari_shapes_from_scan_rois(
                     self.patari_controller.pa_data, *fov
                 )
-                for verts, stype, _ in shapes:
+                for verts, stype, _, _ in shapes:
                     self.patari_controller.shapes_layer.add(
                         verts, shape_type=stype
                     )
@@ -362,7 +362,8 @@ class ScanController(TaskControllerBase):
                     )
                     or {}
                 )
-                props["roi_position"] = [pos for _, _, pos in shapes]
+                props["roi_position"] = [pos for _, _, pos, _ in shapes]
+                props["roi_source"] = [src for _, _, _, src in shapes]
                 self.patari_controller.shapes_layer.properties = props
 
                 if shapes:

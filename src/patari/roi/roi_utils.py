@@ -8,29 +8,62 @@ import cv2
 import numpy as np
 import pandas as pd
 from skimage.draw import polygon
+from patari.config import settings
+from patari.roi.roi_features import (
+    ALL_FEATURE_COLUMNS,
+    FEATURE_REGISTRY,
+    ROIContext,
+    SAVED_FIXED_SOURCE_COLUMNS,
+)
 
 logger = logging.getLogger(__name__)
 
 
-dtype_map = {
-    "roi_index": int,
-    "source_layer": str,
-    "roi_type": str,
-    "scan_id": str,
-    "frame": int,
-    "channel": object,
-    "mean": float,
-    "median": float,
-    "std": float,
-    "p10": float,
-    "p90": float,
-    "min": float,
-    "max": float,
-    "n_pixels": int,
-    "area_mm2": float,
-    "timestamp": str,
-    "filepath": str,
-}
+def full_feature_columns() -> list[str]:
+    return list(ALL_FEATURE_COLUMNS)
+
+
+def visible_feature_columns() -> list[str]:
+    """
+    Checks the user settings for which ROI features are enabled and returns a list of those feature names.
+    """
+    valid = [
+        c for c in ALL_FEATURE_COLUMNS
+        if c in FEATURE_REGISTRY and int(settings.annotation.roi_features.get(c, 0)) == 1
+    ]
+    return valid
+
+
+def live_table_columns() -> list[str]:
+    """
+    columns to show in the live table
+    includes only the features that are enabled in the user settings
+    """
+    return visible_feature_columns()
+
+
+def saved_table_columns() -> list[str]:
+    """ 
+    columns to show in the saved table
+    Includes the visible features that are enabled in the user settings and a fixed set of columns that identify the origin of the ROI
+    """
+    visible = [
+        c for c in visible_feature_columns()
+        if c not in SAVED_FIXED_SOURCE_COLUMNS and c != "roi_index"
+    ]
+    return list(SAVED_FIXED_SOURCE_COLUMNS) + visible
+
+
+def saved_export_columns() -> list[str]:
+    """
+    columns to export to xlsx.
+    Includes all available statistical and roi source features
+    """
+    stats = [
+        c for c in full_feature_columns()
+        if c not in SAVED_FIXED_SOURCE_COLUMNS and c != "roi_index"
+    ]
+    return list(SAVED_FIXED_SOURCE_COLUMNS) + stats
 
 @dataclass
 class ROI:
@@ -55,6 +88,63 @@ def _clamp_channel_idx(active_recon_layer, channel_idx: int) -> int:
 def _is_reconstructed_frame(active_recon_layer, frame_idx: int) -> bool:
     frames = getattr(active_recon_layer, "metadata", {}).get("frames")
     return frames is None or frame_idx in frames
+
+
+def _channel_value(active_recon_layer, channel_idx: int) -> object:
+    axis1_labels = active_recon_layer.metadata.get("axis1_labels")
+    if isinstance(axis1_labels, (list, tuple)) and 0 <= channel_idx < len(
+        axis1_labels
+    ):
+        channel_value = axis1_labels[channel_idx]
+    else:
+        wavelengths = active_recon_layer.metadata.get("wavelengths", None)
+        if isinstance(
+            wavelengths, (list, tuple)
+        ) and 0 <= channel_idx < len(wavelengths):
+            channel_value = wavelengths[channel_idx]
+        else:
+            channel_value = channel_idx
+
+    if isinstance(channel_value, np.generic):
+        channel_value = channel_value.item()
+    if isinstance(channel_value, (bytes, bytearray)):
+        channel_value = channel_value.decode("utf-8")
+    if isinstance(channel_value, float) and channel_value.is_integer():
+        channel_value = int(channel_value)
+    if isinstance(channel_value, str):
+        try:
+            channel_value = int(channel_value)
+        except ValueError:
+            pass
+    return channel_value
+
+
+def _timestamp_str(active_recon_layer, frame_idx: int, channel_idx: int) -> str:
+    timestamps = getattr(active_recon_layer, "metadata", {}).get("timestamps")
+    try:
+        from datetime import datetime, timedelta
+
+        return str(
+            datetime(1, 1, 1)
+            + timedelta(seconds=float(timestamps[frame_idx, channel_idx]))
+        )
+    except Exception:
+        logger.info(
+            "could not parse timestamp for frame %s channel %s",
+            frame_idx,
+            channel_idx,
+        )
+        return "N/A"
+
+
+def _roi_source(shapes_layer, roi_index: int) -> str:
+    props = dict(getattr(shapes_layer, "properties", {}) or {})
+    sources = list(props.get("roi_source", []))
+    if roi_index < len(sources):
+        source = str(sources[roi_index] or "").strip()
+        if source:
+            return source
+    return "PATARI"
 
 
 def _iter_rois(shapes_layer) -> list[ROI]:
@@ -83,6 +173,19 @@ def _roi_mask(
         return polygon_mask(verts_pixels, image_shape)
     except Exception:
         return None
+
+
+def _roi_centroid_mm(roi: ROI) -> tuple[float, float]:
+    if roi.verts.size == 0:
+        return (float("nan"), float("nan"))
+    yx = np.asarray(roi.verts, dtype=float).mean(axis=0)
+    return round(float(yx[0]), 2), round(float(yx[1]), 2)
+
+
+def _resolve_feature_ids(feature_ids: list[str] | None) -> list[str]:
+    if feature_ids is None:
+        return full_feature_columns()
+    return [feature_id for feature_id in feature_ids if feature_id in FEATURE_REGISTRY]
 
 
 def _apply_clamp(
@@ -159,16 +262,12 @@ def compute_roi_stats(
     clamp_min: float | None = None,
     clamp_max: float | None = None,
     clamp_mode: str = "clip",
+    feature_ids: list[str] | None = None,
 ):
     """Compute ROI statistics for all shapes for a specific frame/channel."""
 
-    # logger.info(
-    #     "compute_roi_stats for frame %s, channel %s",
-    #     frame_idx,
-    #     channel_idx,
-    # )
-
-    empty = pd.DataFrame(columns=list(dtype_map.keys())).astype(dtype_map)
+    selected_feature_ids = _resolve_feature_ids(feature_ids)
+    empty = pd.DataFrame(columns=selected_feature_ids)
     if active_recon_layer is None:
         return empty
 
@@ -181,24 +280,13 @@ def compute_roi_stats(
     data = np.asarray(active_recon_layer.data)
     img2d = data[frame_idx, channel_idx]
 
-    timestamps = getattr(active_recon_layer, "metadata", {}).get("timestamps")
-
-    try:
-        from datetime import datetime, timedelta
-
-        timestamp_str = str(
-            datetime(1, 1, 1)
-            + timedelta(seconds=float(timestamps[frame_idx, channel_idx]))
-        )
-    except Exception:
-        logger.info(
-            "could not parse timestamp for frame %s channel %s",
-            frame_idx,
-            channel_idx,
-        )
-        timestamp_str = "N/A"
+    scan_ts = _timestamp_str(active_recon_layer, frame_idx, channel_idx)
 
     sy, sx = _scale_sy_sx(active_recon_layer)
+    channel_value = _channel_value(active_recon_layer, channel_idx)
+    filepath = str(active_recon_layer.metadata.get("filepath", "") or "")
+    scan = Path(filepath).stem if filepath else ""
+    study = Path(filepath).parent.name if filepath else ""
 
     rows = []
     for roi in _iter_rois(shapes_layer):
@@ -206,95 +294,44 @@ def compute_roi_stats(
         if mask is None:
             continue
 
-        vals = img2d[mask]
-        vals_stats = _apply_clamp(
-            vals,
+        vals_raw = img2d[mask]
+        vals = _apply_clamp(
+            vals_raw,
             clamp_min,
             clamp_max,
             mode=str(clamp_mode or "clip"),
         )
 
-        mode_str = str(clamp_mode or "clip")
-        n_pixels = (
-            int(vals.size) if mode_str != "exclude" else int(vals_stats.size)
+        ctx = ROIContext(
+            roi_index=roi.index,
+            src_layers={
+                "data": str(active_recon_layer.name),
+                "mask": _roi_source(shapes_layer, roi.index),
+            },
+            roi_type=roi.kind,
+            study=study,
+            scan=scan,
+            frame=int(frame_idx),
+            channel=channel_value,
+            scan_ts=scan_ts,
+            roi_ts="",
+            roi_centroid=_roi_centroid_mm(roi),
+            filepath=filepath,
+            vals_raw=vals_raw,
+            vals=vals,
+            sy=sy,
+            sx=sx,
+        )
+        rows.append(
+            {
+                feature_id: FEATURE_REGISTRY[feature_id].compute(ctx)
+                for feature_id in selected_feature_ids
+            }
         )
 
-        _nan_stats = dict(
-            mean=np.nan,
-            median=np.nan,
-            std=np.nan,
-            p10=np.nan,
-            p90=np.nan,
-            min=np.nan,
-            max=np.nan,
-        )
-        if vals.size == 0:
-            stats = dict(
-                roi_index=roi.index, n_pixels=0, area_mm2=np.nan, **_nan_stats
-            )
-        elif vals_stats.size == 0:
-            stats = dict(
-                roi_index=roi.index, n_pixels=0, area_mm2=0.0, **_nan_stats
-            )
-        else:
-            stats = dict(
-                roi_index=roi.index,
-                n_pixels=n_pixels,
-                area_mm2=float(n_pixels * sy * sx),
-                mean=float(np.nanmean(vals_stats)),
-                median=float(np.nanmedian(vals_stats)),
-                std=float(np.nanstd(vals_stats)),
-                p10=float(np.nanpercentile(vals_stats, 10)),
-                p90=float(np.nanpercentile(vals_stats, 90)),
-                min=float(np.nanmin(vals_stats)),
-                max=float(np.nanmax(vals_stats)),
-            )
-
-        axis1_labels = active_recon_layer.metadata.get("axis1_labels")
-        if isinstance(axis1_labels, (list, tuple)) and 0 <= channel_idx < len(
-            axis1_labels
-        ):
-            channel_value = axis1_labels[channel_idx]
-        else:
-            wavelengths = active_recon_layer.metadata.get("wavelengths", None)
-            if isinstance(
-                wavelengths, (list, tuple)
-            ) and 0 <= channel_idx < len(wavelengths):
-                channel_value = wavelengths[channel_idx]
-            else:
-                channel_value = channel_idx
-
-        if isinstance(channel_value, np.generic):
-            channel_value = channel_value.item()
-        if isinstance(channel_value, (bytes, bytearray)):
-            channel_value = channel_value.decode("utf-8")
-
-        if isinstance(channel_value, float) and channel_value.is_integer():
-            channel_value = int(channel_value)
-
-        if isinstance(channel_value, str):
-            try:
-                channel_value = int(channel_value)
-            except ValueError:
-                pass
-
-        filepath = active_recon_layer.metadata.get("filepath", "")
-        scan_id = Path(filepath).stem.split("_")[1] if filepath else ""
-        stats["source_layer"] = active_recon_layer.name
-        stats["roi_type"] = roi.kind
-        stats["scan_id"] = scan_id
-        stats["frame"] = frame_idx
-        stats["channel"] = channel_value
-        stats["timestamp"] = timestamp_str
-        stats["filepath"] = filepath
-
-        rows.append(stats)
-
-    df = pd.DataFrame(rows, columns=list(dtype_map.keys()))
-    try:
-        df = df.astype(dtype_map)
-    except Exception:
-        pass
+    df = pd.DataFrame(rows, columns=selected_feature_ids)
+    if not df.empty and "roi_index" in df.columns:
+        df["roi_index"] = pd.to_numeric(df["roi_index"], errors="coerce").astype(int)
     return df
 
 

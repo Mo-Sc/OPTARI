@@ -6,7 +6,10 @@ import pandas as pd
 from magicgui.widgets import PushButton, Table
 from qtpy.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
-from patari.roi.roi_utils import dtype_map
+from patari.roi.roi_utils import (
+    live_table_columns,
+    saved_table_columns,
+)
 
 
 @dataclass
@@ -20,10 +23,13 @@ class RoiDock:
 
 
 def create_roi_dock() -> RoiDock:
-    df_empty = pd.DataFrame(columns=list(dtype_map.keys())).astype(dtype_map)
+    live_columns = live_table_columns()
+    saved_columns = saved_table_columns()
+    df_live_empty = pd.DataFrame(columns=live_columns)
+    df_saved_empty = pd.DataFrame(columns=saved_columns)
 
-    live_table = Table(value=df_empty.copy())
-    saved_table = Table(value=df_empty.copy())
+    live_table = Table(value=df_live_empty)
+    saved_table = Table(value=df_saved_empty)
 
     save_button = PushButton(text="Save ROI Data")
     delete_button = PushButton(text="Delete ROI Data")

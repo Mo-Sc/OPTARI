@@ -284,7 +284,7 @@ def napari_shapes_from_scan_rois(
     pa_data: "pat.PAData",
     fov_x_m: float,
     fov_y_m: float,
-) -> list[tuple[np.ndarray, str, str]]:
+) -> list[tuple[np.ndarray, str, str, str]]:
     """Load ROI polygons from *pa_data* as napari ``(y_mm, x_mm)`` vertices.
 
     Silently skips individual ROIs that cannot be converted.
@@ -317,6 +317,7 @@ def napari_shapes_from_scan_rois(
                     patato_to_napari(pts, fov_x_m, fov_y_m),
                     getattr(roi, "shape_type", "polygon"),
                     getattr(roi, "position", "undefined"),
+                    str(_name),
                 )
             )
         except Exception:

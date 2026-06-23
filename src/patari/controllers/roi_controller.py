@@ -17,7 +17,12 @@ from qtpy.QtWidgets import (
 from patari.controllers.base import TaskControllerBase
 from patari.io.export_pipeline import export_roi_table_to_xlsx
 from patari.roi.roi_library import RoiLibrary
-from patari.roi.roi_utils import compute_roi_stats, dtype_map
+from patari.roi.roi_utils import (
+    compute_roi_stats,
+    live_table_columns,
+    saved_export_columns,
+    saved_table_columns,
+)
 from patari.utils.misc import roi_color_for_index
 from patari.utils.setup import get_user_roi_library_file
 
@@ -61,6 +66,24 @@ class RoiController(TaskControllerBase):
 
     def __init__(self, parent_controller):
         super().__init__(parent_controller)
+        self._saved_full_df = pd.DataFrame(columns=saved_export_columns())
+
+    @staticmethod
+    def _filter_columns(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+        if df.empty:
+            return pd.DataFrame(columns=columns)
+        return df.loc[:, columns]
+
+    def _set_saved_table_view(self) -> None:
+        """
+        Set the saved table view to the current saved full dataframe, filtered to the visible columns.
+        """
+        if self.patari_controller.roi is None:
+            return
+        cols = saved_table_columns()
+        self.patari_controller.roi.saved_table.value = self._filter_columns(
+            self._saved_full_df, cols
+        )
 
     def bind_events(self) -> None:
         """Connect ROI and annotation dock signals."""
@@ -211,6 +234,16 @@ class RoiController(TaskControllerBase):
             return
 
         n_shapes = len(self.patari_controller.shapes_layer.data)
+        props = dict(
+            getattr(self.patari_controller.shapes_layer, "properties", {}) or {}
+        )
+        roi_source = list(props.get("roi_source", []))
+        if len(roi_source) < n_shapes:
+            roi_source.extend(["PATARI"] * (n_shapes - len(roi_source)))
+        elif len(roi_source) > n_shapes:
+            roi_source = roi_source[:n_shapes]
+        props["roi_source"] = roi_source
+        self.patari_controller.shapes_layer.properties = props
 
         # ROI limit. For now just warning, TODO: enforce
         max_rois = settings.annotation.max_rois
@@ -244,9 +277,8 @@ class RoiController(TaskControllerBase):
             return
 
         if self.patari_controller.active_recon_layer is None:
-            self.patari_controller.roi.live_table.value = pd.DataFrame(
-                columns=list(dtype_map.keys())
-            ).astype(dtype_map)
+            cols = live_table_columns()
+            self.patari_controller.roi.live_table.value = pd.DataFrame(columns=cols)
             return
 
         pt = list(self.viewer.dims.point)
@@ -255,9 +287,10 @@ class RoiController(TaskControllerBase):
 
         frame_idx = int(round(pt[0]))
         channel_idx = int(round(pt[1]))
+        live_cols = live_table_columns()
 
         try:
-            df = compute_roi_stats(
+            df_live = compute_roi_stats(
                 self.patari_controller.shapes_layer,
                 self.patari_controller.active_recon_layer,
                 frame_idx,
@@ -267,12 +300,15 @@ class RoiController(TaskControllerBase):
                 clamp_mode=(
                     self.patari_controller.roi_intensity_mode or "clip"
                 ),
+                feature_ids=live_cols,
             )
         except Exception:
             logger.exception("update_live_table failed")
-            df = pd.DataFrame(columns=list(dtype_map.keys())).astype(dtype_map)
+            df_live = pd.DataFrame(columns=live_cols)
 
-        self.patari_controller.roi.live_table.value = df
+        self.patari_controller.roi.live_table.value = self._filter_columns(
+            df_live, live_cols
+        )
 
         # Keep ROI colors in sync with current shape count/order.
         self.apply_roi_colors()
@@ -312,11 +348,6 @@ class RoiController(TaskControllerBase):
             logger.info("Select at least one ROI to save")
             return
 
-        df_live = self.table_value_to_df(self.patari_controller.roi.live_table)
-        if df_live.empty:
-            logger.info("Nothing to save")
-            return
-
         include_all_layers = False
         include_all_frames = False
         include_all_wavelengths = False
@@ -329,32 +360,44 @@ class RoiController(TaskControllerBase):
 
         # TODO: from here on include_all_layers is not yet implemented
 
+        if self.patari_controller.active_recon_layer is None:
+            logger.info("Select an image layer to save ROI stats")
+            return
+
+        pt = list(self.viewer.dims.point)
+        if len(pt) < 2:
+            return
+        frame_idx = int(round(pt[0]))
+        channel_idx = int(round(pt[1]))
+
+        data = np.asarray(self.patari_controller.active_recon_layer.data)
+        if data.ndim < 2:
+            logger.info("Active layer has no frame/channel dimensions")
+            return
+
         # just save for the current frame and channel
         if not include_all_frames and not include_all_wavelengths:
-            rows_to_add = df_live.iloc[selected_indices].astype(dtype_map)
+            df_slice = compute_roi_stats(
+                self.patari_controller.shapes_layer,
+                self.patari_controller.active_recon_layer,
+                frame_idx,
+                channel_idx,
+                clamp_min=self.patari_controller.roi_intensity_min,
+                clamp_max=self.patari_controller.roi_intensity_max,
+                clamp_mode=(self.patari_controller.roi_intensity_mode or "clip"),
+            )
+            roi_index_numeric = pd.to_numeric(
+                df_slice["roi_index"], errors="coerce"
+            )
+            rows_to_add = df_slice[roi_index_numeric.isin(selected_indices)]
         
         # looping through frames/channels
         else:
-            if self.patari_controller.active_recon_layer is None:
-                logger.info("Select an image layer to save ROI stats")
-                return
-
-            pt = list(self.viewer.dims.point)
-            if len(pt) < 2:
-                return
-            frame_idx = int(round(pt[0]))
-            channel_idx = int(round(pt[1]))
-
-            data = np.asarray(self.patari_controller.active_recon_layer.data)
-            if data.ndim < 2:
-                logger.info("Active layer has no frame/channel dimensions")
-                return
-
             if include_all_frames:
                 frames_meta = getattr(
                     self.patari_controller.active_recon_layer, "metadata", {}
                 ).get("frames")
-                frame_indices = [int(f) for f in frames_meta]
+                frame_indices = [int(f) for f in frames_meta] if frames_meta else list(range(data.shape[0]))
             else:
                 frame_indices = [frame_idx]
 
@@ -386,27 +429,30 @@ class RoiController(TaskControllerBase):
                     df_rows = df_slice[roi_index_numeric.isin(selected_indices)]
                     
                     if not df_rows.empty:
-                        collected.append(df_rows.astype(dtype_map))
+                        collected.append(df_rows)
 
             if not collected:
                 logger.info("Nothing to save")
                 return
 
-            rows_to_add = pd.concat(collected, ignore_index=True).astype(
-                dtype_map
+            rows_to_add = pd.concat(collected, ignore_index=True)
+
+        if rows_to_add.empty:
+            logger.info("Nothing to save")
+            return
+
+        rows_to_add = rows_to_add.copy()
+        rows_to_add["roi_ts"] = pd.Timestamp.now().isoformat(timespec="seconds")
+
+        if self._saved_full_df.empty:
+            self._saved_full_df = rows_to_add.loc[:, saved_export_columns()].copy()
+        else:
+            self._saved_full_df = pd.concat(
+                [self._saved_full_df, rows_to_add.loc[:, saved_export_columns()]],
+                ignore_index=True,
             )
 
-        df_saved = self.table_value_to_df(
-            self.patari_controller.roi.saved_table
-        )
-        if df_saved.empty:
-            df_saved = rows_to_add.copy()
-        else:
-            df_saved = pd.concat([df_saved, rows_to_add], ignore_index=True)
-
-        self.patari_controller.roi.saved_table.value = df_saved.astype(
-            dtype_map
-        )
+        self._set_saved_table_view()
         logger.info("Saved %s ROI(s) (%s total row(s))", len(selected_indices), len(rows_to_add))
 
     def on_delete_saved_clicked(self, event=None) -> None:
@@ -422,30 +468,22 @@ class RoiController(TaskControllerBase):
             logger.info("No row selected to delete.")
             return
 
-        df_saved = self.table_value_to_df(
-            self.patari_controller.roi.saved_table
-        )
-        if df_saved.empty:
+        if self._saved_full_df.empty:
             return
 
-        df_saved = df_saved.drop(selected_indices).reset_index(drop=True)
-        self.patari_controller.roi.saved_table.value = df_saved.astype(
-            dtype_map
-        )
+        self._saved_full_df = self._saved_full_df.drop(selected_indices).reset_index(drop=True)
+        self._set_saved_table_view()
         logger.info("Deleted %s saved rows", len(selected_indices))
 
     def on_xlsx_export_clicked(self, event=None) -> None:
         if self.patari_controller.roi is None:
             return
 
-        df_saved = self.table_value_to_df(
-            self.patari_controller.roi.saved_table
-        )
-        if df_saved.empty:
+        if self._saved_full_df.empty:
             logger.info("Saved table empty")
             return
 
-        filename = export_roi_table_to_xlsx(df_saved)
+        filename = export_roi_table_to_xlsx(self._saved_full_df)
         if filename is None:
             return
 
@@ -537,7 +575,7 @@ class RoiController(TaskControllerBase):
     def on_save_roi_library_file_clicked(self, event=None) -> None:
         library = self._ensure_roi_library_loaded()
         library.save()
-        logger.info("Saved ROI Library to %s", _roi_library_file())
+        logger.info("Saved ROI Library to %s", get_user_roi_library_file())
 
     def _roi_library_placement_mode(self) -> str:
         if self.patari_controller.annotation is None:
