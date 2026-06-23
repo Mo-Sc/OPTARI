@@ -4,7 +4,8 @@ from dataclasses import dataclass
 
 import pandas as pd
 from magicgui.widgets import PushButton, Table
-from qtpy.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from qtpy.QtGui import QKeySequence
+from qtpy.QtWidgets import QHBoxLayout, QLabel, QShortcut, QVBoxLayout, QWidget
 
 from patari.roi.roi_utils import (
     live_table_columns,
@@ -20,6 +21,7 @@ class RoiDock:
     save_button: PushButton
     delete_button: PushButton
     xlsx_button: PushButton
+    live_table_delete_shortcut: QShortcut
 
 
 def create_roi_dock() -> RoiDock:
@@ -43,6 +45,8 @@ def create_roi_dock() -> RoiDock:
     live_layout = QVBoxLayout(live_panel)
     live_layout.addWidget(QLabel("Live Analysis"))
     live_layout.addWidget(live_table.native)
+
+    delete_shortcut = QShortcut(QKeySequence.Delete, live_table.native)
 
     btn_panel = QWidget()
     btn_layout = QVBoxLayout(btn_panel)
@@ -70,4 +74,5 @@ def create_roi_dock() -> RoiDock:
         save_button=save_button,
         delete_button=delete_button,
         xlsx_button=xlsx_button,
+        live_table_delete_shortcut=delete_shortcut,
     )

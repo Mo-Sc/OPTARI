@@ -128,16 +128,37 @@ class PatariController:
     def _connect_shapes_layer_events(self) -> None:
         if self.shapes_layer is None:
             return
+        for evt, handler in (
+            (self.shapes_layer.events.data, self._on_shapes_data_changed),
+        ):
+            try:
+                evt.disconnect(handler)
+            except Exception:
+                pass
+            evt.connect(handler)
+
+        # selection sync: use selected_data change events (stable), not highlight events (high-frequency during drag)
         try:
-            self.shapes_layer.events.data.disconnect(
-                self._on_shapes_data_changed
+            self.shapes_layer._selected_data.events.items_changed.disconnect(
+                self._on_shapes_selection_changed
             )
         except Exception:
             pass
-        try:
-            self.shapes_layer.events.data.connect(self._on_shapes_data_changed)
-        except Exception:
-            pass
+        self.shapes_layer._selected_data.events.items_changed.connect(
+            self._on_shapes_selection_changed
+        )
+
+        # live table ↔ shapes selection sync
+        if self.roi is not None:
+            try:
+                self.roi.live_table.native.itemSelectionChanged.disconnect(
+                    self.roi_ctrl.on_live_table_selection_changed
+                )
+            except Exception:
+                pass
+            self.roi.live_table.native.itemSelectionChanged.connect(
+                self.roi_ctrl.on_live_table_selection_changed
+            )
 
     # ============ ROI layer management ============
     def _apply_roi_colors(self) -> None:
@@ -151,6 +172,9 @@ class PatariController:
 
     def _on_shapes_data_changed(self, event=None) -> None:
         self.roi_ctrl.on_shapes_data_changed(event)
+
+    def _on_shapes_selection_changed(self, event=None) -> None:
+        self.roi_ctrl.on_shapes_selection_changed(event)
 
     def _ensure_shapes_layer_on_top(self) -> None:
         """

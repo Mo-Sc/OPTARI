@@ -67,6 +67,7 @@ class RoiController(TaskControllerBase):
     def __init__(self, parent_controller):
         super().__init__(parent_controller)
         self._saved_full_df = pd.DataFrame(columns=saved_export_columns())
+        self._syncing = False
 
     @staticmethod
     def _filter_columns(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
@@ -85,11 +86,59 @@ class RoiController(TaskControllerBase):
             self._saved_full_df, cols
         )
 
+    def _set_live_table_selection(self, selected_rows: list[int]) -> None:
+        if self.patari_controller.roi is None:
+            return
+        table = self.patari_controller.roi.live_table.native
+        table.clearSelection()
+        for row in selected_rows:
+            if row < table.rowCount():
+                table.selectRow(row)
+
+    def on_shapes_selection_changed(self, event=None) -> None:
+        """Sync shapes selection -> live table selection on selection changes only."""
+        shapes = self.patari_controller.shapes_layer
+        if self._syncing or shapes is None or self.patari_controller.roi is None:
+            return
+        selected = list(shapes.selected_data)
+        self._syncing = True
+        try:
+            self._set_live_table_selection(selected)
+        finally:
+            self._syncing = False
+
+    def on_live_table_selection_changed(self) -> None:
+        """Sync live table row selection → shapes layer selection."""
+        shapes = self.patari_controller.shapes_layer
+        if self._syncing or shapes is None or self.patari_controller.roi is None:
+            return
+        # Never write selection back into napari during shape drag/select interactions.
+        if getattr(shapes, "_is_moving", False) or getattr(shapes, "_is_selecting", False):
+            return
+        rows = {idx.row() for idx in self.patari_controller.roi.live_table.native.selectedIndexes()}
+        self._syncing = True
+        try:
+            if rows and self.viewer.layers.selection.active is not shapes:
+                self.viewer.layers.selection.active = shapes
+            shapes.selected_data = rows
+        finally:
+            self._syncing = False
+
+    def on_live_table_delete_key(self) -> None:
+        """Delete selected shapes when Delete is pressed in the live table."""
+        if self.patari_controller.shapes_layer is None:
+            return
+        if self.patari_controller.shapes_layer.selected_data:
+            self.patari_controller.shapes_layer.remove_selected()
+
     def bind_events(self) -> None:
         """Connect ROI and annotation dock signals."""
         # ROI table buttons
         self.patari_controller.roi.save_button.clicked.connect(
             self.on_save_clicked
+        )
+        self.patari_controller.roi.live_table_delete_shortcut.activated.connect(
+            self.on_live_table_delete_key
         )
         self.patari_controller.roi.delete_button.clicked.connect(
             self.on_delete_saved_clicked
@@ -150,6 +199,9 @@ class RoiController(TaskControllerBase):
             )
             self.patari_controller.roi.xlsx_button.clicked.disconnect(
                 self.on_xlsx_export_clicked
+            )
+            self.patari_controller.roi.live_table_delete_shortcut.activated.disconnect(
+                self.on_live_table_delete_key
             )
 
             ann = self.patari_controller.annotation
@@ -306,9 +358,18 @@ class RoiController(TaskControllerBase):
             logger.exception("update_live_table failed")
             df_live = pd.DataFrame(columns=live_cols)
 
-        self.patari_controller.roi.live_table.value = self._filter_columns(
-            df_live, live_cols
-        )
+        selected_rows = []
+        if self.patari_controller.shapes_layer is not None:
+            selected_rows = list(self.patari_controller.shapes_layer.selected_data)
+
+        self._syncing = True
+        try:
+            self.patari_controller.roi.live_table.value = self._filter_columns(
+                df_live, live_cols
+            )
+            self._set_live_table_selection(selected_rows)
+        finally:
+            self._syncing = False
 
         # Keep ROI colors in sync with current shape count/order.
         self.apply_roi_colors()
