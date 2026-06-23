@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from qtpy.QtCore import QSignalBlocker
 from qtpy.QtGui import QColor
 from qtpy.QtWidgets import (
     QDialog,
@@ -68,6 +69,7 @@ class RoiController(TaskControllerBase):
         super().__init__(parent_controller)
         self._saved_full_df = pd.DataFrame(columns=saved_export_columns())
         self._syncing = False
+        self._last_n_shapes = -1
 
     @staticmethod
     def _filter_columns(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
@@ -90,10 +92,11 @@ class RoiController(TaskControllerBase):
         if self.patari_controller.roi is None:
             return
         table = self.patari_controller.roi.live_table.native
-        table.clearSelection()
-        for row in selected_rows:
-            if row < table.rowCount():
-                table.selectRow(row)
+        with QSignalBlocker(table):
+            table.clearSelection()
+            for row in selected_rows:
+                if row < table.rowCount():
+                    table.selectRow(row)
 
     def on_shapes_selection_changed(self, event=None) -> None:
         """Sync shapes selection -> live table selection on selection changes only."""
@@ -249,15 +252,21 @@ class RoiController(TaskControllerBase):
     # controller.shapes_layer.properties = props
     # return
 
-    def apply_roi_colors(self) -> None:
-        """Assign deterministic colors to ROI edges by ROI index."""
-        if self.patari_controller.shapes_layer is None:
+    def apply_roi_colors(self, *, force: bool = False) -> None:
+        """
+        Assign deterministic colors to ROI edges by ROI index.
+        Only applied if the number of shapes has changed since the last call, unless force=True.
+        """
+        
+        n_shapes = len(self.patari_controller.shapes_layer.data)
+        if not force and n_shapes == self._last_n_shapes:
             return
 
         self.patari_controller.shapes_layer.edge_color = [
             roi_color_for_index(i)
-            for i in range(len(self.patari_controller.shapes_layer.data))
+            for i in range(n_shapes)
         ]
+        self._last_n_shapes = n_shapes
 
     def apply_roi_labels(self) -> None:
         """Show ROI index labels next to shapes (when enabled)."""
@@ -316,7 +325,7 @@ class RoiController(TaskControllerBase):
         # positions = list(props.get("roi_position", []))
         # print(positions)
 
-        self.apply_roi_colors()
+        self.apply_roi_colors(force=True)
         self.apply_roi_labels()
 
         self.update_live_table()

@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 
 import numpy as np
-import patato as pat
+import patato as pat # type: ignore
 from napari.layers import Image, Shapes
 from napari.viewer import Viewer
 
@@ -139,12 +139,12 @@ class PatariController:
 
         # selection sync: use selected_data change events (stable), not highlight events (high-frequency during drag)
         try:
-            self.shapes_layer._selected_data.events.items_changed.disconnect(
+            self.shapes_layer.selected_data.events.items_changed.disconnect(
                 self._on_shapes_selection_changed
             )
         except Exception:
             pass
-        self.shapes_layer._selected_data.events.items_changed.connect(
+        self.shapes_layer.selected_data.events.items_changed.connect(
             self._on_shapes_selection_changed
         )
 
