@@ -3,64 +3,79 @@ import sys
 
 logger = logging.getLogger(__name__)
 
-# workaoround for cross-platform cmd/ctrl key in shortcuts
+# workaround for cross-platform cmd/ctrl key in shortcuts
 CMD_CTRL = "Meta" if sys.platform == "darwin" else "Control"
 
 # --- SHORTCUT REGISTRY ---
 SHORTCUTS = {
-    "save_roi_data": f"{CMD_CTRL}-Shift-S", # mimics "Save ROI Data" button, saves all selected ROIs to the saved table
-    "run_unmixing": f"{CMD_CTRL}-Shift-U", # trigger unmixing with current settings (if source layer is selected and presets are loaded)
+    "save_roi_data": f"{CMD_CTRL}-Shift-S",    # triggers "Save ROI Data" button
+    "run_unmixing": f"{CMD_CTRL}-Shift-U",     # triggers unmixing with current settings
+    "run_segmentation": f"{CMD_CTRL}-Shift-T", # triggers segmentation with current settings
 }
 
 
 class ShortcutManager:
     """
-    manager for registering custom PATARI keyboard shortcuts.
-    Note that depending on the widget, buttons can be implemented as Qt QPushButtons or magicgui PushButtons.
-    (button.click() and isEnabled() vs button.clicked() and button.enabled)
+    Manager for registering custom PATARI keyboard shortcuts.
+    Automatically handles both Qt QPushButtons and magicgui PushButtons.
     """
 
     @classmethod
     def register_all(cls, controller) -> None:
-        """bind all custom keyboard shortcuts."""
-        cls._setup_roi_shortcuts(controller)
-        cls._setup_unmixing_shortcuts(controller)
-        # cls._setup_scan_shortcuts(controller)
+        """Bind all custom keyboard shortcuts."""
+        
+        # 1. ROI Shortcuts
+        cls._bind_shortcut_to_button(
+            controller, 
+            shortcut_id="save_roi_data", 
+            button_getter=lambda c: c.roi.save_button, 
+            action_name="Save ROI Data"
+        )
+        
+        # 2. Unmixing Shortcuts
+        cls._bind_shortcut_to_button(
+            controller, 
+            shortcut_id="run_unmixing", 
+            button_getter=lambda c: c.unmixing.run_button, 
+            action_name="Run Unmixing"
+        )
+        
+        # 3. Segmentation Shortcuts
+        cls._bind_shortcut_to_button(
+            controller, 
+            shortcut_id="run_segmentation", 
+            button_getter=lambda c: c.segmentation.generate_tissue_segmentation_button, 
+            action_name="Run Segmentation"
+        )
+        
         logger.info(f"PATARI: Registered custom keyboard shortcuts: {SHORTCUTS}")
 
     @classmethod
-    def _setup_roi_shortcuts(cls, controller) -> None:
-        """Binds custom keyboard shortcuts related to ROI table operations."""
+    def _bind_shortcut_to_button(cls, controller, shortcut_id: str, button_getter: callable, action_name: str) -> None:
+        """
+        Bind keyboard shortcut to a UI button.
+        depending on the widget, buttons can be implemented as Qt QPushButtons or magicgui PushButtons.
+        (button.click() and isEnabled() vs button.clicked() and button.enabled)
+        """
         viewer = controller.viewer
+        shortcut = SHORTCUTS.get(shortcut_id)
 
-        @viewer.bind_key(SHORTCUTS["save_roi_data"], overwrite=True)
-        def _save_roi_data(v):
-            logger.info("PATARI Shortcut: Control-Shift-S triggered.")
+        @viewer.bind_key(shortcut, overwrite=True)
+        def trigger_button(v):
+
+            logger.info(f"PATARI Shortcut: {shortcut} triggered.")
             
-            save_button = controller.roi.save_button
-            # Make sure ROIs are present (should mean button is enabled)
-            if save_button.enabled: 
-                save_button.clicked()
-            else:
-                logger.warning("PATARI Shortcut: Control-Shift-S ignored: Save button is disabled.")
-
-    @classmethod
-    def _setup_unmixing_shortcuts(cls, controller) -> None:
-        """Binds custom keyboard shortcuts related to unmixing operations."""
-        viewer = controller.viewer
-
-        @viewer.bind_key(SHORTCUTS["run_unmixing"], overwrite=True)
-        def _run_unmixing(v):
-            logger.info("PATARI Shortcut: Control-Shift-U triggered.")
+            button = button_getter(controller)
             
-            run_button = controller.unmixing.run_button
-            # Make sure unmixing can be run (should mean button is enabled)
-            if run_button.isEnabled():
-                run_button.click()
+            # Handles the API differences between magicgui and native Qt widgets
+            is_active = button.enabled if hasattr(button, "enabled") else button.isEnabled()
+            
+            if is_active:
+                if hasattr(button, "click"):
+                    # Qt: .click()
+                    button.click()
+                else:
+                    # magicgui: .clicked())
+                    button.clicked()
             else:
-                logger.warning("PATARI Shortcut: Control-Shift-U ignored: Run Unmixing button is disabled.")
-
-    @classmethod
-    def _setup_scan_shortcuts(cls, controller) -> None:
-        # future scan navigation shortcuts
-        pass
+                logger.warning(f"PATARI Shortcut: {shortcut} ignored: {action_name} button is disabled.")

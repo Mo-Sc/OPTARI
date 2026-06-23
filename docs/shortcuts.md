@@ -42,12 +42,18 @@ Browse through scan data, frames, and toggle between different image layers.
 | **Delete Selected ROI(s)** | `Delete` or `Backspace` | `Delete` or `Backspace` |
 | **Save ROI Data*** | `Shift` + `Ctrl` + `S` | `Shift` + `Cmd` + `S` |
 
+## Segmentation and Auto-ROI
 
+| Action | Windows / Linux | macOS |
+| :--- | :--- | :--- |
+| **Segment using Default Config*** | `Shift` + `Ctrl` + `T` | `Shift` + `Cmd` + `T` |
 ## Image Processing
 
 | Action | Windows / Linux | macOS |
 | :--- | :--- | :--- |
 | **Unmix using Default Preset*** | `Shift` + `Ctrl` + `U` | `Shift` + `Cmd` + `U` |
+
+
 
 >*not napari native
 
