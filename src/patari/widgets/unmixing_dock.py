@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from qtpy.QtCore import Qt
 from qtpy.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -12,13 +11,13 @@ from qtpy.QtWidgets import (
     QLabel,
     QListWidget,
     QPushButton,
-    QScrollArea,
-    QSizePolicy,
     QSpinBox,
     QVBoxLayout,
     QWidget,
     QLineEdit,
 )
+
+from .dock_helpers import create_right_dock_shell
 
 
 @dataclass
@@ -39,21 +38,10 @@ class UnmixingDock:
     status_label: QLabel
 
 
-def create_unmixing_dock() -> UnmixingDock:
-    widget = QWidget()
-    shell_layout = QVBoxLayout(widget)
-    shell_layout.setContentsMargins(0, 0, 0, 0)
-
-    scroll = QScrollArea()
-    scroll.setWidgetResizable(True)
-    scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-    scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-    scroll.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-    shell_layout.addWidget(scroll)
-
-    content_widget = QWidget()
-    scroll.setWidget(content_widget)
-    outer = QVBoxLayout(content_widget)
+def create_unmixing_dock(*, enable_scroll: bool = True) -> UnmixingDock:
+    shell = create_right_dock_shell(enable_scroll=enable_scroll)
+    widget = shell.widget
+    outer = shell.content_layout
 
     source_box = QGroupBox("Source")
     source_form = QFormLayout(source_box)

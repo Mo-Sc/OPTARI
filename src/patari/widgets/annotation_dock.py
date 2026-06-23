@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from qtpy.QtCore import Qt
-from qtpy.QtGui import QDoubleValidator
 from qtpy.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -15,11 +13,11 @@ from qtpy.QtWidgets import (
     QListWidget,
     QComboBox,
     QPushButton,
-    QScrollArea,
-    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
+
+from .dock_helpers import create_range_edits, create_right_dock_shell
 
 
 @dataclass
@@ -47,24 +45,10 @@ class AnnotationDock:
             self.roi_library_list.addItem(roi_id)
 
 
-def create_annotation_dock() -> AnnotationDock:
-    # Outer shell — what napari receives as the dock widget
-    widget = QWidget()
-    shell_layout = QVBoxLayout(widget)
-    shell_layout.setContentsMargins(0, 0, 0, 0)
-
-    # Scroll area fills the shell
-    scroll = QScrollArea()
-    scroll.setWidgetResizable(True)
-    scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-    scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-    scroll.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-    shell_layout.addWidget(scroll)
-
-    # Content widget lives inside the scroll area
-    content_widget = QWidget()
-    scroll.setWidget(content_widget)
-    outer = QVBoxLayout(content_widget)
+def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
+    shell = create_right_dock_shell(enable_scroll=enable_scroll)
+    widget = shell.widget
+    outer = shell.content_layout
 
     # ROI Library section
     roi_library_box = QGroupBox("ROI Library")
@@ -107,23 +91,11 @@ def create_annotation_dock() -> AnnotationDock:
     roi_box = QGroupBox("ROI Intensity")
     roi_layout = QVBoxLayout(roi_box)
 
-    def _make_range_edits() -> tuple[QLineEdit, QLineEdit]:
-        min_edit = QLineEdit()
-        max_edit = QLineEdit()
-        validator = QDoubleValidator()
-        min_edit.setValidator(validator)
-        max_edit.setValidator(validator)
-        min_edit.setPlaceholderText("(unset)")
-        max_edit.setPlaceholderText("(unset)")
-        min_edit.setClearButtonEnabled(True)
-        max_edit.setClearButtonEnabled(True)
-        return min_edit, max_edit
-
     roi_clipping_box = QGroupBox("ROI Clipping")
     roi_clipping_box.setCheckable(True)
     roi_clipping_box.setChecked(True)
     roi_clip_form = QFormLayout(roi_clipping_box)
-    roi_clip_min_edit, roi_clip_max_edit = _make_range_edits()
+    roi_clip_min_edit, roi_clip_max_edit = create_range_edits()
     roi_clip_form.addRow("Min. Intensity", roi_clip_min_edit)
     roi_clip_form.addRow("Max. Intensity", roi_clip_max_edit)
 
@@ -131,7 +103,7 @@ def create_annotation_dock() -> AnnotationDock:
     roi_exclusion_box.setCheckable(True)
     roi_exclusion_box.setChecked(False)
     roi_exclude_form = QFormLayout(roi_exclusion_box)
-    roi_exclude_min_edit, roi_exclude_max_edit = _make_range_edits()
+    roi_exclude_min_edit, roi_exclude_max_edit = create_range_edits()
     roi_exclude_form.addRow("Min. Intensity", roi_exclude_min_edit)
     roi_exclude_form.addRow("Max. Intensity", roi_exclude_max_edit)
 

@@ -2,13 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from qtpy.QtWidgets import (
-    QLabel,
-    QPushButton,
-    QScrollArea,
-    QHBoxLayout,
-    QVBoxLayout,
-    QWidget,
+from qtpy.QtWidgets import QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget
+
+from .dock_helpers import (
+    create_bottom_dock_header,
+    create_bottom_plot_strip,
 )
 
 
@@ -25,20 +23,12 @@ def create_histogram_dock() -> HistogramDock:
     widget = QWidget()
     layout = QVBoxLayout(widget)
 
-    status_label = QLabel("Click 'Refresh' to compute ROI histograms.")
-    refresh_button = QPushButton("Refresh")
+    status_label, refresh_button = create_bottom_dock_header(
+        layout,
+        status_text="Click 'Refresh' to compute ROI histograms.",
+    )
+    scroll_area, plots_container = create_bottom_plot_strip()
 
-    plots_container = QWidget()
-    plots_layout = QHBoxLayout(plots_container)
-    plots_layout.setContentsMargins(0, 0, 0, 0)
-    plots_layout.setSpacing(8)
-
-    scroll_area = QScrollArea()
-    scroll_area.setWidgetResizable(True)
-    scroll_area.setWidget(plots_container)
-
-    layout.addWidget(status_label)
-    layout.addWidget(refresh_button)
     layout.addWidget(scroll_area, stretch=1)
 
     return HistogramDock(

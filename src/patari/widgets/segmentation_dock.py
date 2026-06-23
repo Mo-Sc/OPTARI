@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from qtpy.QtCore import Qt
 from qtpy.QtGui import QDoubleValidator
 from qtpy.QtWidgets import (
     QCheckBox,
@@ -13,11 +12,11 @@ from qtpy.QtWidgets import (
     QLineEdit,
     QListWidget,
     QPushButton,
-    QScrollArea,
-    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
+
+from .dock_helpers import create_right_dock_shell
 
 
 @dataclass
@@ -40,25 +39,14 @@ class SegmentationDock:
     segmentation_status_label: QLabel
 
 
-def create_segmentation_dock() -> SegmentationDock:
+def create_segmentation_dock(*, enable_scroll: bool = True) -> SegmentationDock:
     """Create the segmentation dock with model/class and ROI-from-mask controls.
 
     Model combo is initially empty; populate via controller.initialize_ui().
     """
-    widget = QWidget()
-    shell_layout = QVBoxLayout(widget)
-    shell_layout.setContentsMargins(0, 0, 0, 0)
-
-    scroll = QScrollArea()
-    scroll.setWidgetResizable(True)
-    scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-    scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-    scroll.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-    shell_layout.addWidget(scroll)
-
-    content_widget = QWidget()
-    scroll.setWidget(content_widget)
-    outer = QVBoxLayout(content_widget)
+    shell = create_right_dock_shell(enable_scroll=enable_scroll)
+    widget = shell.widget
+    outer = shell.content_layout
 
     seg_box = QGroupBox("Segmentation")
     seg_layout = QVBoxLayout(seg_box)
