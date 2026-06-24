@@ -28,6 +28,7 @@ from patari.utils.misc import roi_color_for_index
 from patari.utils.setup import get_user_roi_library_file
 
 from patari.config import settings
+from napari.layers import Image
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +99,11 @@ class RoiController(TaskControllerBase):
                 if row < table.rowCount():
                     table.selectRow(row)
 
+    def _update_save_button_state(self) -> None:
+        """Update save button enabled state based on current ROI selection."""
+        selected = self.patari_controller.shapes_layer.selected_data
+        self.patari_controller.roi.save_button.enabled = (len(selected) > 0)
+
     def on_shapes_selection_changed(self, event=None) -> None:
         """Sync shapes selection -> live table selection on selection changes only."""
         shapes = self.patari_controller.shapes_layer
@@ -109,6 +115,8 @@ class RoiController(TaskControllerBase):
             self._set_live_table_selection(selected)
         finally:
             self._syncing = False
+        
+        self._update_save_button_state()
 
     def on_live_table_selection_changed(self) -> None:
         """Sync live table row selection → shapes layer selection."""
@@ -315,9 +323,7 @@ class RoiController(TaskControllerBase):
                 n_shapes,
             )
         
-        # disable the save button when no ROIs are present
-        selected = self.patari_controller.shapes_layer.selected_data
-        self.patari_controller.roi.save_button.enabled = (len(selected) > 0)
+        self._update_save_button_state()
 
         # TODO: roi_position attribute
         # for roi specific metadata, we have to add/update properties on the shapes layer, that would be done here
@@ -425,10 +431,8 @@ class RoiController(TaskControllerBase):
         if self.patari_controller.annotation is not None:
             include_all_layers = self.patari_controller.annotation.include_all_layers_checkbox.isChecked()
             include_all_frames = self.patari_controller.annotation.include_all_frames_checkbox.isChecked()
-            include_all_wavelengths = self.patari_controller.annotation.include_all_wavelengths_checkbox.isChecked()
+            include_all_wavelengths = self.patari_controller.annotation.include_all_channels_checkbox.isChecked()
   
-
-        # TODO: from here on include_all_layers is not yet implemented
 
         if self.patari_controller.active_recon_layer is None:
             logger.info("Select an image layer to save ROI stats")
@@ -445,44 +449,33 @@ class RoiController(TaskControllerBase):
             logger.info("Active layer has no frame/channel dimensions")
             return
 
-        # just save for the current frame and channel
-        if not include_all_frames and not include_all_wavelengths:
-            df_slice = compute_roi_stats(
-                self.patari_controller.shapes_layer,
-                self.patari_controller.active_recon_layer,
-                frame_idx,
-                channel_idx,
-                clamp_min=self.patari_controller.roi_intensity_min,
-                clamp_max=self.patari_controller.roi_intensity_max,
-                clamp_mode=(self.patari_controller.roi_intensity_mode or "clip"),
-            )
-            roi_index_numeric = pd.to_numeric(
-                df_slice["roi_index"], errors="coerce"
-            )
-            rows_to_add = df_slice[roi_index_numeric.isin(selected_indices)]
-        
-        # looping through frames/channels
-        else:
+        target_layers = [self.patari_controller.active_recon_layer]
+        if include_all_layers:
+            target_layers = [
+                layer
+                for layer in self.viewer.layers
+                if isinstance(layer, Image) and layer.metadata.get("type") == "pa"
+            ]
+
+        collected: list[pd.DataFrame] = []
+        for layer in target_layers:
+            layer_data = np.asarray(layer.data)
+            if layer_data.ndim < 2:
+                continue
+
             if include_all_frames:
-                frames_meta = getattr(
-                    self.patari_controller.active_recon_layer, "metadata", {}
-                ).get("frames")
-                frame_indices = [int(f) for f in frames_meta] if frames_meta else list(range(data.shape[0]))
+                frames_meta = getattr(layer, "metadata", {}).get("frames")
+                frame_indices = [int(f) for f in frames_meta] if frames_meta else list(range(layer_data.shape[0]))
             else:
                 frame_indices = [frame_idx]
 
-            if include_all_wavelengths:
-                channel_indices = list(range(data.shape[1]))
-            else:
-                channel_indices = [channel_idx]
+            channel_indices = list(range(layer_data.shape[1])) if include_all_layers or include_all_wavelengths else [channel_idx]
 
-            # not very efficient: compute one row per (frame, channel)
-            collected: list[pd.DataFrame] = []
             for f_idx in frame_indices:
                 for c_idx in channel_indices:
                     df_slice = compute_roi_stats(
                         self.patari_controller.shapes_layer,
-                        self.patari_controller.active_recon_layer,
+                        layer,
                         int(f_idx),
                         int(c_idx),
                         clamp_min=self.patari_controller.roi_intensity_min,
@@ -492,20 +485,18 @@ class RoiController(TaskControllerBase):
                         ),
                     )
 
-                    # Filter the computed slice to include ALL selected ROIs
                     roi_index_numeric = pd.to_numeric(
                         df_slice["roi_index"], errors="coerce"
                     )
                     df_rows = df_slice[roi_index_numeric.isin(selected_indices)]
-                    
                     if not df_rows.empty:
                         collected.append(df_rows)
 
-            if not collected:
-                logger.info("Nothing to save")
-                return
+        if not collected:
+            logger.info("Nothing to save")
+            return
 
-            rows_to_add = pd.concat(collected, ignore_index=True)
+        rows_to_add = pd.concat(collected, ignore_index=True)
 
         if rows_to_add.empty:
             logger.info("Nothing to save")
@@ -660,6 +651,9 @@ class RoiController(TaskControllerBase):
         """Place a saved ROI entry at its stored coordinates."""
         verts = np.asarray(entry.vertices, dtype=float)[:, -2:]
         controller.shapes_layer.add(verts, shape_type=entry.shape_type)
+        # Auto-select the newly placed ROI so the Save button activates immediately.
+        new_idx = len(controller.shapes_layer.data) - 1
+        controller.shapes_layer.selected_data = {new_idx}
         # Keep roi_position metadata aligned with the newly added shape index.
         # RoiController.set_last_roi_position(controller, entry.position)
         # Colors and live table are refreshed by shapes_layer.data event.
@@ -725,6 +719,9 @@ class RoiController(TaskControllerBase):
         verts_shifted = verts + np.asarray([dy, dx], dtype=float)
 
         controller.shapes_layer.add(verts_shifted, shape_type=entry.shape_type)
+        # Auto-select the newly placed ROI so the Save button activates immediately.
+        new_idx = len(controller.shapes_layer.data) - 1
+        controller.shapes_layer.selected_data = {new_idx}
 
     def on_roi_library_item_clicked(self, roi_id: str) -> None:
         if self.patari_controller.shapes_layer is None:

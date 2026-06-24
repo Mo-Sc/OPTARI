@@ -31,7 +31,7 @@ class AnnotationDock:
     roi_exclude_max_edit: QLineEdit
     include_all_layers_checkbox: QCheckBox
     include_all_frames_checkbox: QCheckBox
-    include_all_wavelengths_checkbox: QCheckBox
+    include_all_channels_checkbox: QCheckBox
     roi_library_list: QListWidget
     roi_library_description_label: QLabel
     roi_placement_mode_combo: QComboBox
@@ -127,14 +127,21 @@ def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
 
     include_all_layers_checkbox = QCheckBox("Include all layers")
     include_all_frames_checkbox = QCheckBox("Include all frames")
-    include_all_wavelengths_checkbox = QCheckBox("Include all channels")
+    include_all_channels_checkbox = QCheckBox("Include all channels")
     include_all_layers_checkbox.setChecked(False)
     include_all_frames_checkbox.setChecked(False)
-    include_all_wavelengths_checkbox.setChecked(False)
+    include_all_channels_checkbox.setChecked(False)
+
+    # When include all layers, always include all channels
+    include_all_layers_checkbox.toggled.connect(
+        lambda checked: include_all_channels_checkbox.setChecked(True)
+        if checked
+        else None
+    )
 
     save_roi_layout.addWidget(include_all_layers_checkbox)
     save_roi_layout.addWidget(include_all_frames_checkbox)
-    save_roi_layout.addWidget(include_all_wavelengths_checkbox)
+    save_roi_layout.addWidget(include_all_channels_checkbox)
     
 
     outer.addWidget(roi_library_box)
@@ -152,7 +159,7 @@ def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
         roi_exclude_max_edit=roi_exclude_max_edit,
         include_all_layers_checkbox=include_all_layers_checkbox,
         include_all_frames_checkbox=include_all_frames_checkbox,
-        include_all_wavelengths_checkbox=include_all_wavelengths_checkbox,
+        include_all_channels_checkbox=include_all_channels_checkbox,
         roi_library_list=roi_library_list,
         roi_library_description_label=roi_library_description_label,
         roi_placement_mode_combo=roi_placement_mode_combo,

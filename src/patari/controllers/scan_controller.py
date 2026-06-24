@@ -355,6 +355,10 @@ class ScanController(TaskControllerBase):
                         verts, shape_type=stype
                     )
 
+                # Auto select the loaded ROIs for convenience and to activate the button
+                if shapes:
+                    self.patari_controller.shapes_layer.selected_data = set(range(len(shapes)))
+
                 # add roi_position property to shapes layer
                 props = dict(
                     getattr(

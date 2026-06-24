@@ -284,6 +284,9 @@ class SegmentationController(TaskControllerBase):
         self.patari_controller.shapes_layer.add(
             verts, shape_type=shape.shape_type
         )
+        # auto-select the newly added shape, also activates the save button
+        new_idx = len(self.patari_controller.shapes_layer.data) - 1
+        self.patari_controller.shapes_layer.selected_data = {new_idx}
         seg_dock.segmentation_status_label.setText(
             f"ROI generated from class {class_id} in frame {frame_idx}"
         )
