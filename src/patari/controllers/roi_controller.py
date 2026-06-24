@@ -70,7 +70,7 @@ class RoiController(TaskControllerBase):
         super().__init__(parent_controller)
         self._saved_full_df = pd.DataFrame(columns=saved_export_columns())
         self._syncing = False
-        self._last_n_shapes = -1
+        self._n_shapes = -1
 
     @staticmethod
     def _filter_columns(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
@@ -134,6 +134,10 @@ class RoiController(TaskControllerBase):
             shapes.selected_data = rows
         finally:
             self._syncing = False
+
+        # The selection callback is suppressed while _syncing is True,
+        # so update the Save button state explicitly after table -> viewer sync.
+        self._update_save_button_state()
 
     def on_live_table_delete_key(self) -> None:
         """Delete selected shapes when Delete is pressed in the live table."""
@@ -260,43 +264,43 @@ class RoiController(TaskControllerBase):
     # controller.shapes_layer.properties = props
     # return
 
-    def apply_roi_colors(self, *, force: bool = False) -> None:
-        """
-        Assign deterministic colors to ROI edges by ROI index.
-        Only applied if the number of shapes has changed since the last call, unless force=True.
-        """
-        
+    def apply_roi_colors(self) -> None:
+        """Assign deterministic colors to ROI edges by ROI index."""
         n_shapes = len(self.patari_controller.shapes_layer.data)
-        if not force and n_shapes == self._last_n_shapes:
-            return
-
         self.patari_controller.shapes_layer.edge_color = [
             roi_color_for_index(i)
             for i in range(n_shapes)
         ]
-        self._last_n_shapes = n_shapes
 
     def apply_roi_labels(self) -> None:
-        """Show ROI index labels next to shapes (when enabled)."""
+        """Show ROI index labels next to shapes."""
+        props = dict(
+            getattr(self.patari_controller.shapes_layer, "properties", {})
+            or {}
+        )
+        props["roi_id"] = np.arange(
+            len(self.patari_controller.shapes_layer.data), dtype=int
+        )
+        self.patari_controller.shapes_layer.properties = props
+        # napari text supports formatting from properties.
+        self.patari_controller.shapes_layer.text = {
+            "string": "{roi_id}",
+            "size": 8,
+        }
+
+    def format_rois(self) -> None:
+        """Apply ROI visual formatting only when the shape count changes."""
         if self.patari_controller.shapes_layer is None:
             return
-
+        n_shapes = len(self.patari_controller.shapes_layer.data)
+        if n_shapes == self._n_shapes:
+            return
         try:
-            props = dict(
-                getattr(self.patari_controller.shapes_layer, "properties", {})
-                or {}
-            )
-            props["roi_id"] = np.arange(
-                len(self.patari_controller.shapes_layer.data), dtype=int
-            )
-            self.patari_controller.shapes_layer.properties = props
-            # napari text supports formatting from properties.
-            self.patari_controller.shapes_layer.text = {
-                "string": "{roi_id}",
-                "size": 8,
-            }
-        except Exception:
-            logger.exception("failed to apply ROI labels")
+            self.apply_roi_colors()
+            self.apply_roi_labels()
+            self._n_shapes = n_shapes
+        except Exception as e:
+            logger.exception("Error formatting ROIs: %s", e)
 
     def on_shapes_data_changed(self, event=None) -> None:
         if self.patari_controller.shapes_layer is None:
@@ -331,8 +335,7 @@ class RoiController(TaskControllerBase):
         # positions = list(props.get("roi_position", []))
         # print(positions)
 
-        self.apply_roi_colors(force=True)
-        self.apply_roi_labels()
+        self.format_rois()
 
         self.update_live_table()
 
@@ -385,9 +388,6 @@ class RoiController(TaskControllerBase):
             self._set_live_table_selection(selected_rows)
         finally:
             self._syncing = False
-
-        # Keep ROI colors in sync with current shape count/order.
-        self.apply_roi_colors()
 
         # Color first table column to match each ROI color.
         num_shapes = len(self.patari_controller.shapes_layer.data)

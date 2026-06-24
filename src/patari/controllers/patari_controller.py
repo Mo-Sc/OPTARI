@@ -126,39 +126,42 @@ class PatariController:
         ShortcutManager.register_all(self)
 
     def _connect_shapes_layer_events(self) -> None:
+        """
+        Connects events for the shapes layer to the ROI controller. This includes data changes and selection changes.
+        data changes mean ROIs were added/removed/replaced
+        selection changes mean the active ROI set changed
+        """
         if self.shapes_layer is None:
             return
-        for evt, handler in (
-            (self.shapes_layer.events.data, self._on_shapes_data_changed),
-        ):
+
+        bindings = [
+            # Shapes layer data changes drive ROI table refresh, label updates, and formatting.
+            (
+                self.shapes_layer.events.data,
+                self._on_shapes_data_changed
+            ),
+            # selected_data.items_changed is the selection signal for viewer -> table sync.
+            (
+                self.shapes_layer.selected_data.events.items_changed,
+                self._on_shapes_selection_changed,
+            ),
+            # Live table itemSelectionChanged is signal for table -> viewer sync.
+            (
+                self.roi.live_table.native.itemSelectionChanged,
+                self.roi_ctrl.on_live_table_selection_changed,
+            ),
+        ]
+
+        # Disconnect and reconnect to avoid duplicate connections if this is called multiple times.
+        # TODO: check if disconnecting is really necessary
+        for evt, handler in bindings:
             try:
                 evt.disconnect(handler)
             except Exception:
                 pass
+
+        for evt, handler in bindings:
             evt.connect(handler)
-
-        # selection sync: use selected_data change events (stable), not highlight events (high-frequency during drag)
-        try:
-            self.shapes_layer.selected_data.events.items_changed.disconnect(
-                self._on_shapes_selection_changed
-            )
-        except Exception:
-            pass
-        self.shapes_layer.selected_data.events.items_changed.connect(
-            self._on_shapes_selection_changed
-        )
-
-        # live table ↔ shapes selection sync
-        if self.roi is not None:
-            try:
-                self.roi.live_table.native.itemSelectionChanged.disconnect(
-                    self.roi_ctrl.on_live_table_selection_changed
-                )
-            except Exception:
-                pass
-            self.roi.live_table.native.itemSelectionChanged.connect(
-                self.roi_ctrl.on_live_table_selection_changed
-            )
 
     # ============ ROI layer management ============
     def _apply_roi_colors(self) -> None:
