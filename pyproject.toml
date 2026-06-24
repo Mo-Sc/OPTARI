@@ -29,19 +29,20 @@ dependencies = [
     "scikit-image",
     "opencv-python-headless",
     "onnxruntime",
+    # --- precompiled PATATO wheels for python 3.12 ---
     # Windows
-    "patato @ https://github.com/Mo-Sc/patato/releases/download/patari-v0.2-test/patato-0.7.1.dev1+gb950b95e2-cp312-cp312-win_amd64.whl ; sys_platform == 'win32'",
-    # macOS Apple Silicon (TODO: compile patato)
-    # "patato @ https://github.com/Mo-Sc/patato/releases/download/patari-v0.2-test/patato-[...]-macosx_11_0_arm64.whl ; sys_platform == 'darwin' and platform_machine == 'arm64'",
-    # macOS Intel (TODO: compile patato)
-    # "patato @ https://github.com/Mo-Sc/patato/releases/download/patari-v0.2-test/patato-[...]-macosx_10_9_x86_64.whl ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
-    # Linux (compile from source) (for now also mac)
-    "patato @ https://github.com/Mo-Sc/patato/archive/b950b95e283b30f56cfca00bf6b1033d53ab496e.zip ; sys_platform == 'linux' or sys_platform == 'darwin'",
+    "patato @ https://github.com/Mo-Sc/patato/releases/download/patari-v0.3/patato-0.7.1.dev1+gec3fb1ae4-cp312-cp312-win_amd64.whl ; sys_platform == 'win32'",
+    # macOS Apple Silicon (macos-14 runner)
+    "patato @ https://github.com/Mo-Sc/patato/releases/download/patari-v0.3/patato-0.7.1.dev1+gec3fb1ae4-cp312-cp312-macosx_11_0_arm64.whl ; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    # macOS Intel (macos-13 runner)
+    "patato @ https://github.com/Mo-Sc/patato/releases/download/v0.2.0-patari/patato-0.7.1-cp312-cp312-macosx_10_9_x86_64.whl ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    # Linux (ubuntu-latest runner)
+    "patato @ https://github.com/Mo-Sc/patato/releases/download/patari-v0.3/patato-0.7.1.dev1+gec3fb1ae4-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl ; sys_platform == 'linux'"
     "openpyxl",
 ]
 
-# Windows py311 binaries: patato @ https://github.com/Mo-Sc/patato/releases/download/patari-v0.2-test/patato-0.7.1.dev1+gb950b95e2-cp311-cp311-win_amd64.whl",
-                             
+# patato from source: "patato @ https://github.com/Mo-Sc/patato/archive/b950b95e283b30f56cfca00bf6b1033d53ab496e.zip ; sys_platform == 'linux' or sys_platform == 'darwin'",
+
 
 [project.optional-dependencies]
 # Allow easily installation with the full, default napari installation
