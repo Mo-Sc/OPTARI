@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from qtpy.QtCore import Qt
+from qtpy.QtCore import QLocale, Qt
 from qtpy.QtGui import QDoubleValidator
 from qtpy.QtWidgets import (
     QHBoxLayout,
@@ -115,6 +115,7 @@ def create_range_edits(
     def _new_numeric_edit() -> QLineEdit:
         edit = QLineEdit()
         validator = QDoubleValidator()
+        validator.setLocale(QLocale.c())
         validator.setDecimals(decimals)
         if minimum is not None:
             validator.setBottom(minimum)

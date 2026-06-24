@@ -339,12 +339,13 @@ def compute_roi_time_series(
     shapes_layer,
     active_recon_layer,
     channel_idx: int,
+    feature_id: str,
     *,
     clamp_min: float | None = None,
     clamp_max: float | None = None,
     clamp_mode: str = "clip",
 ):
-    """Compute per-ROI mean intensity over time for a fixed channel."""
+    """Compute per-ROI feature over time for a fixed channel."""
 
     if active_recon_layer is None:
         return np.asarray([]), {}
@@ -378,6 +379,12 @@ def compute_roi_time_series(
     sy, sx = _scale_sy_sx(active_recon_layer)
     img_shape = data.shape[-2:]
 
+    # required data for ROI context
+    filepath = str(active_recon_layer.metadata.get("filepath", "") or "")
+    scan = Path(filepath).stem if filepath else ""
+    study = Path(filepath).parent.name if filepath else ""
+    channel_value = _channel_value(active_recon_layer, channel_idx)
+
     series: dict[int, np.ndarray] = {}
     for roi in _iter_rois(shapes_layer):
         mask = _roi_mask(roi, sy=sy, sx=sx, image_shape=img_shape)
@@ -387,16 +394,39 @@ def compute_roi_time_series(
         y = []
         for frame_idx in frames:
             if not _is_reconstructed_frame(active_recon_layer, int(frame_idx)):
+                y.append(np.nan)
                 continue
             img2d = data[int(frame_idx), channel_idx]
-            vals = img2d[mask]
+            vals_raw = img2d[mask]
             vals = _apply_clamp(
-                vals,
+                vals_raw,
                 clamp_min,
                 clamp_max,
                 mode=str(clamp_mode or "clip"),
             )
-            y.append(float(np.nanmean(vals)) if vals.size else np.nan)
+
+            # Create a context for the current ROI and frame to compute the feature
+            ctx = ROIContext(
+                roi_index=roi.index,
+                src_layers={
+                    "data": str(active_recon_layer.name),
+                    "mask": _roi_source(shapes_layer, roi.index),
+                },
+                roi_type=roi.kind,
+                study=study,
+                scan=scan,
+                frame=int(frame_idx),
+                channel=channel_value,
+                scan_ts=_timestamp_str(active_recon_layer, int(frame_idx), channel_idx),
+                roi_ts="",
+                roi_centroid=_roi_centroid_mm(roi),
+                filepath=filepath,
+                vals_raw=vals_raw,
+                vals=vals,
+                sy=sy,
+                sx=sx,
+            )
+            y.append(float(FEATURE_REGISTRY[feature_id].compute(ctx)))
         series[int(roi.index)] = np.asarray(y, dtype=float)
 
     return np.asarray(x, dtype=float), series

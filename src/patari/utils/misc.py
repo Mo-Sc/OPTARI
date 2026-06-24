@@ -13,23 +13,15 @@ def parse_float_input(text: str) -> float | None:
     if t == "":
         return None
     try:
-        return float(t)
+        return float(t.replace(",", "."))
     except Exception:
         return None
 
 
 def roi_color_for_index(roi_index: int) -> str:
     """Return the configured display color for a given ROI index."""
-
     roi_colors = settings.annotation.roi_colors
-
-    if not roi_colors:
-        return "#aa0000ff"
-    try:
-        idx = int(roi_index)
-    except Exception:
-        idx = 0
-    return roi_colors[idx % len(roi_colors)]
+    return roi_colors[int(roi_index) % len(roi_colors)]
 
     
 

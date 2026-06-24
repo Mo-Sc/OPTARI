@@ -87,6 +87,10 @@ FEATURE_REGISTRY: dict[str, FeatureSpec] = {
 
 ALL_FEATURE_COLUMNS: list[str] = list(FEATURE_REGISTRY.keys())
 
+
+def numeric_feature_ids() -> list[str]:
+    return [fid for fid in ALL_FEATURE_COLUMNS if FEATURE_REGISTRY[fid].dtype in (int, float)]
+
 # Fixed set of columns that are always included in the saved table (and export xlsx), regardless of user settings to identify the origin of the ROI
 SAVED_FIXED_SOURCE_COLUMNS: list[str] = [
     "study",

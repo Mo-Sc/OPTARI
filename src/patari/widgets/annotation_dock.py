@@ -17,6 +17,7 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
+from patari.roi.roi_features import numeric_feature_ids
 from .dock_helpers import create_range_edits, create_right_dock_shell
 
 
@@ -32,6 +33,7 @@ class AnnotationDock:
     include_all_layers_checkbox: QCheckBox
     include_all_frames_checkbox: QCheckBox
     include_all_channels_checkbox: QCheckBox
+    time_analysis_feature_combo: QComboBox
     roi_library_list: QListWidget
     roi_library_description_label: QLabel
     roi_placement_mode_combo: QComboBox
@@ -142,11 +144,21 @@ def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
     save_roi_layout.addWidget(include_all_layers_checkbox)
     save_roi_layout.addWidget(include_all_frames_checkbox)
     save_roi_layout.addWidget(include_all_channels_checkbox)
+
+    # Time analysis feature selection (default is mean)
+    time_analysis_box = QGroupBox("Time Analysis")
+    time_analysis_layout = QFormLayout(time_analysis_box)
+    time_analysis_feature_combo = QComboBox()
+    for feature_id in numeric_feature_ids():
+        time_analysis_feature_combo.addItem(feature_id, userData=feature_id)
+    time_analysis_feature_combo.setCurrentIndex(time_analysis_feature_combo.findData("mean"))
+    time_analysis_layout.addRow("Feature", time_analysis_feature_combo)
     
 
     outer.addWidget(roi_library_box)
     outer.addWidget(roi_box)
     outer.addWidget(save_roi_box)
+    outer.addWidget(time_analysis_box)
     outer.addStretch()
 
     return AnnotationDock(
@@ -160,6 +172,7 @@ def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
         include_all_layers_checkbox=include_all_layers_checkbox,
         include_all_frames_checkbox=include_all_frames_checkbox,
         include_all_channels_checkbox=include_all_channels_checkbox,
+        time_analysis_feature_combo=time_analysis_feature_combo,
         roi_library_list=roi_library_list,
         roi_library_description_label=roi_library_description_label,
         roi_placement_mode_combo=roi_placement_mode_combo,

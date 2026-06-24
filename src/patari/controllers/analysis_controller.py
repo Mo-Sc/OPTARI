@@ -121,6 +121,7 @@ class AnalysisController(TaskControllerBase):
         assert plot is not None
 
         _, channel_idx = self._current_frame_channel()
+        feature_id = self.patari_controller.annotation.time_analysis_feature_combo.currentData()
 
         self.patari_controller.time_analysis.status_label.setText(
             "Computing time series…"
@@ -129,6 +130,7 @@ class AnalysisController(TaskControllerBase):
             self.patari_controller.shapes_layer,
             self.patari_controller.active_recon_layer,
             channel_idx,
+            feature_id,
             **self._clamp_kwargs(),
         )
 
@@ -165,10 +167,10 @@ class AnalysisController(TaskControllerBase):
         )
 
         plot.setLabel("bottom", xlabel)
-        plot.setLabel("left", f"Mean Int. ({axis1_value})")
+        plot.setLabel("left", f"{feature_id} ({axis1_value})")
 
         self.patari_controller.time_analysis.status_label.setText(
-            f"Plotted {len(series)} ROI(s) over {len(x)} frame(s)."
+            f"Plotted {len(series)} ROI(s) over {len(x)} frame(s) using {feature_id}."
         )
 
     def on_refresh_histograms_clicked(self, event=None) -> None:
