@@ -1,10 +1,7 @@
 import os
-import sys
 import logging
-import faulthandler
 from os import _exit as os_exit
 
-faulthandler.enable()
 
 from .utils.logging import configure_logging
 from .utils.setup import get_user_dir, configure_napari, load_startup_logo

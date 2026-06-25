@@ -8,7 +8,7 @@ from qtpy.QtCore import QTimer
 from patari.widgets.annotation_dock import create_annotation_dock
 from patari.widgets.histogram_dock import create_histogram_dock
 from patari.widgets.info_dock import create_info_dock
-from patari.widgets.reconstruction_dock import create_reconstruction_dock
+# from patari.widgets.reconstruction_dock import create_reconstruction_dock
 from patari.widgets.roi_dock import create_roi_dock
 from patari.widgets.scan_browser_dock import create_scan_browser_dock
 from patari.widgets.segmentation_dock import create_segmentation_dock
@@ -135,15 +135,15 @@ class UiManager:
         #         )
         #     )
 
-        logger.info(
-            "PATARI: Dock widgets created using napari tabify=True path"
-        )
+        # Select default docks after the event loop has started
         QTimer.singleShot(0, lambda: UiManager._select_default_docks(controller))
+
+        logger.info("Dock widgets created and added to the viewer window.")
 
     # ============ dock layout ============
     @staticmethod
     def _select_default_docks(controller: "PatariController") -> None:
-        # Keep startup selection deterministic.
+        # by default, Scan Browser on the right and Tables at the bottom
         if controller._roi_dock_widget is not None:
             controller._roi_dock_widget.raise_()
         if controller._scan_browser_dock_widget is not None:
