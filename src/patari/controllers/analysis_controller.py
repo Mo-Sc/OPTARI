@@ -11,14 +11,13 @@ from patari.roi.roi_utils import (
 )
 from patari.utils.misc import roi_color_for_index
 from patari.controllers.base import TaskControllerBase
+from patari.config import settings
 
 logger = logging.getLogger(__name__)
 
 
 class AnalysisController(TaskControllerBase):
     """Time analysis, histograms, and spectral plotting helpers."""
-
-    HISTOGRAM_BINS = 50
 
     def __init__(self, parent_controller):
         super().__init__(parent_controller)
@@ -216,10 +215,12 @@ class AnalysisController(TaskControllerBase):
         n_plotted = 0
         for roi_index, vals in roi_vals.items():
             vals = np.asarray(vals)
+            # Remove NaN values before computing histogram
+            vals = vals[np.isfinite(vals)]
             if vals.size == 0:
                 continue
 
-            counts, edges = np.histogram(vals, bins=self.HISTOGRAM_BINS)
+            counts, edges = np.histogram(vals, bins=settings.analysis.histogram_bins)
 
             if counts.size == 0 or edges.size < 2:
                 continue

@@ -16,6 +16,7 @@ from patari.utils.viewer import current_frame_idx
 from napari.layers import Labels
 from patari.controllers.base import TaskControllerBase
 from patari.roi import Ellipse, Rectangle, Polygon, ROIPlacementConfig
+from patari.config import settings
 
 
 logger = logging.getLogger(__name__)
@@ -32,9 +33,15 @@ class SegmentationController(TaskControllerBase):
     def __init__(self, parent_controller):
         super().__init__(parent_controller)
         self._segmentation_model_registry = load_model_registry()
-        self._active_segmentation_model_id = next(
-            iter(self._segmentation_model_registry)
-        )
+        default_model_id = settings.segmentation.default_model
+        if default_model_id not in self._segmentation_model_registry:
+            logger.warning(
+                f"Default segmentation model '{default_model_id}' not found in registry. "
+                f"Available models: {list(self._segmentation_model_registry.keys())}. "
+                f"Falling back to first available model."
+            )
+            default_model_id = next(iter(self._segmentation_model_registry))
+        self._active_segmentation_model_id = default_model_id
         self._segmenter = None
         self._segmenter_model_id = None
         self._seg_layer: Labels | None = None

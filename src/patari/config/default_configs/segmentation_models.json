@@ -1,5 +1,4 @@
 {
-  "default_model": "unet_msot_2_ta",
   "models": [
     {
       "adapter_class": "UKErUSSegAdapter",

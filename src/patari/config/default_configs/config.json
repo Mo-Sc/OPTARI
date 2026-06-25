@@ -55,5 +55,10 @@
             "filepath": 0
         }
     },
-    "segmentation":{}
+    "analysis": {
+        "histogram_bins": 50
+    },
+    "segmentation":{
+        "default_model": "unet_msot_2_ta"
+    }
 }

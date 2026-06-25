@@ -22,9 +22,19 @@ class AnnotationConfig:
     roi_features: dict[str, int] = field(default_factory=dict)
 
 @dataclass(frozen=True)
+class AnalysisConfig:
+    histogram_bins: int
+
+@dataclass(frozen=True)
+class SegmentationConfig:
+    default_model: str
+
+@dataclass(frozen=True)
 class PatariConfig:
     general: GeneralConfig
     annotation: AnnotationConfig
+    analysis: AnalysisConfig
+    segmentation: SegmentationConfig
 
     @classmethod
     def load_from_user_dir(cls) -> "PatariConfig":
@@ -35,4 +45,6 @@ class PatariConfig:
         return cls(
             general=GeneralConfig(**data["general"]),
             annotation=AnnotationConfig(**data["annotation"]),
+            analysis=AnalysisConfig(**data["analysis"]),
+            segmentation=SegmentationConfig(**data["segmentation"])
         )
