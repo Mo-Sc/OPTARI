@@ -124,11 +124,21 @@ class UiManager:
         #         )
         #     )
 
-        # Defer tabification: Qt's main window must finish processing add_dock_widget
-        # events before tabifyDockWidget is safe to call. A singleShot(0) defers until
-        # the event loop is running, avoiding a C++-level segfault on startup.
         from qtpy.QtCore import QTimer
-        QTimer.singleShot(1000, lambda: UiManager._tabify_docks(controller))
+        QTimer.singleShot(0, lambda: UiManager._tabify_when_visible(controller))
+
+    @staticmethod
+    def _tabify_when_visible(controller: "PatariController", _retries: int = 0) -> None:
+        from qtpy.QtCore import QTimer
+        qt_window = getattr(controller.viewer.window, "_qt_window", None)
+        if qt_window is None:
+            return
+        # Retry up to 10 seconds until the window is visible.
+        if not qt_window.isVisible():
+            if _retries < 200:
+                QTimer.singleShot(50, lambda: UiManager._tabify_when_visible(controller, _retries + 1))
+            return
+        UiManager._tabify_docks(controller)
 
     # ============ dock layout ============
     @staticmethod
