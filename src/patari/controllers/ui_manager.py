@@ -124,7 +124,11 @@ class UiManager:
         #         )
         #     )
 
-        UiManager._tabify_docks(controller)
+        # Defer tabification: Qt's main window must finish processing add_dock_widget
+        # events before tabifyDockWidget is safe to call. A singleShot(0) defers until
+        # the event loop is running, avoiding a C++-level segfault on startup.
+        from qtpy.QtCore import QTimer
+        QTimer.singleShot(0, lambda: UiManager._tabify_docks(controller))
 
     # ============ dock layout ============
     @staticmethod

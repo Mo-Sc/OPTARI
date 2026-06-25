@@ -2,6 +2,7 @@ import os
 import sys
 import logging
 import faulthandler
+from os import _exit as os_exit
 
 faulthandler.enable()
 
@@ -44,7 +45,9 @@ def main() -> None:
                 controller.shutdown()
             except Exception as e:
                 logger.exception("Error during controller shutdown: %s", e)
-        sys.exit(0)
+        # os._exit bypasses Python's GC and atexit, preventing Qt objects from
+        # being destroyed in the wrong order after the event loop has stopped.
+        os_exit(0)
 
 if __name__ == "__main__":
     main()
