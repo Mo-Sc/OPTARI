@@ -2,7 +2,7 @@ import os
 import logging
 from .utils.setup import get_user_dir
 from .utils.logging import configure_logging
-from .utils.setup import configure_napari_preferences
+from .utils.setup import configure_napari
 logger = logging.getLogger(__name__)
 
 from patari.config import settings
@@ -31,7 +31,9 @@ def main() -> None:
 
     from napari import Viewer, run
 
-    configure_napari_preferences()
+    viewer = Viewer(title="PATARI (Clinical PA Analysis)") 
+
+    configure_napari(viewer)
 
     # once custom logo is ready
     # from qtpy.QtGui import QIcon 
@@ -39,7 +41,6 @@ def main() -> None:
     # if os.path.exists(logo_path):
     #     viewer.window._qt_window.setWindowIcon(QIcon(logo_path))
 
-    viewer = Viewer(title="PATARI (Clinical PA Analysis)") 
 
     viewer.window.add_plugin_dock_widget("patari", "PATARI Controls")
     run()

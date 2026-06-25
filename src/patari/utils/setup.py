@@ -3,7 +3,7 @@ import shutil
 from pathlib import Path
 import requests
 from typing import Generator
-
+import warnings
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +54,11 @@ def get_user_seg_models_config_file() -> Path:
     """Returns the path to the segmentation models configuration file."""
     return get_user_dir() / "config" / "segmentation_models.json"
 
-def configure_napari_preferences() -> None:
-    """configure PATRI specific napari settings (playback fps, save window state, grid stride)."""
+def configure_napari(viewer) -> None:
+    """
+    configure PATRI specific napari settings (playback fps, save window state, grid stride).
+    Deactivate keyboard search in layers panel to avoid accidental layer selection during ROI drawing.
+    """
     try:
         import napari
         napari_settings = napari.settings.get_settings()
@@ -63,6 +66,15 @@ def configure_napari_preferences() -> None:
         napari_settings.application.playback_fps = 5
         napari_settings.application.save_window_state = True
         napari_settings.application.grid_stride = -2
+
+        # deactivate keyboard search in layers panel 
+        # workaround described here: https://github.com/napari/napari/issues/7551
+        # but gets deprecation warning, so suppress it for now
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=FutureWarning)
+            viewer.window.qt_viewer.layers.keyboardSearch = lambda s: None
+
+
         logger.info("PATARI: Clinical environment preferences applied successfully.")
     except Exception as e:
         logger.warning(f"Could not apply Napari preferences: {e}")
