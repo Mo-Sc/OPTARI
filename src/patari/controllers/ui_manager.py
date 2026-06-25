@@ -126,9 +126,9 @@ class UiManager:
 
         # UiManager._tabify_docks(controller)
 
-        from qtpy.QtCore import QTimer
-        # Push tabification 100ms into the future so Napari can finish its own plugin docking first
-        QTimer.singleShot(100, lambda: UiManager._tabify_docks(controller))
+        # from qtpy.QtCore import QTimer
+        # # Push tabification 100ms into the future so Napari can finish its own plugin docking first
+        # QTimer.singleShot(100, lambda: UiManager._tabify_docks(controller))
 
     # ============ dock layout ============
     @staticmethod
