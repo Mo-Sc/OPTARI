@@ -35,9 +35,9 @@ Key features (v0.3):
 
 1. Download the executable file of the [current release (v3)](tbd) for your operating system (macOS or windows).
 2. Unpack the zip folder and run the patari file.
-3. [Optional, on first run] If you get a warning, give your OS permission to run it:
-    * For windows: Click weitere infos and then trotzdem ausführen TODO
-    * For macOS: Open `System Settings` -> `Privacy & Security` -> Open Patari TODO
+3. [Optional, on first run] If you get an error, stating PATARI could not be verified, give your OS permission to run it:
+    * For windows: Click `More Info` -> `Run Anyways`
+    * For macOS: Open `System Settings` -> `Privacy & Security` -> Scroll down to Security -> “patari was blocked” -> `Open Anyway`
 4. At first run, PATARI will download all the required files, so make sure your computer is connected to the internet. The installation can take a few minutes.
 5. Once the installation is done, PATARI launches automatically. If patari is closed, you can simply launch it again by clicking on the same patari file.
 

@@ -187,6 +187,9 @@ class ScanController(TaskControllerBase):
             self.patari_controller.scan_browser.scans_list.setCurrentRow(0)
 
     def load_scan(self, scan_path: Path) -> None:
+
+        logger.info("loading scan: %s", scan_path)
+        
         scan_path = Path(scan_path)
         self.patari_controller.path = scan_path
         self.reset_scan_state()
@@ -233,6 +236,9 @@ class ScanController(TaskControllerBase):
                 kw.setdefault("metadata", {})
                 kw["metadata"].setdefault("filepath", str(scan_path))
                 self.viewer.add_image(data, **kw)
+                # alternatively set unit here instead of scalebar (deprecated), but doesnt seem to work yet
+                # layer = self.viewer.add_image(data, **kw)
+                # layer.units = "mm"
             else:
                 kw = dict(kw)
                 kw.setdefault("metadata", {})

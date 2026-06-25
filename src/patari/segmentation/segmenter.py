@@ -187,9 +187,9 @@ class UKErUSSegAdapter(ModelAdapterBase):
         mask_2d = reassign_freed_pixels_row_based(mask_2d)
         # combine given classes into one class (here fascia classes)
         mask_2d = combine_classes(mask_2d, post_cfg["combine_class_groups"])
-        for class_id, min_size in post_cfg["remove_small_objects_config"]:
+        for class_id, max_size in post_cfg["remove_small_objects_config"]:
             class_mask = mask_2d == class_id
-            processed_class = remove_small_objects(class_mask, min_size=min_size)
+            processed_class = remove_small_objects(class_mask, max_size=max_size)
             mask_2d[class_mask & ~processed_class] = 0
         # reassign any remaining freed pixels to the nearest class
         mask_2d = reassign_freed_pixels(mask_2d)

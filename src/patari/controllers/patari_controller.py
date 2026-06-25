@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+import warnings
 
 import numpy as np
 import patato as pat # type: ignore
@@ -113,7 +114,10 @@ class PatariController:
         self.viewer.axes.labels = True
         self.viewer.grid.enabled = False
         self.viewer.scale_bar.visible = True
-        self.viewer.scale_bar.unit = "mm"
+        # surpress deprecated warning for until fix
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=DeprecationWarning)
+            self.viewer.scale_bar.unit = "mm"
         self.viewer.dims.axis_labels = ("Frame", "Channel", "z", "x")
 
     def _ensure_docks(self) -> None:
