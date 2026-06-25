@@ -114,9 +114,9 @@ class PatariController:
         self.viewer.axes.labels = True
         self.viewer.grid.enabled = False
         self.viewer.scale_bar.visible = True
-        # surpress deprecated warning for until fix
+        # surpress warning for until fix
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=DeprecationWarning)
+            warnings.simplefilter("ignore", category=FutureWarning)
             self.viewer.scale_bar.unit = "mm"
         self.viewer.dims.axis_labels = ("Frame", "Channel", "z", "x")
 

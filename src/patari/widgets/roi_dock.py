@@ -65,7 +65,7 @@ def create_roi_dock() -> RoiDock:
     layout.addWidget(btn_panel)
     layout.addWidget(saved_panel)
 
-    # container.setMinimumHeight(300)
+    container.setMinimumHeight(300)
 
     return RoiDock(
         widget=container,
