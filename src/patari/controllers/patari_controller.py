@@ -33,16 +33,13 @@ logger = logging.getLogger(__name__)
 
 
 class PatariController:
-    def __init__(
-        self,
-        viewer: Viewer,
-        path: Path | None,
-    ):
+    def __init__(self, viewer: Viewer):
+
         self.viewer = viewer
-        self.path = Path(path) if path is not None else Path()
-        self.study_path: Path | None = (
-            self.path if self.path.is_dir() else self.path.parent
-        )
+        # self.path = Path(path) if path is not None else Path()
+        # self.study_path: Path | None = (
+        #     self.path if self.path.is_dir() else self.path.parent
+        # )
 
         self._scans: dict[Path, str] = {}
         self.pa_data: pat.PAData | None = None
@@ -103,9 +100,9 @@ class PatariController:
 
         # If a path is provided, populate scan browser / load scan.
         # Otherwise, the Scan Browser dock drives loading.
-        if path is not None:
-            self._init_path(self.path)
-        elif self.scan_browser is not None:
+        # if path is not None:
+        #     self._init_path(self.path)
+        if self.scan_browser is not None:
             # Show an empty folder field instead of defaulting to '.'
             self.scan_browser.folder_lineedit.setText("")
 
@@ -114,30 +111,18 @@ class PatariController:
     def shutdown(self) -> None:
         """
         Properly clean up resources and disconnect all signals before shutdown.
-        Must be called before the application exits to avoid segmentation faults.
+        Should prevent segfaults on exit
         """
-        logger.info("PatariController: Starting shutdown sequence...")
-
-        # Disconnect viewer events
+        # Disconnect events
         try:
             self.viewer.dims.events.point.disconnect(self.on_dims_changed)
-        except Exception:
-            pass
-
-        try:
             self.viewer.layers.selection.events.changed.disconnect(
                 self.on_selection_changed
             )
-        except Exception:
-            pass
-
-        # Disconnect shapes layer events
-        if self.shapes_layer is not None:
             for evt, handler in self._shapes_layer_bindings:
-                try:
-                    evt.disconnect(handler)
-                except Exception:
-                    pass
+                evt.disconnect(handler)
+        except Exception:
+            logger.exception("Error disconnecting events during shutdown")
 
         # Close current scan to release file handles
         try:

@@ -128,7 +128,7 @@ class UiManager:
         # events before tabifyDockWidget is safe to call. A singleShot(0) defers until
         # the event loop is running, avoiding a C++-level segfault on startup.
         from qtpy.QtCore import QTimer
-        QTimer.singleShot(0, lambda: UiManager._tabify_docks(controller))
+        QTimer.singleShot(1000, lambda: UiManager._tabify_docks(controller))
 
     # ============ dock layout ============
     @staticmethod
@@ -146,14 +146,17 @@ class UiManager:
         tabify(controller._roi_dock_widget, controller._histograms_dock_widget)
         tabify(controller._roi_dock_widget, controller._spectrum_dock_widget)
 
-        # Right: Scan Browser + Annotation + Segmentation + Unmixing
+        # Right: Scan Browser, Annotation, Segmentation, Unmixing
         tabify(controller._scan_browser_dock_widget, controller._annotation_dock_widget)
         tabify(controller._scan_browser_dock_widget, controller._segmentation_dock_widget)
         tabify(controller._scan_browser_dock_widget, controller._unmixing_dock_widget)
-        # qt_window.tabifyDockWidget(
-        #     controller._scan_browser_dock_widget,
-        #     controller._reconstruction_dock_widget,
-        # )
+
+        # Set default selected docks after tabification.
+        if controller._roi_dock_widget is not None:
+            controller._roi_dock_widget.raise_()
+        if controller._scan_browser_dock_widget is not None:
+            controller._scan_browser_dock_widget.raise_()
+
 
     @staticmethod
     def connect_events(controller: "PatariController") -> None:

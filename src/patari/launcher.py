@@ -10,7 +10,7 @@ from .utils.logging import configure_logging
 from .utils.setup import get_user_dir, configure_napari, load_startup_logo
 from patari.config import settings
 from patari.controllers.patari_controller import PatariController
-# from patari._widget import disclaimer_widget
+
 from . import __version__
 
 logger = logging.getLogger(__name__)
@@ -29,23 +29,24 @@ def main() -> None:
     from napari import Viewer, run
 
     viewer = Viewer(title=f"PATARI v{__version__.split('+')[0]} (INTERNAL USE ONLY)")
+    
     controller = None
 
     try:
         configure_napari(viewer)
         load_startup_logo(viewer)
 
-        controller = PatariController(viewer, None)
+        controller = PatariController(viewer)
 
         run()
+
     finally:
-        print("Shutting down cleanly...")
         if controller is not None:
             try:
                 controller.shutdown()
             except Exception as e:
                 logger.exception("Error during controller shutdown: %s", e)
-        # os._exit bypasses Python's GC and atexit, preventing Qt objects from
+        # os._exit bypasses Pythons GC. Probably not ideal, but avoids a segfault on shutdown due to Qt objects. TODO
         # being destroyed in the wrong order after the event loop has stopped.
         os_exit(0)
 

@@ -118,16 +118,16 @@ class ScanController(TaskControllerBase):
             self.patari_controller.scan_browser.set_folder(path)
 
     def on_browse_folder_clicked(self) -> None:
-        start_path = str(
-            self.patari_controller.path
-            if self.patari_controller.path.exists()
-            else Path.cwd()
-        )
+        # start_path = str(
+        #     self.patari_controller.path
+        #     if self.patari_controller.path.exists()
+        #     else Path.cwd()
+        # )
 
         dialog = QFileDialog(
             None,
             "Select folder or HDF5 scan",
-            start_path,
+            str(Path.cwd()),
         )
         dialog.setFileMode(QFileDialog.AnyFile)
         dialog.setNameFilters(
@@ -189,7 +189,7 @@ class ScanController(TaskControllerBase):
     def load_scan(self, scan_path: Path) -> None:
 
         logger.info("loading scan: %s", scan_path)
-        
+
         scan_path = Path(scan_path)
         self.patari_controller.path = scan_path
         self.reset_scan_state()
