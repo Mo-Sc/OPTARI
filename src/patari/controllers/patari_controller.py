@@ -79,6 +79,9 @@ class PatariController:
         self.analysis_ctrl = AnalysisController(self)
         self.unmixing_ctrl = UnmixingController(self)
 
+        # Track event bindings for proper cleanup
+        self._shapes_layer_bindings = []
+
         # -- bottom elements --
         self.roi: RoiDock | None = None
         self.time_analysis: TimeAnalysisDock | None = None
@@ -107,6 +110,61 @@ class PatariController:
             self.scan_browser.folder_lineedit.setText("")
 
         self.refresh_all()
+
+    def shutdown(self) -> None:
+        """
+        Properly clean up resources and disconnect all signals before shutdown.
+        Must be called before the application exits to avoid segmentation faults.
+        """
+        logger.info("PatariController: Starting shutdown sequence...")
+
+        # Disconnect viewer events
+        try:
+            self.viewer.dims.events.point.disconnect(self.on_dims_changed)
+        except Exception:
+            pass
+
+        try:
+            self.viewer.layers.selection.events.changed.disconnect(
+                self.on_selection_changed
+            )
+        except Exception:
+            pass
+
+        # Disconnect shapes layer events
+        if self.shapes_layer is not None:
+            for evt, handler in self._shapes_layer_bindings:
+                try:
+                    evt.disconnect(handler)
+                except Exception:
+                    pass
+
+        # Close current scan to release file handles
+        try:
+            self._close_current_scan()
+        except Exception:
+            logger.exception("Error closing current scan during shutdown")
+
+        # Clear references to break circular references
+        self.pa_data = None
+        self._patato_objects.clear()
+        self._derived_patato_objects.clear()
+        self.shapes_layer = None
+        self.active_recon_layer = None
+        self.active_us_layer = None
+
+        # Clear widget references
+        self.info = None
+        self.scan_browser = None
+        self.annotation = None
+        self.unmixing = None
+        self.reconstruction = None
+        self.roi = None
+        self.time_analysis = None
+        self.histograms = None
+        self.spectrum = None
+
+        logger.info("PatariController: Shutdown complete")
 
     # ============ viewer setup ============
     def _setup_viewer(self) -> None:
@@ -138,7 +196,7 @@ class PatariController:
         if self.shapes_layer is None:
             return
 
-        bindings = [
+        self._shapes_layer_bindings = [
             # Shapes layer data changes drive ROI table refresh, label updates, and formatting.
             (
                 self.shapes_layer.events.data,
@@ -157,14 +215,13 @@ class PatariController:
         ]
 
         # Disconnect and reconnect to avoid duplicate connections if this is called multiple times.
-        # TODO: check if disconnecting is really necessary
-        for evt, handler in bindings:
+        for evt, handler in self._shapes_layer_bindings:
             try:
                 evt.disconnect(handler)
             except Exception:
                 pass
 
-        for evt, handler in bindings:
+        for evt, handler in self._shapes_layer_bindings:
             evt.connect(handler)
 
     # ============ ROI layer management ============
