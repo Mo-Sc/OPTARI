@@ -1,5 +1,10 @@
 import os
+import sys
 import logging
+import faulthandler
+
+# ENABLE FAULT HANDLER IMMEDIATELY
+faulthandler.enable()
 
 from .utils.setup import get_user_dir
 from .utils.logging import configure_logging
@@ -8,17 +13,7 @@ from patari.config import settings
 
 logger = logging.getLogger(__name__)
 
-
-
 def main() -> None:
-
-    # Force matplotlib to build its font cache first.
-    # This should prevent the segmentation fault with Qt on the very first launch when installing using pyapp
-    # import matplotlib.font_manager
-    # print("Ensuring font cache is ready (this may take a moment on first launch)")
-    # matplotlib.font_manager.findfont(matplotlib.font_manager.FontProperties(), fallback_to_default=True)
-
-    
     print(f"Starting PATARI... (GUI log level: {settings.general.GUI_LOG_LEVEL}, general log level: {settings.general.LOG_LEVEL})")
     configure_logging()
 
@@ -29,27 +24,32 @@ def main() -> None:
     os.environ.setdefault("PATARI_LOG_LEVEL", settings.general.LOG_LEVEL)
     os.environ.setdefault("PATARI_GUI_LOG_LEVEL", settings.general.GUI_LOG_LEVEL)
 
-    
-
     from napari import Viewer, run
     from qtpy.QtWidgets import QApplication
-
 
     viewer = Viewer(title="PATARI (Clinical PA Analysis)") 
 
     configure_napari(viewer)
 
-    # once custom logo is ready
-    # from qtpy.QtGui import QIcon 
-    # logo_path = os.path.join(os.path.dirname(__file__), "data", "patari_logo.png")
-    # if os.path.exists(logo_path):
-    #     viewer.window._qt_window.setWindowIcon(QIcon(logo_path))
-    # Force Qt to finish
+    # Force Qt to finish rendering (still good practice to keep this here!)
     QApplication.processEvents()
 
     viewer.window.add_plugin_dock_widget("patari", "PATARI Controls")
+    
+    # This blocks until the user closes the window
     run()
 
+    # --- CLEAN TEARDOWN BLOCK ---
+    print("Shutting down cleanly...")
+    
+    # 1. Force Napari to cleanly close its viewer and release Qt bindings
+    try:
+        viewer.close()
+    except Exception:
+        pass
+        
+    # 2. Hard exit the process to prevent Python's garbage collector from double-freeing Qt C++ objects
+    sys.exit(0)
 
 if __name__ == "__main__":
     main()
