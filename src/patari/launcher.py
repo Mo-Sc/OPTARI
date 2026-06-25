@@ -1,20 +1,22 @@
 import os
 import logging
+
 from .utils.setup import get_user_dir
 from .utils.logging import configure_logging
 from .utils.setup import configure_napari
+from patari.config import settings
+
 logger = logging.getLogger(__name__)
 
-from patari.config import settings
 
 
 def main() -> None:
 
     # Force matplotlib to build its font cache first.
     # This should prevent the segmentation fault with Qt on the very first launch when installing using pyapp
-    import matplotlib.font_manager
-    print("Ensuring font cache is ready (this may take a moment on first launch)")
-    matplotlib.font_manager.findfont(matplotlib.font_manager.FontProperties(), fallback_to_default=True)
+    # import matplotlib.font_manager
+    # print("Ensuring font cache is ready (this may take a moment on first launch)")
+    # matplotlib.font_manager.findfont(matplotlib.font_manager.FontProperties(), fallback_to_default=True)
 
     
     print(f"Starting PATARI... (GUI log level: {settings.general.GUI_LOG_LEVEL}, general log level: {settings.general.LOG_LEVEL})")
@@ -30,6 +32,8 @@ def main() -> None:
     
 
     from napari import Viewer, run
+    from qtpy.QtWidgets import QApplication
+
 
     viewer = Viewer(title="PATARI (Clinical PA Analysis)") 
 
@@ -40,7 +44,8 @@ def main() -> None:
     # logo_path = os.path.join(os.path.dirname(__file__), "data", "patari_logo.png")
     # if os.path.exists(logo_path):
     #     viewer.window._qt_window.setWindowIcon(QIcon(logo_path))
-
+    # Force Qt to finish
+    QApplication.processEvents()
 
     viewer.window.add_plugin_dock_widget("patari", "PATARI Controls")
     run()
