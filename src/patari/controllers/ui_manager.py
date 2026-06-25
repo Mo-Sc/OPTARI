@@ -133,33 +133,19 @@ class UiManager:
         if qt_window is None:
             return
 
-        # Bottom: ROI, Time Analysis, Histograms, Spectrum
-        qt_window.tabifyDockWidget(
-            controller._roi_dock_widget,
-            controller._time_analysis_dock_widget,
-        )
-        qt_window.tabifyDockWidget(
-            controller._roi_dock_widget,
-            controller._histograms_dock_widget,
-        )
-        qt_window.tabifyDockWidget(
-            controller._roi_dock_widget,
-            controller._spectrum_dock_widget,
-        )
+        def tabify(first, second):
+            if first is not None and second is not None:
+                qt_window.tabifyDockWidget(first, second)
 
-        # Right: Scan Browser + Annotation + Segmentation + Unmixing + Reconstruction
-        qt_window.tabifyDockWidget(
-            controller._scan_browser_dock_widget,
-            controller._annotation_dock_widget,
-        )
-        qt_window.tabifyDockWidget(
-            controller._scan_browser_dock_widget,
-            controller._segmentation_dock_widget,
-        )
-        qt_window.tabifyDockWidget(
-            controller._scan_browser_dock_widget,
-            controller._unmixing_dock_widget,
-        )
+        # Bottom: ROI, Time Analysis, Histograms, Spectrum
+        tabify(controller._roi_dock_widget, controller._time_analysis_dock_widget)
+        tabify(controller._roi_dock_widget, controller._histograms_dock_widget)
+        tabify(controller._roi_dock_widget, controller._spectrum_dock_widget)
+
+        # Right: Scan Browser + Annotation + Segmentation + Unmixing
+        tabify(controller._scan_browser_dock_widget, controller._annotation_dock_widget)
+        tabify(controller._scan_browser_dock_widget, controller._segmentation_dock_widget)
+        tabify(controller._scan_browser_dock_widget, controller._unmixing_dock_widget)
         # qt_window.tabifyDockWidget(
         #     controller._scan_browser_dock_widget,
         #     controller._reconstruction_dock_widget,

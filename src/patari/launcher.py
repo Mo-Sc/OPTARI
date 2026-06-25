@@ -35,25 +35,15 @@ def main() -> None:
         load_startup_logo(viewer)
 
         controller = PatariController(viewer, None)
-        
-        # disclaimer = disclaimer_widget()
-        # viewer.window.add_dock_widget(disclaimer, name="PATARI Controls", area="left")
 
         run()
     finally:
-        # Ensure clean shutdown even if run() raises an exception
         print("Shutting down cleanly...")
         if controller is not None:
             try:
                 controller.shutdown()
             except Exception as e:
                 logger.exception("Error during controller shutdown: %s", e)
-        
-        try:
-            viewer.close()
-        except Exception:
-            pass
-        
         sys.exit(0)
 
 if __name__ == "__main__":
