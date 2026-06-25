@@ -93,9 +93,9 @@ def create_segmentation_dock(*, enable_scroll: bool = True) -> SegmentationDock:
     seg_layout.addWidget(QLabel("Classes"))
     seg_layout.addWidget(segmentation_classes_list)
     seg_layout.addWidget(classes_button_row)
-
-    seg_layout.addWidget(generate_tissue_segmentation_button)
+    
     seg_layout.addWidget(segment_all_frames_checkbox)
+    seg_layout.addWidget(generate_tissue_segmentation_button)
     seg_layout.addWidget(segmentation_status_label)
 
     outer.addWidget(seg_box)
