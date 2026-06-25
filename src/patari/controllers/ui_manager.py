@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
-from qtpy.QtCore import QEvent, QObject, QTimer
+from qtpy.QtCore import QTimer
 
 from patari.widgets.annotation_dock import create_annotation_dock
 from patari.widgets.histogram_dock import create_histogram_dock
@@ -18,30 +19,7 @@ from patari.widgets.unmixing_dock import create_unmixing_dock
 if TYPE_CHECKING:
     from patari.controllers.patari_controller import PatariController
 
-
-try:
-    _PAINT_EVENT_TYPE = QEvent.Type.Paint
-except AttributeError:
-    _PAINT_EVENT_TYPE = QEvent.Paint  # type: ignore[attr-defined]
-
-
-class _DockTabifier(QObject):
-    """
-    Event filter that defers tabifyDockWidget until after the first Paint event.
-    On macOS packaged builds, Cocoa native handles are only guaranteed to exist
-    once Qt has completed its first render pass — isVisible() alone is not enough.
-    """
-
-    def __init__(self, controller, qt_window):
-        super().__init__(qt_window)  # C++ parent prevents premature GC
-        self._controller = controller
-
-    def eventFilter(self, obj, event):
-        if event.type() == _PAINT_EVENT_TYPE:
-            obj.removeEventFilter(self)
-            QTimer.singleShot(0, lambda: UiManager._tabify_docks(self._controller))
-            self.deleteLater()
-        return False
+logger = logging.getLogger(__name__)
 
 
 class UiManager:
@@ -86,6 +64,7 @@ class UiManager:
                     controller.time_analysis.widget,
                     name="Time Analysis",
                     area="bottom",
+                    tabify=True,
                 )
             )
 
@@ -96,6 +75,7 @@ class UiManager:
                     controller.histograms.widget,
                     name="Histogram",
                     area="bottom",
+                    tabify=True,
                 )
             )
 
@@ -106,6 +86,7 @@ class UiManager:
                     controller.spectrum.widget,
                     name="Spectrum",
                     area="bottom",
+                    tabify=True,
                 )
             )
 
@@ -116,6 +97,7 @@ class UiManager:
                     controller.annotation.widget,
                     name="Annotation",
                     area="right",
+                    tabify=True,
                 )
             )
 
@@ -126,6 +108,7 @@ class UiManager:
                     controller.segmentation.widget,
                     name="Segmentation",
                     area="right",
+                    tabify=True,
                 )
             )
 
@@ -136,6 +119,7 @@ class UiManager:
                     controller.unmixing.widget,
                     name="Unmixing",
                     area="right",
+                    tabify=True,
                 )
             )
             controller.unmixing_ctrl.initialize_ui()
@@ -151,36 +135,15 @@ class UiManager:
         #         )
         #     )
 
-        # tabifyDockWidget crashes at the C++ level on macOS packaged builds if called
-        # before Cocoa has completed its first render pass. isVisible() is not sufficient.
-        # An event filter on QEvent::Paint is the correct guard — it fires exactly once,
-        # after all native handles are guaranteed to exist.
-        qt_window = getattr(controller.viewer.window, "_qt_window", None)
-        if qt_window is not None:
-            qt_window.installEventFilter(_DockTabifier(controller, qt_window))
+        logger.info(
+            "PATARI: Dock widgets created using napari tabify=True path"
+        )
+        QTimer.singleShot(0, lambda: UiManager._select_default_docks(controller))
 
     # ============ dock layout ============
     @staticmethod
-    def _tabify_docks(controller: "PatariController") -> None:
-        qt_window = getattr(controller.viewer.window, "_qt_window", None)
-        if qt_window is None:
-            return
-
-        def tabify(first, second):
-            if first is not None and second is not None:
-                qt_window.tabifyDockWidget(first, second)
-
-        # Bottom: ROI, Time Analysis, Histograms, Spectrum
-        tabify(controller._roi_dock_widget, controller._time_analysis_dock_widget)
-        tabify(controller._roi_dock_widget, controller._histograms_dock_widget)
-        tabify(controller._roi_dock_widget, controller._spectrum_dock_widget)
-
-        # Right: Scan Browser, Annotation, Segmentation, Unmixing
-        tabify(controller._scan_browser_dock_widget, controller._annotation_dock_widget)
-        tabify(controller._scan_browser_dock_widget, controller._segmentation_dock_widget)
-        tabify(controller._scan_browser_dock_widget, controller._unmixing_dock_widget)
-
-        # Set default selected docks after tabification.
+    def _select_default_docks(controller: "PatariController") -> None:
+        # Keep startup selection deterministic.
         if controller._roi_dock_widget is not None:
             controller._roi_dock_widget.raise_()
         if controller._scan_browser_dock_widget is not None:
