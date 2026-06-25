@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
+
+from qtpy.QtCore import QTimer
 
 from patari.widgets.annotation_dock import create_annotation_dock
 from patari.widgets.histogram_dock import create_histogram_dock
 from patari.widgets.info_dock import create_info_dock
-from patari.widgets.reconstruction_dock import create_reconstruction_dock
+# from patari.widgets.reconstruction_dock import create_reconstruction_dock
 from patari.widgets.roi_dock import create_roi_dock
 from patari.widgets.scan_browser_dock import create_scan_browser_dock
 from patari.widgets.segmentation_dock import create_segmentation_dock
@@ -15,6 +18,8 @@ from patari.widgets.unmixing_dock import create_unmixing_dock
 
 if TYPE_CHECKING:
     from patari.controllers.patari_controller import PatariController
+
+logger = logging.getLogger(__name__)
 
 
 class UiManager:
@@ -59,6 +64,7 @@ class UiManager:
                     controller.time_analysis.widget,
                     name="Time Analysis",
                     area="bottom",
+                    tabify=True,
                 )
             )
 
@@ -69,6 +75,7 @@ class UiManager:
                     controller.histograms.widget,
                     name="Histogram",
                     area="bottom",
+                    tabify=True,
                 )
             )
 
@@ -79,6 +86,7 @@ class UiManager:
                     controller.spectrum.widget,
                     name="Spectrum",
                     area="bottom",
+                    tabify=True,
                 )
             )
 
@@ -89,6 +97,7 @@ class UiManager:
                     controller.annotation.widget,
                     name="Annotation",
                     area="right",
+                    tabify=True,
                 )
             )
 
@@ -99,6 +108,7 @@ class UiManager:
                     controller.segmentation.widget,
                     name="Segmentation",
                     area="right",
+                    tabify=True,
                 )
             )
 
@@ -109,6 +119,7 @@ class UiManager:
                     controller.unmixing.widget,
                     name="Unmixing",
                     area="right",
+                    tabify=True,
                 )
             )
             controller.unmixing_ctrl.initialize_ui()
@@ -124,46 +135,20 @@ class UiManager:
         #         )
         #     )
 
-        UiManager._tabify_docks(controller)
+        # Select default docks after the event loop has started
+        QTimer.singleShot(0, lambda: UiManager._select_default_docks(controller))
+
+        logger.info("Dock widgets created and added to the viewer window.")
 
     # ============ dock layout ============
     @staticmethod
-    def _tabify_docks(controller: "PatariController") -> None:
-        qt_window = getattr(controller.viewer.window, "_qt_window", None)
-        if qt_window is None:
-            return
+    def _select_default_docks(controller: "PatariController") -> None:
+        # by default, Scan Browser on the right and Tables at the bottom
+        if controller._roi_dock_widget is not None:
+            controller._roi_dock_widget.raise_()
+        if controller._scan_browser_dock_widget is not None:
+            controller._scan_browser_dock_widget.raise_()
 
-        # Bottom: ROI, Time Analysis, Histograms, Spectrum
-        qt_window.tabifyDockWidget(
-            controller._roi_dock_widget,
-            controller._time_analysis_dock_widget,
-        )
-        qt_window.tabifyDockWidget(
-            controller._roi_dock_widget,
-            controller._histograms_dock_widget,
-        )
-        qt_window.tabifyDockWidget(
-            controller._roi_dock_widget,
-            controller._spectrum_dock_widget,
-        )
-
-        # Right: Scan Browser + Annotation + Segmentation + Unmixing + Reconstruction
-        qt_window.tabifyDockWidget(
-            controller._scan_browser_dock_widget,
-            controller._annotation_dock_widget,
-        )
-        qt_window.tabifyDockWidget(
-            controller._scan_browser_dock_widget,
-            controller._segmentation_dock_widget,
-        )
-        qt_window.tabifyDockWidget(
-            controller._scan_browser_dock_widget,
-            controller._unmixing_dock_widget,
-        )
-        # qt_window.tabifyDockWidget(
-        #     controller._scan_browser_dock_widget,
-        #     controller._reconstruction_dock_widget,
-        # )
 
     @staticmethod
     def connect_events(controller: "PatariController") -> None:

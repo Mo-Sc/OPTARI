@@ -1,50 +1,51 @@
 import os
 import logging
-from .utils.setup import get_user_dir
+from os import _exit as os_exit
+
+
 from .utils.logging import configure_logging
-from .utils.setup import configure_napari
-logger = logging.getLogger(__name__)
-
+from .utils.setup import get_user_dir, configure_napari, load_startup_logo
 from patari.config import settings
+from patari.controllers.patari_controller import PatariController
 
+from . import __version__
+
+logger = logging.getLogger(__name__)
 
 def main() -> None:
 
-    # Force matplotlib to build its font cache first.
-    # This should prevent the segmentation fault with Qt on the very first launch when installing using pyapp
-    import matplotlib.font_manager
-    print("Ensuring font cache is ready (this may take a moment on first launch)")
-    matplotlib.font_manager.findfont(matplotlib.font_manager.FontProperties(), fallback_to_default=True)
-
-    
     print(f"Starting PATARI... (GUI log level: {settings.general.GUI_LOG_LEVEL}, general log level: {settings.general.LOG_LEVEL})")
+    
     configure_logging()
-
-    # Set up user directory
     user_dir = get_user_dir()
 
     os.environ.setdefault("PATARI_USER_DIR", str(user_dir))
     os.environ.setdefault("PATARI_LOG_LEVEL", settings.general.LOG_LEVEL)
     os.environ.setdefault("PATARI_GUI_LOG_LEVEL", settings.general.GUI_LOG_LEVEL)
 
-    
-
     from napari import Viewer, run
 
-    viewer = Viewer(title="PATARI (Clinical PA Analysis)") 
+    viewer = Viewer(title=f"PATARI v{__version__.split('+')[0]} (INTERNAL USE ONLY)")
+    
+    controller = None
 
-    configure_napari(viewer)
+    try:
+        configure_napari(viewer)
+        load_startup_logo(viewer)
 
-    # once custom logo is ready
-    # from qtpy.QtGui import QIcon 
-    # logo_path = os.path.join(os.path.dirname(__file__), "data", "patari_logo.png")
-    # if os.path.exists(logo_path):
-    #     viewer.window._qt_window.setWindowIcon(QIcon(logo_path))
+        controller = PatariController(viewer)
 
+        run()
 
-    viewer.window.add_plugin_dock_widget("patari", "PATARI Controls")
-    run()
-
+    finally:
+        if controller is not None:
+            try:
+                controller.shutdown()
+            except Exception as e:
+                logger.exception("Error during controller shutdown: %s", e)
+        # os._exit bypasses Pythons GC. Probably not ideal, but avoids a segfault on shutdown due to Qt objects. TODO
+        # being destroyed in the wrong order after the event loop has stopped.
+        os_exit(0)
 
 if __name__ == "__main__":
     main()

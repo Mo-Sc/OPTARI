@@ -426,12 +426,12 @@ class RoiController(TaskControllerBase):
 
         include_all_layers = False
         include_all_frames = False
-        include_all_wavelengths = False
+        include_all_channels = False
 
         if self.patari_controller.annotation is not None:
             include_all_layers = self.patari_controller.annotation.include_all_layers_checkbox.isChecked()
             include_all_frames = self.patari_controller.annotation.include_all_frames_checkbox.isChecked()
-            include_all_wavelengths = self.patari_controller.annotation.include_all_channels_checkbox.isChecked()
+            include_all_channels = self.patari_controller.annotation.include_all_channels_checkbox.isChecked()
   
 
         if self.patari_controller.active_recon_layer is None:
@@ -469,7 +469,7 @@ class RoiController(TaskControllerBase):
             else:
                 frame_indices = [frame_idx]
 
-            channel_indices = list(range(layer_data.shape[1])) if include_all_layers or include_all_wavelengths else [channel_idx]
+            channel_indices = list(range(layer_data.shape[1])) if include_all_layers or include_all_channels else [channel_idx]
 
             for f_idx in frame_indices:
                 for c_idx in channel_indices:
@@ -638,13 +638,34 @@ class RoiController(TaskControllerBase):
         library.save()
         logger.info("Saved ROI Library to %s", get_user_roi_library_file())
 
-    def _roi_library_placement_mode(self) -> str:
-        if self.patari_controller.annotation is None:
+
+    def _set_roi_library_placement_mode(self, mode: str) -> None:
+
+        combo = self.patari_controller.annotation.roi_placement_mode_combo
+        idx = combo.findData(mode)
+        if idx >= 0:
+            combo.setCurrentIndex(idx)
+
+    def _default_roi_library_placement_mode_for_entry(self, entry) -> str:
+        position_name = str(getattr(entry, "position", "") or "").strip()
+        if not position_name or position_name == "undefined":
             return "static"
 
-        return str(
-            self.patari_controller.annotation.roi_placement_mode_combo.currentData()
-        )
+        result = self.patari_controller.segmentation_ctrl.active_seg_mask_2d()
+        if result is None:
+            return "static"
+
+        seg, seg_layer = result
+        class_names = (seg_layer.metadata or {}).get("class_names", {})
+        class_name_to_id = {
+            str(name).strip(): int(class_id) for class_id, name in class_names.items()
+        }
+
+        if position_name not in class_name_to_id:
+            return "static"
+
+        class_id = class_name_to_id[position_name]
+        return "auto" if np.any(seg == int(class_id)) else "static"
 
     @staticmethod
     def _place_library_entry_static(controller, entry) -> None:
@@ -735,7 +756,14 @@ class RoiController(TaskControllerBase):
                 )
             return
 
-        mode = self._roi_library_placement_mode()
+        self._set_roi_library_placement_mode(
+            self._default_roi_library_placement_mode_for_entry(entry)
+        )
+
+        mode = str(
+            self.patari_controller.annotation.roi_placement_mode_combo.currentData()
+        )
+
         if mode == "auto":
             self._place_library_entry_auto(self.patari_controller, entry)
             return
@@ -752,6 +780,10 @@ class RoiController(TaskControllerBase):
                 ""
             )
             return
+
+        self._set_roi_library_placement_mode(
+            self._default_roi_library_placement_mode_for_entry(entry)
+        )
 
         desc = str(entry.description or "")
         pos = str(entry.position or "undefined")

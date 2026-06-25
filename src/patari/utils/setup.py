@@ -5,6 +5,8 @@ import requests
 from typing import Generator
 import warnings
 
+from imageio.v3 import imread
+
 logger = logging.getLogger(__name__)
 
 
@@ -79,6 +81,15 @@ def configure_napari(viewer) -> None:
     except Exception as e:
         logger.warning(f"Could not apply Napari preferences: {e}")
 
+
+def load_startup_logo(viewer):
+    logo_path = Path(__file__).resolve().parent.parent / "config/startup.png"
+    if logo_path.exists():
+        viewer.add_image(
+            imread(logo_path),
+            name="Welcome to PATARI!",
+            metadata={"type": "startup_logo"},
+        )
 
 def download_file_stream(url: str, dest_path: Path) -> Generator[float, None, None]:
     """
