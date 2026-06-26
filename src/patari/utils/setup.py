@@ -68,6 +68,7 @@ def configure_napari(viewer) -> None:
         napari_settings.application.playback_fps = 5
         napari_settings.application.save_window_state = True
         napari_settings.application.grid_stride = -2
+        napari_settings.appearance.theme = "dark"
 
         # deactivate keyboard search in layers panel 
         # workaround described here: https://github.com/napari/napari/issues/7551

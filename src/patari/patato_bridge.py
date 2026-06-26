@@ -138,6 +138,7 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
                 "colormap": _user_cmaps.get(HDF5Tags.ULTRASOUND, _default_cmaps[HDF5Tags.ULTRASOUND]),
                 "name": "US",
                 "scale": scale_from_patato_obj(us_obj, _us_fallback),
+                "opacity": 1.0,
                 "metadata": {"type": "us", "timestamps": timestamps},
             },
             "image",
@@ -191,6 +192,7 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
                     "colormap": _user_cmaps.get(HDF5Tags.RECONSTRUCTION, _default_cmaps[HDF5Tags.RECONSTRUCTION]),
                     "name": layer_name,
                     "scale": scale_from_patato_obj(recon, _pa_fallback),
+                    "opacity": 1.0,
                     "metadata": {
                         "type": "pa",
                         "pa_kind": "recon",
@@ -246,6 +248,7 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
                         "colormap": _user_cmaps.get(group_name, _default_cmaps.get(group_name, "viridis")),
                         "name": f"{prefix}: {dataset_name}_{idx}",
                         "scale": scale_from_patato_obj(image, _pa_fallback),
+                        "opacity": 1.0,
                         "metadata": metadata,
                     },
                     "image",

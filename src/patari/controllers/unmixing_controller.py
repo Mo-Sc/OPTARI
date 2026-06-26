@@ -362,6 +362,7 @@ class UnmixingController(TaskControllerBase):
             scale=scale,
             translate=translate,
             colormap=colormap,
+            opacity=1.0,
             blending="additive",
             metadata=metadata,
         )
