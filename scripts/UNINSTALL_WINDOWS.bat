@@ -4,7 +4,7 @@ echo ===================================================
 echo     PATARI Environment Cleanup Tool
 echo ===================================================
 echo.
-if exist "patari-windows.exe" (
+if exist "patari.exe" (
     echo Removing PATARI
     patari.exe self remove
     echo.

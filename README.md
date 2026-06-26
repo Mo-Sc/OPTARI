@@ -127,6 +127,10 @@ In a future version, these settings will be editable from the GUI as well.
 - **Hidden features**: Reconstruction dock is currently disabled.
 - **Logging behavior**: `PATARI_LOG_LEVEL` controls terminal log. `PATARI_GUI_LOG_LEVEL` controls napari GUI notification.
 - **Compatibility note**: custom PATATO fork and import/export workarounds are currently required for some personal legacy datasets.
+- **Deployment & distribution**: PATARI is packaged as standalone executables for macOS and Windows using PyApp and GitHub Actions (see `build-pyapp.yml` workflow). PATATO dependencies are provided as precompiled wheels with OS-specific URLs in `pyproject.toml`. On first run, PyApp downloads all dependencies and initializes the user config directory (`~/.patari`) with default config files, ROI library template, and models folder. Segmentation models are lazily downloaded on-demand into the models folder from URLs specified in the segmentation configuration.
+- **GitHub Actions workflow**: binary compilation is automated via the `build-pyapp.yml` GitHub Actions workflow, which builds PATARI wheels, downloads PyApp source, compiles with Rust (with OS-specific PATATO wheels linked), and uploads the final executables as build artifacts for each push.
+- **ROI feature visibility**: the live table displays only user-selected ROI features (toggled via `config.json` annotation settings). However, on save/export operations, PATARI always computes the full feature set and exports all available features regardless of live table visibility, ensuring no data loss during export workflows.
+
 
 
 ## License
