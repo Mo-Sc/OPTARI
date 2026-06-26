@@ -126,16 +126,10 @@ class ScanController(TaskControllerBase):
 
         dialog = QFileDialog(
             None,
-            "Select folder or HDF5 scan",
+            "Select folder or HDF5 scan file",
             str(Path.cwd()),
         )
-        dialog.setFileMode(QFileDialog.AnyFile)
-        dialog.setNameFilters(
-            [
-                "HDF5 scans (*.hdf5 *.h5)",
-                "All files (*)",
-            ]
-        )
+        dialog.setFileMode(QFileDialog.Directory)
 
         if not dialog.exec():
             return
