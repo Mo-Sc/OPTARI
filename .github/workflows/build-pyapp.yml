@@ -1,36 +1,30 @@
-
-name: Build and Release PATARI
+name: Build PATARI Binaries
 
 on:
   push:
     tags:
       - 'v*' #  workflow will  run on tag starting with 'v' (e.g., v0.2)
 
+
 jobs:
   build-pyapp:
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    
-    permissions:
-      contents: write 
-
     strategy:
       matrix:
         include:
           - os: windows-latest
-            os_name: windows
+            zip_name: patari-windows
+            exe_name: patari.exe
             binary_path: target/release/pyapp.exe
-            ext: .exe
           - os: macos-latest
-            os_name: macos
+            zip_name: patari-macos
+            exe_name: patari
             binary_path: target/release/pyapp
-            ext: ""
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
@@ -38,7 +32,6 @@ jobs:
           python-version: "3.12"
 
       - name: Build PATARI Wheel
-        shell: bash
         run: |
           python -m pip install --upgrade pip build
           python -m build --wheel
@@ -59,33 +52,33 @@ jobs:
           PYAPP_PROJECT_NAME: "patari"
           PYAPP_EXEC_SPEC: "patari.launcher:main"
           PYAPP_PYTHON_VERSION: "3.12"
-          PYAPP_PIP_EXTRA_ARGS: "napari[all]"
+          PYAPP_PIP_EXTRA_ARGS: "napari[all]"  # Todo: better here or using optional-dependencies in pyproject.toml? 
         run: |
+          # Find the built wheel file dynamically
           export PYAPP_PROJECT_PATH=$(ls dist/patari-*.whl | head -n 1)
+          
+          # Move into the PyApp directory and compile
           cd pyapp-source
+          # Use absolute path for the wheel
           export PYAPP_PROJECT_PATH="../$PYAPP_PROJECT_PATH"
           cargo build --release
 
-      # Rename the file using the Git Tag (github.ref_name)
-      - name: Rename Executable for Release
+      - name: Rename Executable
         shell: bash
         run: |
-          # This creates e.g., patari_v0.2_windows.exe
-          mv pyapp-source/${{ matrix.binary_path }} patari_${{ github.ref_name }}_${{ matrix.os_name }}${{ matrix.ext }}
-
+          mv pyapp-source/${{ matrix.binary_path }} pyapp-source/target/release/${{ matrix.exe_name }}
       - name: Prepare Release Package
         shell: bash
         run: |
           mkdir -p "$GITHUB_WORKSPACE/release_package"
-          mv "$GITHUB_WORKSPACE/pyapp-source/${{ matrix.binary_path }}" "$GITHUB_WORKSPACE/release_package/patari${{ matrix.ext }}"
+          mv "$GITHUB_WORKSPACE/pyapp-source/target/release/${{ matrix.exe_name }}" "$GITHUB_WORKSPACE/release_package/"
           cp "$GITHUB_WORKSPACE/docs/PATARI_Instructions.pdf" "$GITHUB_WORKSPACE/release_package/" || true
           cp "$GITHUB_WORKSPACE/docs/PATARI_Shortcuts.pdf" "$GITHUB_WORKSPACE/release_package/" || true
           cp "$GITHUB_WORKSPACE/scripts/UNINSTALL_MACOS.txt" "$GITHUB_WORKSPACE/release_package/" || true
           cp "$GITHUB_WORKSPACE/scripts/UNINSTALL_WINDOWS.bat" "$GITHUB_WORKSPACE/release_package/" || true
-          cd "$GITHUB_WORKSPACE/release_package" && zip -r "../patari_${{ github.ref_name }}_${{ matrix.os_name }}.zip" .
 
-      - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
         with:
-          files: patari_${{ github.ref_name }}_${{ matrix.os_name }}.zip
-          generate_release_notes: true
+          name: ${{ matrix.zip_name }}
+          path: release_package/
