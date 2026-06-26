@@ -33,7 +33,7 @@ Key features (v0.3):
 
 ### Option A: Executable (recommended for clinical use)
 
-1. Download the executable file of the [current release (v3)](https://github.com/Mo-Sc/PATARI/releases/tag/v0.2.0) for your operating system (macOS or windows).
+1. Download the executable file of the [current release (v3)](https://github.com/Mo-Sc/PATARI/releases/tag/v0.3.0) for your operating system (macOS or windows).
 2. Unpack the zip folder and run the patari file.
 3. [Optional, on first run] If you get an error, stating PATARI could not be verified, give your OS permission to run it:
     * For windows: Click `More Info` -> `Run Anyways`
