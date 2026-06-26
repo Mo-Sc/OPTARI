@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from qtpy.QtCore import Qt
-from qtpy.QtGui import QDoubleValidator
 from qtpy.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -13,12 +11,14 @@ from qtpy.QtWidgets import (
     QLabel,
     QLineEdit,
     QListWidget,
+    QComboBox,
     QPushButton,
-    QScrollArea,
-    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
+
+from patari.roi.roi_features import numeric_feature_ids
+from .dock_helpers import create_range_edits, create_right_dock_shell
 
 
 @dataclass
@@ -30,10 +30,13 @@ class AnnotationDock:
     roi_exclusion_box: QGroupBox
     roi_exclude_min_edit: QLineEdit
     roi_exclude_max_edit: QLineEdit
+    include_all_layers_checkbox: QCheckBox
     include_all_frames_checkbox: QCheckBox
-    include_all_wavelengths_checkbox: QCheckBox
+    include_all_channels_checkbox: QCheckBox
+    time_analysis_feature_combo: QComboBox
     roi_library_list: QListWidget
     roi_library_description_label: QLabel
+    roi_placement_mode_combo: QComboBox
     save_roi_button: QPushButton
     remove_roi_button: QPushButton
     save_library_button: QPushButton
@@ -44,80 +47,12 @@ class AnnotationDock:
             self.roi_library_list.addItem(roi_id)
 
 
-def create_annotation_dock() -> AnnotationDock:
-    # Outer shell — what napari receives as the dock widget
-    widget = QWidget()
-    shell_layout = QVBoxLayout(widget)
-    shell_layout.setContentsMargins(0, 0, 0, 0)
+def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
+    shell = create_right_dock_shell(enable_scroll=enable_scroll)
+    widget = shell.widget
+    outer = shell.content_layout
 
-    # Scroll area fills the shell
-    scroll = QScrollArea()
-    scroll.setWidgetResizable(True)
-    scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-    scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-    scroll.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-    shell_layout.addWidget(scroll)
-
-    # Content widget lives inside the scroll area
-    content_widget = QWidget()
-    scroll.setWidget(content_widget)
-    outer = QVBoxLayout(content_widget)
-
-    # ------------------------------------------------------------------ #
-    # ROI Settings section                                                 #
-    # ------------------------------------------------------------------ #
-    roi_box = QGroupBox("ROI Settings")
-    roi_layout = QVBoxLayout(roi_box)
-
-    def _make_range_edits() -> tuple[QLineEdit, QLineEdit]:
-        min_edit = QLineEdit()
-        max_edit = QLineEdit()
-        validator = QDoubleValidator()
-        min_edit.setValidator(validator)
-        max_edit.setValidator(validator)
-        min_edit.setPlaceholderText("(unset)")
-        max_edit.setPlaceholderText("(unset)")
-        min_edit.setClearButtonEnabled(True)
-        max_edit.setClearButtonEnabled(True)
-        return min_edit, max_edit
-
-    roi_clipping_box = QGroupBox("ROI Clipping")
-    roi_clipping_box.setCheckable(True)
-    roi_clipping_box.setChecked(True)
-    roi_clip_form = QFormLayout(roi_clipping_box)
-    roi_clip_min_edit, roi_clip_max_edit = _make_range_edits()
-    roi_clip_form.addRow("Min. Intensity", roi_clip_min_edit)
-    roi_clip_form.addRow("Max. Intensity", roi_clip_max_edit)
-
-    roi_exclusion_box = QGroupBox("ROI Exclusion")
-    roi_exclusion_box.setCheckable(True)
-    roi_exclusion_box.setChecked(False)
-    roi_exclude_form = QFormLayout(roi_exclusion_box)
-    roi_exclude_min_edit, roi_exclude_max_edit = _make_range_edits()
-    roi_exclude_form.addRow("Min. Intensity", roi_exclude_min_edit)
-    roi_exclude_form.addRow("Max. Intensity", roi_exclude_max_edit)
-
-    def _on_clipping_toggled(checked: bool) -> None:
-        if checked:
-            roi_exclusion_box.setChecked(False)
-
-    def _on_exclusion_toggled(checked: bool) -> None:
-        if checked:
-            roi_clipping_box.setChecked(False)
-
-    roi_clipping_box.toggled.connect(_on_clipping_toggled)
-    roi_exclusion_box.toggled.connect(_on_exclusion_toggled)
-
-    include_all_frames_checkbox = QCheckBox("Include all frames")
-    include_all_wavelengths_checkbox = QCheckBox("Include all channels")
-    include_all_frames_checkbox.setChecked(False)
-    include_all_wavelengths_checkbox.setChecked(False)
-
-    roi_layout.addWidget(roi_clipping_box)
-    roi_layout.addWidget(roi_exclusion_box)
-    roi_layout.addWidget(include_all_frames_checkbox)
-    roi_layout.addWidget(include_all_wavelengths_checkbox)
-
+    # ROI Library section
     roi_library_box = QGroupBox("ROI Library")
     roi_library_layout = QVBoxLayout(roi_library_box)
 
@@ -140,10 +75,90 @@ def create_annotation_dock() -> AnnotationDock:
     roi_library_description_label = QLabel("")
     roi_library_description_label.setWordWrap(True)
     roi_library_layout.addWidget(roi_library_description_label)
+
+    roi_placement_mode_combo = QComboBox()
+    roi_placement_mode_combo.addItem("static", userData="static")
+    roi_placement_mode_combo.addItem("auto", userData="auto")
+
+    placement_row = QWidget()
+    placement_layout = QHBoxLayout(placement_row)
+    placement_layout.setContentsMargins(0, 0, 0, 0)
+    placement_layout.addWidget(QLabel("Placement"))
+    placement_layout.addWidget(roi_placement_mode_combo)
+    roi_library_layout.addWidget(placement_row)
+
     roi_library_layout.addWidget(button_row)
+
+    # ROI clipping and exclusion section                                                 
+    roi_box = QGroupBox("ROI Intensity")
+    roi_layout = QVBoxLayout(roi_box)
+
+    roi_clipping_box = QGroupBox("ROI Clipping")
+    roi_clipping_box.setCheckable(True)
+    roi_clipping_box.setChecked(True)
+    roi_clip_form = QFormLayout(roi_clipping_box)
+    roi_clip_min_edit, roi_clip_max_edit = create_range_edits()
+    roi_clip_form.addRow("Min. Intensity", roi_clip_min_edit)
+    roi_clip_form.addRow("Max. Intensity", roi_clip_max_edit)
+
+    roi_exclusion_box = QGroupBox("ROI Exclusion")
+    roi_exclusion_box.setCheckable(True)
+    roi_exclusion_box.setChecked(False)
+    roi_exclude_form = QFormLayout(roi_exclusion_box)
+    roi_exclude_min_edit, roi_exclude_max_edit = create_range_edits()
+    roi_exclude_form.addRow("Min. Intensity", roi_exclude_min_edit)
+    roi_exclude_form.addRow("Max. Intensity", roi_exclude_max_edit)
+
+    def _on_clipping_toggled(checked: bool) -> None:
+        if checked:
+            roi_exclusion_box.setChecked(False)
+
+    def _on_exclusion_toggled(checked: bool) -> None:
+        if checked:
+            roi_clipping_box.setChecked(False)
+
+    roi_clipping_box.toggled.connect(_on_clipping_toggled)
+    roi_exclusion_box.toggled.connect(_on_exclusion_toggled)
+
+    roi_layout.addWidget(roi_clipping_box)
+    roi_layout.addWidget(roi_exclusion_box)
+    
+    # ROI data saving options
+    save_roi_box = QGroupBox("Save ROI Data")
+    save_roi_layout = QVBoxLayout(save_roi_box)
+
+    include_all_layers_checkbox = QCheckBox("Include all layers")
+    include_all_frames_checkbox = QCheckBox("Include all frames")
+    include_all_channels_checkbox = QCheckBox("Include all channels")
+    include_all_layers_checkbox.setChecked(False)
+    include_all_frames_checkbox.setChecked(False)
+    include_all_channels_checkbox.setChecked(False)
+
+    # When include all layers, always include all channels
+    include_all_layers_checkbox.toggled.connect(
+        lambda checked: include_all_channels_checkbox.setChecked(True)
+        if checked
+        else None
+    )
+
+    save_roi_layout.addWidget(include_all_layers_checkbox)
+    save_roi_layout.addWidget(include_all_frames_checkbox)
+    save_roi_layout.addWidget(include_all_channels_checkbox)
+
+    # Time analysis feature selection (default is mean)
+    time_analysis_box = QGroupBox("Time Analysis")
+    time_analysis_layout = QFormLayout(time_analysis_box)
+    time_analysis_feature_combo = QComboBox()
+    for feature_id in numeric_feature_ids():
+        time_analysis_feature_combo.addItem(feature_id, userData=feature_id)
+    time_analysis_feature_combo.setCurrentIndex(time_analysis_feature_combo.findData("mean"))
+    time_analysis_layout.addRow("Feature", time_analysis_feature_combo)
+    
 
     outer.addWidget(roi_library_box)
     outer.addWidget(roi_box)
+    outer.addWidget(save_roi_box)
+    outer.addWidget(time_analysis_box)
     outer.addStretch()
 
     return AnnotationDock(
@@ -154,10 +169,13 @@ def create_annotation_dock() -> AnnotationDock:
         roi_exclusion_box=roi_exclusion_box,
         roi_exclude_min_edit=roi_exclude_min_edit,
         roi_exclude_max_edit=roi_exclude_max_edit,
+        include_all_layers_checkbox=include_all_layers_checkbox,
         include_all_frames_checkbox=include_all_frames_checkbox,
-        include_all_wavelengths_checkbox=include_all_wavelengths_checkbox,
+        include_all_channels_checkbox=include_all_channels_checkbox,
+        time_analysis_feature_combo=time_analysis_feature_combo,
         roi_library_list=roi_library_list,
         roi_library_description_label=roi_library_description_label,
+        roi_placement_mode_combo=roi_placement_mode_combo,
         save_roi_button=save_roi_button,
         remove_roi_button=remove_roi_button,
         save_library_button=save_library_button,

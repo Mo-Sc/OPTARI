@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
+
+from qtpy.QtCore import QTimer
 
 from patari.widgets.annotation_dock import create_annotation_dock
 from patari.widgets.histogram_dock import create_histogram_dock
 from patari.widgets.info_dock import create_info_dock
-from patari.widgets.reconstruction_dock import create_reconstruction_dock
+# from patari.widgets.reconstruction_dock import create_reconstruction_dock
 from patari.widgets.roi_dock import create_roi_dock
 from patari.widgets.scan_browser_dock import create_scan_browser_dock
 from patari.widgets.segmentation_dock import create_segmentation_dock
@@ -16,10 +19,13 @@ from patari.widgets.unmixing_dock import create_unmixing_dock
 if TYPE_CHECKING:
     from patari.controllers.patari_controller import PatariController
 
+logger = logging.getLogger(__name__)
+
 
 class UiManager:
     """Build and wire dock widgets for a single PATARI controller instance."""
 
+    # ============ dock setup ============
     @staticmethod
     def setup_docks(controller: "PatariController") -> None:
         # Create docks once per controller instance.
@@ -37,7 +43,7 @@ class UiManager:
             controller.info = create_info_dock()
             controller.viewer.window.add_dock_widget(
                 controller.info.widget,
-                name="PATARI Info",
+                name="Active Slice Info",
                 area="left",
             )
 
@@ -58,6 +64,7 @@ class UiManager:
                     controller.time_analysis.widget,
                     name="Time Analysis",
                     area="bottom",
+                    tabify=True,
                 )
             )
 
@@ -68,6 +75,7 @@ class UiManager:
                     controller.histograms.widget,
                     name="Histogram",
                     area="bottom",
+                    tabify=True,
                 )
             )
 
@@ -78,6 +86,7 @@ class UiManager:
                     controller.spectrum.widget,
                     name="Spectrum",
                     area="bottom",
+                    tabify=True,
                 )
             )
 
@@ -88,19 +97,20 @@ class UiManager:
                     controller.annotation.widget,
                     name="Annotation",
                     area="right",
+                    tabify=True,
                 )
             )
 
-        # Segmentation UI is hidden until fully implemented.
-        # if controller.segmentation is None:
-        #     controller.segmentation = create_segmentation_dock()
-        #     controller._segmentation_dock_widget = (
-        #         controller.viewer.window.add_dock_widget(
-        #             controller.segmentation.widget,
-        #             name="Segmentation",
-        #             area="right",
-        #         )
-        #     )
+        if controller.segmentation is None:
+            controller.segmentation = create_segmentation_dock()
+            controller._segmentation_dock_widget = (
+                controller.viewer.window.add_dock_widget(
+                    controller.segmentation.widget,
+                    name="Segmentation",
+                    area="right",
+                    tabify=True,
+                )
+            )
 
         if controller.unmixing is None:
             controller.unmixing = create_unmixing_dock()
@@ -109,8 +119,10 @@ class UiManager:
                     controller.unmixing.widget,
                     name="Unmixing",
                     area="right",
+                    tabify=True,
                 )
             )
+            controller.unmixing_ctrl.initialize_ui()
 
         # Reconstruction UI is hidden until fully implemented.
         # if controller.reconstruction is None:
@@ -123,51 +135,29 @@ class UiManager:
         #         )
         #     )
 
-        UiManager._tabify_docks(controller)
+        # Select default docks after the event loop has started
+        QTimer.singleShot(0, lambda: UiManager._select_default_docks(controller))
 
+        logger.info("Dock widgets created and added to the viewer window.")
+
+    # ============ dock layout ============
     @staticmethod
-    def _tabify_docks(controller: "PatariController") -> None:
-        qt_window = getattr(controller.viewer.window, "_qt_window", None)
-        if qt_window is None:
-            return
+    def _select_default_docks(controller: "PatariController") -> None:
+        # by default, Scan Browser on the right and Tables at the bottom
+        if controller._roi_dock_widget is not None:
+            controller._roi_dock_widget.raise_()
+        if controller._scan_browser_dock_widget is not None:
+            controller._scan_browser_dock_widget.raise_()
 
-        # Bottom: ROI, Time Analysis, Histograms, Spectrum
-        qt_window.tabifyDockWidget(
-            controller._roi_dock_widget,
-            controller._time_analysis_dock_widget,
-        )
-        qt_window.tabifyDockWidget(
-            controller._roi_dock_widget,
-            controller._histograms_dock_widget,
-        )
-        qt_window.tabifyDockWidget(
-            controller._roi_dock_widget,
-            controller._spectrum_dock_widget,
-        )
-
-        # Right: Scan Browser + Annotation + Segmentation + Unmixing + Reconstruction
-        qt_window.tabifyDockWidget(
-            controller._scan_browser_dock_widget,
-            controller._annotation_dock_widget,
-        )
-        # qt_window.tabifyDockWidget(
-        #     controller._scan_browser_dock_widget,
-        #     controller._segmentation_dock_widget,
-        # )
-        qt_window.tabifyDockWidget(
-            controller._scan_browser_dock_widget,
-            controller._unmixing_dock_widget,
-        )
-        # qt_window.tabifyDockWidget(
-        #     controller._scan_browser_dock_widget,
-        #     controller._reconstruction_dock_widget,
-        # )
 
     @staticmethod
     def connect_events(controller: "PatariController") -> None:
+        # -------- viewer core events --------
         controller._connect_shapes_layer_events()
-
         controller.viewer.dims.events.point.connect(controller.on_dims_changed)
+        controller.viewer.layers.selection.events.changed.connect(
+            controller.on_selection_changed
+        )
 
         # close the currently open scan handle when Qt starts shutting down
         # probably not necessary, just for cleanup
@@ -182,123 +172,10 @@ class UiManager:
         # controller.viewer.layers.events.reordered.connect(controller.on_layers_changed)
         # controller.viewer.layers.events.inserted.connect(controller.on_layers_changed)
         # controller.viewer.layers.events.removed.connect(controller.on_layers_changed)
-        controller.viewer.layers.selection.events.changed.connect(
-            controller.on_selection_changed
-        )
 
-        if controller.roi is not None:
-            controller.roi.save_button.clicked.connect(
-                controller.on_save_clicked
-            )
-            controller.roi.delete_button.clicked.connect(
-                controller.on_delete_saved_clicked
-            )
-            controller.roi.xlsx_button.clicked.connect(
-                controller.on_xlsx_export_clicked
-            )
-
-        if controller.time_analysis is not None:
-            controller.time_analysis.generate_button.clicked.connect(
-                controller.on_generate_time_analysis_clicked
-            )
-
-        if controller.histograms is not None:
-            controller.histograms.refresh_button.clicked.connect(
-                controller.on_refresh_histograms_clicked
-            )
-
-        if controller.spectrum is not None:
-            controller.spectrum.refresh_button.clicked.connect(
-                controller.on_refresh_spectrum_clicked
-            )
-
-        if controller.annotation is not None:
-            for edit in (
-                controller.annotation.roi_clip_min_edit,
-                controller.annotation.roi_clip_max_edit,
-                controller.annotation.roi_exclude_min_edit,
-                controller.annotation.roi_exclude_max_edit,
-            ):
-                edit.editingFinished.connect(
-                    controller._on_roi_intensity_settings_changed
-                )
-                # required for reset via 'unset' clear button
-                edit.textChanged.connect(
-                    lambda t, _e=edit: (
-                        controller._on_roi_intensity_settings_changed()
-                        if (t or "").strip() == ""
-                        else None
-                    )
-                )
-
-            controller.annotation.roi_clipping_box.toggled.connect(
-                lambda checked: controller._on_roi_intensity_settings_changed()
-            )
-            controller.annotation.roi_exclusion_box.toggled.connect(
-                lambda checked: controller._on_roi_intensity_settings_changed()
-            )
-
-            controller.annotation.roi_library_list.itemClicked.connect(
-                lambda item: controller.on_roi_library_item_selected(
-                    item.text()
-                )
-            )
-            controller.annotation.roi_library_list.itemDoubleClicked.connect(
-                lambda item: controller.on_roi_library_item_clicked(
-                    item.text()
-                )
-            )
-            controller.annotation.save_roi_button.clicked.connect(
-                controller.on_save_roi_library_clicked
-            )
-            controller.annotation.remove_roi_button.clicked.connect(
-                controller.on_remove_roi_library_clicked
-            )
-            controller.annotation.save_library_button.clicked.connect(
-                controller.on_save_roi_library_file_clicked
-            )
-
-        if controller.segmentation is not None:
-            controller.segmentation.generate_tissue_segmentation_button.clicked.connect(
-                controller.on_generate_tissue_segmentation_clicked
-            )
-            controller.segmentation.place_roi_button.clicked.connect(
-                controller.on_place_roi_clicked
-            )
-
-            for btn in getattr(
-                controller.segmentation, "roi_preset_buttons", []
-            ):
-                btn.clicked.connect(
-                    lambda checked=False, b=btn: controller.on_roi_preset_clicked(
-                        b
-                    )
-                )
-
-        if controller.scan_browser is not None:
-            controller.scan_browser.browse_button.clicked.connect(
-                controller.on_browse_folder_clicked
-            )
-            controller.scan_browser.scans_list.currentRowChanged.connect(
-                controller.on_scan_selected
-            )
-            controller.scan_browser.hdf5_button.clicked.connect(
-                controller.on_hdf5_export_clicked
-            )
-
-        if controller.unmixing is not None:
-            controller.unmixing.preset_combo.currentIndexChanged.connect(
-                controller.on_unmixing_preset_changed
-            )
-            controller.unmixing.chromophores_list.itemChanged.connect(
-                controller.on_unmixing_chromophores_changed
-            )
-            controller.unmixing.select_all_wavelengths_button.clicked.connect(
-                controller.on_unmixing_select_all_wavelengths_clicked
-            )
-            controller.unmixing.clear_wavelengths_button.clicked.connect(
-                controller.on_unmixing_clear_wavelengths_clicked
-            )
-            controller.unmixing.run_button.clicked.connect(
-                controller.on_run_unmixing_clicked
-            )
+        # -------- dock signal wiring in controllers --------
+        controller.scan_ctrl.bind_events()
+        controller.roi_ctrl.bind_events()
+        controller.analysis_ctrl.bind_events()
+        controller.unmixing_ctrl.bind_events()
+        controller.segmentation_ctrl.bind_events()

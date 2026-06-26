@@ -4,35 +4,28 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 import numpy as np
+import cv2
 
 
 @dataclass(frozen=True)
-class EllipseConfig:
-    """Ellipse ROI placement configuration in mm."""
+class ROIPlacementConfig:
+    """ROI placement configuration in mm."""
 
-    width_mm: float
-    height_mm: float
-    depth_mm: float
-
-
-class ShapeFactory:
-    """Factory for ROI shape placers.
-
-    Currently supports only: ellipse
-    """
-
-    @staticmethod
-    def create_shape(roi_type: str, config: EllipseConfig) -> "ROIShape":
-        if roi_type == "ellipse":
-            return Ellipse(config)
-        raise ValueError(f"Unknown shape type: {roi_type}")
+    width_mm: float | None
+    height_mm: float | None
+    depth_mm: float | None
 
 
 class ROIShape(ABC):
     """Base class for ROI shapes."""
 
-    def __init__(self, config):
+    def __init__(self, config: ROIPlacementConfig):
         self.config = config
+
+    @property
+    @abstractmethod
+    def shape_type(self) -> str:
+        raise NotImplementedError
 
     @abstractmethod
     def to_napari_verts_world(
@@ -44,24 +37,81 @@ class ROIShape(ABC):
         ty: float = 0.0,
         tx: float = 0.0,
     ) -> np.ndarray:
-        """Return napari Shapes vertices in world coords (y,x).
+        """Convert the shape into Napari world coordinate vertices."""
+        pass
 
-        For ellipse: return the 4-point vertex representation used by napari.
+    def _get_pixel_bounds(
+        self, mask: np.ndarray, sy: float, sx: float, use_center_anchor: bool = False
+    ) -> tuple[int, int, int, int, np.ndarray]:
         """
+        Shared geometry logic to calculate the pixel bounding box for any ROI.
+        
+        sy, sx: Scale factors for Y and X dimensions.
+        use_center_anchor: 
+            If True (Box shapes), anchors Y to the top of the class at the image center.
+            If False (Polygon), anchors Y to the absolute highest point of the component.
+        
+        Returns: (x0, x1, y0, y1, largest_component_mask)
+        """
+        mask_u8 = mask.astype(np.uint8)
+        # Ensure it scales to 255 for OpenCV connectivity analysis
+        if mask_u8.max() == 1:
+            mask_u8 *= 255
 
+        h, w = mask_u8.shape
+        if h == 0 or w == 0:
+            raise ValueError("Empty mask")
+        if sy <= 0 or sx <= 0:
+            raise ValueError("Invalid scale")
 
-class Ellipse(ROIShape):
-    """Place an ellipse ROI into a segmentation class mask.
+        # 1. Isolate the largest connected component
+        num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(
+            mask_u8, connectivity=8
+        )
+        if num_labels < 2:
+            raise ValueError("Selected class is empty or not found.")
 
-    Behavior mirrors the approach in your `external/roi_shapes.py`:
-    - horizontally centered
-    - placed as high as possible in the class region along the center column
-    - optional depth offset (mm) below the top border of the class region
-    - trimmed by explicit width/height (mm)
-    """
+        largest_label = 1 + np.argmax(stats[1:, cv2.CC_STAT_AREA])
+        largest_mask = (labels == largest_label).astype(np.uint8)
 
-    def __init__(self, config: EllipseConfig):
-        super().__init__(config)
+        # 2. Establish Reference Points based on conventions
+        center_x = w // 2  
+        
+        if use_center_anchor:
+            # Anchor Y to the top of the class at the horizontal center
+            rows = np.where(largest_mask[:, center_x])[0]
+            if rows.size == 0:
+                raise ValueError("Class not present at image center")
+            top_y = int(rows[0])
+        else:
+            # Anchor Y to the absolute highest point of the component
+            top_y = int(stats[largest_label, cv2.CC_STAT_TOP])
+
+        # 3. Calculate Trim Boundaries
+        # Width: Symmetric around the scan center
+        if self.config.width_mm is not None:
+            width_px = max(1, int(round(float(self.config.width_mm) / float(sx))))
+            half_w = width_px // 2
+            x0 = max(0, center_x - half_w)
+            x1 = min(w, center_x + half_w)
+        else:
+            x0, x1 = 0, w
+
+        # Height: Extending downwards from the established Y-anchor
+        depth_mm = float(self.config.depth_mm or 0.0)
+        depth_px = max(0, int(round(depth_mm / float(sy))))
+        y0 = min(h, top_y + depth_px)
+        
+        if self.config.height_mm is not None:
+            height_px = max(1, int(round(float(self.config.height_mm) / float(sy))))
+            y1 = min(h, y0 + height_px)
+        else:
+            y1 = h
+
+        return x0, x1, y0, y1, largest_mask
+
+class BoxShape(ROIShape):
+    """Intermediate base class for shapes using the center-column reference."""
 
     def to_napari_verts_world(
         self,
@@ -72,71 +122,98 @@ class Ellipse(ROIShape):
         ty: float = 0.0,
         tx: float = 0.0,
     ) -> np.ndarray:
-        mask = np.asarray(class_mask, dtype=bool)
-        if mask.ndim != 2:
-            raise ValueError(f"Expected 2D class mask, got shape {mask.shape}")
+        # Get standardized bounds
+        x0, x1, y0, y1, largest_mask = self._get_pixel_bounds(class_mask, sy, sx, use_center_anchor=True)
 
-        h, w = mask.shape
-        if h == 0 or w == 0:
-            raise ValueError("Empty mask")
+        # check for overextensions
+        # Find the actual vertical extent of the largest component in the center column
+        center_x = largest_mask.shape[1] // 2
+        rows = np.where(largest_mask[:, center_x])[0]
+        if rows.size > 0:
+            available_depth = rows[-1] - rows[0] + 1
+            requested_height = y1 - y0
+            if requested_height > available_depth:
+                raise ValueError(
+                    f"Error: ROI height ({requested_height}px) exceeds class depth ({available_depth}px)."
+                    )
 
-        if sy <= 0 or sx <= 0:
-            raise ValueError("Invalid scale")
+        # Alternative: strict pixel-level check for any overextension outside the class mask
+        # roi_region = np.zeros_like(largest_mask)
+        # roi_region[y0:y1, x0:x1] = 1
+        # # Check if any pixel in the ROI region is NOT in the class mask
+        # overextension = cv2.bitwise_and(roi_region, cv2.bitwise_not(largest_mask))
+        # if cv2.countNonZero(overextension) > 0:
+        #     raise ValueError("Error: ROI extends outside the selected segmentation class.")
 
-        width_px = max(1, int(round(float(self.config.width_mm) / float(sx))))
-        height_px = max(1, int(round(float(self.config.height_mm) / float(sy))))
-        depth_px = max(0, int(round(float(self.config.depth_mm) / float(sy))))
 
-        width_px = min(width_px, w)
-        height_px = min(height_px, h)
+        y0w = float(ty) + float(y0) * float(sy)
+        y1w = float(ty) + float(y1) * float(sy)
+        x0w = float(tx) + float(x0) * float(sx)
+        x1w = float(tx) + float(x1) * float(sx)
 
-        center_x = int(w // 2)
-        col = mask[:, center_x]
-        rows = np.where(col)[0]
-        if rows.size == 0:
-            raise ValueError("Selected class not present at image center")
-
-        top_class = int(rows[0])
-        bottom_class = int(rows[-1])
-        available = bottom_class - top_class + 1
-        if height_px > available:
-            raise ValueError("ROI height exceeds available class depth")
-
-        y_start = top_class + depth_px
-        y_end = y_start + height_px
-        if y_end > bottom_class + 1:
-            # not enough space with the requested depth
-            raise ValueError("ROI depth/height exceeds available class region")
-
-        half_w = width_px / 2.0
-        x0 = int(round(center_x - half_w))
-        x1 = x0 + width_px
-        if x0 < 0:
-            x0 = 0
-            x1 = width_px
-        if x1 > w:
-            x1 = w
-            x0 = max(0, w - width_px)
-
-        # Bounding box corners in pixel coordinates (y,x)
-        y0_px = float(y_start)
-        y1_px = float(y_end)
-        x0_px = float(x0)
-        x1_px = float(x1)
-
-        # Convert to world coords (mm) and apply translate.
-        y0 = float(ty) + y0_px * float(sy)
-        y1 = float(ty) + y1_px * float(sy)
-        x0w = float(tx) + x0_px * float(sx)
-        x1w = float(tx) + x1_px * float(sx)
-
-        # Napari ellipse representation: 4 vertices (rectangle corners) in (y,x).
         return np.asarray(
-            [
-                [y0, x0w],
-                [y0, x1w],
-                [y1, x1w],
-                [y1, x0w],
-            ],
+            [[y0w, x0w], [y0w, x1w], [y1w, x1w], [y1w, x0w]],
             dtype=float,
         )
+
+
+class Rectangle(BoxShape):
+    """Rectangular ROI shape."""
+    @property
+    def shape_type(self) -> str:
+        return "rectangle"
+
+
+class Ellipse(BoxShape):
+    """Elliptical ROI shape."""
+    @property
+    def shape_type(self) -> str:
+        return "ellipse"
+
+
+class Polygon(ROIShape):
+    """
+    Polygonal ROI shape.
+    TODO: holes in the mask are currently ignored. Find a good way of handling them if needed.
+
+    Conventions:
+    - Reference X: Horizontal center of the scan.
+    - Reference Y: Absolute highest point of the largest class component.
+    """
+
+    @property
+    def shape_type(self) -> str:
+        return "polygon"
+
+    def to_napari_verts_world(
+        self,
+        *,
+        class_mask: np.ndarray,
+        sy: float,
+        sx: float,
+        ty: float = 0.0,
+        tx: float = 0.0,
+    ) -> np.ndarray:
+        # Use absolute-top anchor
+        x0, x1, y0, y1, largest_mask = self._get_pixel_bounds(class_mask, sy, sx, use_center_anchor=False)
+
+        # Trim the mask down to the calculated boundaries
+        trimmed_mask = np.zeros_like(largest_mask)
+        trimmed_mask[y0:y1, x0:x1] = largest_mask[y0:y1, x0:x1]
+
+        # Extract the outermost contour
+        contours, _ = cv2.findContours(
+            trimmed_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        )
+        if not contours:
+            raise ValueError("No polygon found after trimming. Check sizes and depth.")
+
+        largest_contour = max(contours, key=cv2.contourArea).squeeze()
+        if largest_contour.ndim == 1:
+            largest_contour = largest_contour[np.newaxis, :]  
+
+        # Convert to Napari world coordinates
+        y_world = float(ty) + largest_contour[:, 1] * float(sy)
+        x_world = float(tx) + largest_contour[:, 0] * float(sx)
+
+        return np.column_stack((y_world, x_world))

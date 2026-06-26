@@ -4,9 +4,13 @@ from dataclasses import dataclass
 
 import pandas as pd
 from magicgui.widgets import PushButton, Table
-from qtpy.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from qtpy.QtGui import QKeySequence
+from qtpy.QtWidgets import QHBoxLayout, QLabel, QShortcut, QVBoxLayout, QWidget
 
-from patari.config import dtype_map
+from patari.roi.roi_utils import (
+    live_table_columns,
+    saved_table_columns,
+)
 
 
 @dataclass
@@ -17,13 +21,17 @@ class RoiDock:
     save_button: PushButton
     delete_button: PushButton
     xlsx_button: PushButton
+    live_table_delete_shortcut: QShortcut
 
 
 def create_roi_dock() -> RoiDock:
-    df_empty = pd.DataFrame(columns=list(dtype_map.keys())).astype(dtype_map)
+    live_columns = live_table_columns()
+    saved_columns = saved_table_columns()
+    df_live_empty = pd.DataFrame(columns=live_columns)
+    df_saved_empty = pd.DataFrame(columns=saved_columns)
 
-    live_table = Table(value=df_empty.copy())
-    saved_table = Table(value=df_empty.copy())
+    live_table = Table(value=df_live_empty)
+    saved_table = Table(value=df_saved_empty)
 
     save_button = PushButton(text="Save ROI Data")
     delete_button = PushButton(text="Delete ROI Data")
@@ -37,6 +45,8 @@ def create_roi_dock() -> RoiDock:
     live_layout = QVBoxLayout(live_panel)
     live_layout.addWidget(QLabel("Live Analysis"))
     live_layout.addWidget(live_table.native)
+
+    delete_shortcut = QShortcut(QKeySequence.Delete, live_table.native)
 
     btn_panel = QWidget()
     btn_layout = QVBoxLayout(btn_panel)
@@ -55,8 +65,8 @@ def create_roi_dock() -> RoiDock:
     layout.addWidget(btn_panel)
     layout.addWidget(saved_panel)
 
-    # container.setMinimumHeight(300)
-
+    container.setMinimumHeight(250)
+    
     return RoiDock(
         widget=container,
         live_table=live_table,
@@ -64,4 +74,5 @@ def create_roi_dock() -> RoiDock:
         save_button=save_button,
         delete_button=delete_button,
         xlsx_button=xlsx_button,
+        live_table_delete_shortcut=delete_shortcut,
     )

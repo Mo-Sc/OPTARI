@@ -1,0 +1,64 @@
+{
+    "general": {
+        "LOG_LEVEL" : "INFO",
+        "GUI_LOG_LEVEL" : "WARNING",
+        "DEFAULT_PA_LAYER": "Recon: iThera BP-40mm(res:100μm)_0",
+        "PA_FALLBACK_SCALE": [1, 0.1, 0.1],
+        "DEFAULT_US_LAYER": "",
+        "US_FALLBACK_SCALE": [1, 0.19, 0.19],
+        "DEFAULT_FRAME_INDEX": 11,
+        "DEFAULT_CHANNEL_INDEX": 0,
+        "LAYER_COLOR_MAPS":{
+            "ultrasounds": "gray",
+            "reconstructions": "viridis",
+            "unmixed": "magma",
+            "so2": "twilight_shifted",
+            "thb": "inferno"
+        }
+    },
+    "annotation": {
+        "max_rois": 10,
+        "roi_colors": [
+            "#8B0000",
+            "#FFD700",
+            "#FF6347",
+            "#FF8C00",
+            "#B22222",
+            "#FFFF00",
+            "#DC143C",
+            "#FF4500",
+            "#FFA500",
+            "#FF7F50"
+        ],
+        "roi_features": {
+            "roi_index": 1,
+            "mean": 1,
+            "median": 1,
+            "std": 1,
+            "p10": 0,
+            "p90": 0,
+            "iqr": 1,
+            "min": 1,
+            "max": 1,
+            "snr": 0,
+            "n_pixels": 0,
+            "area_mm2": 1,
+            "src_layers": 0,
+            "roi_type": 0,
+            "study": 0,
+            "scan": 0,
+            "frame": 0,
+            "channel": 0,
+            "roi_ts": 0,
+            "scan_ts": 0,
+            "roi_centroid": 1,
+            "filepath": 0
+        }
+    },
+    "analysis": {
+        "histogram_bins": 50
+    },
+    "segmentation":{
+        "default_model": "unet_msot_2_ta"
+    }
+}

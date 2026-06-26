@@ -13,13 +13,56 @@ from qtpy.QtWidgets import QListWidgetItem
 
 from patato.io.attribute_tags import UnmixingAttributeTags
 from patato.unmixing.spectra import SPECTRA_NAMES
+from patari.controllers.base import TaskControllerBase
 
 
 logger = logging.getLogger(__name__)
 
 
-class UnmixingController:
+class UnmixingController(TaskControllerBase):
     """Run spectral unmixing and add as layers."""
+
+    def __init__(self, parent_controller):
+        super().__init__(parent_controller)
+
+    def bind_events(self) -> None:
+        """Connect unmixing dock signals."""
+        self.patari_controller.unmixing.preset_combo.currentIndexChanged.connect(
+            self.on_preset_changed
+        )
+        self.patari_controller.unmixing.chromophores_list.itemChanged.connect(
+            self.on_chromophores_changed
+        )
+        self.patari_controller.unmixing.select_all_wavelengths_button.clicked.connect(
+            self.on_select_all_wavelengths_clicked
+        )
+        self.patari_controller.unmixing.clear_wavelengths_button.clicked.connect(
+            self.on_clear_wavelengths_clicked
+        )
+        self.patari_controller.unmixing.run_button.clicked.connect(
+            self.on_run_unmixing_clicked
+        )
+
+    def unbind_events(self) -> None:
+        """Disconnect unmixing dock signals."""
+        try:
+            self.patari_controller.unmixing.preset_combo.currentIndexChanged.disconnect(
+                self.on_preset_changed
+            )
+            self.patari_controller.unmixing.chromophores_list.itemChanged.disconnect(
+                self.on_chromophores_changed
+            )
+            self.patari_controller.unmixing.select_all_wavelengths_button.clicked.disconnect(
+                self.on_select_all_wavelengths_clicked
+            )
+            self.patari_controller.unmixing.clear_wavelengths_button.clicked.disconnect(
+                self.on_clear_wavelengths_clicked
+            )
+            self.patari_controller.unmixing.run_button.clicked.disconnect(
+                self.on_run_unmixing_clicked
+            )
+        except Exception as e:
+            logger.exception("Error unbinding unmixing dock signals: %s", e)
 
     @staticmethod
     def _preset_dir() -> Path:
@@ -43,17 +86,16 @@ class UnmixingController:
             state = Qt.Checked if wavelength in selected else Qt.Unchecked
             item.setCheckState(state)
 
-    @staticmethod
-    def initialize_ui(controller) -> None:
+    def initialize_ui(self) -> None:
         """Initialize preset, chromophore, and wavelength controls once."""
-        if controller.unmixing is None:
+        if self.patari_controller.unmixing is None:
             return
 
-        dock = controller.unmixing
+        dock = self.patari_controller.unmixing
 
         if dock.preset_combo.count() == 0:
             # Populate available preset files once on first dock init.
-            preset_dir = UnmixingController._preset_dir()
+            preset_dir = self._preset_dir()
             for preset_path in sorted(preset_dir.glob("*.json")):
                 dock.preset_combo.addItem(
                     preset_path.stem, userData=preset_path
@@ -68,35 +110,32 @@ class UnmixingController:
                 item.setCheckState(Qt.Unchecked)
                 dock.chromophores_list.addItem(item)
 
-        UnmixingController.refresh_ui(controller)
-        UnmixingController.on_chromophores_changed(controller)
-        UnmixingController.on_preset_changed(controller)
+        self.refresh_ui()
+        self.on_chromophores_changed()
+        self.on_preset_changed()
 
-    @staticmethod
-    def refresh_ui(controller) -> None:
+    def refresh_ui(self) -> None:
         """Refresh source-dependent controls from the active layer."""
-        if controller.unmixing is None:
+        if self.patari_controller.unmixing is None:
             return
 
-        dock = controller.unmixing
-        active_layer = controller.active_layer
+        dock = self.patari_controller.unmixing
+        active_recon_layer = self.patari_controller.active_recon_layer
 
-        if active_layer is None:
+        if active_recon_layer is None or active_recon_layer.metadata["pa_kind"] != "recon":
             dock.source_layer_label.setText("Select a PA reconstruction layer")
             dock.wavelengths_list.clear()
+            # disable unmixing button when no valid source is active
+            dock.run_button.setEnabled(False)
             return
 
-        if active_layer.name not in controller._patato_objects:
-            dock.source_layer_label.setText(
-                "Select a reconstruction layer as source"
-            )
-            dock.wavelengths_list.clear()
-            return
+        dock.source_layer_label.setText(active_recon_layer.name)
 
-        dock.source_layer_label.setText(active_layer.name)
+        # Enable unmixing button
+        dock.run_button.setEnabled(True)
 
-        wavelengths = active_layer.metadata.get("wavelengths") or []
-        source_name = active_layer.name
+        wavelengths = active_recon_layer.metadata.get("wavelengths") or []
+        source_name = active_recon_layer.name
         last_source = dock.widget.property("_unmixing_source_name")
 
         # Keep manual wavelength selections while the same source stays active.
@@ -113,39 +152,41 @@ class UnmixingController:
             item.setCheckState(Qt.Checked)
             dock.wavelengths_list.addItem(item)
 
-        UnmixingController.on_preset_changed(controller)
+        self.on_preset_changed()
 
-    @staticmethod
-    def on_select_all_wavelengths_clicked(controller) -> None:
+    def on_select_all_wavelengths_clicked(self) -> None:
         """Select all source wavelengths in the list widget."""
-        if controller.unmixing is None:
+        if self.patari_controller.unmixing is None:
             return
-        for i in range(controller.unmixing.wavelengths_list.count()):
-            controller.unmixing.wavelengths_list.item(i).setCheckState(
-                Qt.Checked
-            )
+        for i in range(
+            self.patari_controller.unmixing.wavelengths_list.count()
+        ):
+            self.patari_controller.unmixing.wavelengths_list.item(
+                i
+            ).setCheckState(Qt.Checked)
 
-    @staticmethod
-    def on_clear_wavelengths_clicked(controller) -> None:
+    def on_clear_wavelengths_clicked(self) -> None:
         """Clear all source wavelength selections in the list widget."""
-        if controller.unmixing is None:
+        if self.patari_controller.unmixing is None:
             return
-        for i in range(controller.unmixing.wavelengths_list.count()):
-            controller.unmixing.wavelengths_list.item(i).setCheckState(
-                Qt.Unchecked
-            )
+        for i in range(
+            self.patari_controller.unmixing.wavelengths_list.count()
+        ):
+            self.patari_controller.unmixing.wavelengths_list.item(
+                i
+            ).setCheckState(Qt.Unchecked)
 
-    @staticmethod
-    def on_preset_changed(controller) -> None:
+    def on_preset_changed(self) -> None:
         """Load selected preset values into the unmixing controls."""
-        if controller.unmixing is None:
+        if self.patari_controller.unmixing is None:
             return
 
-        dock = controller.unmixing
+        dock = self.patari_controller.unmixing
         preset_path = dock.preset_combo.currentData()
         if preset_path is None:
             return
 
+        # TODO: presets should be moved to user dir
         # Presets map directly to PATATO unmixing attribute tags.
         settings = json.loads(Path(preset_path).read_text())
 
@@ -158,9 +199,7 @@ class UnmixingController:
         )
 
         spectra = set(settings.get(UnmixingAttributeTags.SPECTRA, []))
-        UnmixingController._set_checked_by_text(
-            dock.chromophores_list, spectra
-        )
+        self._set_checked_by_text(dock.chromophores_list, spectra)
 
         wavelength_range = settings.get(UnmixingAttributeTags.WAVELENGTH_RANGE)
         if wavelength_range is not None and len(wavelength_range) == 2:
@@ -172,19 +211,19 @@ class UnmixingController:
                 <= int(dock.wavelengths_list.item(i).data(Qt.UserRole))
                 <= end
             }
-            UnmixingController._set_checked_wavelengths(
-                dock.wavelengths_list, selected
-            )
+            self._set_checked_wavelengths(dock.wavelengths_list, selected)
 
-        UnmixingController.on_chromophores_changed(controller)
+        self.on_chromophores_changed()
 
-    @staticmethod
-    def on_chromophores_changed(controller) -> None:
-        """Enable THb and sO2 options only when Hb and HbO2 are selected."""
-        if controller.unmixing is None:
+    def on_chromophores_changed(self) -> None:
+        """
+        Enable THb and sO2 options only when Hb and HbO2 are selected.
+        so2 is activated by default 
+        """
+        if self.patari_controller.unmixing is None:
             return
 
-        dock = controller.unmixing
+        dock = self.patari_controller.unmixing
         selected = {
             dock.chromophores_list.item(i).text()
             for i in range(dock.chromophores_list.count())
@@ -194,6 +233,7 @@ class UnmixingController:
 
         dock.generate_so2_checkbox.setEnabled(hb_pair_available)
         dock.generate_thb_checkbox.setEnabled(hb_pair_available)
+        dock.generate_so2_checkbox.setChecked(hb_pair_available)
 
         if not hb_pair_available:
             dock.generate_so2_checkbox.setChecked(False)
@@ -275,17 +315,21 @@ class UnmixingController:
         return expanded
 
     def _add_or_update_image_layer(
-        controller,
+        self,
         name: str,
         data: np.ndarray,
         metadata: dict,
         colormap: str,
     ) -> None:
-        """Create or update an image layer while preserving world extent."""
-        source_shape = np.asarray(controller.active_layer.data).shape
+        """Create or update an image layer while preserving world extent.
+        TODO: refactor to a more general layer management utility if needed by other controllers.
+        """
+        source_shape = np.asarray(
+            self.patari_controller.active_recon_layer.data
+        ).shape
         target_shape = np.asarray(data).shape
 
-        scale = list(controller.active_layer.scale)
+        scale = list(self.patari_controller.active_recon_layer.scale)
         # Preserve world-space extent after grid reduction by rescaling pixel spacing.
         scale[-2] = (
             float(scale[-2])
@@ -298,13 +342,13 @@ class UnmixingController:
             / float(target_shape[-1])
         )
         scale = tuple(scale)
-        translate = tuple(controller.active_layer.translate)
+        translate = tuple(self.patari_controller.active_recon_layer.translate)
 
-        if name in controller.viewer.layers and isinstance(
-            controller.viewer.layers[name], Image
+        if name in self.viewer.layers and isinstance(
+            self.viewer.layers[name], Image
         ):
             # Update in place so layer references and visibility state are kept.
-            layer = controller.viewer.layers[name]
+            layer = self.viewer.layers[name]
             layer.data = data
             layer.scale = scale
             layer.translate = translate
@@ -312,29 +356,31 @@ class UnmixingController:
             layer.colormap = colormap
             return
 
-        controller.viewer.add_image(
+        self.viewer.add_image(
             data,
             name=name,
             scale=scale,
             translate=translate,
             colormap=colormap,
+            opacity=1.0,
             blending="additive",
             metadata=metadata,
         )
 
-    @staticmethod
-    def on_run_unmixing_clicked(controller) -> None:
+    def on_run_unmixing_clicked(self) -> None:
         """Execute unmixing for the selected setup and publish output layers."""
-        if controller.unmixing is None:
+        if self.patari_controller.unmixing is None:
             return
 
-        dock = controller.unmixing
+        dock = self.patari_controller.unmixing
 
-        if controller.active_layer is None:
+        if self.patari_controller.active_recon_layer is None:
             dock.status_label.setText("Select a PA reconstruction layer.")
             return
 
-        recon = controller._patato_objects.get(controller.active_layer.name)
+        recon = self.patari_controller._patato_objects.get(
+            self.patari_controller.active_recon_layer.name
+        )
         if recon is None:
             dock.status_label.setText("Source layer must be a reconstruction.")
             return
@@ -358,7 +404,7 @@ class UnmixingController:
             return
 
         frame_numbers = list(
-            controller.active_layer.metadata.get("frames")
+            self.patari_controller.active_recon_layer.metadata.get("frames")
             or range(recon.shape[0])
         )
         # Run against all reconstructed frames by default.
@@ -368,7 +414,7 @@ class UnmixingController:
         frame_mode = "all"
 
         if dock.current_frame_only_checkbox.isChecked():
-            current_frame = int(controller.viewer.dims.current_step[0])
+            current_frame = int(self.viewer.dims.current_step[0])
             if current_frame not in frame_numbers:
                 dock.status_label.setText(
                     "Current frame is not reconstructed."
@@ -388,7 +434,7 @@ class UnmixingController:
 
         logger.info(
             "running unmixing for %s with %s wavelength(s), %s chromophore(s), reduce=%s",
-            controller.active_layer.name,
+            self.patari_controller.active_recon_layer.name,
             len(selected_wavelengths),
             len(selected_chromophores),
             reduce_factor,
@@ -400,23 +446,29 @@ class UnmixingController:
             rescaling_factor=reduce_factor,
             algorithm_id=suffix,
         )
-        unmixed, _, _ = unmixer.run(recon_for_run, controller.pa_data)
-        unmixed_axis1_labels = list(map(str, unmixed.ax_1_labels))
-        unmixed_metadata, unmixed_export_attrs = (
-            UnmixingController._build_output_metadata(
-                source_layer_name=controller.active_layer.name,
-                output_frames=output_frames,
-                axis1_labels=unmixed_axis1_labels,
-                filepath=controller.active_layer.metadata.get("filepath"),
-                timestamps=controller.active_layer.metadata.get("timestamps"),
-                pa_kind="unmixed",
-                frame_mode=frame_mode,
-                include_chromophores=True,
-            )
+        unmixed, _, _ = unmixer.run(
+            recon_for_run, self.patari_controller.pa_data
         )
-        UnmixingController._set_export_frame_attrs(unmixed, unmixed_export_attrs)
+        unmixed_axis1_labels = list(map(str, unmixed.ax_1_labels))
+        unmixed_metadata, unmixed_export_attrs = self._build_output_metadata(
+            source_layer_name=self.patari_controller.active_recon_layer.name,
+            output_frames=output_frames,
+            axis1_labels=unmixed_axis1_labels,
+            filepath=self.patari_controller.active_recon_layer.metadata.get(
+                "filepath"
+            ),
+            timestamps=self.patari_controller.active_recon_layer.metadata.get(
+                "timestamps"
+            ),
+            pa_kind="unmixed",
+            frame_mode=frame_mode,
+            include_chromophores=True,
+        )
+        self._set_export_frame_attrs(unmixed, unmixed_export_attrs)
 
-        source_name = controller.active_layer.name.replace("Recon: ", "")
+        source_name = self.patari_controller.active_recon_layer.name.replace(
+            "Recon: ", ""
+        )
         suffix_part = f"_{suffix}" if suffix else ""
         # Encode the acquisition-frame index when only a single frame is unmixed.
         frame_part = (
@@ -425,90 +477,91 @@ class UnmixingController:
 
         unmixed_name = f"Unmixed: {source_name}{suffix_part}{frame_part}"
         source_frame_count = int(
-            np.asarray(controller.active_layer.data).shape[0]
+                np.asarray(self.patari_controller.active_recon_layer.data).shape[0]
         )
-        unmixed_data = UnmixingController._expand_to_source_frames(
-            UnmixingController._extract_display_data(unmixed),
+        unmixed_data = self._expand_to_source_frames(
+            self._extract_display_data(unmixed),
             output_frames,
             source_frame_count,
         )
         # Channel labels are used by downstream spectrum displays.
-        UnmixingController._add_or_update_image_layer(
-            controller,
+        self._add_or_update_image_layer(
             name=unmixed_name,
             data=unmixed_data,
             metadata=unmixed_metadata,
             colormap="magma",
         )
         # Keep PATATO outputs available for future derived computations.
-        controller._derived_patato_objects[unmixed_name] = unmixed
+        self.patari_controller._derived_patato_objects[unmixed_name] = unmixed
 
         generated = ["unmixed"]
 
         if dock.generate_thb_checkbox.isChecked():
             thb_calc = pat.THbCalculator(algorithm_id=suffix)
-            thb, _, _ = thb_calc.run(unmixed, controller.pa_data)
-            thb_metadata, thb_export_attrs = (
-                UnmixingController._build_output_metadata(
-                    source_layer_name=controller.active_layer.name,
-                    output_frames=output_frames,
-                    axis1_labels=["thb"],
-                    filepath=controller.active_layer.metadata.get("filepath"),
-                    timestamps=controller.active_layer.metadata.get("timestamps"),
-                    pa_kind="unmixed_param",
-                    frame_mode=frame_mode,
-                    parameter="thb",
-                )
+            thb, _, _ = thb_calc.run(unmixed, self.patari_controller.pa_data)
+            thb_metadata, thb_export_attrs = self._build_output_metadata(
+                source_layer_name=self.patari_controller.active_recon_layer.name,
+                output_frames=output_frames,
+                axis1_labels=["thb"],
+                filepath=self.patari_controller.active_recon_layer.metadata.get(
+                    "filepath"
+                ),
+                timestamps=self.patari_controller.active_recon_layer.metadata.get(
+                    "timestamps"
+                ),
+                pa_kind="unmixed_param",
+                frame_mode=frame_mode,
+                parameter="thb",
             )
-            UnmixingController._set_export_frame_attrs(thb, thb_export_attrs)
+            self._set_export_frame_attrs(thb, thb_export_attrs)
             thb_name = f"THb: {source_name}{suffix_part}{frame_part}"
-            UnmixingController._add_or_update_image_layer(
-                controller,
+            self._add_or_update_image_layer(
                 name=thb_name,
-                data=UnmixingController._expand_to_source_frames(
-                    UnmixingController._extract_display_data(thb),
+                data=self._expand_to_source_frames(
+                    self._extract_display_data(thb),
                     output_frames,
                     source_frame_count,
                 ),
                 metadata=thb_metadata,
                 colormap="inferno",
             )
-            controller._derived_patato_objects[thb_name] = thb
+            self.patari_controller._derived_patato_objects[thb_name] = thb
             generated.append("thb")
 
         if dock.generate_so2_checkbox.isChecked():
             so2_calc = pat.SO2Calculator(algorithm_id=suffix, nan_invalid=True)
-            so2, _, _ = so2_calc.run(unmixed, controller.pa_data)
-            so2_metadata, so2_export_attrs = (
-                UnmixingController._build_output_metadata(
-                    source_layer_name=controller.active_layer.name,
-                    output_frames=output_frames,
-                    axis1_labels=["so2"],
-                    filepath=controller.active_layer.metadata.get("filepath"),
-                    timestamps=controller.active_layer.metadata.get("timestamps"),
-                    pa_kind="unmixed_param",
-                    frame_mode=frame_mode,
-                    parameter="so2",
-                )
+            so2, _, _ = so2_calc.run(unmixed, self.patari_controller.pa_data)
+            so2_metadata, so2_export_attrs = self._build_output_metadata(
+                source_layer_name=self.patari_controller.active_recon_layer.name,
+                output_frames=output_frames,
+                axis1_labels=["so2"],
+                filepath=self.patari_controller.active_recon_layer.metadata.get(
+                    "filepath"
+                ),
+                timestamps=self.patari_controller.active_recon_layer.metadata.get(
+                    "timestamps"
+                ),
+                pa_kind="unmixed_param",
+                frame_mode=frame_mode,
+                parameter="so2",
             )
-            UnmixingController._set_export_frame_attrs(so2, so2_export_attrs)
+            self._set_export_frame_attrs(so2, so2_export_attrs)
             so2_name = f"sO2: {source_name}{suffix_part}{frame_part}"
-            UnmixingController._add_or_update_image_layer(
-                controller,
+            self._add_or_update_image_layer(
                 name=so2_name,
-                data=UnmixingController._expand_to_source_frames(
-                    UnmixingController._extract_display_data(so2),
+                data=self._expand_to_source_frames(
+                    self._extract_display_data(so2),
                     output_frames,
                     source_frame_count,
                 ),
                 metadata=so2_metadata,
-                colormap="turbo",
+                colormap="twilight_shifted",
             )
-            controller._derived_patato_objects[so2_name] = so2
+            self.patari_controller._derived_patato_objects[so2_name] = so2
             generated.append("so2")
 
         # Reassert ROI visibility priority after adding multiple result layers.
-        controller._ensure_shapes_layer_on_top()
+        self.patari_controller._ensure_shapes_layer_on_top()
 
         dock.status_label.setText(f"Finished: {', '.join(generated)}")
         logger.info("unmixing complete: %s", ", ".join(generated))

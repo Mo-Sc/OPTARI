@@ -9,12 +9,13 @@ authors = [
   {email = "moritz.schillinger@fau.de"},
 ]
 classifiers = [
-    "Framework :: napari",
     "License :: OSI Approved :: BSD License",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: Microsoft :: Windows",
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 # napari can be included in dependencies if napari imports are required.
 # However, you should not include napari[all], napari[qt],
 # or any other Qt bindings directly (e.g. PyQt5, PySide2).
@@ -28,9 +29,21 @@ dependencies = [
     "pyqtgraph",
     "scikit-image",
     "opencv-python-headless",
-    "patato @ https://github.com/Mo-Sc/patato/archive/b950b95e283b30f56cfca00bf6b1033d53ab496e.zip",
+    "onnxruntime",
+    # --- precompiled PATATO wheels for python 3.12 ---
+    # Windows
+    "patato @ https://github.com/Mo-Sc/patato/releases/download/patari-v0.3/patato-0.7.1.dev1+gec3fb1ae4-cp312-cp312-win_amd64.whl ; sys_platform == 'win32'",
+    # macOS Apple Silicon (macos-14 runner)
+    "patato @ https://github.com/Mo-Sc/patato/releases/download/patari-v0.3/patato-0.7.1.dev1+gec3fb1ae4-cp312-cp312-macosx_11_0_arm64.whl ; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    # macOS Intel (macos-13 runner)
+    # "patato @ https://github.com/Mo-Sc/patato/releases/download/v0.2.0-patari/patato-0.7.1-cp312-cp312-macosx_10_9_x86_64.whl ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    # Linux (ubuntu-latest runner)
+    "patato @ https://github.com/Mo-Sc/patato/releases/download/patari-v0.3/patato-0.7.1.dev1+gec3fb1ae4-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl ; sys_platform == 'linux'",
     "openpyxl",
 ]
+
+# patato from source: "patato @ https://github.com/Mo-Sc/patato/archive/b950b95e283b30f56cfca00bf6b1033d53ab496e.zip ; sys_platform == 'linux' or sys_platform == 'darwin'",
+
 
 [project.optional-dependencies]
 # Allow easily installation with the full, default napari installation
@@ -39,11 +52,6 @@ all = ["napari[all]"]
 
 [project.gui-scripts]
 patari = "patari.launcher:main"
-
-[project.entry-points."napari.manifest"]
-patari = "patari:napari.yaml"
-
-
 
 [build-system]
 requires = ["setuptools>=68", "setuptools-scm>=8"]
@@ -56,7 +64,7 @@ include-package-data = true
 where = ["src"]
 
 [tool.setuptools.package-data]
-"patari" = ["*.yaml", "data/*.json", "data/*.png"]
+"patari" = ["data/*.json", "data/*.png"]
 
 [tool.setuptools_scm]
 write_to = "src/patari/_version.py"

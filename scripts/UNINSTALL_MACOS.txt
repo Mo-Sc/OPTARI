@@ -1,0 +1,6 @@
+To uninstall PATARI on macos:
+- open your Terminal (Cmd - SPACE - Terminal)
+- drag and drop the PATARI file into the Terminal
+- type " self remove" (dont forget the space)
+- press Enter
+You successfully removed PATARI from your system

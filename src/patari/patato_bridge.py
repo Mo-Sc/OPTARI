@@ -1,22 +1,16 @@
-"""patato_bridge — pure helpers bridging PATATO ↔ napari/PATARI.
-
-No napari viewer or Qt state here; all functions are pure and can be
-tested independently of the plugin runtime.
+"""patato_bridge: functions to convert between PATATO and napari data structures
 """
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 
 import numpy as np
-from patato.io.attribute_tags import HDF5Tags
 
-from patari import config
+from patato.io.attribute_tags import HDF5Tags # type: ignore[import]
+import patato as pat  # type: ignore[import]
 
-if TYPE_CHECKING:
-    import patato as pat
-
+from patari.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +38,7 @@ def scale_from_patato_obj(obj, fallback: tuple) -> tuple:
             return fallback
         return (fallback[0], fov_y_m / ny * 1000, fov_x_m / nx * 1000)
     except Exception:
-        logger.debug(
+        logger.warning(
             f"could not derive scale from object {obj}, using fallback {fallback}",
             exc_info=True,
         )
@@ -106,8 +100,19 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
         Maps napari layer name → PATATO ``ImageSequence`` for later use
         (e.g. FOV queries, scale derivation).
     """
-    _us_fallback = (1, 0.19, 0.19)
-    _recon_fallback = (1, 0.1, 0.1)
+    _us_fallback = settings.general.US_FALLBACK_SCALE
+    _pa_fallback = settings.general.PA_FALLBACK_SCALE
+
+    _user_cmaps = settings.general.LAYER_COLOR_MAPS
+    # fallback to hardcoded defaults if any of the configured cmaps are missing
+    _default_cmaps = {
+            HDF5Tags.ULTRASOUND: "gray",
+            HDF5Tags.RECONSTRUCTION: "viridis",
+            HDF5Tags.UNMIXED: "magma",
+            HDF5Tags.SO2: "twilight_shifted",
+            HDF5Tags.THB: "inferno",
+        }  
+
 
     patato_objects: dict = {}
     layers: list = []
@@ -130,9 +135,10 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
         (
             us_img,
             {
-                "colormap": "gray",
+                "colormap": _user_cmaps.get(HDF5Tags.ULTRASOUND, _default_cmaps[HDF5Tags.ULTRASOUND]),
                 "name": "US",
                 "scale": scale_from_patato_obj(us_obj, _us_fallback),
+                "opacity": 1.0,
                 "metadata": {"type": "us", "timestamps": timestamps},
             },
             "image",
@@ -183,11 +189,13 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
             (
                 recon_img,
                 {
-                    "colormap": "viridis",
+                    "colormap": _user_cmaps.get(HDF5Tags.RECONSTRUCTION, _default_cmaps[HDF5Tags.RECONSTRUCTION]),
                     "name": layer_name,
-                    "scale": scale_from_patato_obj(recon, _recon_fallback),
+                    "scale": scale_from_patato_obj(recon, _pa_fallback),
+                    "opacity": 1.0,
                     "metadata": {
                         "type": "pa",
+                        "pa_kind": "recon",
                         "wavelengths": wavelengths,
                         "axis1_name": "Channel",
                         "axis1_labels": wavelengths,
@@ -201,11 +209,11 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
 
     # --- derived PA image groups that may already exist in HDF5 ---
     derived_specs = [
-        (HDF5Tags.UNMIXED, "Unmixed", "magma", "unmixed", None),
-        (HDF5Tags.THB, "THb", "inferno", "unmixed_param", "thb"),
-        (HDF5Tags.SO2, "sO2", "turbo", "unmixed_param", "so2"),
+        (HDF5Tags.UNMIXED, "Unmixed", "unmixed", None),
+        (HDF5Tags.THB, "THb", "unmixed_param", "thb"),
+        (HDF5Tags.SO2, "sO2", "unmixed_param", "so2"),
     ]
-    for group_name, prefix, colormap, pa_kind, parameter in derived_specs:
+    for group_name, prefix, pa_kind, parameter in derived_specs:
         for (dataset_name, idx), image in pa_data.get_scan_images(
             group_name, ignore_default=True
         ).items():
@@ -237,9 +245,10 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
                 (
                     data,
                     {
-                        "colormap": colormap,
+                        "colormap": _user_cmaps.get(group_name, _default_cmaps.get(group_name, "viridis")),
                         "name": f"{prefix}: {dataset_name}_{idx}",
-                        "scale": scale_from_patato_obj(image, _recon_fallback),
+                        "scale": scale_from_patato_obj(image, _pa_fallback),
+                        "opacity": 1.0,
                         "metadata": metadata,
                     },
                     "image",
@@ -278,7 +287,7 @@ def napari_shapes_from_scan_rois(
     pa_data: "pat.PAData",
     fov_x_m: float,
     fov_y_m: float,
-) -> list[tuple[np.ndarray, str, str]]:
+) -> list[tuple[np.ndarray, str, str, str]]:
     """Load ROI polygons from *pa_data* as napari ``(y_mm, x_mm)`` vertices.
 
     Silently skips individual ROIs that cannot be converted.
@@ -291,17 +300,18 @@ def napari_shapes_from_scan_rois(
         logger.exception("could not load ROIs")
         return []
 
+    max_rois = settings.annotation.max_rois
     total_rois = len(rois)
-    if total_rois > config.MAX_ROIS:
+    if total_rois > max_rois:
         logger.warning(
             "data contains %d ROI(s), but MAX_ROIS is %d; only loading first %d",
             total_rois,
-            config.MAX_ROIS,
-            config.MAX_ROIS,
+            max_rois,
+            max_rois,
         )
 
     shapes = []
-    roi_items = list(rois.items())[: config.MAX_ROIS]
+    roi_items = list(rois.items())[: max_rois]
     for (_name, _number), roi in roi_items:
         try:
             pts = np.asarray(roi.points, dtype=float)  # (N, 2): (x_m, y_m)
@@ -310,6 +320,7 @@ def napari_shapes_from_scan_rois(
                     patato_to_napari(pts, fov_x_m, fov_y_m),
                     getattr(roi, "shape_type", "polygon"),
                     getattr(roi, "position", "undefined"),
+                    str(_name),
                 )
             )
         except Exception:

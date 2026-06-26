@@ -4,6 +4,11 @@ from dataclasses import dataclass
 
 from qtpy.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget
 
+from .dock_helpers import (
+    create_bottom_dock_header,
+    create_bottom_single_plot_container,
+)
+
 
 @dataclass
 class TimeAnalysisDock:
@@ -20,15 +25,12 @@ def create_time_analysis_dock() -> TimeAnalysisDock:
     widget = QWidget()
     layout = QVBoxLayout(widget)
 
-    status_label = QLabel("Click 'Refresh' to compute ROI means over time.")
-    generate_button = QPushButton("Refresh")
+    status_label, generate_button = create_bottom_dock_header(
+        layout,
+        status_text="Click 'Refresh' to compute ROI means over time.",
+    )
+    plot_container = create_bottom_single_plot_container()
 
-    plot_container = QWidget()
-    plot_layout = QVBoxLayout(plot_container)
-    plot_layout.setContentsMargins(0, 0, 0, 0)
-
-    layout.addWidget(status_label)
-    layout.addWidget(generate_button)
     layout.addWidget(plot_container, stretch=1)
 
     return TimeAnalysisDock(
