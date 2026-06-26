@@ -25,15 +25,15 @@ Key features (v0.3):
 - AI-based tissue segmentation and automatic ROI placement in target class.
 - Spectral unmixing, including chromophore spectra and THb / sO2 calculation.
 - Export processed scans to HDF5.
-- Usage instructions: [PATARI v0.2 Usage PDF](docs/PATARIv02_Instructions.pdf) (TODO: update)
-- Keyboard shortcuts: [PATARI Keyboard Shortcuts Guide](docs/shortcuts.md)
+- Usage instructions: [PATARI v0.3 Usage PDF](docs/PATARI_Instructions.pdf)
+- Keyboard shortcuts: [PATARI Keyboard Shortcuts Guide](docs/PATARI_Shortcuts.pdf)
 
 
 ## Installation 
 
 ### Option A: Executable (recommended for clinical use)
 
-1. Download the executable file of the [current release (v3)](tbd) for your operating system (macOS or windows).
+1. Download the executable file of the [current release (v3)](https://github.com/Mo-Sc/PATARI/releases/tag/v0.2.0) for your operating system (macOS or windows).
 2. Unpack the zip folder and run the patari file.
 3. [Optional, on first run] If you get an error, stating PATARI could not be verified, give your OS permission to run it:
     * For windows: Click `More Info` -> `Run Anyways`
