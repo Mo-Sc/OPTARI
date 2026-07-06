@@ -285,8 +285,9 @@ def compute_roi_stats(
     sy, sx = _scale_sy_sx(active_recon_layer)
     channel_value = _channel_value(active_recon_layer, channel_idx)
     filepath = str(active_recon_layer.metadata.get("filepath", "") or "")
-    scan = Path(filepath).stem if filepath else ""
-    study = Path(filepath).parent.name if filepath else ""
+    scan_folder = Path(filepath).stem if filepath else ""
+    study_folder = Path(filepath).parent.name if filepath else ""
+    scan_name = str(active_recon_layer.metadata.get("scan_name", ""))
 
     rows = []
     for roi in _iter_rois(shapes_layer):
@@ -309,8 +310,9 @@ def compute_roi_stats(
                 "mask": _roi_source(shapes_layer, roi.index),
             },
             roi_type=roi.kind,
-            study=study,
-            scan=scan,
+            study_folder=study_folder,
+            scan_folder=scan_folder,
+            scan_name=scan_name,
             frame=int(frame_idx),
             channel=channel_value,
             scan_ts=scan_ts,
@@ -381,8 +383,9 @@ def compute_roi_time_series(
 
     # required data for ROI context
     filepath = str(active_recon_layer.metadata.get("filepath", "") or "")
-    scan = Path(filepath).stem if filepath else ""
-    study = Path(filepath).parent.name if filepath else ""
+    scan_folder = Path(filepath).stem if filepath else ""
+    study_folder = Path(filepath).parent.name if filepath else ""
+    scan_name = str(active_recon_layer.metadata.get("scan_name", "") or "")
     channel_value = _channel_value(active_recon_layer, channel_idx)
 
     series: dict[int, np.ndarray] = {}
@@ -413,8 +416,9 @@ def compute_roi_time_series(
                     "mask": _roi_source(shapes_layer, roi.index),
                 },
                 roi_type=roi.kind,
-                study=study,
-                scan=scan,
+                study_folder=study_folder,
+                scan_folder=scan_folder,
+                scan_name=scan_name,
                 frame=int(frame_idx),
                 channel=channel_value,
                 scan_ts=_timestamp_str(active_recon_layer, int(frame_idx), channel_idx),

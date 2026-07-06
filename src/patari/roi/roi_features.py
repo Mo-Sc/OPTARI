@@ -11,8 +11,9 @@ class ROIContext:
     roi_index: int
     src_layers: dict[str, str]
     roi_type: str
-    study: str
-    scan: str
+    study_folder: str
+    scan_folder: str
+    scan_name: str
     frame: int
     channel: object
     scan_ts: str
@@ -75,8 +76,9 @@ FEATURE_REGISTRY: dict[str, FeatureSpec] = {
     "area_mm2": FeatureSpec(float, lambda c: float(c.vals.size * c.sy * c.sx)),
     "src_layers": FeatureSpec(object, lambda c: c.src_layers),
     "roi_type": FeatureSpec(str, lambda c: str(c.roi_type)),
-    "study": FeatureSpec(str, lambda c: str(c.study)),
-    "scan": FeatureSpec(str, lambda c: str(c.scan)),
+    "study_folder": FeatureSpec(str, lambda c: str(c.study_folder)),
+    "scan_folder": FeatureSpec(str, lambda c: str(c.scan_folder)),
+    "scan_name": FeatureSpec(str, lambda c: str(c.scan_name)),
     "frame": FeatureSpec(int, lambda c: int(c.frame)),
     "channel": FeatureSpec(object, lambda c: c.channel),
     "roi_ts": FeatureSpec(str, lambda c: str(c.roi_ts)),
@@ -91,10 +93,11 @@ ALL_FEATURE_COLUMNS: list[str] = list(FEATURE_REGISTRY.keys())
 def numeric_feature_ids() -> list[str]:
     return [fid for fid in ALL_FEATURE_COLUMNS if FEATURE_REGISTRY[fid].dtype in (int, float)]
 
-# Fixed set of columns that are always included in the saved table (and export xlsx), regardless of user settings to identify the origin of the ROI
+# Fixed set of columns that are always included in the saved table, regardless of user settings to identify the origin of the ROI
 SAVED_FIXED_SOURCE_COLUMNS: list[str] = [
-    "study",
-    "scan",
+    "study_folder",
+    "scan_folder",
+    "scan_name",
     "frame",
     "channel",
     "src_layers",

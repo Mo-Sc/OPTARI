@@ -520,16 +520,17 @@ class PatariController:
         )
 
         ts, ts_delta = self.timestamp_for_slice(frame_idx, channel_idx)
-        scan_str = (
-            str(self.path.stem) if getattr(self, "path", None) else "N/A"
-        )
+        scan_folder = str(self.path.stem) if getattr(self, "path", None) else "N/A"
+        scan_info = self._scans.get(getattr(self, "path", Path()))
+        scan_name = scan_info.internal_name if scan_info and scan_info.internal_name else ""
+        scan_display = f"{scan_folder} ({scan_name})" if scan_name else scan_folder
         study_str = (
             str(self.study_path.stem)
             if getattr(self, "study_path", None)
             else "N/A"
         )
         self.info.label.setText(
-            f"Study: {study_str} | Scan: {scan_str}\n"
+            f"Study: {study_str} | Scan: {scan_display}\n"
             f"Layer: {self.active_recon_layer.name}\n"
             f"Frame: {frame_idx} | {axis1_name}: {axis1_value}\n"
             f"Timestamp: {ts} ({ts_delta:.2f} s)"

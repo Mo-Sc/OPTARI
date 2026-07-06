@@ -3,12 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from qtpy.QtCore import Qt
 from qtpy.QtWidgets import (
     QAbstractItemView,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QListWidget,
+    QListWidgetItem,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -32,7 +34,10 @@ class ScanBrowserDock:
         self.scans_list.clear()
         for path, info in scan_items:
             display = f"{path.name} ({info.internal_name})" if info.internal_name else path.name
-            self.scans_list.addItem(display)
+            item = QListWidgetItem(display)
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setCheckState(Qt.Unchecked)
+            self.scans_list.addItem(item)
 
 
 def create_scan_browser_dock() -> ScanBrowserDock:

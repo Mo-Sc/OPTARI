@@ -232,6 +232,7 @@ class ScanController(TaskControllerBase):
                 kw = dict(kw)
                 kw.setdefault("metadata", {})
                 kw["metadata"].setdefault("filepath", str(scan_path))
+                kw["metadata"].setdefault("scan_name", scan_info.internal_name)
                 self.viewer.add_image(data, **kw)
                 # alternatively set unit here instead of scalebar (deprecated), but doesnt seem to work yet
                 # layer = self.viewer.add_image(data, **kw)
@@ -240,6 +241,7 @@ class ScanController(TaskControllerBase):
                 kw = dict(kw)
                 kw.setdefault("metadata", {})
                 kw["metadata"].setdefault("filepath", str(scan_path))
+                kw["metadata"].setdefault("scan_name", scan_info.internal_name)
                 self.viewer.add_labels(data, **kw)
 
         # Create the ROIs layer after image layers so it stays on top.
