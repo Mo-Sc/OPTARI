@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 import re
 
@@ -23,6 +24,13 @@ from patari.controllers.base import TaskControllerBase
 from patari.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class ScanInfo:
+    """Metadata for a discovered scan."""
+    kind: str  # "hdf5" or "ithera"
+    internal_name: str | None
 
 
 class ScanController(TaskControllerBase):
@@ -169,9 +177,11 @@ class ScanController(TaskControllerBase):
 
         if self.patari_controller.scan_browser is not None:
             self.patari_controller.scan_browser.set_folder(folder)
-            self.patari_controller.scan_browser.set_scans(
-                list(self.patari_controller._scans.keys())
-            )
+            scan_items = [
+                (p, info)
+                for p, info in self.patari_controller._scans.items()
+            ]
+            self.patari_controller.scan_browser.set_scans(scan_items)
 
         # Auto-select first scan if available.
         if (
@@ -193,17 +203,10 @@ class ScanController(TaskControllerBase):
             self.patari_controller.refresh_all()
             return
 
-        scan_kind = self.patari_controller._scans.get(
-            scan_path,
-            (
-                "hdf5"
-                if scan_path.suffix.lower() in {".hdf5", ".h5"}
-                else "ithera"
-            ),
-        )
+        scan_info = self.patari_controller._scans.get(scan_path)
 
         try:
-            if scan_kind == "hdf5":
+            if scan_info.kind == "hdf5":
                 self.patari_controller.pa_data = pat.PAData.from_hdf5(
                     str(scan_path), mode="r"
                 )
@@ -296,12 +299,49 @@ class ScanController(TaskControllerBase):
         return (1, 0, key)
 
     @staticmethod
-    def discover_scans(folder: Path) -> dict[Path, str]:
+    def _read_internal_scan_name(path: Path) -> str | None:
+        """
+        Read the internal scan name. 
+        For native ithera, we read it from the .msot XML file instead of constructing the entire iTheraMSOT object,
+        For hdf5 we read it from the HDF5 metadata (cheap)
+        """
+        try:
+            if path.is_file() and path.suffix.lower() == ".hdf5":
+                from patato.io.hdf.hdf5_interface import HDF5Reader
+
+                reader = HDF5Reader(str(path))
+                name = reader.get_scan_name()
+                reader.close()
+                return str(name) if name else None
+            elif path.is_dir():
+                # iTheraMSOT.__init__ parses all frame data —> too expensive
+                # Parse only the relevant XML node directly.
+                import xml.dom.minidom
+
+                msot = path / f"{path.name}.msot"
+                if msot.exists():
+                    tree = xml.dom.minidom.parse(str(msot))
+                    scan_nodes = tree.getElementsByTagName("ScanNode")
+                    if scan_nodes:
+                        name_nodes = scan_nodes[0].getElementsByTagName("Name")
+                        if name_nodes and name_nodes[0].firstChild:
+                            return name_nodes[0].firstChild.nodeValue.strip()
+        except Exception:
+            logger.debug(
+                "failed to read internal scan name from '%s'",
+                path,
+                exc_info=True,
+            )
+        return None
+
+    @staticmethod
+    def discover_scans(folder: Path) -> dict[Path, ScanInfo]:
         # One entry per scan key; if both exist, prefer HDF5 over iThera folder.
-        by_key: dict[str, tuple[Path, str]] = {}
+        by_key: dict[str, tuple[Path, str, str | None]] = {}
 
         for p in folder.glob("Scan_*.hdf5"):
-            by_key[ScanController.scan_key(p)] = (p, "hdf5")
+            internal = ScanController._read_internal_scan_name(p)
+            by_key[ScanController.scan_key(p)] = (p, "hdf5", internal)
 
         for d in folder.glob("Scan_*"):
             if not d.is_dir():
@@ -309,11 +349,14 @@ class ScanController(TaskControllerBase):
             if any(d.glob("*.msot")):
                 key = ScanController.scan_key(d)
                 if key not in by_key:
-                    by_key[key] = (d, "ithera")
+                    internal = ScanController._read_internal_scan_name(d)
+                    by_key[key] = (d, "ithera", internal)
 
-        entries = sorted((v[0], v[1]) for v in by_key.values())
-        entries.sort(key=lambda item: ScanController.scan_sort_key(item[0]))
-        return {p: k for p, k in entries}
+        entries = sorted(
+            ((v[0], v[1], v[2]) for v in by_key.values()),
+            key=lambda item: ScanController.scan_sort_key(item[0]),
+        )
+        return {p: ScanInfo(kind=k, internal_name=n) for p, k, n in entries}
 
     def layers_from_pa_data(self) -> list[tuple]:
         """Build napari LayerData tuples from the open ``controller.pa_data`` handle."""

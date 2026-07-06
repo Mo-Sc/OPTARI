@@ -14,6 +14,8 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
+from patari.controllers.scan_controller import ScanInfo
+
 
 @dataclass
 class ScanBrowserDock:
@@ -26,10 +28,11 @@ class ScanBrowserDock:
     def set_folder(self, folder: Path) -> None:
         self.folder_lineedit.setText(str(folder))
 
-    def set_scans(self, scan_paths: list[Path]) -> None:
+    def set_scans(self, scan_items: list[tuple[Path, ScanInfo]]) -> None:
         self.scans_list.clear()
-        for p in scan_paths:
-            self.scans_list.addItem(p.name)
+        for path, info in scan_items:
+            display = f"{path.name} ({info.internal_name})" if info.internal_name else path.name
+            self.scans_list.addItem(display)
 
 
 def create_scan_browser_dock() -> ScanBrowserDock:

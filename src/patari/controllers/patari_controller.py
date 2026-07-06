@@ -13,6 +13,7 @@ from patari.utils.misc import parse_float_input
 from patari.widgets.info_dock import InfoDock
 from patari.widgets.roi_dock import RoiDock
 from patari.widgets.scan_browser_dock import ScanBrowserDock
+from patari.controllers.scan_controller import ScanInfo
 from patari.widgets.annotation_dock import AnnotationDock
 from patari.widgets.reconstruction_dock import ReconstructionDock
 from patari.widgets.time_analysis_dock import TimeAnalysisDock
@@ -41,7 +42,7 @@ class PatariController:
         #     self.path if self.path.is_dir() else self.path.parent
         # )
 
-        self._scans: dict[Path, str] = {}
+        self._scans: dict[Path, ScanInfo] = {}
         self.pa_data: pat.PAData | None = None
         self._patato_objects: dict[str, pat.ImageSequence] = {}
         self._derived_patato_objects: dict[str, pat.ImageSequence] = {}
