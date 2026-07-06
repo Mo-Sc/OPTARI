@@ -12,7 +12,7 @@
 
 PATARI is a python based analysis tool for clinical photoacoustic studies, based on the PATATO and NAPARI frameworks.
 
-Key features (v0.3):
+Key features (v0.4):
 
 - Load native iThera scans (including ROIs), PATATO HDF5 scans and more.
 - Browse studies and fast switching between scans.
@@ -24,8 +24,8 @@ Key features (v0.3):
 - Visualize ROI intensities over time and spectrum, plot histograms.
 - AI-based tissue segmentation and automatic ROI placement in target class.
 - Spectral unmixing, including chromophore spectra and THb / sO2 calculation.
-- Export processed scans to HDF5.
-- Usage instructions: [PATARI v0.3 Usage PDF](docs/PATARI_Instructions.pdf)
+- Export processed scans to HDF5, individual layers to PNG/TIFF.
+- Usage instructions: [PATARI v0.4 Usage PDF](docs/PATARI_Instructions.pdf)
 - Keyboard shortcuts: [PATARI Keyboard Shortcuts Guide](docs/PATARI_Shortcuts.pdf)
 
 
@@ -33,7 +33,7 @@ Key features (v0.3):
 
 ### Option A: Executable (recommended for clinical use)
 
-1. Download the executable file of the [current release (v3)](https://github.com/Mo-Sc/PATARI/releases/tag/v0.3.0) for your operating system (macOS or windows).
+1. Download the executable file of the [current release (v3)](https://github.com/Mo-Sc/PATARI/releases/tag/v0.4.0) for your operating system (macOS or windows).
 2. Unpack the zip folder and run the patari file.
 3. [Optional, on first run] If you get an error, stating PATARI could not be verified, give your OS permission to run it:
     * For windows: Click `More Info` -> `Run Anyways`
