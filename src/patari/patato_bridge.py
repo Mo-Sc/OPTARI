@@ -10,6 +10,8 @@ import numpy as np
 from patato.io.attribute_tags import HDF5Tags # type: ignore[import]
 import patato as pat  # type: ignore[import]
 
+from patari.utils.motion import k_motion_scores_optimized
+
 from patari.config import settings
 
 logger = logging.getLogger(__name__)
@@ -131,6 +133,14 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
     us_img = np.flip(np.array(us_obj.da[:, :, :, 0, :]), axis=-2)
     n_acq_frames = us_img.shape[0]
     patato_objects["US"] = us_obj
+
+    # if motion-based frame selection is enabled, compute motion scores for each frame
+    # TODO: or maybe always include
+    if settings.general.DEFAULT_FRAME_INDEX == "motion":
+        motion_scores = k_motion_scores_optimized(us_img)
+    else:
+        motion_scores = None
+
     layers.append(
         (
             us_img,
@@ -139,7 +149,7 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
                 "name": "US",
                 "scale": scale_from_patato_obj(us_obj, _us_fallback),
                 "opacity": 1.0,
-                "metadata": {"type": "us", "timestamps": timestamps},
+                "metadata": {"type": "us", "timestamps": timestamps, "motion_scores": motion_scores},
             },
             "image",
         )

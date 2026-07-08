@@ -276,10 +276,20 @@ class ScanController(TaskControllerBase):
 
         # Initialize viewer position to DEFAULT_FRAME_INDEX and DEFAULT_CHANNEL_INDEX
         try:
-            self.viewer.dims.set_point(0, settings.general.DEFAULT_FRAME_INDEX)
+            if settings.general.DEFAULT_FRAME_INDEX == "motion":
+                # find frame with lowest motion 
+                motion_scores = self.patari_controller.active_us_layer.metadata.get("motion_scores")
+                frame_id = int(np.argmin(motion_scores))
+                logger.info("motion-based frame selection: selected frame %d with motion score %.4f", frame_id, motion_scores[frame_id])
+            else:
+                frame_id = settings.general.DEFAULT_FRAME_INDEX
+
+            self.viewer.dims.set_point(0, frame_id)
             self.viewer.dims.set_point(1, settings.general.DEFAULT_CHANNEL_INDEX)
         except Exception:
             logger.warning("failed to set initial viewer position. Setting to (0, 0)", exc_info=True)
+            self.viewer.dims.set_point(0, 0)
+            self.viewer.dims.set_point(1, 0)
 
 
         # Populate ROIs after dims are initialized to avoid computing stats before the viewer is ready.
