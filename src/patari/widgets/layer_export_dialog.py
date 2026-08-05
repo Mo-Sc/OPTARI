@@ -19,6 +19,8 @@ from qtpy.QtWidgets import (
 
 from patari.io.rendering import render_layer_to_image
 
+from patari.config import settings
+
 COLORMAPS = [
     "viridis", "plasma", "inferno", "magma", "cividis",
     "hot", "cool", "bone", "gray", "twilight_shifted"
@@ -104,6 +106,23 @@ class LayerExportDialog(QDialog):
         self.colorbar_checkbox.toggled.connect(self._on_settings_changed)
         form.addRow("", self.colorbar_checkbox)
 
+        self.video_checkbox = QCheckBox("Video")
+        self.video_checkbox.toggled.connect(self._on_video_toggled)
+        form.addRow("", self.video_checkbox)
+
+        self.fps_row = QWidget()
+        fps_layout = QHBoxLayout(self.fps_row)
+        fps_layout.setContentsMargins(0, 0, 0, 0)
+        fps_layout.addWidget(QLabel("FPS:"), 0)
+        self.fps_spinbox = QDoubleSpinBox()
+        self.fps_spinbox.setRange(0.1, 240.0)
+        self.fps_spinbox.setDecimals(2)
+        self.fps_spinbox.setSingleStep(1.0)
+        self.fps_spinbox.setValue(float(settings.general.DEFAULT_PLAYBACK_FPS))
+        fps_layout.addWidget(self.fps_spinbox, 1)
+        form.addRow("", self.fps_row)
+        self.fps_row.setVisible(False)
+
         preview_widget = QWidget()
         preview_layout = QVBoxLayout(preview_widget)
         preview_layout.addWidget(QLabel("Preview:"))
@@ -163,6 +182,9 @@ class LayerExportDialog(QDialog):
     def _on_settings_changed(self) -> None:
         self._preview_timer.start(150)
 
+    def _on_video_toggled(self, checked: bool) -> None:
+        self.fps_row.setVisible(checked)
+
     def _contrast_limits(self) -> tuple[float, float]:
         span = self.data_max - self.data_min
         vmin = self.data_min + self.vmin_slider.value() / 100.0 * span
@@ -193,4 +215,6 @@ class LayerExportDialog(QDialog):
             "vmax": vmax,
             "colormap": self.colormap_combo.currentText(),
             "include_colorbar": self.colorbar_checkbox.isChecked(),
+            "video": self.video_checkbox.isChecked(),
+            "fps": self.fps_spinbox.value(),
         }

@@ -32,6 +32,18 @@ class LayerExportController(TaskControllerBase):
         return layer_data[idx]
 
     @staticmethod
+    def _iter_image_frames(layer_data: np.ndarray, current_step: tuple[int, ...]):
+        if layer_data.ndim <= 2:
+            yield layer_data
+            return
+
+        non_spatial_shape = layer_data.shape[:-2]
+        idx = [min(int(current_step[i]), non_spatial_shape[i] - 1) for i in range(len(non_spatial_shape))]
+        for frame_idx in range(non_spatial_shape[0]):
+            idx[0] = frame_idx
+            yield layer_data[tuple(idx)]
+
+    @staticmethod
     def _roi_vertices_to_pixels(active_layer, us_layer) -> list[np.ndarray]:
         translate_yx = us_layer.translate[-2:]
         scale_yx = us_layer.scale[-2:]
@@ -112,6 +124,65 @@ class LayerExportController(TaskControllerBase):
             return
 
         settings = dialog.get_export_settings()
+
+        default_name = f"{active_layer.name}_export"
+        data_min, data_max = float(np.nanmin(layer_data)), float(np.nanmax(layer_data))
+        if not (np.isclose(settings["vmin"], data_min) and np.isclose(settings["vmax"], data_max)):
+            default_name += f"_{settings['vmin']:.4g}_{settings['vmax']:.4g}"
+
+        is_video = settings["video"] and isinstance(active_layer, Image)
+        if settings["video"] and not isinstance(active_layer, Image):
+            logger.warning("Video export is only supported for Image layers")
+            return
+
+        filename, file_filter = QFileDialog.getSaveFileName(
+            parent_widget,
+            "Export Layer as Video" if is_video else "Export Layer as Image",
+            f"{default_name}.mp4" if is_video else f"{default_name}.png",
+            "MP4 Video (*.mp4);;AVI Video (*.avi)" if is_video else "PNG Images (*.png);;TIFF Images (*.tiff *.tif)",
+        )
+        if not filename:
+            return
+
+        filename = Path(filename)
+        if is_video:
+            if filename.suffix.lower() not in {".mp4", ".avi"}:
+                filename = filename.with_suffix(".avi" if "AVI" in file_filter else ".mp4")
+
+            fps = settings["fps"]
+            frames = LayerExportController._iter_image_frames(active_layer.data, current_step)
+            first_frame_data = next(frames)
+            first_rgb = render_layer_to_image(
+                first_frame_data,
+                colormap=settings["colormap"],
+                vmin=settings["vmin"],
+                vmax=settings["vmax"],
+                include_colorbar=settings["include_colorbar"],
+                transparent_background=False,
+            )
+            height, width = first_rgb.shape[:2]
+            fourcc = cv2.VideoWriter_fourcc(*("mp4v" if filename.suffix.lower() == ".mp4" else "XVID"))
+            writer = cv2.VideoWriter(str(filename), fourcc, fps, (width, height))
+            writer.write(cv2.cvtColor(first_rgb, cv2.COLOR_RGB2BGR))
+
+            for frame_data in frames:
+                frame_rgb = render_layer_to_image(
+                    frame_data,
+                    colormap=settings["colormap"],
+                    vmin=settings["vmin"],
+                    vmax=settings["vmax"],
+                    include_colorbar=settings["include_colorbar"],
+                    transparent_background=False,
+                )
+                writer.write(cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR))
+
+            writer.release()
+            logger.info("Exported video to %s at %.3f FPS", filename, fps)
+            return
+
+        if filename.suffix.lower() not in {".png", ".tiff", ".tif"}:
+            filename = filename.with_suffix(".tiff" if "TIFF" in file_filter else ".png")
+
         rgb = render_layer_to_image(
             layer_data,
             colormap=settings["colormap"],
@@ -120,24 +191,6 @@ class LayerExportController(TaskControllerBase):
             include_colorbar=settings["include_colorbar"],
             transparent_background=isinstance(active_layer, Shapes),
         )
-
-        default_name = f"{active_layer.name}_export"
-        data_min, data_max = float(np.nanmin(layer_data)), float(np.nanmax(layer_data))
-        if not (np.isclose(settings["vmin"], data_min) and np.isclose(settings["vmax"], data_max)):
-            default_name += f"_{settings['vmin']:.4g}_{settings['vmax']:.4g}"
-
-        filename, file_filter = QFileDialog.getSaveFileName(
-            parent_widget,
-            "Export Layer as Image",
-            f"{default_name}.png",
-            "PNG Images (*.png);;TIFF Images (*.tiff *.tif)",
-        )
-        if not filename:
-            return
-
-        filename = Path(filename)
-        if filename.suffix.lower() not in {".png", ".tiff", ".tif"}:
-            filename = filename.with_suffix(".tiff" if "TIFF" in file_filter else ".png")
 
         # cv2 expects BGR(A) order
         color_conversion = cv2.COLOR_RGBA2BGRA if rgb.shape[2] == 4 else cv2.COLOR_RGB2BGR
