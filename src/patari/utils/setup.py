@@ -63,9 +63,11 @@ def configure_napari(viewer) -> None:
     """
     try:
         import napari
+        from patari.config import settings
+        
         napari_settings = napari.settings.get_settings()
         
-        napari_settings.application.playback_fps = 5
+        napari_settings.application.playback_fps = settings.general.DEFAULT_PLAYBACK_FPS
         napari_settings.application.save_window_state = True
         napari_settings.application.grid_stride = -2
         napari_settings.appearance.theme = "dark"

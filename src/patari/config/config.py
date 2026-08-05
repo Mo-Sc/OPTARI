@@ -13,6 +13,7 @@ class GeneralConfig:
     US_FALLBACK_SCALE: tuple[float, float, float]
     DEFAULT_FRAME_INDEX: int | str # frame index or "motion" for motion-based selection
     DEFAULT_CHANNEL_INDEX: int
+    DEFAULT_PLAYBACK_FPS: int
     LAYER_COLOR_MAPS: dict = field(default_factory=dict)
 
 @dataclass(frozen=True)
