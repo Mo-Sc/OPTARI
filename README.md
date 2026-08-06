@@ -1,4 +1,4 @@
-# PATARI - Photoacoustic Analysis Plugin for NAPARI
+# PATARI - Photoacoustic Analysis Toolkit for NAPARI
 
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](LICENSE)
 [![Python >=3.10](https://img.shields.io/badge/python-%3E%3D3.10-blue)](https://www.python.org/)
@@ -33,7 +33,7 @@ Key features (v0.4):
 
 ### Option A: Executable (recommended for clinical use)
 
-1. Download the executable file of the [current release (v3)](https://github.com/Mo-Sc/PATARI/releases/tag/v0.4.0) for your operating system (macOS or windows).
+1. Download the executable file of the [current release (v4)](https://github.com/Mo-Sc/PATARI/releases/tag/v0.4.0) for your operating system (macOS or windows).
 2. Unpack the zip folder and run the patari file.
 3. [Optional, on first run] If you get an error, stating PATARI could not be verified, give your OS permission to run it:
     * For windows: Click `More Info` -> `Run Anyways`
@@ -95,23 +95,29 @@ In a future version, these settings will be editable from the GUI as well.
     - Contains some minor adjustments and bug fixes. In the future, these will either be moved to PATARI or included in the public PATATO
     - Also ensures compatibility with some of my legacy hdf5 files
 
-### Architecture Notes (v0.2, todo: update)
+### Architecture Notes (v0.4)
 
-- **High-level design**: PATARI follows a controller + dock split with a task-controller pattern (see [architecture diagram](architecture.md))
+PATARI is a **standalone desktop application** that embeds napari as its viewer/rendering engine (no
+longer distributed as a napari plugin). `patari.launcher:main()` creates its
+own `napari.Viewer` and instantiates a single `PatariController` around it. A full architecture
+description can be found in [`dev/patari_architecture.md`](dev/patari_architecture.md)
+
+- **High-level design**: a controller + dock split with a task-controller pattern.
   - `PatariController`: central session/app controller holding viewer state, scan data, and ROI geometry. Instantiates and coordinates feature controllers.
-  - **Task Controllers** (all inherit from `TaskControllerBase`): domain-specific controllers that own their UI state, behavior, and signal lifecycle:
+  - **Task Controllers** (all inherit from `TaskControllerBase`, instance-based with `initialize_ui()` / `bind_events()` / `unbind_events()` / `teardown()`): domain-specific controllers that own their UI state, behavior, and signal lifecycle:
     - `ScanController`: scan lifecycle, loading, discovery, export, scan browser signals
     - `RoiController`: ROI table, shapes layer, labeling, colors, library management signals
-    - `SegmentationController`: tissue segmentation, model selection, ROI-from-mask signals (+ model cleanup via `teardown()`)
+    - `SegmentationController`: tissue segmentation, lazily-cached ONNX model, ROI-from-mask signals (+ model cleanup via `teardown()`)
     - `AnalysisController`: time analysis, histograms, spectra signals
     - `UnmixingController`: spectral unmixing, chromophore derived layers signals
+    - `LayerExportController`: exports the active layer (image or ROI shapes) to PNG/TIFF
   - `UIManager`: factory for dock creation and delegation to task controller signal wiring
-- **Plugin startup path**: `_widget.py` initializes logging, resolves the active napari viewer, creates `PatariController`, and returns the Info dock widget.
 - **UI construction path**: `UiManager.setup_docks()` creates dock widgets; `UiManager.connect_events()` delegates signal wiring to each controller's `bind_events()`.
 - **Rendering/data IO**: `patato_bridge.py` handles PATATO <-> napari transformations, coordinate conversion, scale/FOV, and layer data construction.
-- **Layer metadata**: PA layers rely on metadata keys such as `type`, `pa_kind`, `frames`, `timestamps`, `axis1_name`, `axis1_labels`, and `source_layer`. Many downstream features (info labels, analysis, export/reload symmetry) depend on these.
+- **Layer metadata**: PA layers rely on metadata keys such as `type`, `frames`, `timestamps`, `motion_scores`. Many downstream features (info labels, analysis, export/reload symmetry) depend on these.
+- **Automatic frame selection**: `utils/motion.py` computes vectorized SSIM+ZNCC motion scores per frame; used to auto-pick the clearest frame when `config.general.DEFAULT_FRAME_INDEX == "motion"`.
 - **ROI model**: ROI stats are recomputed from `shapes_layer.events.data`. Initial ROI loading temporarily disconnects this handler to avoid repeated per-shape computation during initialization.
-- **ROI feature configuration**: available ROI metrics and source fields are defined in a central feature registry and can be toggled in `config.json` via `annotation.roi_features`.
+- **ROI feature configuration**: available ROI metrics and source fields are defined in a central feature registry (`roi/roi_features.py`) and can be toggled in `config.json` via `annotation.roi_features`.
 - **Visible columns**: the live and saved table views are column-filtered from that feature map, while saved/source columns keep a fixed order for consistent export schemas.
 - **Live vs save computation**: for interactivity, live updates compute only currently visible live columns; on save/export, PATARI always computes the full feature set.
 - **Coordinate conventions**: ROIs are represented in napari as `(y_mm, x_mm)` and converted to PATATO `(x_m, y_m)` at export/import. Conversion logic is in `patato_bridge.py`.
@@ -122,9 +128,9 @@ In a future version, these settings will be editable from the GUI as well.
 - **Derived layers**: unmixing outputs (unmixed, THb, sO2) are stored in `_derived_patato_objects` and exported with synchronized attributes so they can be reloaded as normal PA layers.
 - **Sparse layers**: data that only contain selected frames are expanded to acquisition-frame indexing for viewer consistency; Frame id is carried in metadata and used on reload.
 - **Current ROI position state**: `roi_position` metadata for manual ROIs is not fully synchronized yet. Future work includes fully synchronized shape specific metadata dict.
-- **Segmentation models**: configured in `src/patari/data/segmentation_models.json` (ONNX path + model IO metadata).
+- **Segmentation models**: configured in `~/.patari/config/segmentation_models.json` (ONNX path + model IO metadata), lazily downloaded on demand into `~/.patari/models`.
 - **Segmentation model training**: Code for training and evaluating different segmentation models can be found in [this repo](https://github.com/Mo-Sc/OA-US-Segmentation-Public/tree/us_segmentation_algos) (private, access after request).
-- **Hidden features**: Reconstruction dock is currently disabled.
+- **Hidden features**: Reconstruction dock is currently disabled (not created in `ui_manager.py`).
 - **Logging behavior**: `PATARI_LOG_LEVEL` controls terminal log. `PATARI_GUI_LOG_LEVEL` controls napari GUI notification.
 - **Compatibility note**: custom PATATO fork and import/export workarounds are currently required for some personal legacy datasets.
 - **Deployment & distribution**: PATARI is packaged as standalone executables for macOS and Windows using PyApp and GitHub Actions (see `build-pyapp.yml` workflow). PATATO dependencies are provided as precompiled wheels with OS-specific URLs in `pyproject.toml`. On first run, PyApp downloads all dependencies and initializes the user config directory (`~/.patari`) with default config files, ROI library template, and models folder. Segmentation models are lazily downloaded on-demand into the models folder from URLs specified in the segmentation configuration.
