@@ -220,7 +220,13 @@ class UnmixingController(TaskControllerBase):
         compute_so2 = settings.get(UnmixingAttributeTags.COMPUTE_SO2, True)
         dock.generate_so2_checkbox.setChecked(bool(compute_so2))
 
-        compute_thb = settings.get(UnmixingAttributeTags.COMPUTE_THB, True)
+        try:
+            # workaround until patato is recompiled
+            # TODO: remove!
+            compute_thb = settings.get(UnmixingAttributeTags.COMPUTE_THB, True)
+        except Exception as e:
+            logger.exception("Error reading compute_thb from preset: %s", e)
+            compute_thb = True
         dock.generate_thb_checkbox.setChecked(bool(compute_thb))
 
         self.on_chromophores_changed()
