@@ -31,11 +31,18 @@ class SegmentationConfig:
     default_model: str
 
 @dataclass(frozen=True)
+class ExportConfig:
+    font_size: int
+    cbar_width: int
+    padding: int
+
+@dataclass(frozen=True)
 class PatariConfig:
     general: GeneralConfig
     annotation: AnnotationConfig
     analysis: AnalysisConfig
     segmentation: SegmentationConfig
+    export: ExportConfig
 
     @classmethod
     def load_from_user_dir(cls) -> "PatariConfig":
@@ -47,5 +54,6 @@ class PatariConfig:
             general=GeneralConfig(**data["general"]),
             annotation=AnnotationConfig(**data["annotation"]),
             analysis=AnalysisConfig(**data["analysis"]),
-            segmentation=SegmentationConfig(**data["segmentation"])
+            segmentation=SegmentationConfig(**data["segmentation"]),
+            export=ExportConfig(**data["export"])
         )

@@ -62,5 +62,10 @@
     },
     "segmentation":{
         "default_model": "unet_msot_2_ta"
+    },
+    "export": {
+        "font_size": 12,
+        "cbar_width": 110,
+        "padding": 20
     }
 }

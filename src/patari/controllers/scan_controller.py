@@ -19,7 +19,7 @@ from patari.patato_bridge import (
 from patari.io.export_pipeline import export_scan_to_hdf5
 from patari.utils.misc import roi_color_for_index
 from patari.controllers.base import TaskControllerBase
-from patari.controllers.layer_export_controller import LayerExportController
+from patari.controllers.viewer_export_controller import ViewerExportController
 
 
 from patari.config import settings
@@ -52,7 +52,7 @@ class ScanController(TaskControllerBase):
             self.on_hdf5_export_clicked
         )
         self.patari_controller.scan_browser.export_layer_button.clicked.connect(
-            lambda: LayerExportController.on_export_layer_clicked(self.patari_controller)
+            lambda: ViewerExportController.on_export_clicked(self.patari_controller)
         )
 
     def unbind_events(self) -> None:

@@ -67,7 +67,7 @@ def create_scan_browser_dock() -> ScanBrowserDock:
     export_row_layout.setContentsMargins(0, 0, 0, 0)
 
     hdf5_button = QPushButton("Export HDF5")
-    export_layer_button = QPushButton("Export Layer")
+    export_layer_button = QPushButton("Export View")
     export_row_layout.addWidget(hdf5_button)
     export_row_layout.addWidget(export_layer_button)
 

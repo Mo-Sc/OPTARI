@@ -154,7 +154,7 @@ class PatariController:
 
     # ============ viewer setup ============
     def _setup_viewer(self) -> None:
-        self.viewer.axes.visible = True
+        self.viewer.axes.visible = False # dont show axes by default
         self.viewer.axes.labels = True
         self.viewer.grid.enabled = False
         self.viewer.scale_bar.visible = True
