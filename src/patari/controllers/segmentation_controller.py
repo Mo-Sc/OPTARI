@@ -367,6 +367,7 @@ class SegmentationController(TaskControllerBase):
                     "class_names": class_names,
                     "source_model_id": self.active_segmentation_model_id,
                 },
+                units=us_layer.units,
             )
             self._seg_layer = label_layer
 

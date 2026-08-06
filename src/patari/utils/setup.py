@@ -72,10 +72,10 @@ def configure_napari(viewer) -> None:
         napari_settings.application.grid_stride = -2
         napari_settings.appearance.theme = "dark"
 
-        # deactivate keyboard search in layers panel 
+        # deactivate keyboard search in layers panel because it slows done keyboard-based ROI drawing
         # workaround described here: https://github.com/napari/napari/issues/7551
         # but gets deprecation warning, so suppress it for now
-        # TODO: check how to handle in future versions
+        # TODO: check how to handle in future versions (still works in 0.80)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=FutureWarning)
             viewer.window.qt_viewer.layers.keyboardSearch = lambda s: None

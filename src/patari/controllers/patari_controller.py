@@ -158,10 +158,6 @@ class PatariController:
         self.viewer.axes.labels = True
         self.viewer.grid.enabled = False
         self.viewer.scale_bar.visible = True
-        # surpress warning for until fix
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=FutureWarning)
-            self.viewer.scale_bar.unit = "mm"
         self.viewer.dims.axis_labels = ("Frame", "Channel", "z", "x")
 
     def _ensure_docks(self) -> None:

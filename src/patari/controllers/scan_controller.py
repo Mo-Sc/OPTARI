@@ -236,15 +236,14 @@ class ScanController(TaskControllerBase):
             if lt == "image":
                 kw = dict(kw)
                 kw.setdefault("metadata", {})
+                kw.setdefault("units", "mm")
                 kw["metadata"].setdefault("filepath", str(scan_path))
                 kw["metadata"].setdefault("scan_name", scan_info.internal_name)
                 self.viewer.add_image(data, **kw)
-                # alternatively set unit here instead of scalebar (deprecated), but doesnt seem to work yet
-                # layer = self.viewer.add_image(data, **kw)
-                # layer.units = "mm"
             else:
                 kw = dict(kw)
                 kw.setdefault("metadata", {})
+                kw.setdefault("units", "mm")
                 kw["metadata"].setdefault("filepath", str(scan_path))
                 kw["metadata"].setdefault("scan_name", scan_info.internal_name)
                 self.viewer.add_labels(data, **kw)
@@ -257,6 +256,7 @@ class ScanController(TaskControllerBase):
             edge_width=0.1,
             ndim=2,
             metadata={"type": "roi"},
+            units="mm",
         )
         self.patari_controller._connect_shapes_layer_events()
 

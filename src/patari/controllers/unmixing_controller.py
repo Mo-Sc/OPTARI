@@ -365,6 +365,7 @@ class UnmixingController(TaskControllerBase):
             opacity=1.0,
             blending="additive",
             metadata=metadata,
+            units=self.patari_controller.active_recon_layer.units,
         )
 
     def on_run_unmixing_clicked(self) -> None:
