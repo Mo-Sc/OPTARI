@@ -3,8 +3,7 @@ name: Build PATARI Binaries
 on:
   push:
     tags:
-      - 'v*' #  workflow will  run on tag starting with 'v' (e.g., v0.2)
-
+      - 'v*' # Runs on release tags (e.g., v0.4.0)
 
 jobs:
   build-pyapp:
@@ -52,14 +51,12 @@ jobs:
           PYAPP_PROJECT_NAME: "patari"
           PYAPP_EXEC_SPEC: "patari.launcher:main"
           PYAPP_PYTHON_VERSION: "3.12"
-          PYAPP_PIP_EXTRA_ARGS: "napari[all]"  # Todo: better here or using optional-dependencies in pyproject.toml? 
         run: |
           # Find the built wheel file dynamically
           export PYAPP_PROJECT_PATH=$(ls dist/patari-*.whl | head -n 1)
           
           # Move into the PyApp directory and compile
           cd pyapp-source
-          # Use absolute path for the wheel
           export PYAPP_PROJECT_PATH="../$PYAPP_PROJECT_PATH"
           cargo build --release
 
@@ -67,6 +64,7 @@ jobs:
         shell: bash
         run: |
           mv pyapp-source/${{ matrix.binary_path }} pyapp-source/target/release/${{ matrix.exe_name }}
+
       - name: Prepare Release Package
         shell: bash
         run: |

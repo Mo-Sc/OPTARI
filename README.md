@@ -55,12 +55,6 @@ Install the package (-e for editable mode):
 pip install -e .
 ```
 
-If napari is not already installed, install with napari + Qt extras:
-
-```
-pip install -e ".[all]"
-```
-
 To run patari, open a terminal, start PATARI via module entrypoint:
 
 ```
@@ -72,8 +66,6 @@ There is also an installed launcher entry point:
 ```
 patari
 ```
-
-This opens napari and directly adds the PATARI dock widget. To quickly create a desktop shortcut, you can use the `create_macos_desktop_launcher.py` script (mac only).
 
 ## Configuration
 

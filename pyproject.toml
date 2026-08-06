@@ -16,39 +16,23 @@ classifiers = [
     "Operating System :: Microsoft :: Windows",
 ]
 requires-python = ">=3.12"
-# napari can be included in dependencies if napari imports are required.
-# However, you should not include napari[all], napari[qt],
-# or any other Qt bindings directly (e.g. PyQt5, PySide2).
-# See best practices: https://napari.org/stable/plugins/building_a_plugin/best_practices.html
 dependencies = [
-    "numpy",
-    "pandas",
-    "magicgui",
-    "qtpy",
-    "imageio",
-    "pyqtgraph",
-    "scikit-image",
-    "opencv-python-headless",
-    "onnxruntime",
-    # --- precompiled PATATO wheels for python 3.12 ---
-    # Windows
+    "napari==0.8.0",
+    "PyQt6==6.10.2",
+    "numpy==2.4.6",
+    "pandas==3.0.5",
+    "magicgui==0.10.2",
+    "qtpy==2.4.3",
+    "imageio==2.37.4",
+    "pyqtgraph==0.14.0",
+    "scikit-image==0.26.0",
+    "opencv-python-headless==5.0.0.93",
+    "onnxruntime==1.28.0",
+    "openpyxl==3.1.5",
     "patato @ https://github.com/Mo-Sc/patato/releases/download/patari-v0.3/patato-0.7.1.dev1+gec3fb1ae4-cp312-cp312-win_amd64.whl ; sys_platform == 'win32'",
-    # macOS Apple Silicon (macos-14 runner)
     "patato @ https://github.com/Mo-Sc/patato/releases/download/patari-v0.3/patato-0.7.1.dev1+gec3fb1ae4-cp312-cp312-macosx_11_0_arm64.whl ; sys_platform == 'darwin' and platform_machine == 'arm64'",
-    # macOS Intel (macos-13 runner)
-    # "patato @ https://github.com/Mo-Sc/patato/releases/download/v0.2.0-patari/patato-0.7.1-cp312-cp312-macosx_10_9_x86_64.whl ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
-    # Linux (ubuntu-latest runner)
     "patato @ https://github.com/Mo-Sc/patato/releases/download/patari-v0.3/patato-0.7.1.dev1+gec3fb1ae4-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl ; sys_platform == 'linux'",
-    "openpyxl",
 ]
-
-# patato from source: "patato @ https://github.com/Mo-Sc/patato/archive/b950b95e283b30f56cfca00bf6b1033d53ab496e.zip ; sys_platform == 'linux' or sys_platform == 'darwin'",
-
-
-[project.optional-dependencies]
-# Allow easily installation with the full, default napari installation
-# (including Qt backend) using patari[all].
-all = ["napari[all]"]
 
 [project.gui-scripts]
 patari = "patari.launcher:main"
@@ -74,7 +58,6 @@ fallback_version = "0.0.1+nogit"
 minversion = "6.0"
 addopts = ["-ra", "--showlocals", "--strict-markers", "--strict-config"]
 xfail_strict = true
-# filterwarnings = ["error"]  # recommended by PP309; deprecation warnings cause failures so leaving for the user to enable if desired
 log_cli_level = "INFO"
 testpaths = ["tests"]
 
