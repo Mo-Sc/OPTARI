@@ -65,11 +65,6 @@ class UnmixingController(TaskControllerBase):
             logger.exception("Error unbinding unmixing dock signals: %s", e)
 
     @staticmethod
-    def _preset_dir() -> Path:
-        """Return the directory that contains PATATO unmixing presets."""
-        return Path(pat_unmixing.__file__).resolve().parent / "unmix_presets"
-
-    @staticmethod
     def _set_checked_by_text(list_widget, selected: set[str]) -> None:
         """Apply checked state to list items that match selected texts."""
         for i in range(list_widget.count()):
@@ -94,8 +89,10 @@ class UnmixingController(TaskControllerBase):
         dock = self.patari_controller.unmixing
 
         if dock.preset_combo.count() == 0:
-            # Populate available preset files once on first dock init.
-            preset_dir = self._preset_dir()
+            # fill with available presets from user directory
+            from patari.utils.setup import get_user_unmixing_presets_dir
+            preset_dir = get_user_unmixing_presets_dir()
+
             for preset_path in sorted(preset_dir.glob("*.json")):
                 dock.preset_combo.addItem(
                     preset_path.stem, userData=preset_path
@@ -186,12 +183,11 @@ class UnmixingController(TaskControllerBase):
         if preset_path is None:
             return
 
-        # TODO: presets should be moved to user dir
-        # Presets map directly to PATATO unmixing attribute tags.
+        # load unmixing preset from user directory
         settings = json.loads(Path(preset_path).read_text())
 
         reduce_factor = int(
-            settings.get(UnmixingAttributeTags.RESOLUTION_REDUCE, 3)
+            settings.get(UnmixingAttributeTags.RESOLUTION_REDUCE, 1)
         )
         dock.resolution_reduction_factor.setValue(max(1, reduce_factor))
         dock.suffix_edit.setText(
@@ -201,17 +197,31 @@ class UnmixingController(TaskControllerBase):
         spectra = set(settings.get(UnmixingAttributeTags.SPECTRA, []))
         self._set_checked_by_text(dock.chromophores_list, spectra)
 
+        selected_wavelengths = set()
         wavelength_range = settings.get(UnmixingAttributeTags.WAVELENGTH_RANGE)
         if wavelength_range is not None and len(wavelength_range) == 2:
             start, end = int(wavelength_range[0]), int(wavelength_range[1])
-            selected = {
+            selected_wavelengths = {
                 int(dock.wavelengths_list.item(i).data(Qt.UserRole))
                 for i in range(dock.wavelengths_list.count())
                 if start
                 <= int(dock.wavelengths_list.item(i).data(Qt.UserRole))
                 <= end
             }
-            self._set_checked_wavelengths(dock.wavelengths_list, selected)
+
+        explicit_wavelengths = settings.get(UnmixingAttributeTags.UNMIXING_WAVELENGTHS)
+        if explicit_wavelengths is not None:
+            explicit_set = {int(w) for w in explicit_wavelengths}
+            selected_wavelengths = explicit_set
+
+        if selected_wavelengths:
+            self._set_checked_wavelengths(dock.wavelengths_list, selected_wavelengths)
+
+        compute_so2 = settings.get(UnmixingAttributeTags.COMPUTE_SO2, True)
+        dock.generate_so2_checkbox.setChecked(bool(compute_so2))
+
+        compute_thb = settings.get(UnmixingAttributeTags.COMPUTE_THB, True)
+        dock.generate_thb_checkbox.setChecked(bool(compute_thb))
 
         self.on_chromophores_changed()
 

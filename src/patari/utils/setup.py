@@ -32,9 +32,25 @@ def get_user_dir() -> Path:
         
         for config_file in default_configs_dir.glob("*.json"):
             shutil.copy(config_file, user_dir / "config" / config_file.name)
+
+        # copy default unmixing presets to user dir (only on first run, preserve user edits)
+        # TODO: this should be cleaner, once reconstruction presets are implemented as well
+        default_presets_dir = default_configs_dir / "unmixing_presets"
+        if default_presets_dir.exists():
+            user_presets_dir = user_dir / "config" / "unmixing_presets"
+            user_presets_dir.mkdir(exist_ok=True)
+            for preset_file in default_presets_dir.glob("*.json"):
+                shutil.copy(preset_file, user_presets_dir / preset_file.name)
+            logger.info(f"Copied default unmixing presets to {user_presets_dir}")
+
         logger.info(f"Copied default config files to {user_dir / 'config'}")
-                
+
     return user_dir
+
+
+def get_user_unmixing_presets_dir() -> Path:
+    """Returns the path to the user-editable unmixing presets directory."""
+    return get_user_dir() / "config" / "unmixing_presets"
 
 def get_user_config_file() -> Path:
     """Returns the path to the configuration file."""
