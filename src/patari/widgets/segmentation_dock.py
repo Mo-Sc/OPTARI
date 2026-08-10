@@ -4,7 +4,6 @@ from dataclasses import dataclass
 
 from qtpy.QtGui import QDoubleValidator
 from qtpy.QtWidgets import (
-    QCheckBox,
     QHBoxLayout,
     QComboBox,
     QGroupBox,
@@ -12,11 +11,16 @@ from qtpy.QtWidgets import (
     QLineEdit,
     QListWidget,
     QPushButton,
+    QRadioButton,
     QVBoxLayout,
     QWidget,
 )
 
-from .dock_helpers import create_right_dock_shell
+from .dock_helpers import (
+    create_frame_scope_controls,
+    create_preset_controls,
+    create_right_dock_shell,
+)
 
 
 @dataclass
@@ -24,6 +28,9 @@ class SegmentationDock:
     """Widget references used by segmentation-related controller callbacks."""
 
     widget: QWidget
+    preset_combo: QComboBox
+    save_preset_button: QPushButton
+    remove_preset_button: QPushButton
     segmentation_model_combo: QComboBox
     segmentation_classes_list: QListWidget
     select_all_classes_button: QPushButton
@@ -35,7 +42,8 @@ class SegmentationDock:
     roi_top_margin_edit: QLineEdit
     generate_roi_button: QPushButton
     generate_tissue_segmentation_button: QPushButton
-    segment_all_frames_checkbox: QCheckBox
+    current_frames_radio: QRadioButton
+    all_frames_radio: QRadioButton
     segmentation_status_label: QLabel
 
 
@@ -50,6 +58,13 @@ def create_segmentation_dock(*, enable_scroll: bool = True) -> SegmentationDock:
 
     seg_box = QGroupBox("Segmentation")
     seg_layout = QVBoxLayout(seg_box)
+
+    (
+        preset_combo,
+        save_preset_button,
+        remove_preset_button,
+        preset_actions,
+    ) = create_preset_controls()
 
     segmentation_model_combo = QComboBox()
 
@@ -83,18 +98,23 @@ def create_segmentation_dock(*, enable_scroll: bool = True) -> SegmentationDock:
     generate_roi_button = QPushButton("Generate ROI from Mask")
 
     generate_tissue_segmentation_button = QPushButton(
-        "Generate Tissue Segmentation"
+        "Run Segmentation"
     )
-    segment_all_frames_checkbox = QCheckBox("Segment all frames")
+    frame_scope_row, current_frames_radio, all_frames_radio = (
+        create_frame_scope_controls()
+    )
     segmentation_status_label = QLabel("Select a model and run segmentation.")
 
+    seg_layout.addWidget(QLabel("Preset"))
+    seg_layout.addWidget(preset_combo)
+    seg_layout.addWidget(preset_actions)
     seg_layout.addWidget(QLabel("Model"))
     seg_layout.addWidget(segmentation_model_combo)
     seg_layout.addWidget(QLabel("Classes"))
     seg_layout.addWidget(segmentation_classes_list)
     seg_layout.addWidget(classes_button_row)
     
-    seg_layout.addWidget(segment_all_frames_checkbox)
+    seg_layout.addWidget(frame_scope_row)
     seg_layout.addWidget(generate_tissue_segmentation_button)
     seg_layout.addWidget(segmentation_status_label)
 
@@ -117,6 +137,9 @@ def create_segmentation_dock(*, enable_scroll: bool = True) -> SegmentationDock:
 
     return SegmentationDock(
         widget=widget,
+        preset_combo=preset_combo,
+        save_preset_button=save_preset_button,
+        remove_preset_button=remove_preset_button,
         segmentation_model_combo=segmentation_model_combo,
         segmentation_classes_list=segmentation_classes_list,
         select_all_classes_button=select_all_classes_button,
@@ -128,6 +151,7 @@ def create_segmentation_dock(*, enable_scroll: bool = True) -> SegmentationDock:
         roi_top_margin_edit=roi_top_margin_edit,
         generate_roi_button=generate_roi_button,
         generate_tissue_segmentation_button=generate_tissue_segmentation_button,
-        segment_all_frames_checkbox=segment_all_frames_checkbox,
+        current_frames_radio=current_frames_radio,
+        all_frames_radio=all_frames_radio,
         segmentation_status_label=segmentation_status_label,
     )

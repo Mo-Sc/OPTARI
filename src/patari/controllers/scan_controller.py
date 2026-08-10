@@ -18,6 +18,7 @@ from patari.patato_bridge import (
 )
 from patari.io.export_pipeline import export_scan_to_hdf5
 from patari.utils.misc import roi_color_for_index
+from patari.utils.setup import load_startup_logo
 from patari.controllers.base import TaskControllerBase
 from patari.controllers.viewer_export_controller import ViewerExportController
 
@@ -96,26 +97,28 @@ class ScanController(TaskControllerBase):
 
     def close_current_scan(self) -> None:
         """Close the HDF5 handle for the current scan."""
-        if self.patari_controller.pa_data is None:
-            return
-        try:
-            self.patari_controller.pa_data.close()
-        except Exception:
-            logger.info("failed to close current scan handle", exc_info=True)
+        if self.patari_controller.pa_data is not None:
+            try:
+                self.patari_controller.pa_data.close()
+            except Exception:
+                logger.info("failed to close current scan handle", exc_info=True)
         self.patari_controller.pa_data = None
         self.patari_controller._patato_objects = {}
         self.patari_controller._derived_patato_objects = {}
 
-    def reset_scan_state(self) -> None:
+    def reset_scan_state(self, restore_startup_logo: bool = True) -> None:
         """Clear current scan state and remove all viewer layers."""
         self.close_current_scan()
         self.patari_controller.segmentation_ctrl.teardown()
-
-        for layer in list(self.viewer.layers):
-            self.viewer.layers.remove(layer)
         self.patari_controller.active_recon_layer = None
         self.patari_controller.active_us_layer = None
         self.patari_controller.shapes_layer = None
+
+        for layer in list(self.viewer.layers):
+            self.viewer.layers.remove(layer)
+        self.patari_controller.refresh_controller_uis()
+        if restore_startup_logo:
+            load_startup_logo(self.viewer)
 
     def init_path(self, path: Path) -> None:
         if path.is_dir():
@@ -194,6 +197,8 @@ class ScanController(TaskControllerBase):
             and self.patari_controller.scan_browser is not None
         ):
             self.patari_controller.scan_browser.scans_list.setCurrentRow(0)
+        else:
+            self.reset_scan_state()
 
     def load_scan(self, scan_path: Path) -> None:
 
@@ -201,10 +206,11 @@ class ScanController(TaskControllerBase):
 
         scan_path = Path(scan_path)
         self.patari_controller.path = scan_path
-        self.reset_scan_state()
+        self.reset_scan_state(restore_startup_logo=False)
 
         if not scan_path.exists():
             logger.warning("scan not found: %s", scan_path)
+            load_startup_logo(self.viewer)
             self.patari_controller.refresh_all()
             return
 
@@ -221,6 +227,7 @@ class ScanController(TaskControllerBase):
                 )
         except Exception:
             logger.exception("failed to open scan '%s'", scan_path)
+            load_startup_logo(self.viewer)
             self.patari_controller.refresh_all()
             return
 
@@ -229,6 +236,7 @@ class ScanController(TaskControllerBase):
         except Exception:
             logger.exception("failed to load '%s'", scan_path)
             self.close_current_scan()
+            load_startup_logo(self.viewer)
             self.patari_controller.refresh_all()
             return
 
@@ -273,6 +281,7 @@ class ScanController(TaskControllerBase):
             None,
         )
         self.patari_controller._resolve_active_recon_layer()
+        self.patari_controller.refresh_controller_uis()
 
         # Initialize viewer position to DEFAULT_FRAME_INDEX and DEFAULT_CHANNEL_INDEX
         try:

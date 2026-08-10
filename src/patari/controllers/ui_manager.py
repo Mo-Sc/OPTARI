@@ -8,7 +8,7 @@ from qtpy.QtCore import QTimer
 from patari.widgets.annotation_dock import create_annotation_dock
 from patari.widgets.histogram_dock import create_histogram_dock
 from patari.widgets.info_dock import create_info_dock
-# from patari.widgets.reconstruction_dock import create_reconstruction_dock
+from patari.widgets.reconstruction_dock import create_reconstruction_dock
 from patari.widgets.roi_dock import create_roi_dock
 from patari.widgets.scan_browser_dock import create_scan_browser_dock
 from patari.widgets.segmentation_dock import create_segmentation_dock
@@ -122,18 +122,17 @@ class UiManager:
                     tabify=True,
                 )
             )
-            controller.unmixing_ctrl.initialize_ui()
 
-        # Reconstruction UI is hidden until fully implemented.
-        # if controller.reconstruction is None:
-        #     controller.reconstruction = create_reconstruction_dock()
-        #     controller._reconstruction_dock_widget = (
-        #         controller.viewer.window.add_dock_widget(
-        #             controller.reconstruction.widget,
-        #             name="Reconstruction",
-        #             area="right",
-        #         )
-        #     )
+        if controller.reconstruction is None:
+            controller.reconstruction = create_reconstruction_dock()
+            controller._reconstruction_dock_widget = (
+                controller.viewer.window.add_dock_widget(
+                    controller.reconstruction.widget,
+                    name="Reconstruction",
+                    area="right",
+                    tabify=True,
+                )
+            )
 
         # Select default docks after the event loop has started
         QTimer.singleShot(0, lambda: UiManager._select_default_docks(controller))
@@ -178,4 +177,5 @@ class UiManager:
         controller.roi_ctrl.bind_events()
         controller.analysis_ctrl.bind_events()
         controller.unmixing_ctrl.bind_events()
+        controller.reconstruction_ctrl.bind_events()
         controller.segmentation_ctrl.bind_events()

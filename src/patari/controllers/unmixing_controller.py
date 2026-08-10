@@ -1,19 +1,24 @@
 from __future__ import annotations
 
-import json
 import logging
-from pathlib import Path
 
 import numpy as np
 import patato as pat
-import patato.unmixing as pat_unmixing
-from napari.layers import Image
 from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QListWidgetItem
 
 from patato.io.attribute_tags import UnmixingAttributeTags
 from patato.unmixing.spectra import SPECTRA_NAMES
 from patari.controllers.base import TaskControllerBase
+from patari.patato_bridge import display_data_from_patato_obj
+from patari.utils.presets import PresetStore
+from patari.utils.setup import get_user_unmixing_presets_dir
+from patari.widgets.dock_helpers import (
+    add_preset_to_combo,
+    populate_preset_combo,
+    prompt_preset_name,
+    remove_selected_preset,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -24,6 +29,7 @@ class UnmixingController(TaskControllerBase):
 
     def __init__(self, parent_controller):
         super().__init__(parent_controller)
+        self.preset_store = PresetStore(get_user_unmixing_presets_dir())
 
     def bind_events(self) -> None:
         """Connect unmixing dock signals."""
@@ -41,6 +47,12 @@ class UnmixingController(TaskControllerBase):
         )
         self.patari_controller.unmixing.run_button.clicked.connect(
             self.on_run_unmixing_clicked
+        )
+        self.patari_controller.unmixing.save_preset_button.clicked.connect(
+            self.on_save_preset_clicked
+        )
+        self.patari_controller.unmixing.remove_preset_button.clicked.connect(
+            self.on_remove_preset_clicked
         )
 
     def unbind_events(self) -> None:
@@ -60,6 +72,12 @@ class UnmixingController(TaskControllerBase):
             )
             self.patari_controller.unmixing.run_button.clicked.disconnect(
                 self.on_run_unmixing_clicked
+            )
+            self.patari_controller.unmixing.save_preset_button.clicked.disconnect(
+                self.on_save_preset_clicked
+            )
+            self.patari_controller.unmixing.remove_preset_button.clicked.disconnect(
+                self.on_remove_preset_clicked
             )
         except Exception as e:
             logger.exception("Error unbinding unmixing dock signals: %s", e)
@@ -88,17 +106,7 @@ class UnmixingController(TaskControllerBase):
 
         dock = self.patari_controller.unmixing
 
-        if dock.preset_combo.count() == 0:
-            # fill with available presets from user directory
-            from patari.utils.setup import get_user_unmixing_presets_dir
-            preset_dir = get_user_unmixing_presets_dir()
-
-            for preset_path in sorted(preset_dir.glob("*.json")):
-                dock.preset_combo.addItem(
-                    preset_path.stem, userData=preset_path
-                )
-            if dock.preset_combo.count() > 0:
-                dock.preset_combo.setCurrentIndex(0)
+        populate_preset_combo(dock.preset_combo, self.preset_store)
 
         if dock.chromophores_list.count() == 0:
             for name in sorted(SPECTRA_NAMES.keys()):
@@ -109,7 +117,69 @@ class UnmixingController(TaskControllerBase):
 
         self.refresh_ui()
         self.on_chromophores_changed()
+
+    def on_save_preset_clicked(self) -> None:
+        """Save the current unmixing controls as a new user preset."""
+        if self.patari_controller.unmixing is None:
+            return
+
+        dock = self.patari_controller.unmixing
+        selected_wavelengths = [
+            int(dock.wavelengths_list.item(i).data(Qt.UserRole))
+            for i in range(dock.wavelengths_list.count())
+            if dock.wavelengths_list.item(i).checkState() == Qt.Checked
+        ]
+        selected_chromophores = [
+            dock.chromophores_list.item(i).text()
+            for i in range(dock.chromophores_list.count())
+            if dock.chromophores_list.item(i).checkState() == Qt.Checked
+        ]
+        preset_settings = {
+            UnmixingAttributeTags.RESOLUTION_REDUCE: dock.resolution_reduction_factor.value(),
+            UnmixingAttributeTags.UNMIXING_WAVELENGTHS: selected_wavelengths,
+            UnmixingAttributeTags.SPECTRA: selected_chromophores,
+            UnmixingAttributeTags.COMPUTE_THB: dock.generate_thb_checkbox.isChecked(),
+            UnmixingAttributeTags.COMPUTE_SO2: dock.generate_so2_checkbox.isChecked(),
+            UnmixingAttributeTags.SUFFIX: dock.suffix_edit.text().strip(),
+        }
+        preset_name = prompt_preset_name(
+            dock.widget, dock.preset_combo, "unmixing_preset"
+        )
+        if preset_name is None:
+            return
+
+        try:
+            preset_path = self.preset_store.save(preset_name, preset_settings)
+        except (ValueError, OSError) as exc:
+            dock.status_label.setText(f"Could not save preset: {exc}")
+            return
+
+        add_preset_to_combo(dock.preset_combo, preset_path)
+        dock.status_label.setText(f"Saved preset: {preset_path.name}")
         self.on_preset_changed()
+
+    def on_remove_preset_clicked(self) -> None:
+        if self.patari_controller.unmixing is None:
+            return
+
+        dock = self.patari_controller.unmixing
+        preset_path = dock.preset_combo.currentData()
+        if preset_path is None:
+            dock.status_label.setText("Select a preset to remove.")
+            return
+
+        try:
+            removed_path, removed = remove_selected_preset(
+                dock.preset_combo, self.preset_store
+            )
+        except (ValueError, OSError) as exc:
+            dock.status_label.setText(f"Could not remove preset: {exc}")
+            return
+        if not removed:
+            dock.status_label.setText(f"Preset not found: {preset_path.name}")
+            return
+
+        dock.status_label.setText(f"Removed preset: {removed_path.name}")
 
     def refresh_ui(self) -> None:
         """Refresh source-dependent controls from the active layer."""
@@ -183,52 +253,43 @@ class UnmixingController(TaskControllerBase):
         if preset_path is None:
             return
 
-        # load unmixing preset from user directory
-        settings = json.loads(Path(preset_path).read_text())
-
-        reduce_factor = int(
-            settings.get(UnmixingAttributeTags.RESOLUTION_REDUCE, 1)
-        )
-        dock.resolution_reduction_factor.setValue(max(1, reduce_factor))
-        dock.suffix_edit.setText(
-            str(settings.get(UnmixingAttributeTags.SUFFIX, ""))
-        )
-
-        spectra = set(settings.get(UnmixingAttributeTags.SPECTRA, []))
-        self._set_checked_by_text(dock.chromophores_list, spectra)
-
-        selected_wavelengths = set()
-        wavelength_range = settings.get(UnmixingAttributeTags.WAVELENGTH_RANGE)
-        if wavelength_range is not None and len(wavelength_range) == 2:
-            start, end = int(wavelength_range[0]), int(wavelength_range[1])
-            selected_wavelengths = {
-                int(dock.wavelengths_list.item(i).data(Qt.UserRole))
-                for i in range(dock.wavelengths_list.count())
-                if start
-                <= int(dock.wavelengths_list.item(i).data(Qt.UserRole))
-                <= end
-            }
-
-        explicit_wavelengths = settings.get(UnmixingAttributeTags.UNMIXING_WAVELENGTHS)
-        if explicit_wavelengths is not None:
-            explicit_set = {int(w) for w in explicit_wavelengths}
-            selected_wavelengths = explicit_set
-
-        if selected_wavelengths:
-            self._set_checked_wavelengths(dock.wavelengths_list, selected_wavelengths)
-
-        compute_so2 = settings.get(UnmixingAttributeTags.COMPUTE_SO2, True)
-        dock.generate_so2_checkbox.setChecked(bool(compute_so2))
-
         try:
-            # workaround until patato is recompiled
-            # TODO: remove!
-            compute_thb = settings.get(UnmixingAttributeTags.COMPUTE_THB, True)
-        except Exception as e:
-            logger.exception("Error reading compute_thb from preset: %s", e)
-            compute_thb = True
-        dock.generate_thb_checkbox.setChecked(bool(compute_thb))
+            settings = self.preset_store.load(preset_path)
+            reduce_factor = int(
+                settings.get(UnmixingAttributeTags.RESOLUTION_REDUCE, 1)
+            )
+            spectra = set(settings.get(UnmixingAttributeTags.SPECTRA, []))
+            selected_wavelengths = set()
+            wavelength_range = settings.get(UnmixingAttributeTags.WAVELENGTH_RANGE)
+            if wavelength_range is not None and len(wavelength_range) == 2:
+                start, end = int(wavelength_range[0]), int(wavelength_range[1])
+                selected_wavelengths = {
+                    int(dock.wavelengths_list.item(i).data(Qt.UserRole))
+                    for i in range(dock.wavelengths_list.count())
+                    if start
+                    <= int(dock.wavelengths_list.item(i).data(Qt.UserRole))
+                    <= end
+                }
 
+            explicit_wavelengths = settings.get(
+                UnmixingAttributeTags.UNMIXING_WAVELENGTHS
+            )
+            if explicit_wavelengths is not None:
+                selected_wavelengths = {int(w) for w in explicit_wavelengths}
+
+            compute_so2 = settings.get(UnmixingAttributeTags.COMPUTE_SO2, True)
+            compute_thb = settings.get(UnmixingAttributeTags.COMPUTE_THB, True)
+            suffix = str(settings.get(UnmixingAttributeTags.SUFFIX, ""))
+        except (TypeError, ValueError, KeyError, OSError) as exc:
+            dock.status_label.setText(f"Could not apply preset: {exc}")
+            return
+
+        dock.resolution_reduction_factor.setValue(max(1, reduce_factor))
+        dock.suffix_edit.setText(suffix)
+        self._set_checked_by_text(dock.chromophores_list, spectra)
+        self._set_checked_wavelengths(dock.wavelengths_list, selected_wavelengths)
+        dock.generate_so2_checkbox.setChecked(bool(compute_so2))
+        dock.generate_thb_checkbox.setChecked(bool(compute_thb))
         self.on_chromophores_changed()
 
     def on_chromophores_changed(self) -> None:
@@ -249,16 +310,9 @@ class UnmixingController(TaskControllerBase):
 
         dock.generate_so2_checkbox.setEnabled(hb_pair_available)
         dock.generate_thb_checkbox.setEnabled(hb_pair_available)
-        dock.generate_so2_checkbox.setChecked(hb_pair_available)
-
         if not hb_pair_available:
             dock.generate_so2_checkbox.setChecked(False)
             dock.generate_thb_checkbox.setChecked(False)
-
-    @staticmethod
-    def _extract_display_data(image_sequence) -> np.ndarray:
-        """Convert PATATO sequence to viewer data orientation."""
-        return np.flip(np.array(image_sequence.da[:, :, :, 0, :]), axis=-2)
 
     @staticmethod
     def _set_export_frame_attrs(
@@ -310,80 +364,6 @@ class UnmixingController(TaskControllerBase):
 
         return layer_metadata, export_attrs
 
-    @staticmethod
-    def _expand_to_source_frames(
-        data: np.ndarray,
-        output_frames: list[int],
-        source_frame_count: int,
-    ) -> np.ndarray:
-        """Pad computed frames to source frame indexing when needed."""
-        if data.shape[0] == source_frame_count:
-            return data
-
-        # Map computed frames into the acquisition frame index space.
-        # This preserves frame-aligned indexing with sparse reconstructions.
-        expanded = np.zeros(
-            (source_frame_count, *data.shape[1:]), dtype=data.dtype
-        )
-        for i, frame in enumerate(output_frames):
-            if 0 <= int(frame) < source_frame_count:
-                expanded[int(frame)] = data[i]
-        return expanded
-
-    def _add_or_update_image_layer(
-        self,
-        name: str,
-        data: np.ndarray,
-        metadata: dict,
-        colormap: str,
-    ) -> None:
-        """Create or update an image layer while preserving world extent.
-        TODO: refactor to a more general layer management utility if needed by other controllers.
-        """
-        source_shape = np.asarray(
-            self.patari_controller.active_recon_layer.data
-        ).shape
-        target_shape = np.asarray(data).shape
-
-        scale = list(self.patari_controller.active_recon_layer.scale)
-        # Preserve world-space extent after grid reduction by rescaling pixel spacing.
-        scale[-2] = (
-            float(scale[-2])
-            * float(source_shape[-2])
-            / float(target_shape[-2])
-        )
-        scale[-1] = (
-            float(scale[-1])
-            * float(source_shape[-1])
-            / float(target_shape[-1])
-        )
-        scale = tuple(scale)
-        translate = tuple(self.patari_controller.active_recon_layer.translate)
-
-        if name in self.viewer.layers and isinstance(
-            self.viewer.layers[name], Image
-        ):
-            # Update in place so layer references and visibility state are kept.
-            layer = self.viewer.layers[name]
-            layer.data = data
-            layer.scale = scale
-            layer.translate = translate
-            layer.metadata = metadata
-            layer.colormap = colormap
-            return
-
-        self.viewer.add_image(
-            data,
-            name=name,
-            scale=scale,
-            translate=translate,
-            colormap=colormap,
-            opacity=1.0,
-            blending="additive",
-            metadata=metadata,
-            units=self.patari_controller.active_recon_layer.units,
-        )
-
     def on_run_unmixing_clicked(self) -> None:
         """Execute unmixing for the selected setup and publish output layers."""
         if self.patari_controller.unmixing is None:
@@ -430,11 +410,11 @@ class UnmixingController(TaskControllerBase):
         current_frame_id = None
         frame_mode = "all"
 
-        if dock.current_frame_only_checkbox.isChecked():
+        if dock.current_frames_radio.isChecked():
             current_frame = int(self.viewer.dims.current_step[0])
             if current_frame not in frame_numbers:
                 dock.status_label.setText(
-                    "Current frame is not reconstructed."
+                    "Selected frame is not reconstructed."
                 )
                 return
             recon_idx = frame_numbers.index(current_frame)
@@ -497,7 +477,7 @@ class UnmixingController(TaskControllerBase):
                 np.asarray(self.patari_controller.active_recon_layer.data).shape[0]
         )
         unmixed_data = self._expand_to_source_frames(
-            self._extract_display_data(unmixed),
+            display_data_from_patato_obj(unmixed),
             output_frames,
             source_frame_count,
         )
@@ -506,7 +486,9 @@ class UnmixingController(TaskControllerBase):
             name=unmixed_name,
             data=unmixed_data,
             metadata=unmixed_metadata,
+            patato_obj=unmixed,
             colormap="magma",
+            units=self.patari_controller.active_recon_layer.units,
         )
         # Keep PATATO outputs available for future derived computations.
         self.patari_controller._derived_patato_objects[unmixed_name] = unmixed
@@ -535,12 +517,14 @@ class UnmixingController(TaskControllerBase):
             self._add_or_update_image_layer(
                 name=thb_name,
                 data=self._expand_to_source_frames(
-                    self._extract_display_data(thb),
+                    display_data_from_patato_obj(thb),
                     output_frames,
                     source_frame_count,
                 ),
                 metadata=thb_metadata,
+                patato_obj=thb,
                 colormap="inferno",
+                units=self.patari_controller.active_recon_layer.units,
             )
             self.patari_controller._derived_patato_objects[thb_name] = thb
             generated.append("thb")
@@ -567,12 +551,14 @@ class UnmixingController(TaskControllerBase):
             self._add_or_update_image_layer(
                 name=so2_name,
                 data=self._expand_to_source_frames(
-                    self._extract_display_data(so2),
+                    display_data_from_patato_obj(so2),
                     output_frames,
                     source_frame_count,
                 ),
                 metadata=so2_metadata,
+                patato_obj=so2,
                 colormap="twilight_shifted",
+                units=self.patari_controller.active_recon_layer.units,
             )
             self.patari_controller._derived_patato_objects[so2_name] = so2
             generated.append("so2")

@@ -11,13 +11,18 @@ from qtpy.QtWidgets import (
     QLabel,
     QListWidget,
     QPushButton,
+    QRadioButton,
     QSpinBox,
     QVBoxLayout,
     QWidget,
     QLineEdit,
 )
 
-from .dock_helpers import create_right_dock_shell
+from .dock_helpers import (
+    create_frame_scope_controls,
+    create_preset_controls,
+    create_right_dock_shell,
+)
 
 
 @dataclass
@@ -25,11 +30,14 @@ class UnmixingDock:
     widget: QWidget
     source_layer_label: QLabel
     preset_combo: QComboBox
+    save_preset_button: QPushButton
+    remove_preset_button: QPushButton
     wavelengths_list: QListWidget
     select_all_wavelengths_button: QPushButton
     clear_wavelengths_button: QPushButton
     chromophores_list: QListWidget
-    current_frame_only_checkbox: QCheckBox
+    current_frames_radio: QRadioButton
+    all_frames_radio: QRadioButton
     generate_thb_checkbox: QCheckBox
     generate_so2_checkbox: QCheckBox
     resolution_reduction_factor: QSpinBox
@@ -51,7 +59,12 @@ def create_unmixing_dock(*, enable_scroll: bool = True) -> UnmixingDock:
     setup_box = QGroupBox("Unmixing Setup")
     setup_layout = QVBoxLayout(setup_box)
 
-    preset_combo = QComboBox()
+    (
+        preset_combo,
+        save_preset_button,
+        remove_preset_button,
+        preset_actions,
+    ) = create_preset_controls()
 
     wavelengths_list = QListWidget()
     wavelengths_list.setSelectionMode(QListWidget.NoSelection)
@@ -69,9 +82,6 @@ def create_unmixing_dock(*, enable_scroll: bool = True) -> UnmixingDock:
     chromophores_list.setSelectionMode(QListWidget.NoSelection)
     chromophores_list.setMinimumHeight(140)
 
-    current_frame_only_checkbox = QCheckBox("Use current frame only")
-    current_frame_only_checkbox.setChecked(False)
-
     generate_thb_checkbox = QCheckBox("Generate THb layer")
     generate_thb_checkbox.setChecked(False)
     generate_so2_checkbox = QCheckBox("Generate sO2 layer")
@@ -88,6 +98,7 @@ def create_unmixing_dock(*, enable_scroll: bool = True) -> UnmixingDock:
 
     setup_layout.addWidget(QLabel("Preset"))
     setup_layout.addWidget(preset_combo)
+    setup_layout.addWidget(preset_actions)
 
     setup_layout.addWidget(QLabel("Wavelengths"))
     setup_layout.addWidget(wavelengths_list)
@@ -96,7 +107,6 @@ def create_unmixing_dock(*, enable_scroll: bool = True) -> UnmixingDock:
     setup_layout.addWidget(QLabel("Chromophores"))
     setup_layout.addWidget(chromophores_list)
 
-    setup_layout.addWidget(current_frame_only_checkbox)
     setup_layout.addWidget(generate_thb_checkbox)
     setup_layout.addWidget(generate_so2_checkbox)
 
@@ -108,8 +118,12 @@ def create_unmixing_dock(*, enable_scroll: bool = True) -> UnmixingDock:
 
     action_box = QGroupBox("Run")
     action_layout = QVBoxLayout(action_box)
-    run_button = QPushButton("Run unmixing")
+    frame_scope_row, current_frames_radio, all_frames_radio = (
+        create_frame_scope_controls()
+    )
+    run_button = QPushButton("Run Unmixing")
     status_label = QLabel("Select wavelengths and chromophores.")
+    action_layout.addWidget(frame_scope_row)
     action_layout.addWidget(run_button)
     action_layout.addWidget(status_label)
 
@@ -122,11 +136,14 @@ def create_unmixing_dock(*, enable_scroll: bool = True) -> UnmixingDock:
         widget=widget,
         source_layer_label=source_layer_label,
         preset_combo=preset_combo,
+        save_preset_button=save_preset_button,
+        remove_preset_button=remove_preset_button,
         wavelengths_list=wavelengths_list,
         select_all_wavelengths_button=select_all_wavelengths_button,
         clear_wavelengths_button=clear_wavelengths_button,
         chromophores_list=chromophores_list,
-        current_frame_only_checkbox=current_frame_only_checkbox,
+        current_frames_radio=current_frames_radio,
+        all_frames_radio=all_frames_radio,
         generate_thb_checkbox=generate_thb_checkbox,
         generate_so2_checkbox=generate_so2_checkbox,
         resolution_reduction_factor=resolution_reduction_factor,

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -17,7 +16,7 @@ from qtpy.QtWidgets import (
 
 from patari.controllers.base import TaskControllerBase
 from patari.io.export_pipeline import export_roi_table_to_xlsx
-from patari.roi.roi_library import RoiLibrary
+from patari.roi.roi_presets import RoiPresetStore
 from patari.roi.roi_utils import (
     compute_roi_stats,
     live_table_columns,
@@ -25,7 +24,7 @@ from patari.roi.roi_utils import (
     saved_table_columns,
 )
 from patari.utils.misc import roi_color_for_index
-from patari.utils.setup import get_user_roi_library_file
+from patari.utils.setup import get_user_roi_presets_dir
 
 from patari.config import settings
 from napari.layers import Image
@@ -71,6 +70,7 @@ class RoiController(TaskControllerBase):
         self._saved_full_df = pd.DataFrame(columns=saved_export_columns())
         self._syncing = False
         self._n_shapes = -1
+        self._roi_preset_store = RoiPresetStore(get_user_roi_presets_dir())
 
     @staticmethod
     def _filter_columns(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
@@ -102,7 +102,7 @@ class RoiController(TaskControllerBase):
     def _update_save_button_state(self) -> None:
         """Update save button enabled state based on current ROI selection."""
         selected = self.patari_controller.shapes_layer.selected_data
-        self.patari_controller.roi.save_button.enabled = (len(selected) > 0)
+        self.patari_controller.roi.save_button.setEnabled(len(selected) > 0)
 
     def on_shapes_selection_changed(self, event=None) -> None:
         """Sync shapes selection -> live table selection on selection changes only."""
@@ -140,11 +140,20 @@ class RoiController(TaskControllerBase):
         self._update_save_button_state()
 
     def on_live_table_delete_key(self) -> None:
-        """Delete selected shapes when Delete is pressed in the live table."""
+        """Delete selected shapes when Delete is pressed in the live table.
+        TODO: check is this working?
+        """
         if self.patari_controller.shapes_layer is None:
             return
         if self.patari_controller.shapes_layer.selected_data:
             self.patari_controller.shapes_layer.remove_selected()
+
+    def _on_empty_roi_text_changed(self, text: str) -> None:
+        if not (text or "").strip():
+            self.patari_controller._on_roi_intensity_settings_changed()
+
+    def _on_roi_intensity_toggle_changed(self, checked: bool) -> None:
+        self.patari_controller._on_roi_intensity_settings_changed()
 
     def bind_events(self) -> None:
         """Connect ROI and annotation dock signals."""
@@ -173,35 +182,29 @@ class RoiController(TaskControllerBase):
             edit.editingFinished.connect(
                 self.patari_controller._on_roi_intensity_settings_changed
             )
-            edit.textChanged.connect(
-                lambda t, _e=edit: (
-                    self.patari_controller._on_roi_intensity_settings_changed()
-                    if (t or "").strip() == ""
-                    else None
-                )
-            )
+            edit.textChanged.connect(self._on_empty_roi_text_changed)
 
         ann.roi_clipping_box.toggled.connect(
-            lambda checked: self.patari_controller._on_roi_intensity_settings_changed()
+            self._on_roi_intensity_toggle_changed
         )
         ann.roi_exclusion_box.toggled.connect(
-            lambda checked: self.patari_controller._on_roi_intensity_settings_changed()
+            self._on_roi_intensity_toggle_changed
         )
 
-        # ROI library
-        ann.roi_library_list.itemClicked.connect(
-            lambda item: self.on_roi_library_item_selected(item.text())
+        # ROI presets
+        ann.roi_presets_list.itemClicked.connect(
+            self.on_roi_preset_item_selected
         )
-        ann.roi_library_list.itemDoubleClicked.connect(
-            lambda item: self.on_roi_library_item_clicked(item.text())
+        ann.roi_presets_list.itemDoubleClicked.connect(
+            self.on_roi_preset_item_clicked
         )
-        ann.save_roi_button.clicked.connect(self.on_save_roi_library_clicked)
-        ann.remove_roi_button.clicked.connect(
-            self.on_remove_roi_library_clicked
+        ann.save_roi_preset_button.clicked.connect(
+            self.on_save_roi_preset_clicked
         )
-        ann.save_library_button.clicked.connect(
-            self.on_save_roi_library_file_clicked
+        ann.remove_roi_preset_button.clicked.connect(
+            self.on_remove_roi_preset_clicked
         )
+        ann.place_roi_button.clicked.connect(self.on_place_roi_clicked)
 
     def unbind_events(self) -> None:
         """Disconnect ROI and annotation dock signals."""
@@ -229,22 +232,28 @@ class RoiController(TaskControllerBase):
                 edit.editingFinished.disconnect(
                     self.patari_controller._on_roi_intensity_settings_changed
                 )
+                edit.textChanged.disconnect(self._on_empty_roi_text_changed)
 
-            ann.roi_library_list.itemClicked.disconnect(
-                lambda item: self.on_roi_library_item_selected(item.text())
+            ann.roi_clipping_box.toggled.disconnect(
+                self._on_roi_intensity_toggle_changed
             )
-            ann.roi_library_list.itemDoubleClicked.disconnect(
-                lambda item: self.on_roi_library_item_clicked(item.text())
+            ann.roi_exclusion_box.toggled.disconnect(
+                self._on_roi_intensity_toggle_changed
             )
-            ann.save_roi_button.clicked.disconnect(
-                self.on_save_roi_library_clicked
+
+            ann.roi_presets_list.itemClicked.disconnect(
+                self.on_roi_preset_item_selected
             )
-            ann.remove_roi_button.clicked.disconnect(
-                self.on_remove_roi_library_clicked
+            ann.roi_presets_list.itemDoubleClicked.disconnect(
+                self.on_roi_preset_item_clicked
             )
-            ann.save_library_button.clicked.disconnect(
-                self.on_save_roi_library_file_clicked
+            ann.save_roi_preset_button.clicked.disconnect(
+                self.on_save_roi_preset_clicked
             )
+            ann.remove_roi_preset_button.clicked.disconnect(
+                self.on_remove_roi_preset_clicked
+            )
+            ann.place_roi_button.clicked.disconnect(self.on_place_roi_clicked)
         except Exception as e:
             logger.exception(
                 "Error unbinding ROI and annotation dock signals: %s", e
@@ -340,10 +349,13 @@ class RoiController(TaskControllerBase):
         self.update_live_table()
 
     def update_live_table(self, event=None) -> None:
-        if (
-            self.patari_controller.roi is None
-            or self.patari_controller.shapes_layer is None
-        ):
+        if self.patari_controller.roi is None:
+            return
+
+        if self.patari_controller.shapes_layer is None:
+            self.patari_controller.roi.live_table.value = pd.DataFrame(
+                columns=live_table_columns()
+            )
             return
 
         if self.patari_controller.active_recon_layer is None:
@@ -550,33 +562,29 @@ class RoiController(TaskControllerBase):
 
         logger.info("Saved ROI table to %s", filename)
 
-    def _ensure_roi_library_loaded(self) -> RoiLibrary:
-        library = getattr(self.patari_controller, "_roi_library", None)
-        if library is None:
-            library = RoiLibrary(get_user_roi_library_file())
-            library.load()
-            self.patari_controller._roi_library = library
-        return library
-
-    def _refresh_roi_library_ui(self) -> None:
+    def _refresh_roi_presets_ui(self) -> None:
         if self.patari_controller.annotation is None:
             return
-        library = self._ensure_roi_library_loaded()
-        ids = library.list_ids()
-        self.patari_controller.annotation.set_roi_ids(ids)
-        self.patari_controller.annotation.roi_library_description_label.setText(
-            ""
-        )
+        try:
+            names = [preset.name for preset in self._roi_preset_store.list_presets()]
+        except (TypeError, ValueError, OSError) as exc:
+            self.patari_controller.annotation.set_roi_preset_names([])
+            self.patari_controller.annotation.roi_presets_description_label.setText(
+                f"Could not load ROI presets: {exc}"
+            )
+            return
+        self.patari_controller.annotation.set_roi_preset_names(names)
+        self.patari_controller.annotation.roi_presets_description_label.setText("")
 
-    def on_save_roi_library_clicked(self, event=None) -> None:
+    def on_save_roi_preset_clicked(self, event=None) -> None:
         if self.patari_controller.shapes_layer is None:
             return
 
         selected = list(self.patari_controller.shapes_layer.selected_data)
         if len(selected) == 0:
-            logger.info("Save ROI clicked with no selected ROI")
+            logger.info("Save ROI preset clicked with no selected ROI")
             if self.patari_controller.annotation is not None:
-                self.patari_controller.annotation.roi_library_description_label.setText(
+                self.patari_controller.annotation.roi_presets_description_label.setText(
                     "No ROI selected in viewer."
                 )
             return
@@ -594,60 +602,64 @@ class RoiController(TaskControllerBase):
             return
         roi_id, description, position = metadata
 
-        source_fov_x_mm = None
-        source_fov_y_mm = None
         fov_m = self.patari_controller._get_fov()
-        if fov_m is not None:
-            source_fov_x_mm = float(fov_m[0]) * 1000.0
-            source_fov_y_mm = float(fov_m[1]) * 1000.0
+        if fov_m is None:
+            self.patari_controller.annotation.roi_presets_description_label.setText(
+                "Could not save ROI preset: current scan has no valid FOV."
+            )
+            return
+        source_fov_x_mm = float(fov_m[0]) * 1000.0
+        source_fov_y_mm = float(fov_m[1]) * 1000.0
 
-        library = self._ensure_roi_library_loaded()
-        library.add_or_update(
-            roi_id=roi_id,
-            description=str(description or ""),
-            position=str(position or "undefined"),
-            shape_type=shape_type,
-            vertices=[[float(v[0]), float(v[1])] for v in verts[:, -2:]],
-            source_fov_x_mm=source_fov_x_mm,
-            source_fov_y_mm=source_fov_y_mm,
-        )
+        try:
+            preset_path = self._roi_preset_store.save_preset(
+                name=roi_id,
+                description=str(description or ""),
+                position=str(position or "undefined"),
+                shape_type=shape_type,
+                vertices=[[float(v[0]), float(v[1])] for v in verts[:, -2:]],
+                source_fov_x_mm=source_fov_x_mm,
+                source_fov_y_mm=source_fov_y_mm,
+            )
+        except (TypeError, ValueError, OSError) as exc:
+            self.patari_controller.annotation.roi_presets_description_label.setText(
+                f"Could not save ROI preset: {exc}"
+            )
+            return
 
-        self._refresh_roi_library_ui()
-        logger.info("Saved ROI '%s' into ROI Library (in-memory)", roi_id)
+        self._refresh_roi_presets_ui()
+        logger.info("Saved ROI preset '%s' to %s", roi_id, preset_path)
 
-    def on_remove_roi_library_clicked(self, event=None) -> None:
+    def on_remove_roi_preset_clicked(self, event=None) -> None:
         if self.patari_controller.annotation is None:
             return
-        item = self.patari_controller.annotation.roi_library_list.currentItem()
+        item = self.patari_controller.annotation.roi_presets_list.currentItem()
         if item is None:
             return
-        roi_id = item.text()
-        if not roi_id:
+        preset_name = item.text()
+        if not preset_name:
             return
 
-        library = self._ensure_roi_library_loaded()
-        removed = library.remove(roi_id)
-        if removed:
-            self._refresh_roi_library_ui()
-            logger.info(
-                "Removed ROI '%s' from ROI Library (in-memory)", roi_id
+        try:
+            removed = self._roi_preset_store.delete(preset_name)
+        except (TypeError, ValueError, OSError) as exc:
+            self.patari_controller.annotation.roi_presets_description_label.setText(
+                f"Could not remove ROI preset: {exc}"
             )
+            return
+        if removed:
+            self._refresh_roi_presets_ui()
+            logger.info("Removed ROI preset '%s'", preset_name)
 
-    def on_save_roi_library_file_clicked(self, event=None) -> None:
-        library = self._ensure_roi_library_loaded()
-        library.save()
-        logger.info("Saved ROI Library to %s", get_user_roi_library_file())
-
-
-    def _set_roi_library_placement_mode(self, mode: str) -> None:
+    def _set_roi_placement_mode(self, mode: str) -> None:
 
         combo = self.patari_controller.annotation.roi_placement_mode_combo
         idx = combo.findData(mode)
         if idx >= 0:
             combo.setCurrentIndex(idx)
 
-    def _default_roi_library_placement_mode_for_entry(self, entry) -> str:
-        position_name = str(getattr(entry, "position", "") or "").strip()
+    def _default_roi_placement_mode_for_preset(self, preset) -> str:
+        position_name = str(getattr(preset, "position", "") or "").strip()
         if not position_name or position_name == "undefined":
             return "static"
 
@@ -668,19 +680,41 @@ class RoiController(TaskControllerBase):
         return "auto" if np.any(seg == int(class_id)) else "static"
 
     @staticmethod
-    def _place_library_entry_static(controller, entry) -> None:
-        """Place a saved ROI entry at its stored coordinates."""
-        verts = np.asarray(entry.vertices, dtype=float)[:, -2:]
-        controller.shapes_layer.add(verts, shape_type=entry.shape_type)
+    def _place_roi_preset_static(controller, preset) -> None:
+        """Place a preset while preserving its physical size across FOVs."""
+        verts = np.asarray(preset.vertices, dtype=float)[:, -2:]
+        target_fov = controller._get_fov()
+        if target_fov is None:
+            raise ValueError("Current scan has no valid FOV.")
+
+        source_fov = (
+            preset.source_fov_x_mm / 1000.0,
+            preset.source_fov_y_mm / 1000.0,
+        )
+        source_center = np.mean(verts, axis=0)
+        target_center = np.array(
+            [
+                source_center[0] * target_fov[1] / source_fov[1],
+                source_center[1] * target_fov[0] / source_fov[0],
+            ]
+        )
+        verts += target_center - source_center
+
+        if (
+            np.any(verts[:, 0] < 0)
+            or np.any(verts[:, 0] > target_fov[1] * 1000)
+            or np.any(verts[:, 1] < 0)
+            or np.any(verts[:, 1] > target_fov[0] * 1000)
+        ):
+            raise ValueError("ROI preset does not fit in the target FOV.")
+
+        controller.shapes_layer.add(verts, shape_type=preset.shape_type)
         # Auto-select the newly placed ROI so the Save button activates immediately.
         new_idx = len(controller.shapes_layer.data) - 1
         controller.shapes_layer.selected_data = {new_idx}
-        # Keep roi_position metadata aligned with the newly added shape index.
-        # RoiController.set_last_roi_position(controller, entry.position)
-        # Colors and live table are refreshed by shapes_layer.data event.
 
     @staticmethod
-    def _place_library_entry_auto(controller, entry) -> None:
+    def _place_roi_preset_auto(controller, preset) -> None:
         """Place a saved ROI by aligning it to the selected segmentation class."""
         result = controller.segmentation_ctrl.active_seg_mask_2d()
         if result is None:
@@ -696,7 +730,7 @@ class RoiController(TaskControllerBase):
             str(name): int(class_id) for class_id, name in class_names.items()
         }
 
-        target_class_name = str(entry.position or "").strip()
+        target_class_name = str(preset.position or "").strip()
         if target_class_name not in class_name_to_id:
             QMessageBox.critical(
                 None, "Auto ROI",
@@ -709,11 +743,11 @@ class RoiController(TaskControllerBase):
         if not np.any(class_mask):
             QMessageBox.critical(
                 None, "Auto ROI",
-                f"Class '{target_class_name}' is not present in the current frame.",
+                f"Class '{target_class_name}' is not present in the selected frame.",
             )
             return
 
-        verts = np.asarray(entry.vertices, dtype=float)[:, -2:]
+        verts = np.asarray(preset.vertices, dtype=float)[:, -2:]
         y_min = float(np.min(verts[:, 0]))
         x_min = float(np.min(verts[:, 1]))
         x_max = float(np.max(verts[:, 1]))
@@ -739,66 +773,83 @@ class RoiController(TaskControllerBase):
         dx = tx + float(center_col) * sx - source_center_x
         verts_shifted = verts + np.asarray([dy, dx], dtype=float)
 
-        controller.shapes_layer.add(verts_shifted, shape_type=entry.shape_type)
+        controller.shapes_layer.add(verts_shifted, shape_type=preset.shape_type)
         # Auto-select the newly placed ROI so the Save button activates immediately.
         new_idx = len(controller.shapes_layer.data) - 1
         controller.shapes_layer.selected_data = {new_idx}
 
-    def on_roi_library_item_clicked(self, roi_id: str) -> None:
+    def _place_selected_roi_preset(self) -> None:
         if self.patari_controller.shapes_layer is None:
             return
-        library = self._ensure_roi_library_loaded()
-        entry = library.get_by_id(roi_id)
-        if entry is None:
-            if self.patari_controller.annotation is not None:
-                self.patari_controller.annotation.roi_library_description_label.setText(
-                    ""
-                )
+        annotation = self.patari_controller.annotation
+        item = annotation.roi_presets_list.currentItem()
+        if item is None:
             return
-
-        self._set_roi_library_placement_mode(
-            self._default_roi_library_placement_mode_for_entry(entry)
-        )
-
-        mode = str(
-            self.patari_controller.annotation.roi_placement_mode_combo.currentData()
-        )
-
-        if mode == "auto":
-            self._place_library_entry_auto(self.patari_controller, entry)
-            return
-
-        self._place_library_entry_static(self.patari_controller, entry)
-
-    def on_roi_library_item_selected(self, roi_id: str) -> None:
-        if self.patari_controller.annotation is None:
-            return
-        library = self._ensure_roi_library_loaded()
-        entry = library.get_by_id(roi_id)
-        if entry is None:
-            self.patari_controller.annotation.roi_library_description_label.setText(
-                ""
+        try:
+            preset = self._roi_preset_store.get(item.text())
+        except (TypeError, ValueError, OSError) as exc:
+            annotation.roi_presets_description_label.setText(
+                f"Could not load ROI preset: {exc}"
             )
             return
 
-        self._set_roi_library_placement_mode(
-            self._default_roi_library_placement_mode_for_entry(entry)
+        try:
+            mode = str(annotation.roi_placement_mode_combo.currentData())
+            if mode == "auto":
+                self._place_roi_preset_auto(self.patari_controller, preset)
+                return
+            self._place_roi_preset_static(self.patari_controller, preset)
+        except ValueError as exc:
+            annotation.roi_presets_description_label.setText(
+                f"Could not place ROI preset: {exc}"
+            )
+
+    def on_place_roi_clicked(self, event=None) -> None:
+        self._place_selected_roi_preset()
+
+    def on_roi_preset_item_clicked(self, item) -> None:
+        self._place_selected_roi_preset()
+
+    def on_roi_preset_item_selected(self, item) -> None:
+        if self.patari_controller.annotation is None:
+            return
+        try:
+            preset = self._roi_preset_store.get(item.text())
+        except (TypeError, ValueError, OSError) as exc:
+            self.patari_controller.annotation.roi_presets_description_label.setText(
+                f"Could not load ROI preset: {exc}"
+            )
+            return
+
+        self._set_roi_placement_mode(
+            self._default_roi_placement_mode_for_preset(preset)
         )
 
-        desc = str(entry.description or "")
-        pos = str(entry.position or "undefined")
+        desc = str(preset.description or "")
+        pos = str(preset.position or "undefined")
 
         desc = (
             f"{desc} (default position: {pos})"
             if desc
             else f"(default position: {pos})"
         )
-        self.patari_controller.annotation.roi_library_description_label.setText(
+        self.patari_controller.annotation.roi_presets_description_label.setText(
             desc
         )
 
-    def initialize_roi_library(self) -> None:
-        try:
-            self._refresh_roi_library_ui()
-        except Exception:
-            logger.exception("failed to initialize ROI Library")
+    def initialize_ui(self) -> None:
+        """Initialize ROI preset controls and current ROI display state."""
+        self._refresh_roi_presets_ui()
+        self.refresh_ui()
+
+    def refresh_ui(self) -> None:
+        """Refresh ROI controls after scan or active-layer state changes."""
+        if self.patari_controller.roi is None:
+            return
+        if self.patari_controller.shapes_layer is None:
+            self.patari_controller.roi.save_button.setEnabled(False)
+            self.update_live_table()
+            self._n_shapes = -1
+            return
+        self._update_save_button_state()
+        self.update_live_table()

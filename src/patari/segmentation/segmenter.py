@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import json
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import numpy as np
@@ -92,9 +93,13 @@ class ModelAdapterBase(ABC):
         self, mask_2d: np.ndarray)-> np.ndarray:
         raise NotImplementedError
 
-    def predict(self, frames: np.ndarray) -> list[SegmentationResult]:
+    def predict(
+        self,
+        frames: np.ndarray,
+        on_frame_complete: Callable[[int], None] | None = None,
+    ) -> list[SegmentationResult]:
         """Segment a batch of frames.
-
+        on_frame_complete: optional callback to report progress
         us_data: (nframes, H, W) — use us_data[np.newaxis] for a single frame.
         """
         results = []
@@ -103,6 +108,8 @@ class ModelAdapterBase(ABC):
             mask_2d = self.infer(frame_2d_pre)
             mask_2d_post = self.postprocess(mask_2d)
             results.append(SegmentationResult(seg=mask_2d_post, class_names=dict(self.class_names)))
+            if on_frame_complete is not None:
+                on_frame_complete(1)
         return results
 
 

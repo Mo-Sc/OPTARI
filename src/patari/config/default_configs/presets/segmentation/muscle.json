@@ -1,0 +1,9 @@
+{
+  "model_id": "unet_msot_2_ta",
+  "selected_class_ids": [3],
+  "roi_class_id": null,
+  "roi_shape": "ellipse",
+  "roi_width_mm": null,
+  "roi_height_mm": null,
+  "roi_top_margin_mm": null
+}

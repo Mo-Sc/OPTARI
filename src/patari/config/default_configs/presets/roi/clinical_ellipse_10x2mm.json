@@ -1,0 +1,9 @@
+{
+  "description": "Ellipse of size 10x2mm similar to 2nd UK PAD study (https://doi.org/10.1038/s43856-025-00801-1)",
+  "position": "muscle",
+  "created": "2026-04-08T12:49:27.693948+00:00",
+  "shape_type": "ellipse",
+  "vertices": [[20.0, 15.0], [20.0, 25.0], [22.0, 25.0], [22.0, 15.0]],
+  "source_fov_x_mm": 40.0,
+  "source_fov_y_mm": 40.0
+}

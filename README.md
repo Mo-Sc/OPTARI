@@ -18,7 +18,7 @@ Key features (v0.4):
 - Browse studies and fast switching between scans.
 - Visualize US + reconstructed PA layers.
 - Seamless scrolling through frames and wavelengths.
-- Draw, edit, and save ROIs, create a ROI Library.
+- Draw, edit, and save ROIs, and place reusable ROI presets.
 - Extract customizable statistical features from ROIs, auto-updating analysis table, export to XLSX.
 - Fast intensity extraction over multiple layers, frames, wavelengths or chromophores.
 - Visualize ROI intensities over time and spectrum, plot histograms.
@@ -73,7 +73,10 @@ At installation, PATARI creates a `.patari` folder in the users home directory a
 
 To change settings in PATARI, edit the respective json file (requires restart):
 - `config.json`: main configuration file. Contains general settings, as well as task-specific settings for the different modules.
-- `roi_library.json`: Contains all the ROIs in the ROI Library. Entries can be manually added or deleted.
+- `presets/reconstruction/*.json`: Reconstruction settings presets.
+- `presets/unmixing/*.json`: Spectral unmixing presets.
+- `presets/roi/*.json`: One reusable ROI preset per JSON file.
+- `presets/segmentation/*.json`: Segmentation model, class, and ROI-from-mask presets.
 - `segmentation_models.json`: Configuration for the automatic segmentation. See segmentation reference for more info (tbd)
 
 In a future version, these settings will be editable from the GUI as well.
@@ -98,10 +101,11 @@ description can be found in [`dev/patari_architecture.md`](dev/patari_architectu
   - `PatariController`: central session/app controller holding viewer state, scan data, and ROI geometry. Instantiates and coordinates feature controllers.
   - **Task Controllers** (all inherit from `TaskControllerBase`, instance-based with `initialize_ui()` / `bind_events()` / `unbind_events()` / `teardown()`): domain-specific controllers that own their UI state, behavior, and signal lifecycle:
     - `ScanController`: scan lifecycle, loading, discovery, export, scan browser signals
-    - `RoiController`: ROI table, shapes layer, labeling, colors, library management signals
+    - `RoiController`: ROI table, shapes layer, labeling, colors, and ROI preset signals
     - `SegmentationController`: tissue segmentation, lazily-cached ONNX model, ROI-from-mask signals (+ model cleanup via `teardown()`)
     - `AnalysisController`: time analysis, histograms, spectra signals
     - `UnmixingController`: spectral unmixing, chromophore derived layers signals
+    - `ReconstructionController`: reconstruction presets, processing, and derived layers
     - `LayerExportController`: exports the active layer (image or ROI shapes) to PNG/TIFF
   - `UIManager`: factory for dock creation and delegation to task controller signal wiring
 - **UI construction path**: `UiManager.setup_docks()` creates dock widgets; `UiManager.connect_events()` delegates signal wiring to each controller's `bind_events()`.
@@ -122,10 +126,10 @@ description can be found in [`dev/patari_architecture.md`](dev/patari_architectu
 - **Current ROI position state**: `roi_position` metadata for manual ROIs is not fully synchronized yet. Future work includes fully synchronized shape specific metadata dict.
 - **Segmentation models**: configured in `~/.patari/config/segmentation_models.json` (ONNX path + model IO metadata), lazily downloaded on demand into `~/.patari/models`.
 - **Segmentation model training**: Code for training and evaluating different segmentation models can be found in [this repo](https://github.com/Mo-Sc/OA-US-Segmentation-Public/tree/us_segmentation_algos) (private, access after request).
-- **Hidden features**: Reconstruction dock is currently disabled (not created in `ui_manager.py`).
+- **Reconstruction**: Reconstruction settings and outputs are available in the Reconstruction dock.
 - **Logging behavior**: `PATARI_LOG_LEVEL` controls terminal log. `PATARI_GUI_LOG_LEVEL` controls napari GUI notification.
 - **Compatibility note**: custom PATATO fork and import/export workarounds are currently required for some personal legacy datasets.
-- **Deployment & distribution**: PATARI is packaged as standalone executables for macOS and Windows using PyApp and GitHub Actions (see `build-pyapp.yml` workflow). PATATO dependencies are provided as precompiled wheels with OS-specific URLs in `pyproject.toml`. On first run, PyApp downloads all dependencies and initializes the user config directory (`~/.patari`) with default config files, ROI library template, and models folder. Segmentation models are lazily downloaded on-demand into the models folder from URLs specified in the segmentation configuration.
+- **Deployment & distribution**: PATARI is packaged as standalone executables for macOS and Windows using PyApp and GitHub Actions (see `build-pyapp.yml` workflow). PATATO dependencies are provided as precompiled wheels with OS-specific URLs in `pyproject.toml`. On first run, PyApp downloads all dependencies and initializes the user config directory (`~/.patari`) with default config files, per-feature preset folders, and models folder. Segmentation models are lazily downloaded on-demand into the models folder from URLs specified in the segmentation configuration.
 - **GitHub Actions workflow**: binary compilation is automated via the `build-pyapp.yml` GitHub Actions workflow, which builds PATARI wheels, downloads PyApp source, compiles with Rust (with OS-specific PATATO wheels linked), and uploads the final executables as build artifacts for each push.
 - **ROI feature visibility**: the live table displays only user-selected ROI features (toggled via `config.json` annotation settings). However, on save/export operations, PATARI always computes the full feature set and exports all available features regardless of live table visibility, ensuring no data loss during export workflows.
 

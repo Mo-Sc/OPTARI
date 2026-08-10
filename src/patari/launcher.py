@@ -41,6 +41,7 @@ def main() -> None:
         if controller is not None:
             try:
                 controller.shutdown()
+                logger.info("PATARI shutdown complete.")
             except Exception as e:
                 logger.exception("Error during controller shutdown: %s", e)
         # os._exit bypasses Pythons GC. Probably not ideal, but avoids a segfault on shutdown due to Qt objects. TODO

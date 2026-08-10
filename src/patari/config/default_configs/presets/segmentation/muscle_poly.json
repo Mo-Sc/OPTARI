@@ -1,0 +1,11 @@
+{
+  "model_id": "unet_msot_2_ta",
+  "selected_class_ids": [
+    3
+  ],
+  "roi_class_id": 3,
+  "roi_shape": "polygon",
+  "roi_width_mm": 10.0,
+  "roi_height_mm": 3.0,
+  "roi_top_margin_mm": null
+}

@@ -10,55 +10,73 @@ from imageio.v3 import imread
 logger = logging.getLogger(__name__)
 
 
+def _copy_default_presets(default_configs_dir: Path, user_config_dir: Path) -> None:
+    default_presets_dir = default_configs_dir / "presets"
+    if not default_presets_dir.exists():
+        return
+
+    user_presets_dir = user_config_dir / "presets"
+    for preset_file in default_presets_dir.rglob("*.json"):
+        target = user_presets_dir / preset_file.relative_to(default_presets_dir)
+        # Never overwrite a preset that the user has edited.
+        if target.exists():
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(preset_file, target)
+
+
 def get_user_dir() -> Path:
     """sets env var for user home dir and fills it with defaults if it doesn't exist."""
 
     user_dir = Path.home() / ".patari"
     
+    config_dir = user_dir / "config"
+    default_configs_dir = Path(__file__).resolve().parent.parent / "config" / "default_configs"
+    if not default_configs_dir.exists():
+        raise FileNotFoundError(f"Default configs directory not found at {default_configs_dir}")
+
     # First-run:
-    if not Path.exists(user_dir / "config" / "config.json"):
+    if not (config_dir / "config.json").exists():
         # create the user dir and subdirs for config, logs, models
         logger.info(f"Creating user directory at {user_dir}")
         user_dir.mkdir(parents=True, exist_ok=True)
-        (user_dir / "config").mkdir(exist_ok=True)
+        config_dir.mkdir(exist_ok=True)
         (user_dir / "logs").mkdir(exist_ok=True)
         (user_dir / "models").mkdir(exist_ok=True)
 
-        # copy default config files from patari/src/patari/data/default_configs
-        default_configs_dir = Path(__file__).resolve().parent.parent / "config" / "default_configs"
-
-        if not default_configs_dir.exists():
-            raise FileNotFoundError(f"Default configs directory not found at {default_configs_dir}")
-        
         for config_file in default_configs_dir.glob("*.json"):
-            shutil.copy(config_file, user_dir / "config" / config_file.name)
+            shutil.copy2(config_file, config_dir / config_file.name)
 
-        # copy default unmixing presets to user dir (only on first run, preserve user edits)
-        # TODO: this should be cleaner, once reconstruction presets are implemented as well
-        default_presets_dir = default_configs_dir / "unmixing_presets"
-        if default_presets_dir.exists():
-            user_presets_dir = user_dir / "config" / "unmixing_presets"
-            user_presets_dir.mkdir(exist_ok=True)
-            for preset_file in default_presets_dir.glob("*.json"):
-                shutil.copy(preset_file, user_presets_dir / preset_file.name)
-            logger.info(f"Copied default unmixing presets to {user_presets_dir}")
+        logger.info(f"Copied default config files to {config_dir}")
 
-        logger.info(f"Copied default config files to {user_dir / 'config'}")
+    _copy_default_presets(default_configs_dir, config_dir)
 
     return user_dir
 
 
 def get_user_unmixing_presets_dir() -> Path:
     """Returns the path to the user-editable unmixing presets directory."""
-    return get_user_dir() / "config" / "unmixing_presets"
+    return get_user_dir() / "config" / "presets" / "unmixing"
+
+
+def get_user_reconstruction_presets_dir() -> Path:
+    """Returns the path to the user-editable reconstruction presets directory."""
+    return get_user_dir() / "config" / "presets" / "reconstruction"
+
+
+def get_user_roi_presets_dir() -> Path:
+    """Returns the path to the user-editable ROI presets directory."""
+    return get_user_dir() / "config" / "presets" / "roi"
+
+
+def get_user_segmentation_presets_dir() -> Path:
+    """Returns the path to the user-editable segmentation presets directory."""
+    return get_user_dir() / "config" / "presets" / "segmentation"
+
 
 def get_user_config_file() -> Path:
     """Returns the path to the configuration file."""
     return get_user_dir() / "config" / "config.json"
-
-def get_user_roi_library_file() -> Path:
-    """Returns the path to the ROI library file."""
-    return get_user_dir() / "config" / "roi_library.json"
 
 def get_user_log_file() -> Path:
     """Returns the path to the log file."""

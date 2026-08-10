@@ -27,6 +27,7 @@ from patari.controllers.roi_controller import RoiController
 from patari.controllers.segmentation_controller import SegmentationController
 from patari.controllers.analysis_controller import AnalysisController
 from patari.controllers.unmixing_controller import UnmixingController
+from patari.controllers.reconstruction_controller import ReconstructionController
 
 from patari.config import settings
 
@@ -76,6 +77,7 @@ class PatariController:
         self.segmentation_ctrl = SegmentationController(self)
         self.analysis_ctrl = AnalysisController(self)
         self.unmixing_ctrl = UnmixingController(self)
+        self.reconstruction_ctrl = ReconstructionController(self)
 
         # Track event bindings for proper cleanup
         self._shapes_layer_bindings = []
@@ -92,12 +94,12 @@ class PatariController:
 
         self._setup_viewer()
         self._ensure_docks()
-        self._initialize_roi_library()
-        self._connect_events()
-        self.register_shortcuts()
-        # some tasks require UI initialization based on the data (e.g. segmentation model list, unmixing reference spectra)
+        self.roi_ctrl.initialize_ui()
         self.segmentation_ctrl.initialize_ui()
         self.unmixing_ctrl.initialize_ui()
+        self.reconstruction_ctrl.initialize_ui()
+        self._connect_events()
+        self.register_shortcuts()
 
         # If a path is provided, populate scan browser / load scan.
         # Otherwise, the Scan Browser dock drives loading.
@@ -114,6 +116,20 @@ class PatariController:
         Properly clean up resources and disconnect all signals before shutdown.
         Should prevent segfaults on exit
         """
+        for controller in (
+            self.scan_ctrl,
+            self.roi_ctrl,
+            self.analysis_ctrl,
+            self.unmixing_ctrl,
+            self.reconstruction_ctrl,
+            self.segmentation_ctrl,
+        ):
+            try:
+                controller.unbind_events()
+                controller.teardown()
+            except Exception:
+                logger.exception("Error shutting down %s", type(controller).__name__)
+
         # Disconnect events
         try:
             self.viewer.dims.events.point.disconnect(self.on_dims_changed)
@@ -143,6 +159,7 @@ class PatariController:
         self.info = None
         self.scan_browser = None
         self.annotation = None
+        self.segmentation = None
         self.unmixing = None
         self.reconstruction = None
         self.roi = None
@@ -213,9 +230,6 @@ class PatariController:
     def _apply_roi_labels(self) -> None:
         self.roi_ctrl.apply_roi_labels()
 
-    def _initialize_roi_library(self) -> None:
-        self.roi_ctrl.initialize_roi_library()
-
     def _on_shapes_data_changed(self, event=None) -> None:
         self.roi_ctrl.on_shapes_data_changed(event)
 
@@ -243,6 +257,18 @@ class PatariController:
 
     def _init_path(self, path: Path) -> None:
         self.scan_ctrl.init_path(path)
+
+    def refresh_controller_uis(self) -> None:
+        """Refresh all controller-owned UI after a state transition."""
+        for controller in (
+            self.scan_ctrl,
+            self.roi_ctrl,
+            self.analysis_ctrl,
+            self.unmixing_ctrl,
+            self.reconstruction_ctrl,
+            self.segmentation_ctrl,
+        ):
+            controller.refresh_ui()
 
     @property
     def wavelengths(self) -> "list[int] | None":

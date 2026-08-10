@@ -48,7 +48,7 @@ include-package-data = true
 where = ["src"]
 
 [tool.setuptools.package-data]
-"patari" = ["data/*.json", "data/*.png"]
+"patari" = ["config/default_configs/*.json", "config/default_configs/**/*.json", "config/startup.png"]
 
 [tool.setuptools_scm]
 write_to = "src/patari/_version.py"

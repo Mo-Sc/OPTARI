@@ -34,17 +34,17 @@ class AnnotationDock:
     include_all_frames_checkbox: QCheckBox
     include_all_channels_checkbox: QCheckBox
     time_analysis_feature_combo: QComboBox
-    roi_library_list: QListWidget
-    roi_library_description_label: QLabel
+    roi_presets_list: QListWidget
+    roi_presets_description_label: QLabel
     roi_placement_mode_combo: QComboBox
-    save_roi_button: QPushButton
-    remove_roi_button: QPushButton
-    save_library_button: QPushButton
+    save_roi_preset_button: QPushButton
+    remove_roi_preset_button: QPushButton
+    place_roi_button: QPushButton
 
-    def set_roi_ids(self, ids: list[str]) -> None:
-        self.roi_library_list.clear()
-        for roi_id in ids:
-            self.roi_library_list.addItem(roi_id)
+    def set_roi_preset_names(self, names: list[str]) -> None:
+        self.roi_presets_list.clear()
+        for name in names:
+            self.roi_presets_list.addItem(name)
 
 
 def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
@@ -52,29 +52,29 @@ def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
     widget = shell.widget
     outer = shell.content_layout
 
-    # ROI Library section
-    roi_library_box = QGroupBox("ROI Library")
-    roi_library_layout = QVBoxLayout(roi_library_box)
+    # ROI presets section
+    roi_presets_box = QGroupBox("ROI Presets")
+    roi_presets_layout = QVBoxLayout(roi_presets_box)
 
-    roi_library_list = QListWidget()
-    roi_library_list.setSelectionMode(QAbstractItemView.SingleSelection)
+    roi_presets_list = QListWidget()
+    roi_presets_list.setSelectionMode(QAbstractItemView.SingleSelection)
 
     button_row = QWidget()
     button_layout = QHBoxLayout(button_row)
     button_layout.setContentsMargins(0, 0, 0, 0)
 
-    save_roi_button = QPushButton("Save ROI")
-    remove_roi_button = QPushButton("Remove ROI")
-    save_library_button = QPushButton("Save Library")
+    save_roi_preset_button = QPushButton("Save Preset")
+    remove_roi_preset_button = QPushButton("Remove Preset")
+    place_roi_button = QPushButton("Apply Preset")
 
-    button_layout.addWidget(save_roi_button)
-    button_layout.addWidget(remove_roi_button)
-    button_layout.addWidget(save_library_button)
+    button_layout.addWidget(save_roi_preset_button)
+    button_layout.addWidget(remove_roi_preset_button)
+    button_layout.addWidget(place_roi_button)
 
-    roi_library_layout.addWidget(roi_library_list)
-    roi_library_description_label = QLabel("")
-    roi_library_description_label.setWordWrap(True)
-    roi_library_layout.addWidget(roi_library_description_label)
+    roi_presets_layout.addWidget(roi_presets_list)
+    roi_presets_description_label = QLabel("")
+    roi_presets_description_label.setWordWrap(True)
+    roi_presets_layout.addWidget(roi_presets_description_label)
 
     roi_placement_mode_combo = QComboBox()
     roi_placement_mode_combo.addItem("static", userData="static")
@@ -83,11 +83,11 @@ def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
     placement_row = QWidget()
     placement_layout = QHBoxLayout(placement_row)
     placement_layout.setContentsMargins(0, 0, 0, 0)
-    placement_layout.addWidget(QLabel("Placement"))
+    placement_layout.addWidget(QLabel("Placement mode"))
     placement_layout.addWidget(roi_placement_mode_combo)
-    roi_library_layout.addWidget(placement_row)
+    roi_presets_layout.addWidget(placement_row)
 
-    roi_library_layout.addWidget(button_row)
+    roi_presets_layout.addWidget(button_row)
 
     # ROI clipping and exclusion section                                                 
     roi_box = QGroupBox("ROI Intensity")
@@ -155,7 +155,7 @@ def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
     time_analysis_layout.addRow("Feature", time_analysis_feature_combo)
     
 
-    outer.addWidget(roi_library_box)
+    outer.addWidget(roi_presets_box)
     outer.addWidget(roi_box)
     outer.addWidget(save_roi_box)
     outer.addWidget(time_analysis_box)
@@ -173,10 +173,10 @@ def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
         include_all_frames_checkbox=include_all_frames_checkbox,
         include_all_channels_checkbox=include_all_channels_checkbox,
         time_analysis_feature_combo=time_analysis_feature_combo,
-        roi_library_list=roi_library_list,
-        roi_library_description_label=roi_library_description_label,
+        roi_presets_list=roi_presets_list,
+        roi_presets_description_label=roi_presets_description_label,
         roi_placement_mode_combo=roi_placement_mode_combo,
-        save_roi_button=save_roi_button,
-        remove_roi_button=remove_roi_button,
-        save_library_button=save_library_button,
+        save_roi_preset_button=save_roi_preset_button,
+        remove_roi_preset_button=remove_roi_preset_button,
+        place_roi_button=place_roi_button,
     )

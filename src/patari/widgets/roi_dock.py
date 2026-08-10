@@ -3,9 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import pandas as pd
-from magicgui.widgets import PushButton, Table
+from magicgui.widgets import Table
 from qtpy.QtGui import QKeySequence
-from qtpy.QtWidgets import QHBoxLayout, QLabel, QShortcut, QVBoxLayout, QWidget
+from qtpy.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QShortcut,
+    QVBoxLayout,
+    QWidget,
+)
 
 from patari.roi.roi_utils import (
     live_table_columns,
@@ -18,9 +25,9 @@ class RoiDock:
     widget: QWidget
     live_table: Table
     saved_table: Table
-    save_button: PushButton
-    delete_button: PushButton
-    xlsx_button: PushButton
+    save_button: QPushButton
+    delete_button: QPushButton
+    xlsx_button: QPushButton
     live_table_delete_shortcut: QShortcut
 
 
@@ -33,9 +40,9 @@ def create_roi_dock() -> RoiDock:
     live_table = Table(value=df_live_empty)
     saved_table = Table(value=df_saved_empty)
 
-    save_button = PushButton(text="Save ROI Data")
-    delete_button = PushButton(text="Delete ROI Data")
-    xlsx_button = PushButton(text="Export XLSX")
+    save_button = QPushButton("Save ROI Data")
+    delete_button = QPushButton("Delete ROI Data")
+    xlsx_button = QPushButton("Export XLSX")
 
     # build Qt container for the bottom dock
     container = QWidget()
@@ -51,9 +58,9 @@ def create_roi_dock() -> RoiDock:
     btn_panel = QWidget()
     btn_layout = QVBoxLayout(btn_panel)
     btn_layout.addWidget(QLabel(" "))
-    btn_layout.addWidget(save_button.native)
-    btn_layout.addWidget(delete_button.native)
-    btn_layout.addWidget(xlsx_button.native)
+    btn_layout.addWidget(save_button)
+    btn_layout.addWidget(delete_button)
+    btn_layout.addWidget(xlsx_button)
     btn_layout.addStretch()
 
     saved_panel = QWidget()

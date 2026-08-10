@@ -1,0 +1,9 @@
+{
+  "description": "Ellipse of size 5x2mm as used in skin type dataset",
+  "position": "muscle",
+  "created": "2026-04-08T12:49:27.693948+00:00",
+  "shape_type": "ellipse",
+  "vertices": [[20.0, 15.0], [20.0, 20.0], [22.0, 20.0], [22.0, 15.0]],
+  "source_fov_x_mm": 40.0,
+  "source_fov_y_mm": 40.0
+}

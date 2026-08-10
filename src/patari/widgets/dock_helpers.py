@@ -1,19 +1,26 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from qtpy.QtCore import QLocale, Qt
 from qtpy.QtGui import QDoubleValidator
 from qtpy.QtWidgets import (
+    QButtonGroup,
+    QComboBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QPushButton,
+    QInputDialog,
+    QRadioButton,
     QScrollArea,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
+
+from patari.utils.presets import PresetStore
 
 
 @dataclass
@@ -22,6 +29,84 @@ class DockShell:
     content_widget: QWidget
     content_layout: QVBoxLayout
     scroll_area: QScrollArea | None
+
+
+def create_frame_scope_controls() -> tuple[QWidget, QRadioButton, QRadioButton]:
+    """Create the shared current/all frames radio-button control."""
+    container = QWidget()
+    layout = QHBoxLayout(container)
+    layout.setContentsMargins(0, 0, 0, 0)
+
+    current_frames_radio = QRadioButton("Selected Frame")
+    all_frames_radio = QRadioButton("All Frames")
+    all_frames_radio.setChecked(True)
+
+    group = QButtonGroup(container)
+    group.setExclusive(True)
+    group.addButton(current_frames_radio)
+    group.addButton(all_frames_radio)
+
+    layout.addWidget(current_frames_radio)
+    layout.addWidget(all_frames_radio)
+    return container, current_frames_radio, all_frames_radio
+
+
+# helpers for preset management
+def create_preset_controls() -> tuple[QComboBox, QPushButton, QPushButton, QWidget]:
+    """Create the shared preset selector and save/remove action row."""
+    preset_combo = QComboBox()
+    save_preset_button = QPushButton("Save Preset")
+    remove_preset_button = QPushButton("Remove Preset")
+
+    actions = QWidget()
+    actions_layout = QHBoxLayout(actions)
+    actions_layout.setContentsMargins(0, 0, 0, 0)
+    actions_layout.addWidget(save_preset_button)
+    actions_layout.addWidget(remove_preset_button)
+    return preset_combo, save_preset_button, remove_preset_button, actions
+
+
+def populate_preset_combo(combo: QComboBox, store: PresetStore) -> None:
+    """Populate a preset combo and select its first entry."""
+    combo.blockSignals(True)
+    try:
+        combo.clear()
+        for preset_path in store.list_paths():
+            combo.addItem(preset_path.stem, userData=preset_path)
+        if combo.count() > 0:
+            combo.setCurrentIndex(0)
+    finally:
+        combo.blockSignals(False)
+
+
+def prompt_preset_name(parent: QWidget, combo: QComboBox, fallback: str) -> str | None:
+    """Ask for a new preset name, returning ``None`` when cancelled."""
+    name, accepted = QInputDialog.getText(
+        parent,
+        "Save Preset",
+        "Preset name:",
+        text=combo.currentText() or fallback,
+    )
+    return name if accepted else None
+
+
+def add_preset_to_combo(combo: QComboBox, preset_path: Path) -> None:
+    """Add a saved preset and select it."""
+    combo.addItem(preset_path.stem, userData=preset_path)
+    combo.setCurrentIndex(combo.count() - 1)
+
+
+def remove_selected_preset(
+    combo: QComboBox, store: PresetStore
+) -> tuple[Path | None, bool]:
+    """Delete the selected preset and remove it from the combo."""
+    preset_path = combo.currentData()
+    if preset_path is None:
+        return None, False
+    removed = store.delete(preset_path)
+    if removed:
+        combo.removeItem(combo.currentIndex())
+    return preset_path, removed
 
 
 # Helpers for right-side form docks in UiManager._tabify_docks().

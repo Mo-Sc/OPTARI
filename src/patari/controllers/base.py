@@ -1,5 +1,12 @@
 """Base class for task-specific controllers."""
 
+import numpy as np
+
+from napari.layers import Image
+
+from patari.config import settings
+from patari.patato_bridge import scale_from_patato_obj
+
 
 class TaskControllerBase:
     """Minimal interface for task controllers.
@@ -32,3 +39,65 @@ class TaskControllerBase:
     def teardown(self) -> None:
         """Release resources (models, threads). Override if needed."""
         pass
+
+    def refresh_ui(self) -> None:
+        """Refresh controller-owned UI after application state changes."""
+        pass
+
+    @staticmethod
+    def _expand_to_source_frames(
+        data: np.ndarray,
+        output_frames: list[int],
+        source_frame_count: int,
+    ) -> np.ndarray:
+        """Pad sparse output frames back to the acquisition frame axis."""
+        if data.shape[0] == source_frame_count:
+            return data
+
+        expanded = np.zeros(
+            (source_frame_count, *data.shape[1:]), dtype=data.dtype
+        )
+        for i, frame in enumerate(output_frames):
+            if i < data.shape[0] and 0 <= int(frame) < source_frame_count:
+                expanded[int(frame)] = data[i]
+        return expanded
+
+    def _add_or_update_image_layer(
+        self,
+        name: str,
+        data: np.ndarray,
+        metadata: dict,
+        patato_obj,
+        colormap: str,
+        units: str,
+    ) -> None:
+        """Create or update a PATATO-derived napari image layer."""
+        scale = scale_from_patato_obj(
+            patato_obj,
+            settings.general.PA_FALLBACK_SCALE,
+        )
+        source_layer = self.patari_controller.active_recon_layer
+        # Derived layers share the selected source layer's world origin.
+        translate = tuple(source_layer.translate) if source_layer is not None else None
+        if name in self.viewer.layers and isinstance(self.viewer.layers[name], Image):
+            layer = self.viewer.layers[name]
+            layer.data = data
+            layer.scale = scale
+            if translate is not None:
+                layer.translate = translate
+            layer.metadata = metadata
+            layer.colormap = colormap
+            return
+
+        image_kwargs = {
+            "name": name,
+            "scale": scale,
+            "colormap": colormap,
+            "metadata": metadata,
+            "opacity": 1.0,
+            "blending": "multiplicative", # blending always multiplicative for better overlay
+            "units": units,
+        }
+        if translate is not None:
+            image_kwargs["translate"] = translate
+        self.viewer.add_image(data, **image_kwargs)

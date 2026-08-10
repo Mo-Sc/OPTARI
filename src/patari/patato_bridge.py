@@ -52,6 +52,11 @@ def scale_from_patato_obj(obj, fallback: tuple) -> tuple:
 # ---------------------------------------------------------------------------
 
 
+def display_data_from_patato_obj(image_sequence) -> np.ndarray:
+    """Convert PATATO image data to napari's display orientation."""
+    return np.flip(np.array(image_sequence.da[:, :, :, 0, :]), axis=-2)
+
+
 def patato_to_napari(
     pts_m: np.ndarray, fov_x_m: float, fov_y_m: float
 ) -> np.ndarray:
@@ -130,7 +135,7 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
 
     # --- ultrasound ---
     us_obj = pa_data.get_ultrasound()
-    us_img = np.flip(np.array(us_obj.da[:, :, :, 0, :]), axis=-2)
+    us_img = display_data_from_patato_obj(us_obj)
     n_acq_frames = us_img.shape[0]
     patato_objects["US"] = us_obj
 
@@ -154,9 +159,6 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
             "image",
         )
     )
-
-    def _display_data(image_sequence) -> np.ndarray:
-        return np.flip(np.array(image_sequence.da[:, :, :, 0, :]), axis=-2)
 
     def _frame_list(image_sequence, n_frames: int) -> list[int]:
         frames_info = image_sequence.da.attrs.get(
@@ -189,7 +191,7 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
 
     # --- reconstructions ---
     for (recon_name, idx), recon in pa_data.get_scan_reconstructions().items():
-        recon_raw = _display_data(recon)
+        recon_raw = display_data_from_patato_obj(recon)
         recon_frame_list = _frame_list(recon, recon_raw.shape[0])
         recon_img = _expand_to_acquisition_frames(recon_raw, recon_frame_list)
 
@@ -227,7 +229,7 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
         for (dataset_name, idx), image in pa_data.get_scan_images(
             group_name, ignore_default=True
         ).items():
-            raw = _display_data(image)
+            raw = display_data_from_patato_obj(image)
             frame_list = _frame_list(image, raw.shape[0])
             data = _expand_to_acquisition_frames(raw, frame_list)
 
@@ -281,9 +283,15 @@ def fov_from_objects(patato_objects: dict) -> "tuple[float, float] | None":
     for obj in patato_objects.values():
         try:
             fov = obj.fov
-            if fov is not None and len(fov) >= 2 and None not in fov:
-                return float(fov[0]), float(fov[1])
+            if fov is None or len(fov) < 2 or None in fov:
+                continue
+            fov_x_m, fov_y_m = float(fov[0]), float(fov[1])
+            if fov_x_m > 0 and fov_y_m > 0:
+                return fov_x_m, fov_y_m
         except Exception:
+            logger.warning(
+                f"could not derive FOV from object {obj}", exc_info=True
+            )
             continue
     return None
 
