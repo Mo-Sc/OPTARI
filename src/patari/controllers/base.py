@@ -70,6 +70,8 @@ class TaskControllerBase:
         patato_obj,
         colormap: str,
         units: str,
+        offset_x_mm: float = 0.0,
+        offset_z_mm: float = 0.0,
     ) -> None:
         """Create or update a PATATO-derived napari image layer."""
         scale = scale_from_patato_obj(
@@ -77,8 +79,13 @@ class TaskControllerBase:
             settings.general.PA_FALLBACK_SCALE,
         )
         source_layer = self.patari_controller.active_recon_layer
-        # Derived layers share the selected source layer's world origin.
         translate = tuple(source_layer.translate) if source_layer is not None else None
+        if translate is not None:
+            translate = (
+                *translate[:-2],
+                translate[-2] + offset_z_mm,
+                translate[-1] + offset_x_mm,
+            )
         if name in self.viewer.layers and isinstance(self.viewer.layers[name], Image):
             layer = self.viewer.layers[name]
             layer.data = data

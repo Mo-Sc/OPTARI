@@ -39,7 +39,7 @@ def create_frame_scope_controls() -> tuple[QWidget, QRadioButton, QRadioButton]:
 
     current_frames_radio = QRadioButton("Selected Frame")
     all_frames_radio = QRadioButton("All Frames")
-    all_frames_radio.setChecked(True)
+    current_frames_radio.setChecked(True)
 
     group = QButtonGroup(container)
     group.setExclusive(True)

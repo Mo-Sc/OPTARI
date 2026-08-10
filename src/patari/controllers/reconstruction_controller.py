@@ -12,6 +12,7 @@ from qtpy.QtCore import Qt
 from patari.controllers.base import TaskControllerBase
 from patari.patato_bridge import display_data_from_patato_obj
 from patari.utils.presets import PresetStore
+from patari.utils.misc import download_file
 from patari.utils.setup import get_user_reconstruction_presets_dir
 from patari.widgets.reconstruction_dock import (
     SPEED_OF_SOUND_DEFAULT,
@@ -26,6 +27,19 @@ from patari.widgets.dock_helpers import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_deepmb_model(settings_dict: dict) -> dict:
+    params = dict(settings_dict[ReconAttributeTags.ADDITIONAL_PARAMETERS])
+    model_path = Path(params.pop("model_path")).expanduser()
+
+    if not model_path.is_file():
+        download_file(params["model_url"], model_path)
+
+    params["model_path"] = str(model_path)
+    params.pop("model_url", None)
+    settings_dict[ReconAttributeTags.ADDITIONAL_PARAMETERS] = params
+    return settings_dict
 
 
 class ReconstructionController(TaskControllerBase):
@@ -262,7 +276,16 @@ class ReconstructionController(TaskControllerBase):
         if self._settings_dirty:
             dock.status_label.setText("Apply preset before running.")
             return
+
         settings_dict = dict(self._applied_settings)
+        if settings_dict.get(ReconAttributeTags.RECONSTRUCTION_ALGORITHM) == (
+            "DeepMB ONNX Reconstruction"
+        ):
+            settings_dict = _resolve_deepmb_model(settings_dict)
+
+        offset_x_mm = float(settings_dict.pop("OFFSET_X", 0.0))
+        offset_z_mm = float(settings_dict.pop("OFFSET_Z", 0.0))
+
         algorithm_name = settings_dict.get(
             ReconAttributeTags.RECONSTRUCTION_ALGORITHM, "Reconstruction"
         )
@@ -343,6 +366,8 @@ class ReconstructionController(TaskControllerBase):
             reconstruction,
             colormap="viridis",
             units="mm",
+            offset_x_mm=offset_x_mm,
+            offset_z_mm=offset_z_mm,
         )
         self.patari_controller._patato_objects[layer_name] = reconstruction
         self.patari_controller._derived_patato_objects[layer_name] = reconstruction

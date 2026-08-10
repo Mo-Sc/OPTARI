@@ -22,6 +22,12 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
+def _fov_size(value) -> float:
+    if isinstance(value, (tuple, list, np.ndarray)):
+        return abs(float(value[1]) - float(value[0]))
+    return float(value)
+
+
 def scale_from_patato_obj(obj, fallback: tuple) -> tuple:
     """Derive a ``(t, y, x)`` napari scale in mm/pixel from a PATATO object.
 
@@ -34,7 +40,7 @@ def scale_from_patato_obj(obj, fallback: tuple) -> tuple:
         shape = obj.shape_2d  # (ny, nx) pixels
         if fov is None or None in fov or len(shape) < 2:
             return fallback
-        fov_x_m, fov_y_m = float(fov[0]), float(fov[1])
+        fov_x_m, fov_y_m = _fov_size(fov[0]), _fov_size(fov[1])
         ny, nx = int(shape[-2]), int(shape[-1])
         if ny == 0 or nx == 0 or fov_x_m == 0 or fov_y_m == 0:
             return fallback
@@ -45,7 +51,6 @@ def scale_from_patato_obj(obj, fallback: tuple) -> tuple:
             exc_info=True,
         )
         return fallback
-
 
 # ---------------------------------------------------------------------------
 # Coordinate conversion
@@ -285,7 +290,7 @@ def fov_from_objects(patato_objects: dict) -> "tuple[float, float] | None":
             fov = obj.fov
             if fov is None or len(fov) < 2 or None in fov:
                 continue
-            fov_x_m, fov_y_m = float(fov[0]), float(fov[1])
+            fov_x_m, fov_y_m = _fov_size(fov[0]), _fov_size(fov[1])
             if fov_x_m > 0 and fov_y_m > 0:
                 return fov_x_m, fov_y_m
         except Exception:

@@ -29,7 +29,7 @@ from .dock_helpers import (
 # speed of sound slider bounds
 SPEED_OF_SOUND_MIN = 1400
 SPEED_OF_SOUND_MAX = 1600
-SPEED_OF_SOUND_DEFAULT = 1520
+SPEED_OF_SOUND_DEFAULT = 1525
 
 
 @dataclass
