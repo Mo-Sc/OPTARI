@@ -14,6 +14,7 @@ from patari.patato_bridge import display_data_from_patato_obj
 from patari.utils.presets import PresetStore
 from patari.utils.misc import download_file
 from patari.utils.setup import get_user_reconstruction_presets_dir
+from patari.utils.viewer import viewer_busy
 from patari.widgets.reconstruction_dock import (
     SPEED_OF_SOUND_DEFAULT,
     SPEED_OF_SOUND_MAX,
@@ -316,8 +317,7 @@ class ReconstructionController(TaskControllerBase):
 
         # preprocessing -> reconstruction chain; run explicitly (not via run_pipeline) so the
         # UI-controlled speed of sound always overrides the preset/scan value on the final step.
-        self.viewer.window._status_bar._toggle_activity_dock(True)
-        try:
+        with viewer_busy(self.viewer):
             # Reconstruction has two sequential processing stages.
             with progress(total=2, desc="Reconstructing") as progress_bar:
                 preprocessor = pat.read_reconstruction_preset(settings_dict)
@@ -335,8 +335,6 @@ class ReconstructionController(TaskControllerBase):
                     **new_settings,
                 )
                 progress_bar.update(1)
-        finally:
-            self.viewer.window._status_bar._toggle_activity_dock(False)
 
         suffix_part = f"_{suffix}" if suffix else ""
         frame_part = f"_F{current_frame_id}" if current_frame_id is not None else ""

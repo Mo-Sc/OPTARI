@@ -14,7 +14,7 @@ from patari.segmentation.segmenter import (
     SegmentationModelConfig,
 )
 from patari.segmentation.segmentation_presets import validate_segmentation_settings
-from patari.utils.viewer import selected_frame_idx
+from patari.utils.viewer import selected_frame_idx, viewer_busy
 from patari.controllers.base import TaskControllerBase
 from patari.roi import Ellipse, Rectangle, Polygon, ROIPlacementConfig
 from patari.config import settings
@@ -528,14 +528,11 @@ class SegmentationController(TaskControllerBase):
         )
 
         try:
-            self.viewer.window._status_bar._toggle_activity_dock(True)
-            try:
+            with viewer_busy(self.viewer):
                 with progress(total=len(frame_ids), desc="Segmenting") as progress_bar:
                     results = segmenter.predict(
                         us_data, on_frame_complete=progress_bar.update
                     )
-            finally:
-                self.viewer.window._status_bar._toggle_activity_dock(False)
 
             class_names = results[0].class_names
 

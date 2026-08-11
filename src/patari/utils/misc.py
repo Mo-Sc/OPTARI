@@ -3,6 +3,7 @@ from pathlib import Path
 from napari.utils import progress
 
 from patari.config import settings
+from patari.utils.viewer import viewer_busy
 
 def parse_float_input(text: str) -> float | None:
     """
@@ -41,17 +42,11 @@ def download_file(url: str, dest_path: Path) -> None:
     from napari import current_viewer
 
     viewer = current_viewer()
-    # deprecated private API access, however currently only way to force the activity dock to open
-    # https://github.com/napari/napari/issues/4598
-    viewer.window._status_bar._toggle_activity_dock(True)
-
-    # use native Napari progress loop
-    with progress(total=total_size, desc=f"Downloading {dest_path.name}") as pbr:
-        with open(tmp_path, "wb") as f:
-            for chunk in response.iter_content(chunk_size=512 * 1024): # 512KB chunks
-                if chunk:
-                    f.write(chunk)
-                    pbr.update(len(chunk))
-    tmp_path.rename(dest_path)
-
-    viewer.window._status_bar._toggle_activity_dock(False)
+    with viewer_busy(viewer):
+        with progress(total=total_size, desc=f"Downloading {dest_path.name}") as pbr:
+            with open(tmp_path, "wb") as f:
+                for chunk in response.iter_content(chunk_size=512 * 1024): # 512KB chunks
+                    if chunk:
+                        f.write(chunk)
+                        pbr.update(len(chunk))
+        tmp_path.rename(dest_path)

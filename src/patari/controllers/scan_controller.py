@@ -247,7 +247,8 @@ class ScanController(TaskControllerBase):
                 kw.setdefault("units", "mm")
                 kw["metadata"].setdefault("filepath", str(scan_path))
                 kw["metadata"].setdefault("scan_name", scan_info.internal_name)
-                self.viewer.add_image(data, **kw)
+                layer = self.viewer.add_image(data, **kw)
+                layer.colorbar.visible = True
             else:
                 kw = dict(kw)
                 kw.setdefault("metadata", {})
@@ -266,6 +267,7 @@ class ScanController(TaskControllerBase):
             metadata={"type": "roi"},
             units="mm",
         )
+        self.patari_controller.shapes_layer.locked = True
         self.patari_controller._connect_shapes_layer_events()
 
         # After adding layers, pick a sensible default selected layer.
