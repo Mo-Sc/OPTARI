@@ -564,8 +564,15 @@ class SegmentationController(TaskControllerBase):
                     "frames": frame_ids,
                     "class_names": class_names,
                     "source_model_id": self.active_segmentation_model_id,
+                    "settings": {
+                        "model_id": self.active_segmentation_model_id,
+                        "selected_class_ids": sorted(selected_ids),
+                        "class_names": class_names,
+                        "frame_mode": frame_mode,
+                        "frames": frame_ids,
+                    },
                 },
-                units=us_layer.units,
+                units=self.image_units,
             )
             self._seg_layer = label_layer
 

@@ -157,6 +157,9 @@ class UiManager:
         controller.viewer.layers.selection.events.changed.connect(
             controller.on_selection_changed
         )
+        controller.info.metadata_button.clicked.connect(
+            controller.on_metadata_clicked
+        )
 
         # close the currently open scan handle when Qt starts shutting down
         # probably not necessary, just for cleanup

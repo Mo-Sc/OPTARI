@@ -15,6 +15,8 @@ class TaskControllerBase:
     inherits from this.
     """
 
+    image_units = ("dimensionless", "dimensionless", "mm", "mm")
+
     def __init__(self, parent_controller):
         """Initialize with reference to parent controller.
 
@@ -69,7 +71,6 @@ class TaskControllerBase:
         metadata: dict,
         patato_obj,
         colormap: str,
-        units: str,
         offset_x_mm: float = 0.0,
         offset_z_mm: float = 0.0,
     ) -> None:
@@ -98,6 +99,7 @@ class TaskControllerBase:
                 layer.translate = translate
             layer.metadata = metadata
             layer.colormap = colormap
+            layer.units = self.image_units
         else:
             # layer does not exist, create a new one
             image_kwargs = {
@@ -107,7 +109,7 @@ class TaskControllerBase:
                 "metadata": metadata,
                 "opacity": 1.0,
                 "blending": "multiplicative", # blending always multiplicative for better overlay
-                "units": units,
+                "units": self.image_units,
             }
             if translate is not None:
                 image_kwargs["translate"] = translate

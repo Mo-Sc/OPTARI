@@ -278,16 +278,16 @@ class ReconstructionController(TaskControllerBase):
             dock.status_label.setText("Apply preset before running.")
             return
 
-        settings_dict = dict(self._applied_settings)
-        if settings_dict.get(ReconAttributeTags.RECONSTRUCTION_ALGORITHM) == (
+        settings = dict(self._applied_settings)
+        if settings.get(ReconAttributeTags.RECONSTRUCTION_ALGORITHM) == (
             "DeepMB ONNX Reconstruction"
         ):
-            settings_dict = _resolve_deepmb_model(settings_dict)
+            settings = _resolve_deepmb_model(settings)
 
-        offset_x_mm = float(settings_dict.pop("OFFSET_X", 0.0))
-        offset_z_mm = float(settings_dict.pop("OFFSET_Z", 0.0))
+        offset_x_mm = float(settings.pop("OFFSET_X", 0.0))
+        offset_z_mm = float(settings.pop("OFFSET_Z", 0.0))
 
-        algorithm_name = settings_dict.get(
+        algorithm_name = settings.get(
             ReconAttributeTags.RECONSTRUCTION_ALGORITHM, "Reconstruction"
         )
         suffix = dock.suffix_edit.text().strip()
@@ -320,7 +320,7 @@ class ReconstructionController(TaskControllerBase):
         with viewer_busy(self.viewer):
             # Reconstruction has two sequential processing stages.
             with progress(total=2, desc="Reconstructing") as progress_bar:
-                preprocessor = pat.read_reconstruction_preset(settings_dict)
+                preprocessor = pat.read_reconstruction_preset(settings)
                 reconstruction_algorithm = preprocessor.children[0]
                 time_series = pa_data_for_run.get_time_series()
                 filtered_time_series, new_settings, _ = preprocessor.run(
@@ -341,6 +341,18 @@ class ReconstructionController(TaskControllerBase):
         layer_name = f"Recon: {algorithm_name}{suffix_part}{frame_part}"
 
         wavelengths = [int(w) for w in reconstruction.ax_1_labels]
+        settings.update(new_settings)
+        settings.update(
+            {
+            ReconAttributeTags.RECONSTRUCTION_ALGORITHM: algorithm_name,
+            ReconAttributeTags.SPEED_OF_SOUND: speed_of_sound,
+            "OFFSET_X": offset_x_mm,
+            "OFFSET_Z": offset_z_mm,
+                "frame_mode": "current" if current_frame_id is not None else "all",
+                "frames": output_frames,
+                "suffix": suffix,
+            }
+        )
         layer_metadata = {
             "type": "pa",
             "pa_kind": "recon",
@@ -350,6 +362,7 @@ class ReconstructionController(TaskControllerBase):
             "filepath": str(self.patari_controller.path),
             "timestamps": self.patari_controller.timestamps,
             "frames": output_frames,
+            "settings": settings,
         }
 
         data = self._expand_to_source_frames(
@@ -363,7 +376,6 @@ class ReconstructionController(TaskControllerBase):
             layer_metadata,
             reconstruction,
             colormap="viridis",
-            units="mm",
             offset_x_mm=offset_x_mm,
             offset_z_mm=offset_z_mm,
         )

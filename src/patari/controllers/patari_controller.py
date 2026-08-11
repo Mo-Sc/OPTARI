@@ -20,6 +20,7 @@ from patari.widgets.time_analysis_dock import TimeAnalysisDock
 from patari.widgets.unmixing_dock import UnmixingDock
 from patari.widgets.histogram_dock import HistogramDock
 from patari.widgets.spectrum_dock import SpectrumDock
+from patari.widgets.layer_metadata_dialog import LayerMetadataDialog
 from patari.controllers.ui_manager import UiManager
 from patari.controllers.shortcut_manager import ShortcutManager
 from patari.controllers.scan_controller import ScanController
@@ -496,6 +497,7 @@ class PatariController:
     def update_info_labels(self, event=None) -> None:
         if self.info is None:
             return
+        self.info.metadata_button.setEnabled(self.active_recon_layer is not None)
         if self.active_recon_layer is None:
             self.info.label.setText("Select a PA image layer")
             return
@@ -557,3 +559,24 @@ class PatariController:
             f"Frame: {frame_idx} | {axis1_name}: {axis1_value}\n"
             f"Timestamp: {ts} ({ts_delta:.2f} s)"
         )
+
+    def on_metadata_clicked(self) -> None:
+        """Open metadata window for the currently selected image layer."""
+        selected_layers = list(self.viewer.layers.selection)
+        layer = next(
+            (candidate for candidate in reversed(selected_layers) if isinstance(candidate, Image)),
+            self.active_recon_layer,
+        )
+        if layer is None:
+            return
+
+        scan_info = self._scans.get(getattr(self, "path", Path()))
+        dialog = LayerMetadataDialog(
+            layer=layer,
+            pa_data=self.pa_data,
+            scan_path=getattr(self, "path", None),
+            study_path=getattr(self, "study_path", None),
+            scan_info=scan_info,
+            parent=self.viewer.window._qt_window,
+        )
+        dialog.exec()

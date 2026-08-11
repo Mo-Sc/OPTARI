@@ -335,6 +335,7 @@ class UnmixingController(TaskControllerBase):
         frame_mode: str,
         parameter: str | None = None,
         include_chromophores: bool = False,
+        settings: dict,
     ) -> tuple[dict, dict]:
         """Build synchronized layer metadata and HDF5 export attributes."""
         layer_metadata = {
@@ -351,6 +352,7 @@ class UnmixingController(TaskControllerBase):
             layer_metadata["chromophores"] = axis1_labels
         if parameter is not None:
             layer_metadata["parameter"] = parameter
+        layer_metadata["settings"] = settings
 
         export_attrs = {
             "frames": np.asarray(output_frames, dtype=int),
@@ -426,6 +428,16 @@ class UnmixingController(TaskControllerBase):
 
         suffix = dock.suffix_edit.text().strip()
         reduce_factor = int(dock.resolution_reduction_factor.value())
+        settings = {
+            "wavelengths": selected_wavelengths,
+            "chromophores": selected_chromophores,
+            "resolution_reduction_factor": reduce_factor,
+            "suffix": suffix,
+            "frame_mode": frame_mode,
+            "frames": output_frames,
+            "generate_thb": dock.generate_thb_checkbox.isChecked(),
+            "generate_so2": dock.generate_so2_checkbox.isChecked(),
+        }
 
         dock.status_label.setText("Running unmixing…")
 
@@ -460,6 +472,7 @@ class UnmixingController(TaskControllerBase):
             pa_kind="unmixed",
             frame_mode=frame_mode,
             include_chromophores=True,
+            settings=settings,
         )
         self._set_export_frame_attrs(unmixed, unmixed_export_attrs)
 
@@ -488,7 +501,6 @@ class UnmixingController(TaskControllerBase):
             metadata=unmixed_metadata,
             patato_obj=unmixed,
             colormap="magma",
-            units=self.patari_controller.active_recon_layer.units,
         )
         # Keep PATATO outputs available for future derived computations.
         self.patari_controller._derived_patato_objects[unmixed_name] = unmixed
@@ -511,6 +523,7 @@ class UnmixingController(TaskControllerBase):
                 pa_kind="unmixed_param",
                 frame_mode=frame_mode,
                 parameter="thb",
+                settings=settings,
             )
             self._set_export_frame_attrs(thb, thb_export_attrs)
             thb_name = f"THb: {source_name}{suffix_part}{frame_part}"
@@ -524,7 +537,6 @@ class UnmixingController(TaskControllerBase):
                 metadata=thb_metadata,
                 patato_obj=thb,
                 colormap="inferno",
-                units=self.patari_controller.active_recon_layer.units,
             )
             self.patari_controller._derived_patato_objects[thb_name] = thb
             generated.append("thb")
@@ -545,6 +557,7 @@ class UnmixingController(TaskControllerBase):
                 pa_kind="unmixed_param",
                 frame_mode=frame_mode,
                 parameter="so2",
+                settings=settings,
             )
             self._set_export_frame_attrs(so2, so2_export_attrs)
             so2_name = f"sO2: {source_name}{suffix_part}{frame_part}"
@@ -558,7 +571,6 @@ class UnmixingController(TaskControllerBase):
                 metadata=so2_metadata,
                 patato_obj=so2,
                 colormap="twilight_shifted",
-                units=self.patari_controller.active_recon_layer.units,
             )
             self.patari_controller._derived_patato_objects[so2_name] = so2
             generated.append("so2")
