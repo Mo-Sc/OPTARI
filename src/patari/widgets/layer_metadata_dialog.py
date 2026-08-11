@@ -17,7 +17,11 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from patari.utils.metadata import layer_metadata_rows, scan_metadata_rows
+from patari.utils.metadata import (
+    clinical_metadata_rows,
+    layer_metadata_rows,
+    scan_metadata_rows,
+)
 
 
 class LayerMetadataDialog(QDialog):
@@ -43,6 +47,14 @@ class LayerMetadataDialog(QDialog):
                 scan_metadata_rows(pa_data, scan_path, study_path, scan_info)
             ),
             "Scan",
+        )
+        tabs.addTab(
+            self._create_table(
+                clinical_metadata_rows(
+                    pa_data.get_clinical_metadata() if pa_data else None
+                )
+            ),
+            "Clinical",
         )
 
         buttons = QDialogButtonBox(QDialogButtonBox.Close)
