@@ -13,6 +13,7 @@ import patato as pat  # type: ignore[import]
 from patari.utils.motion import k_motion_scores_optimized
 
 from patari.config import settings
+from patari.roi.roi_records import ROIRecord
 
 logger = logging.getLogger(__name__)
 
@@ -46,10 +47,7 @@ def scale_from_patato_obj(obj, fallback: tuple) -> tuple:
             return fallback
         return (fallback[0], fov_y_m / ny * 1000, fov_x_m / nx * 1000)
     except Exception:
-        logger.warning(
-            f"could not derive scale from object {obj}, using fallback {fallback}",
-            exc_info=True,
-        )
+        logger.warning(f"could not derive scale from object {obj}, using fallback {fallback}")
         return fallback
 
 # ---------------------------------------------------------------------------
@@ -294,9 +292,7 @@ def fov_from_objects(patato_objects: dict) -> "tuple[float, float] | None":
             if fov_x_m > 0 and fov_y_m > 0:
                 return fov_x_m, fov_y_m
         except Exception:
-            logger.warning(
-                f"could not derive FOV from object {obj}", exc_info=True
-            )
+            logger.warning(f"could not derive FOV from object {obj}")
             continue
     return None
 
@@ -314,7 +310,6 @@ def napari_shapes_from_scan_rois(
     """Load ROI polygons from *pa_data* as napari ``(y_mm, x_mm)`` vertices.
 
     Silently skips individual ROIs that cannot be converted.
-    Limits ROIs to MAX_ROIS from config; logs warning if truncated.
     Returns an empty list when no ROIs exist or loading fails.
     """
     try:
@@ -323,19 +318,8 @@ def napari_shapes_from_scan_rois(
         logger.exception("could not load ROIs")
         return []
 
-    max_rois = settings.annotation.max_rois
-    total_rois = len(rois)
-    if total_rois > max_rois:
-        logger.warning(
-            "data contains %d ROI(s), but MAX_ROIS is %d; only loading first %d",
-            total_rois,
-            max_rois,
-            max_rois,
-        )
-
     shapes = []
-    roi_items = list(rois.items())[: max_rois]
-    for (_name, _number), roi in roi_items:
+    for (_name, _number), roi in rois.items():
         try:
             pts = np.asarray(roi.points, dtype=float)  # (N, 2): (x_m, y_m)
             shapes.append(
@@ -351,6 +335,61 @@ def napari_shapes_from_scan_rois(
     return shapes
 
 
+def roi_records_from_scan_rois(
+    pa_data: "pat.PAData", fov_x_m: float, fov_y_m: float
+) -> list[ROIRecord]:
+    """Load PATATO ROIs as one frame-owned record per valid frame."""
+    try:
+        rois = pa_data.get_rois()
+        n_frames = int(np.asarray(pa_data.get_ultrasound().da).shape[0])
+    except Exception:
+        logger.exception("could not load ROI records")
+        return []
+
+    records: list[ROIRecord] = []
+    used_ids: set[int] = set()
+    next_id = 0
+    next_group = 0
+    for (_name, _number), roi in rois.items():
+        points = np.asarray(roi.points, dtype=float)
+        frames = np.asarray(getattr(roi, "ax0_index", []), dtype=int).reshape(-1)
+        frames = np.unique(frames[(frames >= 0) & (frames < n_frames)])
+        if not frames.size:
+            frames = np.arange(n_frames, dtype=int)
+
+        try:
+            persisted_group = int(getattr(roi, "roi_group_id", None))
+        except (TypeError, ValueError):
+            persisted_group = None
+        group_id = persisted_group if persisted_group is not None else next_group
+        next_group = max(next_group, group_id + 1)
+
+        try:
+            persisted_id = int(getattr(roi, "roi_id", None))
+        except (TypeError, ValueError):
+            persisted_id = None
+        for frame_id in frames:
+            roi_id = persisted_id if len(frames) == 1 else None
+            if roi_id is None or roi_id in used_ids:
+                while next_id in used_ids:
+                    next_id += 1
+                roi_id = next_id
+            used_ids.add(roi_id)
+            next_id = max(next_id, roi_id + 1)
+            records.append(
+                ROIRecord(
+                    roi_id=roi_id,
+                    roi_group_id=group_id,
+                    frame_id=int(frame_id),
+                    verts=patato_to_napari(points, fov_x_m, fov_y_m),
+                    kind=getattr(roi, "shape_type", "polygon"),
+                    source=getattr(roi, "roi_class", "PATATO"),
+                    position=getattr(roi, "position", "undefined"),
+                )
+            )
+    return records
+
+
 def napari_shapes_to_patato_rois(
     shapes: list[np.ndarray],
     shape_types: list[str],
@@ -362,6 +401,8 @@ def napari_shapes_to_patato_rois(
     rep: float = 0.0,
     frame_idx: int = 0,
     roi_class: str = "PATARI",
+    roi_ids: list[int] | None = None,
+    roi_group_ids: list[int] | None = None,
 ) -> list[object]:
     """Convert napari ROI shapes into PATATO ROI objects.
 
@@ -374,8 +415,7 @@ def napari_shapes_to_patato_rois(
         zip(shapes, shape_types, roi_positions)
     ):
         verts_yx = np.asarray(verts, dtype=float)[..., -2:]
-        rois.append(
-            PatatoROI.from_polygon_mm(
+        roi = PatatoROI.from_polygon_mm(
                 verts_yx_mm=verts_yx,
                 fov=(fov_x_m, fov_y_m),
                 z_position=z,
@@ -387,5 +427,9 @@ def napari_shapes_to_patato_rois(
                 generated=True,
                 shape_type=stype,
             )
-        )
+        if roi_ids is not None:
+            roi.roi_id = int(roi_ids[i])
+        if roi_group_ids is not None:
+            roi.roi_group_id = int(roi_group_ids[i])
+        rois.append(roi)
     return rois

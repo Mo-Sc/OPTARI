@@ -17,6 +17,7 @@ from qtpy.QtWidgets import (
 from patari.controllers.base import TaskControllerBase
 from patari.io.export_pipeline import export_roi_table_to_xlsx
 from patari.roi.roi_presets import RoiPresetStore
+from patari.roi.roi_records import ROIRecord
 from patari.roi.roi_utils import (
     compute_roi_stats,
     live_table_columns,
@@ -25,11 +26,12 @@ from patari.roi.roi_utils import (
 )
 from patari.utils.misc import roi_color_for_index
 from patari.utils.setup import get_user_roi_presets_dir
+from patari.utils.viewer import selected_frame_idx
 
-from patari.config import settings
 from napari.layers import Image
 
 logger = logging.getLogger(__name__)
+ROI_EDGE_WIDTH = 0.1
 
 
 def _roi_name_popup() -> tuple[str, str, str] | None:
@@ -69,8 +71,143 @@ class RoiController(TaskControllerBase):
         super().__init__(parent_controller)
         self._saved_full_df = pd.DataFrame(columns=saved_export_columns())
         self._syncing = False
-        self._n_shapes = -1
+        self._roi_records: dict[int, ROIRecord] = {}
+        self._projection_ids: list[int] = []
+        self._next_roi_id = 0
+        self._next_roi_group_id = 0
+        self._projecting = False
         self._roi_preset_store = RoiPresetStore(get_user_roi_presets_dir())
+
+    @property
+    def roi_records(self) -> list[ROIRecord]:
+        return list(self._roi_records.values())
+
+    def _n_frames(self) -> int:
+        return int(np.asarray(self.patari_controller.active_us_layer.data).shape[0])
+
+    # def _current_frame(self) -> int:
+    #     return selected_frame_idx(self.viewer, self._n_frames())
+
+    def _new_record(self, verts, kind: str) -> ROIRecord:
+        record = ROIRecord(
+            roi_id=self._next_roi_id,
+            roi_group_id=self._next_roi_group_id,
+            frame_id=selected_frame_idx(self.viewer, self._n_frames()),
+            verts=verts,
+            kind=kind,
+        )
+        self._next_roi_id += 1
+        self._next_roi_group_id += 1
+        return record
+
+    def set_roi_records(self, records: list[ROIRecord]) -> None:
+        self._roi_records = {record.roi_id: record for record in records}
+        self._next_roi_id = max((record.roi_id for record in records), default=-1) + 1
+        self._next_roi_group_id = max(
+            (record.roi_group_id for record in records), default=-1
+        ) + 1
+        self.project_current_frame()
+
+    def clear_roi_records(self) -> None:
+        self._roi_records.clear()
+        self._projection_ids = []
+
+    def current_records(self) -> list[ROIRecord]:
+        """Records for the ROIs currently displayed, in display order."""
+        return [self._roi_records[roi_id] for roi_id in self._projection_ids]
+
+    def expand_current_projection_to_all_frames(self) -> None:
+        self.sync_records_from_shapes()
+        if not self._projection_ids:
+            return
+        source = self._roi_records[self._projection_ids[-1]]
+        for frame_id in range(self._n_frames()):
+            if frame_id == source.frame_id:
+                continue
+            record = ROIRecord(
+                roi_id=self._next_roi_id,
+                roi_group_id=source.roi_group_id,
+                frame_id=frame_id,
+                verts=source.verts,
+                kind=source.kind,
+                source=source.source,
+                position=source.position,
+            )
+            self._roi_records[record.roi_id] = record
+            self._next_roi_id += 1
+        self.project_current_frame()
+
+    def project_current_frame(self) -> None:
+        shapes = self.patari_controller.shapes_layer
+        if shapes is None or self._projecting:
+            return
+        frame_id = selected_frame_idx(self.viewer, self._n_frames())
+        visible = sorted(
+            (r for r in self._roi_records.values() if r.frame_id == frame_id),
+            key=lambda r: r.roi_id,
+        )
+        self._projecting = True
+        try:
+            # pass (verts, kind) pairs so napari never rebuilds shapes against a stale shape_type
+            shapes.data = [(r.verts, r.kind) for r in visible]
+            if visible:
+                shapes.edge_width = [ROI_EDGE_WIDTH] * len(visible)
+            self._projection_ids = [r.roi_id for r in visible]
+            shapes.selected_data = set()
+        finally:
+            self._projecting = False
+        self._refresh_shape_display()
+
+    def _match_ids_after_removal(self, data, kinds: list[str]) -> list[int | None]:
+        """Match surviving shapes to their prior ids; removal preserves relative order."""
+        old_records = self.current_records()
+        matched: list[int | None] = []
+        j = 0
+        for verts, kind in zip(data, kinds):
+            verts = np.asarray(verts, dtype=float)
+            while j < len(old_records) and not (
+                old_records[j].kind == kind
+                and np.array_equal(old_records[j].verts, verts)
+            ):
+                j += 1
+            matched.append(old_records[j].roi_id if j < len(old_records) else None)
+            j += 1
+        return matched
+
+    def sync_records_from_shapes(self) -> None:
+        """Keep frame-owned ROI records in sync with the projected Shapes layer.
+
+        Same/grown shape count: ids are kept positionally (napari always
+        appends new shapes at the end; in-place edits keep their position).
+        Shrunk shape count: removal preserves the relative order of survivors,
+        so ids are recovered by matching remaining geometry to the old records.
+        """
+        shapes = self.patari_controller.shapes_layer
+        if shapes is None or self._projecting:
+            return
+
+        data = list(shapes.data)
+        kinds = [str(k) for k in shapes.shape_type]
+        old_ids = self._projection_ids
+
+        if len(data) < len(old_ids):
+            new_ids = self._match_ids_after_removal(data, kinds)
+        else:
+            new_ids = old_ids + [None] * (len(data) - len(old_ids))
+
+        for i, (verts, kind) in enumerate(zip(data, kinds)):
+            if new_ids[i] is None:
+                record = self._new_record(verts, kind)
+                new_ids[i] = record.roi_id
+                self._roi_records[record.roi_id] = record
+            else:
+                record = self._roi_records[new_ids[i]]
+                record.verts = np.asarray(verts, dtype=float).copy()
+                record.kind = kind
+
+        for stale_id in set(old_ids) - set(new_ids):
+            del self._roi_records[stale_id]
+        self._projection_ids = new_ids
 
     @staticmethod
     def _filter_columns(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
@@ -259,93 +396,28 @@ class RoiController(TaskControllerBase):
                 "Error unbinding ROI and annotation dock signals: %s", e
             )
 
-    # @staticmethod
-    # def set_last_roi_position(controller, position: str) -> None:
-    #     """Tag the most recently added ROI with a semantic position string."""
-    # Disabled for now: roi_position metadata is currently not exported anyways by
-    # export/stats
-    # props = dict(getattr(controller.shapes_layer, "properties", {}) or {})
-    # positions = list(props.get("roi_position", []))
-    # if not positions:
-    #     return
-    # positions[-1] = str(position or "undefined")
-    # props["roi_position"] = positions
-    # controller.shapes_layer.properties = props
-    # return
-
-    def apply_roi_colors(self) -> None:
-        """Assign deterministic colors to ROI edges by ROI index."""
-        n_shapes = len(self.patari_controller.shapes_layer.data)
-        self.patari_controller.shapes_layer.edge_color = [
-            roi_color_for_index(i)
-            for i in range(n_shapes)
-        ]
-
-    def apply_roi_labels(self) -> None:
-        """Show ROI index labels next to shapes."""
-        props = dict(
-            getattr(self.patari_controller.shapes_layer, "properties", {})
-            or {}
-        )
-        props["roi_id"] = np.arange(
-            len(self.patari_controller.shapes_layer.data), dtype=int
-        )
-        self.patari_controller.shapes_layer.properties = props
-        # napari text supports formatting from properties.
-        self.patari_controller.shapes_layer.text = {
-            "string": "{roi_id}",
-            "size": 8,
+    def _refresh_shape_display(self) -> None:
+        """Recolor and relabel ROI shapes from their records."""
+        shapes = self.patari_controller.shapes_layer
+        records = self.current_records()
+        shapes.edge_color = [roi_color_for_index(i) for i in range(len(records))]
+        shapes.properties = {
+            "roi_id": [r.roi_id for r in records],
+            "roi_group_id": [r.roi_group_id for r in records],
+            "roi_source": [r.source for r in records],
+            "roi_position": [r.position for r in records],
         }
-
-    def format_rois(self) -> None:
-        """Apply ROI visual formatting only when the shape count changes."""
-        if self.patari_controller.shapes_layer is None:
-            return
-        n_shapes = len(self.patari_controller.shapes_layer.data)
-        if n_shapes == self._n_shapes:
-            return
-        try:
-            self.apply_roi_colors()
-            self.apply_roi_labels()
-            self._n_shapes = n_shapes
-        except Exception as e:
-            logger.exception("Error formatting ROIs: %s", e)
+        # napari text supports formatting from properties.
+        shapes.text = {"string": "{roi_id}", "size": 8}
 
     def on_shapes_data_changed(self, event=None) -> None:
-        if self.patari_controller.shapes_layer is None:
+        if self.patari_controller.shapes_layer is None or self._projecting:
             return
 
-        n_shapes = len(self.patari_controller.shapes_layer.data)
-        props = dict(
-            getattr(self.patari_controller.shapes_layer, "properties", {}) or {}
-        )
-        roi_source = list(props.get("roi_source", []))
-        if len(roi_source) < n_shapes:
-            roi_source.extend(["PATARI"] * (n_shapes - len(roi_source)))
-        elif len(roi_source) > n_shapes:
-            roi_source = roi_source[:n_shapes]
-        props["roi_source"] = roi_source
-        self.patari_controller.shapes_layer.properties = props
+        self.sync_records_from_shapes()
+        self._refresh_shape_display()
 
-        # ROI limit. For now just warning, TODO: enforce
-        max_rois = settings.annotation.max_rois
-        if n_shapes > max_rois:
-            logger.warning(
-                "ROI soft limit reached (%s ROIs); Too many ROIs may cause performance issues. Current number of ROIs: %s",
-                max_rois,
-                n_shapes,
-            )
-        
         self._update_save_button_state()
-
-        # TODO: roi_position attribute
-        # for roi specific metadata, we have to add/update properties on the shapes layer, that would be done here
-        # props = dict(getattr(controller.shapes_layer, "properties", {}) or {})
-        # positions = list(props.get("roi_position", []))
-        # print(positions)
-
-        self.format_rois()
-
         self.update_live_table()
 
     def update_live_table(self, event=None) -> None:
@@ -373,7 +445,7 @@ class RoiController(TaskControllerBase):
 
         try:
             df_live = compute_roi_stats(
-                self.patari_controller.shapes_layer,
+                self.current_records(),
                 self.patari_controller.active_recon_layer,
                 frame_idx,
                 channel_idx,
@@ -435,6 +507,11 @@ class RoiController(TaskControllerBase):
         if not selected_indices:
             logger.info("Select at least one ROI to save")
             return
+        selected_ids = {
+            self._projection_ids[index]
+            for index in selected_indices
+            if index < len(self._projection_ids)
+        }
 
         include_all_layers = False
         include_all_frames = False
@@ -469,6 +546,7 @@ class RoiController(TaskControllerBase):
                 if isinstance(layer, Image) and layer.metadata.get("type") == "pa"
             ]
 
+        records = self.current_records()
         collected: list[pd.DataFrame] = []
         for layer in target_layers:
             layer_data = np.asarray(layer.data)
@@ -486,7 +564,7 @@ class RoiController(TaskControllerBase):
             for f_idx in frame_indices:
                 for c_idx in channel_indices:
                     df_slice = compute_roi_stats(
-                        self.patari_controller.shapes_layer,
+                        records,
                         layer,
                         int(f_idx),
                         int(c_idx),
@@ -500,7 +578,7 @@ class RoiController(TaskControllerBase):
                     roi_index_numeric = pd.to_numeric(
                         df_slice["roi_index"], errors="coerce"
                     )
-                    df_rows = df_slice[roi_index_numeric.isin(selected_indices)]
+                    df_rows = df_slice[roi_index_numeric.isin(selected_ids)]
                     if not df_rows.empty:
                         collected.append(df_rows)
 
@@ -797,8 +875,10 @@ class RoiController(TaskControllerBase):
             mode = str(annotation.roi_placement_mode_combo.currentData())
             if mode == "auto":
                 self._place_roi_preset_auto(self.patari_controller, preset)
-                return
-            self._place_roi_preset_static(self.patari_controller, preset)
+            else:
+                self._place_roi_preset_static(self.patari_controller, preset)
+            if annotation.all_frames_radio.isChecked():
+                self.expand_current_projection_to_all_frames()
         except ValueError as exc:
             annotation.roi_presets_description_label.setText(
                 f"Could not place ROI preset: {exc}"
@@ -849,7 +929,6 @@ class RoiController(TaskControllerBase):
         if self.patari_controller.shapes_layer is None:
             self.patari_controller.roi.save_button.setEnabled(False)
             self.update_live_table()
-            self._n_shapes = -1
             return
         self._update_save_button_state()
         self.update_live_table()

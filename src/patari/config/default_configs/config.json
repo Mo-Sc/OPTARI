@@ -18,7 +18,6 @@
         }
     },
     "annotation": {
-        "max_rois": 10,
         "roi_colors": [
             "#8B0000",
             "#FFD700",

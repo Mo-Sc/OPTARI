@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from pathlib import Path
 
 import cv2
@@ -15,6 +14,7 @@ from patari.roi.roi_features import (
     ROIContext,
     SAVED_FIXED_SOURCE_COLUMNS,
 )
+from patari.roi.roi_records import ROIRecord
 
 logger = logging.getLogger(__name__)
 
@@ -64,13 +64,6 @@ def saved_export_columns() -> list[str]:
         if c not in SAVED_FIXED_SOURCE_COLUMNS and c != "roi_index"
     ]
     return list(SAVED_FIXED_SOURCE_COLUMNS) + stats
-
-@dataclass
-class ROI:
-    index: int
-    kind: str
-    verts: np.ndarray  # (N, 2) in layer coordinates (mm)
-
 
 def _scale_sy_sx(active_recon_layer) -> tuple[float, float]:
     scale = getattr(active_recon_layer, "scale", (1.0, 1.0, 1.0))
@@ -137,33 +130,13 @@ def _timestamp_str(active_recon_layer, frame_idx: int, channel_idx: int) -> str:
         return "N/A"
 
 
-def _roi_source(shapes_layer, roi_index: int) -> str:
-    props = dict(getattr(shapes_layer, "properties", {}) or {})
-    sources = list(props.get("roi_source", []))
-    if roi_index < len(sources):
-        source = str(sources[roi_index] or "").strip()
-        if source:
-            return source
-    return "PATARI"
-
-
-def _iter_rois(shapes_layer) -> list[ROI]:
-    rois: list[ROI] = []
-    for i, verts in enumerate(getattr(shapes_layer, "data", [])):
-        verts_arr = np.asarray(verts)
-        if verts_arr.ndim != 2:
-            continue
-        kind = (
-            shapes_layer.shape_type[i]
-            if hasattr(shapes_layer, "shape_type")
-            else "polygon"
-        )
-        rois.append(ROI(index=int(i), kind=str(kind), verts=verts_arr))
-    return rois
+def _iter_rois(records: list[ROIRecord]) -> list[ROIRecord]:
+    """Filter out any degenerate (non 2D) ROI geometry."""
+    return [r for r in records if r.verts.ndim == 2]
 
 
 def _roi_mask(
-    roi: ROI, *, sy: float, sx: float, image_shape
+    roi: ROIRecord, *, sy: float, sx: float, image_shape
 ) -> np.ndarray | None:
     # convert mm→px (y,x)
     verts_pixels = roi.verts / np.array([sy, sx])
@@ -175,7 +148,7 @@ def _roi_mask(
         return None
 
 
-def _roi_centroid_mm(roi: ROI) -> tuple[float, float]:
+def _roi_centroid_mm(roi: ROIRecord) -> tuple[float, float]:
     if roi.verts.size == 0:
         return (float("nan"), float("nan"))
     yx = np.asarray(roi.verts, dtype=float).mean(axis=0)
@@ -254,7 +227,7 @@ def ellipse_mask(verts_px, image_shape):
 
 
 def compute_roi_stats(
-    shapes_layer,
+    records: list[ROIRecord],
     active_recon_layer,
     frame_idx: int,
     channel_idx: int,
@@ -290,7 +263,7 @@ def compute_roi_stats(
     scan_name = str(active_recon_layer.metadata.get("scan_name", ""))
 
     rows = []
-    for roi in _iter_rois(shapes_layer):
+    for roi in _iter_rois(records):
         mask = _roi_mask(roi, sy=sy, sx=sx, image_shape=img2d.shape)
         if mask is None:
             continue
@@ -304,10 +277,11 @@ def compute_roi_stats(
         )
 
         ctx = ROIContext(
-            roi_index=roi.index,
+            roi_index=roi.roi_id,
+            roi_group_id=roi.roi_group_id,
             src_layers={
                 "data": str(active_recon_layer.name),
-                "mask": _roi_source(shapes_layer, roi.index),
+                "mask": roi.source,
             },
             roi_type=roi.kind,
             study_folder=study_folder,
@@ -331,14 +305,11 @@ def compute_roi_stats(
             }
         )
 
-    df = pd.DataFrame(rows, columns=selected_feature_ids)
-    if not df.empty and "roi_index" in df.columns:
-        df["roi_index"] = pd.to_numeric(df["roi_index"], errors="coerce").astype(int)
-    return df
+    return pd.DataFrame(rows, columns=selected_feature_ids)
 
 
 def compute_roi_time_series(
-    shapes_layer,
+    records: list[ROIRecord],
     active_recon_layer,
     channel_idx: int,
     feature_id: str,
@@ -389,7 +360,7 @@ def compute_roi_time_series(
     channel_value = _channel_value(active_recon_layer, channel_idx)
 
     series: dict[int, np.ndarray] = {}
-    for roi in _iter_rois(shapes_layer):
+    for roi in _iter_rois(records):
         mask = _roi_mask(roi, sy=sy, sx=sx, image_shape=img_shape)
         if mask is None:
             continue
@@ -410,10 +381,11 @@ def compute_roi_time_series(
 
             # Create a context for the current ROI and frame to compute the feature
             ctx = ROIContext(
-                roi_index=roi.index,
+                roi_index=roi.roi_id,
+                roi_group_id=roi.roi_group_id,
                 src_layers={
                     "data": str(active_recon_layer.name),
-                    "mask": _roi_source(shapes_layer, roi.index),
+                    "mask": roi.source,
                 },
                 roi_type=roi.kind,
                 study_folder=study_folder,
@@ -431,13 +403,13 @@ def compute_roi_time_series(
                 sx=sx,
             )
             y.append(float(FEATURE_REGISTRY[feature_id].compute(ctx)))
-        series[int(roi.index)] = np.asarray(y, dtype=float)
+        series[roi.roi_id] = np.asarray(y, dtype=float)
 
     return np.asarray(x, dtype=float), series
 
 
 def extract_roi_pixels_for_slice(
-    shapes_layer,
+    records: list[ROIRecord],
     active_recon_layer,
     frame_idx: int,
     channel_idx: int,
@@ -461,12 +433,12 @@ def extract_roi_pixels_for_slice(
     sy, sx = _scale_sy_sx(active_recon_layer)
 
     out: dict[int, np.ndarray] = {}
-    for roi in _iter_rois(shapes_layer):
+    for roi in _iter_rois(records):
         mask = _roi_mask(roi, sy=sy, sx=sx, image_shape=img2d.shape)
         if mask is None:
             continue
         vals = img2d[mask]
-        out[int(roi.index)] = _apply_clamp(
+        out[roi.roi_id] = _apply_clamp(
             vals,
             clamp_min,
             clamp_max,
@@ -476,7 +448,7 @@ def extract_roi_pixels_for_slice(
 
 
 def compute_roi_spectra(
-    shapes_layer,
+    records: list[ROIRecord],
     active_recon_layer,
     frame_idx: int,
     *,
@@ -523,7 +495,7 @@ def compute_roi_spectra(
     img_shape = data.shape[-2:]
 
     series: dict[int, np.ndarray] = {}
-    for roi in _iter_rois(shapes_layer):
+    for roi in _iter_rois(records):
         mask = _roi_mask(roi, sy=sy, sx=sx, image_shape=img_shape)
         if mask is None:
             continue
@@ -534,6 +506,6 @@ def compute_roi_spectra(
                 vals, clamp_min, clamp_max, mode=str(clamp_mode or "clip")
             )
             y.append(float(np.nanmean(vals)) if vals.size else np.nan)
-        series[int(roi.index)] = np.asarray(y, dtype=float)
+        series[roi.roi_id] = np.asarray(y, dtype=float)
 
     return x, series, x_tick_labels

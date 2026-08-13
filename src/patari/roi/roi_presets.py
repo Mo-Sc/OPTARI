@@ -9,6 +9,8 @@ from patari.utils.presets import PresetStore
 
 @dataclass
 class RoiPreset:
+    """Serializable ROI geometry and placement metadata."""
+
     name: str
     description: str
     position: str
@@ -50,6 +52,8 @@ class RoiPreset:
 
 
 class RoiPresetStore(PresetStore):
+    """Load and save named ROI presets in the user preset directory."""
+
     def list_presets(self) -> list[RoiPreset]:
         return [
             RoiPreset.from_dict(path.stem, self.load(path))

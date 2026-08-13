@@ -126,7 +126,7 @@ class AnalysisController(TaskControllerBase):
             "Computing time series…"
         )
         x, series = compute_roi_time_series(
-            self.patari_controller.shapes_layer,
+            self.patari_controller.roi_ctrl.current_records(),
             self.patari_controller.active_recon_layer,
             channel_idx,
             feature_id,
@@ -136,8 +136,8 @@ class AnalysisController(TaskControllerBase):
         plot.clear()
         plot.addLegend()
 
-        for roi_index, y in series.items():
-            color = roi_color_for_index(int(roi_index))
+        for position, (roi_index, y) in enumerate(series.items()):
+            color = roi_color_for_index(position)
             plot.plot(
                 x,
                 y,
@@ -201,7 +201,7 @@ class AnalysisController(TaskControllerBase):
         )
 
         roi_vals = extract_roi_pixels_for_slice(
-            self.patari_controller.shapes_layer,
+            self.patari_controller.roi_ctrl.current_records(),
             self.patari_controller.active_recon_layer,
             frame_idx,
             channel_idx,
@@ -213,7 +213,7 @@ class AnalysisController(TaskControllerBase):
         )
 
         n_plotted = 0
-        for roi_index, vals in roi_vals.items():
+        for position, (roi_index, vals) in enumerate(roi_vals.items()):
             vals = np.asarray(vals)
             # Remove NaN values before computing histogram
             vals = vals[np.isfinite(vals)]
@@ -228,7 +228,7 @@ class AnalysisController(TaskControllerBase):
             x = (edges[:-1] + edges[1:]) / 2.0
             width = float(edges[1] - edges[0])
 
-            color = roi_color_for_index(int(roi_index))
+            color = roi_color_for_index(position)
             brush = pg.mkBrush(color)
             pen = pg.mkPen(color)
 
@@ -281,7 +281,7 @@ class AnalysisController(TaskControllerBase):
         )
 
         x, series, x_tick_labels = compute_roi_spectra(
-            self.patari_controller.shapes_layer,
+            self.patari_controller.roi_ctrl.current_records(),
             self.patari_controller.active_recon_layer,
             frame_idx,
             **self._clamp_kwargs(),
@@ -298,11 +298,11 @@ class AnalysisController(TaskControllerBase):
             )
         )
         x_label = "Channel" if axis1_name.lower() == "channel" else axis1_name
-        for roi_index, y in series.items():
+        for position, (roi_index, y) in enumerate(series.items()):
             if y.size == 0 or np.all(np.isnan(y)):
                 continue
 
-            color = roi_color_for_index(int(roi_index))
+            color = roi_color_for_index(position)
 
             plot = pg.PlotWidget()
             plot.setTitle(f"ROI {roi_index}")

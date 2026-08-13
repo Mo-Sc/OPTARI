@@ -63,7 +63,7 @@ def layer_metadata_rows(layer) -> list[tuple[str, str, str]]:
         ("Blending", layer.blending),
         ("Colormap", layer.colormap.name),
         ("Contrast limits", tuple(layer.contrast_limits)),
-        ("Application metadata", dict(layer.metadata)),
+        ("Layer-specific metadata", dict(layer.metadata)),
     ]
     return [
         (label, _format(value), _format(value, details=True))
@@ -115,6 +115,7 @@ def scan_metadata_rows(
         ("Scan path", scan_path),
         ("Scan name", pa_data.get_scan_name()),
         ("Internal name", getattr(scan_info, "internal_name", None)),
+        ("File origin", pa_data.get_file_origin()),
         ("Acquisition date", pa_data.get_scan_datetime()),
         ("Clinical scan", pa_data.is_clinical()),
         ("Acquisition shape", getattr(pa_data, "shape", None)),

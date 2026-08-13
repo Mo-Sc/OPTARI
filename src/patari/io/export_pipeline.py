@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 import logging
 from pathlib import Path
 
+import h5py
 import numpy as np
 import patato as pat
 from qtpy.QtWidgets import QFileDialog
 
+from patari import __version__
 from patari.patato_bridge import napari_shapes_to_patato_rois
+from patato.io.attribute_tags import HDF5Tags
 
 
 logger = logging.getLogger(__name__)
@@ -41,11 +45,12 @@ def export_scan_to_hdf5(controller, destination: Path) -> bool:
     if destination.suffix.lower() not in {".hdf5", ".h5"}:
         destination = destination.with_suffix(".hdf5")
     if destination.exists():
-        logger.warning("export target already exists: %s", destination)
+        logger.error("export target already exists: %s", destination)
         return False
 
     try:
         controller.pa_data.save_hdf5(str(destination))
+        _write_file_origin(destination)
     except Exception:
         logger.exception("failed to export scan to HDF5")
         return False
@@ -68,48 +73,27 @@ def export_scan_to_hdf5(controller, destination: Path) -> bool:
                 pass
 
 
+def _write_file_origin(destination: Path) -> None:
+    file_origin = {
+        "tool": "PATARI",
+        "tool_version": __version__,
+        "format_version": 1,
+        "operator": "Undefined",
+        "creation_time": dt.datetime.now(dt.timezone.utc)
+        .isoformat(),
+    }
+    with h5py.File(destination, "r+") as file:
+        file.attrs[HDF5Tags.FILE_ORIGIN] = json.dumps(file_origin)
+
+
 def _write_rois(controller, destination_pa_data) -> None:
     if controller.shapes_layer is None or controller.shapes_layer.data is None:
         return
 
-    # Use the current slice to annotate ROI acquisition context.
-    frame_idx = int(controller.viewer.dims.current_step[0])
-    channel_idx = int(controller.viewer.dims.current_step[1])
-
-    try:
-        z = int(
-            controller.pa_data.scan_reader.get_scanner_z_position()[
-                frame_idx, channel_idx
-            ]
-        )
-        run = int(
-            controller.pa_data.scan_reader.get_run_numbers()[
-                frame_idx, channel_idx
-            ]
-        )
-        rep = int(
-            controller.pa_data.scan_reader.get_repetition_numbers()[
-                frame_idx, channel_idx
-            ]
-        )
-    except Exception:
-        logger.exception(
-            "failed to read z/run/repetition when exporting ROIs; defaulting to 0"
-        )
-        z, run, rep = 0, 0, 0
-
-    shapes_snapshot = [
-        np.asarray(verts, dtype=float)
-        for verts in controller.shapes_layer.data
-    ]
-    shape_types_snapshot = list(controller.shapes_layer.shape_type)
-
-    # roi_position is currently not set for manual ROIs and therefore this list would be out of sync
-    # TODO: roi_position
-    # roi_positions_snapshot = list(
-    #     controller.shapes_layer.properties["roi_position"]
-    # )
-    roi_positions_snapshot = ["undefined"] * len(shapes_snapshot)
+    controller.roi_ctrl.sync_records_from_shapes()
+    records = controller.roi_ctrl.roi_records
+    if not records:
+        return
 
     # Overwrite PATARI-created ROI groups while preserving non-PATARI groups.
     existing_rois = dict(destination_pa_data.get_rois())
@@ -124,23 +108,36 @@ def _write_rois(controller, destination_pa_data) -> None:
 
     fov_x_m, fov_y_m = controller._get_fov()
     export_roi_class = f"PATARI_{dt.datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+    z_values = controller.pa_data.scan_reader.get_scanner_z_position()
+    run_values = controller.pa_data.scan_reader.get_run_numbers()
+    rep_values = controller.pa_data.scan_reader.get_repetition_numbers()
+    channel_idx = int(controller.viewer.dims.current_step[1])
 
-    rois = napari_shapes_to_patato_rois(
-        shapes_snapshot,
-        shape_types_snapshot,
-        roi_positions_snapshot,
-        fov_x_m,
-        fov_y_m,
-        z,
-        run,
-        rep,
-        frame_idx,
-        roi_class=export_roi_class,
-    )
-    for roi in rois:
+    for record in records:
+        frame_idx = int(record.frame_id)
+        try:
+            z = z_values[frame_idx, channel_idx]
+            run = run_values[frame_idx, channel_idx]
+            rep = rep_values[frame_idx, channel_idx]
+        except (IndexError, KeyError):
+            z, run, rep = 0, 0, 0
+        roi = napari_shapes_to_patato_rois(
+            [np.asarray(record.verts, dtype=float)],
+            [record.kind],
+            [record.position],
+            fov_x_m,
+            fov_y_m,
+            z,
+            run,
+            rep,
+            frame_idx,
+            roi_class=export_roi_class,
+            roi_ids=[record.roi_id],
+            roi_group_ids=[record.roi_group_id],
+        )[0]
         destination_pa_data.add_roi(roi, generated=True)
 
-    logger.info("saved %s PATARI ROI(s)", len(rois))
+    logger.info("saved %s PATARI ROI(s)", len(records))
 
 
 def _write_derived_images(controller, destination_pa_data) -> None:

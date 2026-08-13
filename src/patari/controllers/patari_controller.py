@@ -50,6 +50,7 @@ class PatariController:
         self._derived_patato_objects: dict[str, pat.ImageSequence] = {}
 
         self.shapes_layer: Shapes | None = None
+        self._last_frame_idx: int | None = None
         self.active_recon_layer: Image | None = None
         self.active_us_layer: Image | None = None
 
@@ -225,12 +226,6 @@ class PatariController:
             evt.connect(handler)
 
     # ============ ROI layer management ============
-    def _apply_roi_colors(self) -> None:
-        self.roi_ctrl.apply_roi_colors()
-
-    def _apply_roi_labels(self) -> None:
-        self.roi_ctrl.apply_roi_labels()
-
     def _on_shapes_data_changed(self, event=None) -> None:
         self.roi_ctrl.on_shapes_data_changed(event)
 
@@ -387,6 +382,11 @@ class PatariController:
         try:
             if self._snap_dims_to_active_layer():
                 return
+
+            frame_idx = int(round(self.viewer.dims.point[0]))
+            if frame_idx != self._last_frame_idx:
+                self._last_frame_idx = frame_idx
+                self.roi_ctrl.project_current_frame()
 
             self.refresh_all()
 

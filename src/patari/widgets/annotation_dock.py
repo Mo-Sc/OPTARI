@@ -13,12 +13,17 @@ from qtpy.QtWidgets import (
     QListWidget,
     QComboBox,
     QPushButton,
+    QRadioButton,
     QVBoxLayout,
     QWidget,
 )
 
 from patari.roi.roi_features import numeric_feature_ids
-from .dock_helpers import create_range_edits, create_right_dock_shell
+from .dock_helpers import (
+    create_frame_scope_controls,
+    create_range_edits,
+    create_right_dock_shell,
+)
 
 
 @dataclass
@@ -37,6 +42,8 @@ class AnnotationDock:
     roi_presets_list: QListWidget
     roi_presets_description_label: QLabel
     roi_placement_mode_combo: QComboBox
+    current_frames_radio: QRadioButton
+    all_frames_radio: QRadioButton
     save_roi_preset_button: QPushButton
     remove_roi_preset_button: QPushButton
     place_roi_button: QPushButton
@@ -86,6 +93,11 @@ def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
     placement_layout.addWidget(QLabel("Placement mode"))
     placement_layout.addWidget(roi_placement_mode_combo)
     roi_presets_layout.addWidget(placement_row)
+
+    scope_row, current_frames_radio, all_frames_radio = (
+        create_frame_scope_controls()
+    )
+    roi_presets_layout.addWidget(scope_row)
 
     roi_presets_layout.addWidget(button_row)
 
@@ -176,6 +188,8 @@ def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
         roi_presets_list=roi_presets_list,
         roi_presets_description_label=roi_presets_description_label,
         roi_placement_mode_combo=roi_placement_mode_combo,
+        current_frames_radio=current_frames_radio,
+        all_frames_radio=all_frames_radio,
         save_roi_preset_button=save_roi_preset_button,
         remove_roi_preset_button=remove_roi_preset_button,
         place_roi_button=place_roi_button,

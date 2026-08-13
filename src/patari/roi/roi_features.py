@@ -9,6 +9,7 @@ import numpy as np
 @dataclass(frozen=True)
 class ROIContext:
     roi_index: int
+    roi_group_id: int
     src_layers: dict[str, str]
     roi_type: str
     study_folder: str
@@ -63,6 +64,7 @@ def _snr(values: np.ndarray) -> float:
 
 FEATURE_REGISTRY: dict[str, FeatureSpec] = {
     "roi_index": FeatureSpec(int, lambda c: int(c.roi_index)),
+    "roi_group_id": FeatureSpec(int, lambda c: int(c.roi_group_id)),
     "mean": FeatureSpec(float, lambda c: _nan_stat(c.vals, np.nanmean)),
     "median": FeatureSpec(float, lambda c: _nan_stat(c.vals, np.nanmedian)),
     "std": FeatureSpec(float, lambda c: _nan_stat(c.vals, np.nanstd)),
@@ -95,6 +97,8 @@ def numeric_feature_ids() -> list[str]:
 
 # Fixed set of columns that are always included in the saved table, regardless of user settings to identify the origin of the ROI
 SAVED_FIXED_SOURCE_COLUMNS: list[str] = [
+    "roi_index",
+    "roi_group_id",
     "study_folder",
     "scan_folder",
     "scan_name",

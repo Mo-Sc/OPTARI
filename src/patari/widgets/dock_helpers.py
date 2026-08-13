@@ -46,6 +46,7 @@ def create_frame_scope_controls() -> tuple[QWidget, QRadioButton, QRadioButton]:
     group.addButton(current_frames_radio)
     group.addButton(all_frames_radio)
 
+    layout.addWidget(QLabel("Scope"))
     layout.addWidget(current_frames_radio)
     layout.addWidget(all_frames_radio)
     return container, current_frames_radio, all_frames_radio

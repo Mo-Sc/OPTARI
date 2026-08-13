@@ -14,7 +14,7 @@ from qtpy.QtWidgets import QFileDialog
 from patari.patato_bridge import (
     build_napari_layers,
     fov_from_objects,
-    napari_shapes_from_scan_rois,
+    roi_records_from_scan_rois,
 )
 from patari.io.export_pipeline import export_scan_to_hdf5
 from patari.utils.misc import roi_color_for_index
@@ -113,6 +113,8 @@ class ScanController(TaskControllerBase):
         self.patari_controller.active_recon_layer = None
         self.patari_controller.active_us_layer = None
         self.patari_controller.shapes_layer = None
+        self.patari_controller.roi_ctrl.clear_roi_records()
+        self.patari_controller._last_frame_idx = None
 
         for layer in list(self.viewer.layers):
             self.viewer.layers.remove(layer)
@@ -335,9 +337,9 @@ class ScanController(TaskControllerBase):
         """
         try:
             if path.is_file() and path.suffix.lower() == ".hdf5":
-                from patato.io.hdf.hdf5_interface import HDF5Reader
+                from patato.io.hdf.hdf5_reader_factory import get_hdf5_reader
 
-                reader = HDF5Reader(str(path))
+                reader = get_hdf5_reader(str(path))
                 name = reader.get_scan_name()
                 reader.close()
                 return str(name) if name else None
@@ -411,6 +413,7 @@ class ScanController(TaskControllerBase):
             )
 
             shapes: list = []
+            self.patari_controller.roi_ctrl.clear_roi_records()
             self.patari_controller.shapes_layer.data = []
             fov = (
                 self.get_fov()
@@ -418,13 +421,15 @@ class ScanController(TaskControllerBase):
                 else None
             )
             if fov is not None:
-                shapes = napari_shapes_from_scan_rois(
+                records = roi_records_from_scan_rois(
                     self.patari_controller.pa_data, *fov
                 )
-                for verts, stype, _, _ in shapes:
-                    self.patari_controller.shapes_layer.add(
-                        verts, shape_type=stype
-                    )
+                self.patari_controller.roi_ctrl.set_roi_records(records)
+                shapes = [
+                    (record.verts, record.kind, record.position, record.source)
+                    for record in records
+                    if record.frame_id == int(self.viewer.dims.point[0])
+                ]
 
                 # Auto select the loaded ROIs for convenience and to activate the button
                 if shapes:

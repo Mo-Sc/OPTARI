@@ -18,7 +18,6 @@ class GeneralConfig:
 
 @dataclass(frozen=True)
 class AnnotationConfig:
-    max_rois: int
     roi_colors: list = field(default_factory=list)
     roi_features: dict[str, int] = field(default_factory=dict)
 
