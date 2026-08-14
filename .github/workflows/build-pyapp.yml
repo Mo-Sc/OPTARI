@@ -3,7 +3,7 @@ name: Build PATARI Binaries
 on:
   push:
     tags:
-      - 'v*' # Runs on release tags (e.g., v0.4.0)
+      - 'v*' # Runs on release tags (e.g., v0.8.0)
 
 jobs:
   build-pyapp:
@@ -13,17 +13,19 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            zip_name: patari-windows
-            exe_name: patari.exe
+            os_name: windows
+            exe_suffix: .exe
             binary_path: target/release/pyapp.exe
           - os: macos-latest
-            zip_name: patari-macos
-            exe_name: patari
+            os_name: macos
+            exe_suffix: ""
             binary_path: target/release/pyapp
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
@@ -60,16 +62,18 @@ jobs:
           export PYAPP_PROJECT_PATH="../$PYAPP_PROJECT_PATH"
           cargo build --release
 
-      - name: Rename Executable
+      - name: Rename Executable with Version Tag
         shell: bash
         run: |
-          mv pyapp-source/${{ matrix.binary_path }} pyapp-source/target/release/${{ matrix.exe_name }}
+          FINAL_NAME="patari-${{ github.ref_name }}${{ matrix.exe_suffix }}"
+          mv pyapp-source/${{ matrix.binary_path }} pyapp-source/target/release/$FINAL_NAME
+          echo "FINAL_NAME=$FINAL_NAME" >> $GITHUB_ENV
 
       - name: Prepare Release Package
         shell: bash
         run: |
           mkdir -p "$GITHUB_WORKSPACE/release_package"
-          mv "$GITHUB_WORKSPACE/pyapp-source/target/release/${{ matrix.exe_name }}" "$GITHUB_WORKSPACE/release_package/"
+          mv "$GITHUB_WORKSPACE/pyapp-source/target/release/${{ env.FINAL_NAME }}" "$GITHUB_WORKSPACE/release_package/"
           cp "$GITHUB_WORKSPACE/docs/PATARI_Instructions.pdf" "$GITHUB_WORKSPACE/release_package/" || true
           cp "$GITHUB_WORKSPACE/docs/PATARI_Shortcuts.pdf" "$GITHUB_WORKSPACE/release_package/" || true
           cp "$GITHUB_WORKSPACE/scripts/UNINSTALL_MACOS.txt" "$GITHUB_WORKSPACE/release_package/" || true
@@ -78,5 +82,5 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.zip_name }}
+          name: patari-${{ matrix.os_name }}-${{ github.ref_name }}
           path: release_package/
