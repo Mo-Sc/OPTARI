@@ -12,6 +12,8 @@
 
 PATARI is a python based analysis tool for clinical photoacoustic studies, based on the PATATO and NAPARI frameworks.
 
+**TODO: UPDATE FOR VERSION 0.5**
+
 Key features (v0.4):
 
 - Load native iThera scans (including ROIs), PATATO HDF5 scans and more.
@@ -78,6 +80,8 @@ To change settings in PATARI, edit the respective json file (requires restart):
 - `presets/roi/*.json`: One reusable ROI preset per JSON file.
 - `presets/segmentation/*.json`: Segmentation model, class, and ROI-from-mask presets.
 - `segmentation_models.json`: Configuration for the automatic segmentation. See segmentation reference for more info (tbd)
+
+PATARI stores a configuration schema version in `config.json`. If a future version is incompatible with the current schema, PATARI renames the existing `.patari` folder to a timestamped `.patari_old_*` backup and creates a new configuration from the packaged defaults. The previous settings, presets, models, and logs remain available in the backup.
 
 In a future version, these settings will be editable from the GUI as well.
 

@@ -1,7 +1,9 @@
 from dataclasses import dataclass, field
 import json
 
-from patari.utils.setup import get_user_config_file
+from patari.utils.setup import archive_user_dir, get_user_config_file, get_user_dir
+
+CURRENT_SCHEMA_VERSION = 1 # adapt in default config.json as well
 
 @dataclass(frozen=True)
 class GeneralConfig:
@@ -37,6 +39,7 @@ class ExportConfig:
 
 @dataclass(frozen=True)
 class PatariConfig:
+    schema_version: int
     general: GeneralConfig
     annotation: AnnotationConfig
     analysis: AnalysisConfig
@@ -48,8 +51,16 @@ class PatariConfig:
         """Loads the user's config.json and safely parses it into the dataclasses."""
         config_path = get_user_config_file()
         data = json.loads(config_path.read_text())
+
+        schema_version = data.get("schema_version")
+
+        if schema_version != CURRENT_SCHEMA_VERSION:
+            archive_user_dir(get_user_dir())
+            config_path = get_user_config_file()
+            data = json.loads(config_path.read_text())
         
         return cls(
+            schema_version=data["schema_version"],
             general=GeneralConfig(**data["general"]),
             annotation=AnnotationConfig(**data["annotation"]),
             analysis=AnalysisConfig(**data["analysis"]),
