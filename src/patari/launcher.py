@@ -1,7 +1,10 @@
 import os
 import logging
 from os import _exit as os_exit
+from pathlib import Path
 
+from PyQt6.QtGui import QIcon
+from PyQt6.QtWidgets import QApplication
 
 from .utils.logging import configure_logging
 from .utils.setup import get_user_dir, configure_napari, load_startup_logo
@@ -25,8 +28,13 @@ def main() -> None:
 
     from napari import Viewer, run
 
+    app = QApplication.instance() or QApplication([])
+
     viewer = Viewer(title=f"PATARI v{__version__.split('+')[0]} (INTERNAL USE ONLY)")
-    
+
+    app.setWindowIcon(
+        QIcon(str(Path(__file__).resolve().parent / "config" / "logo.png"))
+    )
     controller = None
 
     try:
