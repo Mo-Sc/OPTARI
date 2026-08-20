@@ -499,12 +499,12 @@ class PatariController:
             return
         self.info.metadata_button.setEnabled(self.active_recon_layer is not None)
         if self.active_recon_layer is None:
-            self.info.label.setText("Select a PA image layer")
+            self.info.set_message("Select a PA image layer")
             return
 
         pt = list(self.viewer.dims.point)
         if len(pt) < 2:
-            self.info.label.setText(f"Layer: {self.active_recon_layer.name}")
+            self.info.set_rows([("Layer", self.active_recon_layer.name)])
             return
 
         frame_idx = int(round(pt[0]))
@@ -553,11 +553,14 @@ class PatariController:
             if getattr(self, "study_path", None)
             else "N/A"
         )
-        self.info.label.setText(
-            f"Study: {study_str} | Scan: {scan_display}\n"
-            f"Layer: {self.active_recon_layer.name}\n"
-            f"Frame: {frame_idx} | {axis1_name}: {axis1_value}\n"
-            f"Timestamp: {ts} ({ts_delta:.2f} s)"
+        self.info.set_rows(
+            [
+                ("Study", study_str),
+                ("Scan", scan_display),
+                ("Layer", self.active_recon_layer.name),
+                ("Frame", f"{frame_idx} | {axis1_name}: {axis1_value}"),
+                ("Timestamp", f"{ts} ({ts_delta:.2f} s)"),
+            ]
         )
 
     def on_metadata_clicked(self) -> None:

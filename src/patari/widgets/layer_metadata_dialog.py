@@ -71,6 +71,15 @@ class LayerMetadataDialog(QDialog):
         table.setHorizontalHeaderLabels(["Property", "Value"])
         table.verticalHeader().setVisible(False)
         table.setAlternatingRowColors(True)
+        table.setStyleSheet(
+            "QTableWidget {"
+            "background-color: #2b2b2b;"
+            "alternate-background-color: #363636;"
+            "color: #f0f0f0;"
+            "selection-background-color: #4d647a;"
+            "selection-color: #ffffff;"
+            "}"
+        )
         table.setWordWrap(False)
         table.setTextElideMode(Qt.ElideMiddle)
         table.setSelectionBehavior(QAbstractItemView.SelectRows)
