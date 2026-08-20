@@ -3,6 +3,14 @@ import logging
 from os import _exit as os_exit
 from pathlib import Path
 
+import jax  # noqa: jax is required by PATATO
+            # must import before PyQt6/napari on Windows: importing
+            # PyQt6 first causes jaxlib's native extension (_jax.pyd) to fail with
+            # "DLL load failed ... initialization routine failed".
+            # Cause is unclear, but importing jax first is workaround.
+            # Do not reorder without re-testing on Windows.
+
+
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QApplication
 
