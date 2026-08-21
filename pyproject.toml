@@ -34,6 +34,12 @@ dependencies = [
     "patato @ https://github.com/Mo-Sc/patato/releases/download/patari-v0.5/patato-0.7.1.dev1+g517d19146-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl ; sys_platform == 'linux'",
 ]
 
+[project.optional-dependencies]
+docs = [
+    "mkdocs-material>=9.5",
+    "mkdocstrings[python]>=0.25",
+]
+
 [project.gui-scripts]
 patari = "patari.launcher:main"
 
