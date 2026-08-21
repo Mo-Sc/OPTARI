@@ -1,9 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from html import escape
 
 from qtpy.QtCore import Qt
-from qtpy.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from qtpy.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
+)
 
 
 @dataclass
@@ -11,6 +19,29 @@ class InfoDock:
     widget: QWidget
     label: QLabel
     metadata_button: QPushButton
+
+    def set_message(self, text: str) -> None:
+        self.label.setText(text)
+        line_height = 4 * self.label.fontMetrics().lineSpacing()
+        wrapped_height = self.label.heightForWidth(self.label.width())
+        self.label.setMinimumHeight(max(line_height, wrapped_height))
+
+    def set_rows(self, rows: list[tuple[str, str]]) -> None:
+        html_rows = "".join(
+            f"<tr bgcolor='{('#2b2b2b' if index % 2 == 0 else '#363636')}'>"
+            "<td><b>"
+            f"{escape(label)}"
+            "</b></td><td>"
+            f"{escape(value)}"
+            "</td></tr>"
+            for index, (label, value) in enumerate(rows)
+        )
+        self.label.setText(
+            "<table cellpadding='4' cellspacing='0' width='100%'>"
+            f"{html_rows}"
+            "</table>"
+        )
+        self.label.setMinimumHeight(0)
 
 
 def create_info_dock() -> InfoDock:
@@ -34,8 +65,11 @@ def create_info_dock() -> InfoDock:
     label = QLabel("")
     label.setWordWrap(True)
     label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-    label.setStyleSheet("color: palette(text); line-height: 1.25em;")
+    label.setStyleSheet("color: white; line-height: 1.25em;")
+    scroll_area = QScrollArea()
+    scroll_area.setWidgetResizable(True)
+    scroll_area.setFrameShape(QScrollArea.NoFrame)
+    scroll_area.setWidget(label)
     layout.addWidget(header)
-    layout.addWidget(label)
-    layout.addStretch()
+    layout.addWidget(scroll_area)
     return InfoDock(widget=widget, label=label, metadata_button=metadata_button)

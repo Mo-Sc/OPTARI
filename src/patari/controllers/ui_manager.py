@@ -40,12 +40,14 @@ class UiManager:
             )
 
         if controller.info is None:
+            # info dock is not tabified, but floating by default
             controller.info = create_info_dock()
-            controller.viewer.window.add_dock_widget(
+            controller._info_dock_widget = controller.viewer.window.add_dock_widget(
                 controller.info.widget,
                 name="Active Slice Info",
                 area="left",
             )
+            controller._info_dock_widget.setFloating(True)
 
         if controller.roi is None:
             controller.roi = create_roi_dock()

@@ -65,7 +65,9 @@ jobs:
       - name: Rename Executable with Version Tag
         shell: bash
         run: |
-          FINAL_NAME="patari-${{ github.ref_name }}${{ matrix.exe_suffix }}"
+          VERSION_TAG="${{ github.ref_name }}"
+          VERSION_TAG="${VERSION_TAG//./-}"
+          FINAL_NAME="patari-${VERSION_TAG}${{ matrix.exe_suffix }}"
           mv pyapp-source/${{ matrix.binary_path }} pyapp-source/target/release/$FINAL_NAME
           echo "FINAL_NAME=$FINAL_NAME" >> $GITHUB_ENV
 
