@@ -1,10 +1,6 @@
-# PATARI Keyboard Shortcuts Guide
+# Keyboard Shortcuts
 
-Using keyboard shortcuts can significantly speed up your analysis workflow. This is a short list containing some of the most useful shortcuts for traditional MSOT analysis, like navigating the viewer and annotating ROIs. A complete list of built-in napari shortcuts can be found and modified by clicking **`napari` ➔ `Preferences` ➔ `Shortcuts`**. 
-
-In the future, we can extend this list with custom shortcuts, depending on the analysis protocol.
-
-
+Using keyboard shortcuts can significantly speed up your analysis workflow. This is a short list containing some of the most useful shortcuts for traditional MSOT analysis, like navigating the viewer and annotating ROIs. A complete list of built-in napari shortcuts can be found and modified by clicking **`napari` ➔ `Preferences` ➔ `Shortcuts`**.
 
 ## Navigation & Layer Control
 
@@ -42,18 +38,21 @@ Browse through scan data, frames, and toggle between different image layers.
 | **Delete Selected ROI(s)** | `Delete` or `Backspace` | `Delete` or `Backspace` |
 | **Save ROI Data*** | `Shift` + `Ctrl` + `S` | `Shift` + `Cmd` + `S` |
 
+!!! warning
+    Delete only works when the ROI is selected **in the viewer**. Selecting a row in the Live/Saved Analysis
+    table and pressing Delete/Backspace does not delete the ROI.
+
 ## Segmentation and Auto-ROI
 
 | Action | Windows / Linux | macOS |
 | :--- | :--- | :--- |
 | **Segment using Default Config*** | `Shift` + `Ctrl` + `T` | `Shift` + `Cmd` + `T` |
+
 ## Image Processing
 
 | Action | Windows / Linux | macOS |
 | :--- | :--- | :--- |
 | **Unmix using Default Preset*** | `Shift` + `Ctrl` + `U` | `Shift` + `Cmd` + `U` |
-
-
 
 >*not napari native
 

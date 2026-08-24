@@ -297,6 +297,7 @@ def compute_roi_stats(
             vals=vals,
             sy=sy,
             sx=sx,
+            verts=roi.verts,
         )
         rows.append(
             {
@@ -401,6 +402,7 @@ def compute_roi_time_series(
                 vals=vals,
                 sy=sy,
                 sx=sx,
+                verts=roi.verts,
             )
             y.append(float(FEATURE_REGISTRY[feature_id].compute(ctx)))
         series[roi.roi_id] = np.asarray(y, dtype=float)
