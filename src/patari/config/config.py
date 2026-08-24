@@ -3,7 +3,7 @@ import json
 
 from patari.utils.setup import archive_user_dir, get_user_config_file, get_user_dir
 
-CURRENT_SCHEMA_VERSION = 1 # adapt in default config.json as well
+CURRENT_SCHEMA_VERSION = 2 # adapt in default config.json as well
 
 @dataclass(frozen=True)
 class GeneralConfig:

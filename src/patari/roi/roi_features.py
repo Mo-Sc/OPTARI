@@ -25,6 +25,7 @@ class ROIContext:
     vals: np.ndarray
     sy: float
     sx: float
+    verts: np.ndarray
 
 
 @dataclass(frozen=True)
@@ -62,6 +63,15 @@ def _snr(values: np.ndarray) -> float:
     return float(np.nanmean(values) / std)
 
 
+def _size_mm(ctx: ROIContext) -> float:
+    """
+    returns the size of the ROI in mm^2 (for 2D ROIs) or length in mm (for line ROIs).
+    """
+    if ctx.roi_type == "line":
+        return float(np.linalg.norm(np.diff(ctx.verts, axis=0), axis=1).sum())
+    return float(ctx.vals.size * ctx.sy * ctx.sx)
+
+
 FEATURE_REGISTRY: dict[str, FeatureSpec] = {
     "roi_index": FeatureSpec(int, lambda c: int(c.roi_index)),
     "roi_group_id": FeatureSpec(int, lambda c: int(c.roi_group_id)),
@@ -75,7 +85,7 @@ FEATURE_REGISTRY: dict[str, FeatureSpec] = {
     "max": FeatureSpec(float, lambda c: _nan_stat(c.vals, np.nanmax)),
     "snr": FeatureSpec(float, lambda c: _nan_stat(c.vals, _snr)),
     "n_pixels": FeatureSpec(int, lambda c: int(c.vals.size)),
-    "area_mm2": FeatureSpec(float, lambda c: float(c.vals.size * c.sy * c.sx)),
+    "size_mm": FeatureSpec(float, _size_mm),
     "src_layers": FeatureSpec(object, lambda c: c.src_layers),
     "roi_type": FeatureSpec(str, lambda c: str(c.roi_type)),
     "study_folder": FeatureSpec(str, lambda c: str(c.study_folder)),

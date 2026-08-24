@@ -1,5 +1,5 @@
 {
-    "schema_version": 1,
+    "schema_version": 2,
     "general": {
         "LOG_LEVEL" : "INFO",
         "GUI_LOG_LEVEL" : "WARNING",
@@ -43,7 +43,7 @@
             "max": 1,
             "snr": 0,
             "n_pixels": 1,
-            "area_mm2": 1,
+            "size_mm": 1,
             "src_layers": 0,
             "roi_type": 0,
             "study_folder": 0,
