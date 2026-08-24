@@ -1,0 +1,107 @@
+site_name: PATARI
+site_description: >-
+  Documentation for PATARI, an open-source napari-based toolkit for
+  clinical photoacoustic imaging analysis.
+site_url: https://mo-sc.github.io/PATARI/
+repo_url: https://github.com/Mo-Sc/PATARI
+repo_name: Mo-Sc/PATARI
+edit_uri: edit/main/docs/
+docs_dir: docs
+copyright: Copyright &copy; 2026 Moritz Schillinger
+
+theme:
+  name: material
+  logo: assets/logo.png
+  favicon: assets/logo.png
+  palette:
+    - scheme: slate
+      primary: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - scheme: default
+      primary: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+    - content.action.edit
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            merge_init_into_class: true
+            separate_signature: true
+
+nav:
+  - Home: index.md
+  - Installation:
+      - Overview: installation/index.md
+      - Troubleshooting: installation/troubleshooting.md
+  - User Guide:
+      - Overview: user-guide/index.md
+      - Viewer & Navigation: user-guide/viewer-and-navigation.md
+      - ROI Annotation: user-guide/roi-annotation.md
+      - Temporal & Spectral Analysis: user-guide/temporal-and-spectral-analysis.md
+      - Segmentation: user-guide/segmentation.md
+      - Reconstruction: user-guide/reconstruction.md
+      - Unmixing: user-guide/unmixing.md
+      - Exporting Data: user-guide/exporting-data.md
+      - Keyboard Shortcuts: user-guide/keyboard-shortcuts.md
+      - FAQ: user-guide/faq.md
+  - Sample Workflow:
+      - Manual ROI Workflow: clinical-workflows/manual-roi-workflow.md
+      - Segmentation + Unmixing Workflow: clinical-workflows/segmentation-unmixing-workflow.md
+      - Batch Processing Workflow: clinical-workflows/batch-processing-workflow.md
+      - Pixel Counting: clinical-workflows/pixel-counting.md
+  - Configuration:
+      - Overview: configuration/index.md
+      - Configuration Schema: configuration/configuration-schema.md
+      - Presets: configuration/presets.md
+      - Segmentation Models: configuration/segmentation-models.md
+  - Developer Guide:
+      - Architecture: developer-guide/architecture.md
+      - Controllers & Widgets: developer-guide/controllers-and-widgets.md
+      - Data & Integrations: developer-guide/data-and-integrations.md
+      - Contributing: developer-guide/contributing.md
+      - API Reference:
+          - PATATO Bridge: developer-guide/api-reference/patato-bridge.md
+          - Controllers: developer-guide/api-reference/controllers.md
+          - Config: developer-guide/api-reference/config.md
+  - Credits: credits.md

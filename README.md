@@ -1,150 +1,69 @@
-# PATARI - Photoacoustic Analysis Toolkit for NAPARI
+# PATARI — Photoacoustic Analysis Toolkit for NAPARI
 
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](LICENSE)
-[![Python >=3.10](https://img.shields.io/badge/python-%3E%3D3.10-blue)](https://www.python.org/)
+[![Python >=3.12](https://img.shields.io/badge/python-%3E%3D3.12-blue)](https://www.python.org/)
+[![Docs](https://img.shields.io/badge/docs-mkdocs--material-blue)](https://mo-sc.github.io/PATARI/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-<!-- [![PyPI](https://img.shields.io/pypi/v/patari.svg?color=green)](https://pypi.org/project/patari)
-[![tests](https://github.com/FAU/patari/workflows/tests/badge.svg)](https://github.com/FAU/patari/actions)
-[![codecov](https://codecov.io/gh/FAU/patari/branch/main/graph/badge.svg)](https://codecov.io/gh/FAU/patari)
-[![napari hub](https://img.shields.io/endpoint?url=https://api.napari-hub.org/shields/patari)](https://napari-hub.org/plugins/patari)
-[![npe2](https://img.shields.io/badge/plugin-npe2-blue?link=https://napari.org/stable/plugins/index.html)](https://napari.org/stable/plugins/index.html) -->
+
+PATARI is an open-source, GUI-based desktop application for analyzing clinical photoacoustic (PA) and ultrasound
+(US) studies. It is built on [napari](https://napari.org) for visualization and [PATATO](https://github.com/BohndiekLab/patato)
+for data I/O and processing. TODO: mention mac / os / windows support. Mention intended for easy use in clinical studies. TODO: mention ipasc compatible
+
+TODO: add a screenshot
 
 
-PATARI is a python based analysis tool for clinical photoacoustic studies, based on the PATATO and NAPARI frameworks.
+**Full documentation, inlcuding instructions, sample workflows, and API references: [mo-sc.github.io/PATARI](https://mo-sc.github.io/PATARI/)**.
 
-**TODO: UPDATE FOR VERSION 0.5**
+## Key features
 
-Key features (v0.4):
-
-- Load native iThera scans (including ROIs), PATATO HDF5 scans and more.
-- Browse studies and fast switching between scans.
-- Visualize US + reconstructed PA layers.
-- Seamless scrolling through frames and wavelengths.
-- Draw, edit, and save ROIs, and place reusable ROI presets.
-- Extract customizable statistical features from ROIs, auto-updating analysis table, export to XLSX.
-- Fast intensity extraction over multiple layers, frames, wavelengths or chromophores.
-- Visualize ROI intensities over time and spectrum, plot histograms.
-- AI-based tissue segmentation and automatic ROI placement in target class.
-- Spectral unmixing, including chromophore spectra and THb / sO2 calculation.
-- Export processed scans to HDF5, individual layers to PNG/TIFF.
-- Usage instructions: [PATARI v0.4 Usage PDF](docs/PATARI_Instructions.pdf)
-- Keyboard shortcuts: [PATARI Keyboard Shortcuts Guide](docs/PATARI_Shortcuts.pdf)
+- Visualize co-registered US + PA scans from different photoacoustic scanners
+- Browse multi-subject, multi-scan studies with fast switching and scrolling through frames/wavelengths.
+- Draw, edit, and save ROIs, reuse them via a shareable ROI Library.
+- Extract ROI intensities, plot ROI intensities over time and wavelength.
+- AI-based tissue segmentation with automatic ROI placement.
+- Reconstruction and spectral unmixing using PATATO and DeepMB, directly from the GUI.
+- Export to CSV/XLSX, IPASC-compatible HDF5, or PNG/TIFF.
 
 
-## Installation 
+## Quickstart
 
-### Option A: Executable (recommended for clinical use)
+The easiest way to use PATARI is by using one of the standalone executables: (todo: link to doc about quick installation)
 
-1. Download the executable file of the [current release (v4)](https://github.com/Mo-Sc/PATARI/releases/tag/v0.4.0) for your operating system (macOS or windows).
-2. Unpack the zip folder and run the patari file.
-3. [Optional, on first run] If you get an error, stating PATARI could not be verified, give your OS permission to run it:
-    * For windows: Click `More Info` -> `Run Anyways`
-    * For macOS: Open `System Settings` -> `Privacy & Security` -> Scroll down to Security -> “patari was blocked” -> `Open Anyway`
-4. At first run, PATARI will download all the required files, so make sure your computer is connected to the internet. The installation can take a few minutes.
-5. Once the installation is done, PATARI launches automatically. If patari is closed, you can simply launch it again by clicking on the same patari file.
+Alternatively, install from source:
 
-
-### Option B: Installation from source (recommended for development)
-
-Create a new python environment, clone this repository:
-
-```
+```bash
 git clone git@github.com:Mo-Sc/PATARI.git
-```
-
-Install the package (-e for editable mode):
-```
-pip install -e .
-```
-
-To run patari, open a terminal, start PATARI via module entrypoint:
-
-```
-python -m patari.launcher
-```
-
-There is also an installed launcher entry point:
-
-```
+cd PATARI
+pip install .
 patari
 ```
 
-## Configuration
+## For Development
 
-At installation, PATARI creates a `.patari` folder in the users home directory and copies all the relevant configuration files into it. It also contains a `models` folder, where PATARI auto-downloads pretrained segmentation models, once the segmentation adapter is run for the first time. 
+```bash
+git clone git@github.com:Mo-Sc/PATARI.git
+cd PATARI
+pip install -e ".[docs]"   # docs only if docs are changed
+pytest                     # run tests
+```
 
-To change settings in PATARI, edit the respective json file (requires restart):
-- `config.json`: main configuration file. Contains general settings, as well as task-specific settings for the different modules.
-- `presets/reconstruction/*.json`: Reconstruction settings presets.
-- `presets/unmixing/*.json`: Spectral unmixing presets.
-- `presets/roi/*.json`: One reusable ROI preset per JSON file.
-- `presets/segmentation/*.json`: Segmentation model, class, and ROI-from-mask presets.
-- `segmentation_models.json`: Configuration for the automatic segmentation. See segmentation reference for more info (tbd)
+**Note:** PATARI currently depends on a custom PATATO fork for compatibility fixes and legacy HDF5 support (see `pyproject.toml`). 
+ 
+To contribute to PATARI, follow [Contributing](https://mo-sc.github.io/PATARI/developer-guide/contributing/).
 
-PATARI stores a configuration schema version in `config.json`. If a future version is incompatible with the current schema, PATARI renames the existing `.patari` folder to a timestamped `.patari_old_*` backup and creates a new configuration from the packaged defaults. The previous settings, presets, models, and logs remain available in the backup.
+If you find a bug, or have a feature request, [file an issue](https://github.com/Mo-Sc/PATARI/issues) with a detailed description.
 
-In a future version, these settings will be editable from the GUI as well.
-
-## Development Stuff 
-
-
-- PATARI currently depends on a custom PATATO fork:
-
-    - `https://github.com/Mo-Sc/patato.git@b950b95e283b30f56cfca00bf6b1033d53ab496e`
-    - Contains some minor adjustments and bug fixes. In the future, these will either be moved to PATARI or included in the public PATATO
-    - Also ensures compatibility with some of my legacy hdf5 files
-
-### Architecture Notes (v0.4)
-
-PATARI is a **standalone desktop application** that embeds napari as its viewer/rendering engine (no
-longer distributed as a napari plugin). `patari.launcher:main()` creates its
-own `napari.Viewer` and instantiates a single `PatariController` around it. A full architecture
-description can be found in [`dev/patari_architecture.md`](dev/patari_architecture.md)
-
-- **High-level design**: a controller + dock split with a task-controller pattern.
-  - `PatariController`: central session/app controller holding viewer state, scan data, and ROI geometry. Instantiates and coordinates feature controllers.
-  - **Task Controllers** (all inherit from `TaskControllerBase`, instance-based with `initialize_ui()` / `bind_events()` / `unbind_events()` / `teardown()`): domain-specific controllers that own their UI state, behavior, and signal lifecycle:
-    - `ScanController`: scan lifecycle, loading, discovery, export, scan browser signals
-    - `RoiController`: ROI table, shapes layer, labeling, colors, and ROI preset signals
-    - `SegmentationController`: tissue segmentation, lazily-cached ONNX model, ROI-from-mask signals (+ model cleanup via `teardown()`)
-    - `AnalysisController`: time analysis, histograms, spectra signals
-    - `UnmixingController`: spectral unmixing, chromophore derived layers signals
-    - `ReconstructionController`: reconstruction presets, processing, and derived layers
-    - `LayerExportController`: exports the active layer (image or ROI shapes) to PNG/TIFF
-  - `UIManager`: factory for dock creation and delegation to task controller signal wiring
-- **UI construction path**: `UiManager.setup_docks()` creates dock widgets; `UiManager.connect_events()` delegates signal wiring to each controller's `bind_events()`.
-- **Rendering/data IO**: `patato_bridge.py` handles PATATO <-> napari transformations, coordinate conversion, scale/FOV, and layer data construction.
-- **Layer metadata**: PA layers rely on metadata keys such as `type`, `frames`, `timestamps`, `motion_scores`. Many downstream features (info labels, analysis, export/reload symmetry) depend on these.
-- **Automatic frame selection**: `utils/motion.py` computes vectorized SSIM+ZNCC motion scores per frame; used to auto-pick the clearest frame when `config.general.DEFAULT_FRAME_INDEX == "motion"`.
-- **ROI model**: ROI stats are recomputed from `shapes_layer.events.data`. Initial ROI loading temporarily disconnects this handler to avoid repeated per-shape computation during initialization.
-- **ROI feature configuration**: available ROI metrics and source fields are defined in a central feature registry (`roi/roi_features.py`) and can be toggled in `config.json` via `annotation.roi_features`.
-- **Visible columns**: the live and saved table views are column-filtered from that feature map, while saved/source columns keep a fixed order for consistent export schemas.
-- **Live vs save computation**: for interactivity, live updates compute only currently visible live columns; on save/export, PATARI always computes the full feature set.
-- **Coordinate conventions**: ROIs are represented in napari as `(y_mm, x_mm)` and converted to PATATO `(x_m, y_m)` at export/import. Conversion logic is in `patato_bridge.py`.
-- **Data loading**: PATARI loads either iThera scan folders or HDF5 scans via PATATO readers and supports loading both individual scans and study folders.
-- **Scan preference rule**: if both iThera and HDF5 exist for the same scan key, scan discovery prefers HDF5 (treated as previously converted version).
-- **Export model**: HDF5 export is write-to-new-file only (no overwrite/append), cannot export back to iThera, and currently fails if target file already exists.
-- **Export implementation**: export is a two-pass workflow (save base scan first, reopen, then write live ROIs and derived images). This is a workaround for PATATO reader/writer ownership where loaded data stays tied to its source file.
-- **Derived layers**: unmixing outputs (unmixed, THb, sO2) are stored in `_derived_patato_objects` and exported with synchronized attributes so they can be reloaded as normal PA layers.
-- **Sparse layers**: data that only contain selected frames are expanded to acquisition-frame indexing for viewer consistency; Frame id is carried in metadata and used on reload.
-- **Current ROI position state**: `roi_position` metadata for manual ROIs is not fully synchronized yet. Future work includes fully synchronized shape specific metadata dict.
-- **Segmentation models**: configured in `~/.patari/config/segmentation_models.json` (ONNX path + model IO metadata), lazily downloaded on demand into `~/.patari/models`.
-- **Segmentation model training**: Code for training and evaluating different segmentation models can be found in [this repo](https://github.com/Mo-Sc/OA-US-Segmentation-Public/tree/us_segmentation_algos) (private, access after request).
-- **Reconstruction**: Reconstruction settings and outputs are available in the Reconstruction dock.
-- **Logging behavior**: `PATARI_LOG_LEVEL` controls terminal log. `PATARI_GUI_LOG_LEVEL` controls napari GUI notification.
-- **Compatibility note**: custom PATATO fork and import/export workarounds are currently required for some personal legacy datasets.
-- **Deployment & distribution**: PATARI is packaged as standalone executables for macOS and Windows using PyApp and GitHub Actions (see `build-pyapp.yml` workflow). PATATO dependencies are provided as precompiled wheels with OS-specific URLs in `pyproject.toml`. On first run, PyApp downloads all dependencies and initializes the user config directory (`~/.patari`) with default config files, per-feature preset folders, and models folder. Segmentation models are lazily downloaded on-demand into the models folder from URLs specified in the segmentation configuration.
-- **GitHub Actions workflow**: binary compilation is automated via the `build-pyapp.yml` GitHub Actions workflow, which builds PATARI wheels, downloads PyApp source, compiles with Rust (with OS-specific PATATO wheels linked), and uploads the final executables as build artifacts for each push.
-- **ROI feature visibility**: the live table displays only user-selected ROI features (toggled via `config.json` annotation settings). However, on save/export operations, PATARI always computes the full feature set and exports all available features regardless of live table visibility, ensuring no data loss during export workflows.
+## Citing & License
 
 
+PATARI is distributed under the [BSD-3-Clause license](https://github.com/Mo-Sc/PATARI/blob/main/LICENSE).
+Free and open source, for both research and clinical use.
 
-## License
 
-Distributed under the terms of the [BSD-3] license,
-"patari" is free and open source software
+If PATARI is useful in your research, please cite the accompanying paper:
 
-## Issues
-
-If you encounter any problems, please [file an issue] along with a detailed description.
+TODO: format
+    Schillinger, M., Bader, M., Buehler, A., Wachter, F., Breininger, K. *PATARI: An open-source software
+    framework for clinical translation of photoacoustic imaging.* — citation details to be added once
+    published.
 
