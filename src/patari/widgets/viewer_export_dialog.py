@@ -25,6 +25,10 @@ class ViewerExportDialog(QDialog):
 
         self.video_checkbox = QCheckBox("Video")
         self.video_checkbox.setEnabled(video_available)
+        self.video_checkbox.setToolTip(
+            "Export all frames as an MP4 instead of a single image "
+            "(disabled for single-frame scans)"
+        )
         self.video_checkbox.toggled.connect(self._on_video_toggled)
 
         self.fps_row = QWidget()

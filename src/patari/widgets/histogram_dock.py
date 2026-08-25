@@ -27,6 +27,10 @@ def create_histogram_dock() -> HistogramDock:
         layout,
         status_text="Click 'Refresh' to compute ROI histograms.",
     )
+    refresh_button.setToolTip(
+        "Recompute intensity histograms for the active ROI(s) on the current layer, "
+        "frame, and channel"
+    )
     scroll_area, plots_container = create_bottom_plot_strip()
 
     layout.addWidget(scroll_area, stretch=1)

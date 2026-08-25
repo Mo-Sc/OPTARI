@@ -41,7 +41,12 @@ def create_roi_dock() -> RoiDock:
     saved_table = Table(value=df_saved_empty)
 
     save_button = QPushButton("Save ROI Data")
+    save_button.setToolTip(
+        "Save the selected shape's measurements to the Saved Analysis table "
+        "(Shift+Ctrl+S / Shift+Cmd+S)"
+    )
     delete_button = QPushButton("Delete ROI Data")
+    delete_button.setToolTip("Delete the selected row(s) from the Saved Analysis table")
     xlsx_button = QPushButton("Export XLSX")
 
     # build Qt container for the bottom dock

@@ -65,14 +65,21 @@ def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
 
     roi_presets_list = QListWidget()
     roi_presets_list.setSelectionMode(QAbstractItemView.SingleSelection)
+    roi_presets_list.setToolTip("Click to preview a preset; double-click to place it immediately")
 
     button_row = QWidget()
     button_layout = QHBoxLayout(button_row)
     button_layout.setContentsMargins(0, 0, 0, 0)
 
     save_roi_preset_button = QPushButton("Save Preset")
+    save_roi_preset_button.setToolTip(
+        "Save the currently selected ROI shape in the viewer as a reusable preset"
+    )
     remove_roi_preset_button = QPushButton("Remove Preset")
     place_roi_button = QPushButton("Apply Preset")
+    place_roi_button.setToolTip(
+        "Place the selected preset using the placement mode and scope below"
+    )
 
     button_layout.addWidget(save_roi_preset_button)
     button_layout.addWidget(remove_roi_preset_button)
@@ -86,6 +93,10 @@ def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
     roi_placement_mode_combo = QComboBox()
     roi_placement_mode_combo.addItem("static", userData="static")
     roi_placement_mode_combo.addItem("auto", userData="auto")
+    roi_placement_mode_combo.setToolTip(
+        "Static: uses the preset's saved coordinates. Auto: places it inside the matching "
+        "segmentation class, falling back to static if not found"
+    )
 
     placement_row = QWidget()
     placement_layout = QHBoxLayout(placement_row)
@@ -108,6 +119,10 @@ def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
     roi_clipping_box = QGroupBox("ROI Clipping")
     roi_clipping_box.setCheckable(True)
     roi_clipping_box.setChecked(True)
+    roi_clipping_box.setToolTip(
+        "Clamp out-of-range pixel values before computing ROI statistics "
+        "(mutually exclusive with ROI Exclusion)"
+    )
     roi_clip_form = QFormLayout(roi_clipping_box)
     roi_clip_min_edit, roi_clip_max_edit = create_range_edits()
     roi_clip_form.addRow("Min. Intensity", roi_clip_min_edit)
@@ -116,6 +131,10 @@ def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
     roi_exclusion_box = QGroupBox("ROI Exclusion")
     roi_exclusion_box.setCheckable(True)
     roi_exclusion_box.setChecked(False)
+    roi_exclusion_box.setToolTip(
+        "Drop out-of-range pixels entirely before computing ROI statistics "
+        "(mutually exclusive with ROI Clipping)"
+    )
     roi_exclude_form = QFormLayout(roi_exclusion_box)
     roi_exclude_min_edit, roi_exclude_max_edit = create_range_edits()
     roi_exclude_form.addRow("Min. Intensity", roi_exclude_min_edit)
@@ -145,6 +164,14 @@ def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
     include_all_layers_checkbox.setChecked(False)
     include_all_frames_checkbox.setChecked(False)
     include_all_channels_checkbox.setChecked(False)
+    include_all_layers_checkbox.setToolTip(
+        "Save this ROI's data for every layer in the scan; also enables Include all channels"
+    )
+    include_all_frames_checkbox.setToolTip("Save this ROI's data for every frame in the scan")
+    include_all_channels_checkbox.setToolTip(
+        "Save this ROI's data for every channel (wavelength/chromophore); "
+        "auto-enabled by Include all layers"
+    )
 
     # When include all layers, always include all channels
     include_all_layers_checkbox.toggled.connect(

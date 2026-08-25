@@ -29,6 +29,10 @@ def create_time_analysis_dock() -> TimeAnalysisDock:
         layout,
         status_text="Click 'Refresh' to compute ROI means over time.",
     )
+    generate_button.setToolTip(
+        "Recompute the selected feature over time for the active ROI(s), using the "
+        "Feature setting in the Annotation dock"
+    )
     plot_container = create_bottom_single_plot_container()
 
     layout.addWidget(plot_container, stretch=1)

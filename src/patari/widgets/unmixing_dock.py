@@ -65,10 +65,15 @@ def create_unmixing_dock(*, enable_scroll: bool = True) -> UnmixingDock:
         remove_preset_button,
         preset_actions,
     ) = create_preset_controls()
+    preset_combo.setToolTip(
+        "Selecting a preset loads its wavelength, chromophore, and layer settings"
+    )
+    remove_preset_button.setToolTip("Permanently delete the selected preset file")
 
     wavelengths_list = QListWidget()
     wavelengths_list.setSelectionMode(QListWidget.NoSelection)
     wavelengths_list.setMinimumHeight(140)
+    wavelengths_list.setToolTip("Available wavelengths are determined by the source layer")
 
     wavelength_button_row = QWidget()
     wavelength_button_layout = QHBoxLayout(wavelength_button_row)
@@ -81,16 +86,28 @@ def create_unmixing_dock(*, enable_scroll: bool = True) -> UnmixingDock:
     chromophores_list = QListWidget()
     chromophores_list.setSelectionMode(QListWidget.NoSelection)
     chromophores_list.setMinimumHeight(140)
+    chromophores_list.setToolTip(
+        "Hb and HbO2 must be checked to enable the THb/sO2 layers below"
+    )
 
     generate_thb_checkbox = QCheckBox("Generate THb layer")
     generate_thb_checkbox.setChecked(False)
+    generate_thb_checkbox.setToolTip(
+        "Adds a total-hemoglobin layer (requires Hb and HbO2 both selected above)"
+    )
     generate_so2_checkbox = QCheckBox("Generate sO2 layer")
     generate_so2_checkbox.setChecked(False)
+    generate_so2_checkbox.setToolTip(
+        "Adds an oxygen-saturation layer (requires Hb and HbO2 both selected above)"
+    )
 
     resolution_reduction_factor = QSpinBox()
     resolution_reduction_factor.setMinimum(1)
     resolution_reduction_factor.setMaximum(8)
     resolution_reduction_factor.setValue(3)
+    resolution_reduction_factor.setToolTip(
+        "Downsamples the reconstruction before unmixing; 1 = full resolution"
+    )
 
     suffix_edit = QLineEdit()
     suffix_edit.setPlaceholderText("optional suffix")
@@ -122,6 +139,10 @@ def create_unmixing_dock(*, enable_scroll: bool = True) -> UnmixingDock:
         create_frame_scope_controls()
     )
     run_button = QPushButton("Run Unmixing")
+    run_button.setToolTip(
+        "Requires an active PA reconstruction layer, and at least one wavelength and "
+        "chromophore selected (Shift+Ctrl+U / Shift+Cmd+U)"
+    )
     status_label = QLabel("Select wavelengths and chromophores.")
     action_layout.addWidget(frame_scope_row)
     action_layout.addWidget(run_button)

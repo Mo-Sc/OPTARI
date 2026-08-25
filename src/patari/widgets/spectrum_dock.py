@@ -27,6 +27,9 @@ def create_spectrum_dock() -> SpectrumDock:
         layout,
         status_text="Click 'Refresh' to compute ROI spectra.",
     )
+    refresh_button.setToolTip(
+        "Recompute per-ROI mean-intensity spectra across channels for the current frame"
+    )
     scroll_area, plots_container = create_bottom_plot_strip()
 
     layout.addWidget(scroll_area, stretch=1)

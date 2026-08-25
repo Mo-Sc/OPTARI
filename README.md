@@ -47,6 +47,11 @@ pip install -e ".[docs]"   # docs only if docs are changed
 pytest                     # run tests
 ```
 
+To build the docs locally:
+```
+mkdocs build --no-directory-urls --site-dir patari-docs
+```
+
 **Note:** PATARI currently depends on a custom PATATO fork for compatibility fixes and legacy HDF5 support (see `pyproject.toml`). 
  
 To contribute to PATARI, follow [Contributing](https://mo-sc.github.io/PATARI/developer-guide/contributing/).

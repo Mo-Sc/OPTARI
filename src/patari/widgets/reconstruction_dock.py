@@ -70,6 +70,8 @@ def create_reconstruction_dock(*, enable_scroll: bool = True) -> ReconstructionD
         remove_preset_button,
         preset_actions,
     ) = create_preset_controls()
+    preset_combo.setToolTip("Selecting a preset loads its settings into the editor below")
+    remove_preset_button.setToolTip("Permanently delete the selected preset file")
 
     all_settings_button = QToolButton()
     all_settings_button.setText("Show all settings")
@@ -81,8 +83,14 @@ def create_reconstruction_dock(*, enable_scroll: bool = True) -> ReconstructionD
     settings_edit.setPlaceholderText("JSON reconstruction settings")
     settings_edit.setLineWrapMode(QPlainTextEdit.NoWrap)
     settings_edit.setVisible(False)
+    settings_edit.setToolTip(
+        "Edits here must be confirmed with Apply Preset — Run stays disabled until then"
+    )
     apply_preset_button = QPushButton("Apply Preset")
     apply_preset_button.setVisible(False)
+    apply_preset_button.setToolTip(
+        "Apply the edited settings for this run only (does not save them to the preset file)"
+    )
     settings_actions = QHBoxLayout()
     settings_actions.addWidget(apply_preset_button)
 
@@ -90,6 +98,10 @@ def create_reconstruction_dock(*, enable_scroll: bool = True) -> ReconstructionD
     speed_of_sound_slider.setMinimum(SPEED_OF_SOUND_MIN)
     speed_of_sound_slider.setMaximum(SPEED_OF_SOUND_MAX)
     speed_of_sound_slider.setValue(SPEED_OF_SOUND_DEFAULT)
+    speed_of_sound_slider.setToolTip(
+        "Overrides the preset's speed of sound for this run only — does not affect "
+        "other layers or the saved preset"
+    )
     speed_of_sound_value_label = QLabel(f"{SPEED_OF_SOUND_DEFAULT} m/s")
     speed_of_sound_row = QWidget()
     speed_of_sound_row_layout = QHBoxLayout(speed_of_sound_row)
@@ -121,6 +133,7 @@ def create_reconstruction_dock(*, enable_scroll: bool = True) -> ReconstructionD
         create_frame_scope_controls()
     )
     run_button = QPushButton("Run Reconstruction")
+    run_button.setToolTip("Requires a loaded scan and a selected, non-edited preset")
     status_label = QLabel("Select a preset and run.")
     action_layout.addWidget(frame_scope_row)
     action_layout.addWidget(run_button)

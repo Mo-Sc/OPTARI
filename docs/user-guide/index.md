@@ -15,6 +15,9 @@ You can drag dock tabs to rearrange them, and napari remembers your layout betwe
 
 ![UI Overview](../assets/screenshots/placeholders/ss_overview.png)
 
+
+Most buttons, checkboxes, and other controls have a tooltip. Hover over one for a quick explanation of what it does before clicking.
+
 ## Pages in this guide
 
 1. [Viewer & Navigation](viewer-and-navigation.md) — the Scan Browser, Layer List, and moving through frames and

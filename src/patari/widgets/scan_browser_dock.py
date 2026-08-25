@@ -55,6 +55,7 @@ def create_scan_browser_dock() -> ScanBrowserDock:
     folder_lineedit = QLineEdit()
     folder_lineedit.setReadOnly(True)
     browse_button = QPushButton("Open Study")
+    browse_button.setToolTip("Select a folder containing scans to load (iThera or HDF5)")
 
     row_layout.addWidget(folder_lineedit, stretch=1)
     row_layout.addWidget(browse_button)
@@ -67,7 +68,13 @@ def create_scan_browser_dock() -> ScanBrowserDock:
     export_row_layout.setContentsMargins(0, 0, 0, 0)
 
     hdf5_button = QPushButton("Export HDF5")
+    hdf5_button.setToolTip(
+        "Export the loaded scan, ROIs, and derived layers as HDF5 (requires a loaded scan)"
+    )
     export_layer_button = QPushButton("Export View")
+    export_layer_button.setToolTip(
+        "Export the current viewer display as an image or video"
+    )
     export_row_layout.addWidget(hdf5_button)
     export_row_layout.addWidget(export_layer_button)
 

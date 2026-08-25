@@ -65,8 +65,16 @@ def create_segmentation_dock(*, enable_scroll: bool = True) -> SegmentationDock:
         remove_preset_button,
         preset_actions,
     ) = create_preset_controls()
+    preset_combo.setToolTip("Selecting a preset applies it immediately")
+    save_preset_button.setToolTip(
+        "Save the selected model, classes, and ROI-from-mask settings as a preset "
+        "(requires at least one checked class)"
+    )
 
     segmentation_model_combo = QComboBox()
+    segmentation_model_combo.setToolTip(
+        "Changing the model resets the class list and clears the selected ROI class"
+    )
 
     segmentation_classes_list = QListWidget()
     segmentation_classes_list.setSelectionMode(QListWidget.NoSelection)
@@ -94,11 +102,22 @@ def create_segmentation_dock(*, enable_scroll: bool = True) -> SegmentationDock:
         edit.setValidator(QDoubleValidator(0.0, 9999.0, 2))
         edit.setClearButtonEnabled(True)
         edit.setPlaceholderText("mm")
+    roi_top_margin_edit.setToolTip(
+        "Offset from the top of the detected tissue region (not a size)"
+    )
 
     generate_roi_button = QPushButton("Generate ROI from Mask")
+    generate_roi_button.setToolTip(
+        "Place an ROI in the selected class's region "
+        "(requires an existing segmentation mask for this frame)"
+    )
 
     generate_tissue_segmentation_button = QPushButton(
         "Run Segmentation"
+    )
+    generate_tissue_segmentation_button.setToolTip(
+        "Generate a tissue mask for the checked classes on an active US layer "
+        "(Shift+Ctrl+T / Shift+Cmd+T)"
     )
     frame_scope_row, current_frames_radio, all_frames_radio = (
         create_frame_scope_controls()
