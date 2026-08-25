@@ -13,7 +13,7 @@ To create a new reconstruction, raw time series data must be available — eithe
 
 - `backproject_clinical`: default reconstruction settings from PATATO. 
 - `backproject_ithera`: default reconstruction settings from PATATO, but preprocessed with a 50kHz high-pass filter, resembling more closely the default iThera backprojection algorithm.
-- `deepmb_ithera`: DeepMB, with settings for iThera MSOT Acuity Echo devices. Requires a filepath or URL pointing to a pretrained model.
+- `deepmb_ithera` (experimental): DeepMB, with settings for iThera MSOT Acuity Echo devices. Requires a filepath or URL pointing to a pretrained model.
 
 **(2)** Adjust the **speed of sound** if needed.
 
