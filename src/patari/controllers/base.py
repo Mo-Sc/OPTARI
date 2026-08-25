@@ -71,24 +71,23 @@ class TaskControllerBase:
         metadata: dict,
         patato_obj,
         colormap: str,
-        offset_x_mm: float = 0.0,
-        offset_z_mm: float = 0.0,
+        translate: tuple[float, ...] | None = None,
     ) -> None:
-        """Create or update a PATATO-derived napari image layer."""
+        """Create or update a PATATO-derived napari image layer.
+
+        `translate` places the layer absolutely in the viewer (mm, data axis order).
+        When omitted, the layer inherits the active recon layer's position so that
+        derived outputs stay aligned with the recon they were computed from.
+        """
 
         scale = scale_from_patato_obj(
             patato_obj,
             settings.general.PA_FALLBACK_SCALE,
         )
-        source_layer = self.patari_controller.active_recon_layer
-
-        # translate means the position of the layer in the viewer
-        translate = tuple(source_layer.translate) if source_layer is not None else None
-        if translate is not None:
+        if translate is None:
+            source_layer = self.patari_controller.active_recon_layer
             translate = (
-                *translate[:-2],
-                translate[-2] + offset_z_mm,
-                translate[-1] + offset_x_mm,
+                tuple(source_layer.translate) if source_layer is not None else None
             )
         if name in self.viewer.layers and isinstance(self.viewer.layers[name], Image):
             # layer already exists, update its data and metadata

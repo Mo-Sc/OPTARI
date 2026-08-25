@@ -370,14 +370,18 @@ class ReconstructionController(TaskControllerBase):
             output_frames,
             source_frame_count,
         )
+
+        # absolute placement: a recon comes from the raw time series, so it must not
+        # inherit (and re-apply) the offset of whichever layer is currently active
+        translate = (0.0,) * (data.ndim - 2) + (offset_z_mm, offset_x_mm)
+
         self._add_or_update_image_layer(
             layer_name,
             data,
             layer_metadata,
             reconstruction,
             colormap="viridis",
-            offset_x_mm=offset_x_mm,
-            offset_z_mm=offset_z_mm,
+            translate=translate
         )
         self.patari_controller._patato_objects[layer_name] = reconstruction
         self.patari_controller._derived_patato_objects[layer_name] = reconstruction
