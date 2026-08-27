@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
+from functools import partial
+from math import ceil
 
 import numpy as np
 import patato as pat
@@ -10,6 +13,7 @@ from qtpy.QtWidgets import QListWidgetItem
 from patato.io.attribute_tags import UnmixingAttributeTags
 from patato.unmixing.spectra import SPECTRA_NAMES
 from patari.controllers.base import TaskControllerBase
+from patari.utils.tasks import start_task
 from patari.patato_bridge import display_data_from_patato_obj
 from patari.utils.presets import PresetStore
 from patari.utils.setup import get_user_unmixing_presets_dir
@@ -22,6 +26,54 @@ from patari.widgets.dock_helpers import (
 
 
 logger = logging.getLogger(__name__)
+
+# Unlike PATATO's reconstruction/preprocessing, SpectralUnmixer.run has no internal batch
+# loop or GPU/ONNX call. We chunk it ourselves to allow progress updates and cancellation.
+UNMIXING_CHUNK_FRAMES = 4
+
+
+def _unmix_frames(
+    recon_for_run,
+    pa_data,
+    wavelengths: list[int],
+    chromophores: list[str],
+    reduce_factor: int,
+    suffix: str,
+    generate_thb: bool,
+    generate_so2: bool,
+    chunk_frames: int,
+) -> Iterator[None]:
+    """Unmix *recon_for_run* in frame chunks, yielding once per finished chunk.
+
+    Runs in a worker thread, so it must not touch Qt or napari. THb/sO2 (when requested)
+    are computed per chunk.
+    """
+    unmixer = pat.SpectralUnmixer(
+        chromophores=chromophores,
+        wavelengths=np.array(wavelengths, dtype=float),
+        rescaling_factor=reduce_factor,
+        algorithm_id=suffix,
+    )
+    thb_calc = pat.THbCalculator(algorithm_id=suffix) if generate_thb else None
+    so2_calc = pat.SO2Calculator(algorithm_id=suffix, nan_invalid=True) if generate_so2 else None
+
+    unmixed_chunks, thb_chunks, so2_chunks = [], [], []
+    for start in range(0, int(recon_for_run.shape[0]), chunk_frames):
+        frames = recon_for_run[start : start + chunk_frames]
+        unmixed_chunk, _, _ = unmixer.run(frames, pa_data)
+        unmixed_chunks.append(unmixed_chunk)
+        if thb_calc is not None:
+            thb_chunk, _, _ = thb_calc.run(unmixed_chunk, pa_data)
+            thb_chunks.append(thb_chunk)
+        if so2_calc is not None:
+            so2_chunk, _, _ = so2_calc.run(unmixed_chunk, pa_data)
+            so2_chunks.append(so2_chunk)
+        yield
+
+    unmixed = pat.ImageSequence.concat(unmixed_chunks)
+    thb = pat.ImageSequence.concat(thb_chunks) if thb_chunks else None
+    so2 = pat.ImageSequence.concat(so2_chunks) if so2_chunks else None
+    return unmixed, thb, so2
 
 
 class UnmixingController(TaskControllerBase):
@@ -199,7 +251,7 @@ class UnmixingController(TaskControllerBase):
         dock.source_layer_label.setText(active_recon_layer.name)
 
         # Enable unmixing button
-        dock.run_button.setEnabled(True)
+        dock.run_button.setEnabled(not self.patari_controller.task_running)
 
         wavelengths = active_recon_layer.metadata.get("wavelengths") or []
         source_name = active_recon_layer.name
@@ -367,7 +419,7 @@ class UnmixingController(TaskControllerBase):
         return layer_metadata, export_attrs
 
     def on_run_unmixing_clicked(self) -> None:
-        """Execute unmixing for the selected setup and publish output layers."""
+        """Start unmixing for the selected setup in a worker thread."""
         if self.patari_controller.unmixing is None:
             return
 
@@ -415,9 +467,7 @@ class UnmixingController(TaskControllerBase):
         if dock.current_frames_radio.isChecked():
             current_frame = int(self.viewer.dims.current_step[0])
             if current_frame not in frame_numbers:
-                dock.status_label.setText(
-                    "Selected frame is not reconstructed."
-                )
+                dock.status_label.setText("Selected frame is not reconstructed.")
                 return
             recon_idx = frame_numbers.index(current_frame)
             # PATATO expects a contiguous slice, then we remap to acquisition frame ids.
@@ -428,6 +478,8 @@ class UnmixingController(TaskControllerBase):
 
         suffix = dock.suffix_edit.text().strip()
         reduce_factor = int(dock.resolution_reduction_factor.value())
+        generate_thb = dock.generate_thb_checkbox.isChecked()
+        generate_so2 = dock.generate_so2_checkbox.isChecked()
         settings = {
             "wavelengths": selected_wavelengths,
             "chromophores": selected_chromophores,
@@ -435,148 +487,147 @@ class UnmixingController(TaskControllerBase):
             "suffix": suffix,
             "frame_mode": frame_mode,
             "frames": output_frames,
-            "generate_thb": dock.generate_thb_checkbox.isChecked(),
-            "generate_so2": dock.generate_so2_checkbox.isChecked(),
+            "generate_thb": generate_thb,
+            "generate_so2": generate_so2,
         }
 
-        dock.status_label.setText("Running unmixing…")
+        n_chunks = ceil(len(output_frames) / UNMIXING_CHUNK_FRAMES)
+        source_layer_name = self.patari_controller.active_recon_layer.name
+        source_layer_metadata = dict(self.patari_controller.active_recon_layer.metadata)
+        source_frame_count = int(
+            np.asarray(self.patari_controller.active_recon_layer.data).shape[0]
+        )
+        source_name = source_layer_name.replace("Recon: ", "")
+        suffix_part = f"_{suffix}" if suffix else ""
+        # Encode the acquisition-frame index when only a single frame is unmixed.
+        frame_part = f"_F{current_frame_id}" if current_frame_id is not None else ""
 
+        def publish(result) -> None:
+            """Add the finished unmixed/THb/sO2 layers. Runs on the main thread."""
+            unmixed, thb, so2 = result
+            generated = ["unmixed"]
+
+            unmixed_axis1_labels = list(map(str, unmixed.ax_1_labels))
+            unmixed_metadata, unmixed_export_attrs = self._build_output_metadata(
+                source_layer_name=source_layer_name,
+                output_frames=output_frames,
+                axis1_labels=unmixed_axis1_labels,
+                filepath=source_layer_metadata.get("filepath"),
+                timestamps=source_layer_metadata.get("timestamps"),
+                pa_kind="unmixed",
+                frame_mode=frame_mode,
+                include_chromophores=True,
+                settings=settings,
+            )
+            self._set_export_frame_attrs(unmixed, unmixed_export_attrs)
+
+            unmixed_name = f"Unmixed: {source_name}{suffix_part}{frame_part}"
+            unmixed_data = self._expand_to_source_frames(
+                display_data_from_patato_obj(unmixed),
+                output_frames,
+                source_frame_count,
+            )
+            # Channel labels are used by downstream spectrum displays.
+            self._add_or_update_image_layer(
+                name=unmixed_name,
+                data=unmixed_data,
+                metadata=unmixed_metadata,
+                patato_obj=unmixed,
+                colormap="magma",
+            )
+            # Keep PATATO outputs available for future derived computations.
+            self.patari_controller._derived_patato_objects[unmixed_name] = unmixed
+
+            if thb is not None:
+                thb_metadata, thb_export_attrs = self._build_output_metadata(
+                    source_layer_name=source_layer_name,
+                    output_frames=output_frames,
+                    axis1_labels=["thb"],
+                    filepath=source_layer_metadata.get("filepath"),
+                    timestamps=source_layer_metadata.get("timestamps"),
+                    pa_kind="unmixed_param",
+                    frame_mode=frame_mode,
+                    parameter="thb",
+                    settings=settings,
+                )
+                self._set_export_frame_attrs(thb, thb_export_attrs)
+                thb_name = f"THb: {source_name}{suffix_part}{frame_part}"
+                self._add_or_update_image_layer(
+                    name=thb_name,
+                    data=self._expand_to_source_frames(
+                        display_data_from_patato_obj(thb),
+                        output_frames,
+                        source_frame_count,
+                    ),
+                    metadata=thb_metadata,
+                    patato_obj=thb,
+                    colormap="inferno",
+                )
+                self.patari_controller._derived_patato_objects[thb_name] = thb
+                generated.append("thb")
+
+            if so2 is not None:
+                so2_metadata, so2_export_attrs = self._build_output_metadata(
+                    source_layer_name=source_layer_name,
+                    output_frames=output_frames,
+                    axis1_labels=["so2"],
+                    filepath=source_layer_metadata.get("filepath"),
+                    timestamps=source_layer_metadata.get("timestamps"),
+                    pa_kind="unmixed_param",
+                    frame_mode=frame_mode,
+                    parameter="so2",
+                    settings=settings,
+                )
+                self._set_export_frame_attrs(so2, so2_export_attrs)
+                so2_name = f"sO2: {source_name}{suffix_part}{frame_part}"
+                self._add_or_update_image_layer(
+                    name=so2_name,
+                    data=self._expand_to_source_frames(
+                        display_data_from_patato_obj(so2),
+                        output_frames,
+                        source_frame_count,
+                    ),
+                    metadata=so2_metadata,
+                    patato_obj=so2,
+                    colormap="twilight_shifted",
+                )
+                self.patari_controller._derived_patato_objects[so2_name] = so2
+                generated.append("so2")
+
+            # Reassert ROI visibility priority after adding multiple result layers.
+            self.patari_controller._ensure_shapes_layer_on_top()
+
+            dock.status_label.setText(f"Finished: {', '.join(generated)}")
+            logger.info("unmixing complete: %s", ", ".join(generated))
+
+        dock.status_label.setText(f"Unmixing {len(output_frames)} frame(s)…")
         logger.info(
-            "running unmixing for %s with %s wavelength(s), %s chromophore(s), reduce=%s",
-            self.patari_controller.active_recon_layer.name,
+            "running unmixing for %s with %s wavelength(s), %s chromophore(s), reduce=%s, "
+            "in %s chunk(s) of %s",
+            source_layer_name,
             len(selected_wavelengths),
             len(selected_chromophores),
             reduce_factor,
+            n_chunks,
+            UNMIXING_CHUNK_FRAMES,
         )
 
-        unmixer = pat.SpectralUnmixer(
-            chromophores=selected_chromophores,
-            wavelengths=np.array(selected_wavelengths, dtype=float),
-            rescaling_factor=reduce_factor,
-            algorithm_id=suffix,
-        )
-        unmixed, _, _ = unmixer.run(
-            recon_for_run, self.patari_controller.pa_data
-        )
-        unmixed_axis1_labels = list(map(str, unmixed.ax_1_labels))
-        unmixed_metadata, unmixed_export_attrs = self._build_output_metadata(
-            source_layer_name=self.patari_controller.active_recon_layer.name,
-            output_frames=output_frames,
-            axis1_labels=unmixed_axis1_labels,
-            filepath=self.patari_controller.active_recon_layer.metadata.get(
-                "filepath"
+        start_task(
+            self.patari_controller,
+            partial(
+                _unmix_frames,
+                recon_for_run,
+                self.patari_controller.pa_data,
+                selected_wavelengths,
+                selected_chromophores,
+                reduce_factor,
+                suffix,
+                generate_thb,
+                generate_so2,
+                UNMIXING_CHUNK_FRAMES,
             ),
-            timestamps=self.patari_controller.active_recon_layer.metadata.get(
-                "timestamps"
-            ),
-            pa_kind="unmixed",
-            frame_mode=frame_mode,
-            include_chromophores=True,
-            settings=settings,
+            total=n_chunks,
+            desc="Unmixing",
+            on_result=publish,
+            status_label=dock.status_label,
         )
-        self._set_export_frame_attrs(unmixed, unmixed_export_attrs)
-
-        source_name = self.patari_controller.active_recon_layer.name.replace(
-            "Recon: ", ""
-        )
-        suffix_part = f"_{suffix}" if suffix else ""
-        # Encode the acquisition-frame index when only a single frame is unmixed.
-        frame_part = (
-            f"_F{current_frame_id}" if current_frame_id is not None else ""
-        )
-
-        unmixed_name = f"Unmixed: {source_name}{suffix_part}{frame_part}"
-        source_frame_count = int(
-                np.asarray(self.patari_controller.active_recon_layer.data).shape[0]
-        )
-        unmixed_data = self._expand_to_source_frames(
-            display_data_from_patato_obj(unmixed),
-            output_frames,
-            source_frame_count,
-        )
-        # Channel labels are used by downstream spectrum displays.
-        self._add_or_update_image_layer(
-            name=unmixed_name,
-            data=unmixed_data,
-            metadata=unmixed_metadata,
-            patato_obj=unmixed,
-            colormap="magma",
-        )
-        # Keep PATATO outputs available for future derived computations.
-        self.patari_controller._derived_patato_objects[unmixed_name] = unmixed
-
-        generated = ["unmixed"]
-
-        if dock.generate_thb_checkbox.isChecked():
-            thb_calc = pat.THbCalculator(algorithm_id=suffix)
-            thb, _, _ = thb_calc.run(unmixed, self.patari_controller.pa_data)
-            thb_metadata, thb_export_attrs = self._build_output_metadata(
-                source_layer_name=self.patari_controller.active_recon_layer.name,
-                output_frames=output_frames,
-                axis1_labels=["thb"],
-                filepath=self.patari_controller.active_recon_layer.metadata.get(
-                    "filepath"
-                ),
-                timestamps=self.patari_controller.active_recon_layer.metadata.get(
-                    "timestamps"
-                ),
-                pa_kind="unmixed_param",
-                frame_mode=frame_mode,
-                parameter="thb",
-                settings=settings,
-            )
-            self._set_export_frame_attrs(thb, thb_export_attrs)
-            thb_name = f"THb: {source_name}{suffix_part}{frame_part}"
-            self._add_or_update_image_layer(
-                name=thb_name,
-                data=self._expand_to_source_frames(
-                    display_data_from_patato_obj(thb),
-                    output_frames,
-                    source_frame_count,
-                ),
-                metadata=thb_metadata,
-                patato_obj=thb,
-                colormap="inferno",
-            )
-            self.patari_controller._derived_patato_objects[thb_name] = thb
-            generated.append("thb")
-
-        if dock.generate_so2_checkbox.isChecked():
-            so2_calc = pat.SO2Calculator(algorithm_id=suffix, nan_invalid=True)
-            so2, _, _ = so2_calc.run(unmixed, self.patari_controller.pa_data)
-            so2_metadata, so2_export_attrs = self._build_output_metadata(
-                source_layer_name=self.patari_controller.active_recon_layer.name,
-                output_frames=output_frames,
-                axis1_labels=["so2"],
-                filepath=self.patari_controller.active_recon_layer.metadata.get(
-                    "filepath"
-                ),
-                timestamps=self.patari_controller.active_recon_layer.metadata.get(
-                    "timestamps"
-                ),
-                pa_kind="unmixed_param",
-                frame_mode=frame_mode,
-                parameter="so2",
-                settings=settings,
-            )
-            self._set_export_frame_attrs(so2, so2_export_attrs)
-            so2_name = f"sO2: {source_name}{suffix_part}{frame_part}"
-            self._add_or_update_image_layer(
-                name=so2_name,
-                data=self._expand_to_source_frames(
-                    display_data_from_patato_obj(so2),
-                    output_frames,
-                    source_frame_count,
-                ),
-                metadata=so2_metadata,
-                patato_obj=so2,
-                colormap="twilight_shifted",
-            )
-            self.patari_controller._derived_patato_objects[so2_name] = so2
-            generated.append("so2")
-
-        # Reassert ROI visibility priority after adding multiple result layers.
-        self.patari_controller._ensure_shapes_layer_on_top()
-
-        dock.status_label.setText(f"Finished: {', '.join(generated)}")
-        logger.info("unmixing complete: %s", ", ".join(generated))

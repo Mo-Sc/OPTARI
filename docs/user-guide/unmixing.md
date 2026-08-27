@@ -30,4 +30,4 @@ Presets can be saved and reloaded so the same processing configuration is reprod
 with collaborators (see [Presets](../configuration/presets.md)). To save the current configuration as a preset, click the `Save Preset` button.
 
 !!! note
-      Unmixing runs synchronously. The interface is briefly unresponsive while the unmixing runs, depending on the size of the scan.
+      Unmixing runs in the background and can be interrupted via the Cancel button. The viewer stays fully interactive while it runs, but only one reconstruction, unmixing, or segmentation task can run at a time.

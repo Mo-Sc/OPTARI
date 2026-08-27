@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
+from functools import partial
 
 import numpy as np
 from napari.layers import Labels
-from napari.utils import progress
 from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QListWidgetItem
 
@@ -14,12 +15,13 @@ from patari.segmentation.segmenter import (
     SegmentationModelConfig,
 )
 from patari.segmentation.segmentation_presets import validate_segmentation_settings
-from patari.utils.viewer import selected_frame_idx, viewer_busy
+from patari.utils.viewer import selected_frame_idx
+from patari.utils.tasks import download_then, start_task
 from patari.controllers.base import TaskControllerBase
 from patari.roi import Ellipse, Rectangle, Polygon, ROIPlacementConfig
 from patari.config import settings
 from patari.utils.presets import PresetStore
-from patari.utils.setup import get_user_segmentation_presets_dir
+from patari.utils.setup import get_user_models_dir, get_user_segmentation_presets_dir
 from patari.widgets.dock_helpers import (
     add_preset_to_combo,
     populate_preset_combo,
@@ -29,6 +31,43 @@ from patari.widgets.dock_helpers import (
 
 
 logger = logging.getLogger(__name__)
+
+
+def _segment_frames(
+    segmenter,
+    us_data: np.ndarray,
+    selected_ids: set[int],
+    n_channels: int,
+    frame_idx: int | None,
+    us_shape: tuple[int, ...],
+) -> Iterator[None]:
+    """Segment *us_data* one frame at a time, yielding once per finished frame.
+
+    Runs in a worker thread, so it must not touch Qt or napari. Segmenter.predict never
+    batches multiple frames into one inference call regardless of chunk size (each frame is
+    a separate ONNX session.run). The mask post-processing (class filtering, channel repeat, frame-padding) that used to
+    run on the main thread after predict() is done here too
+    """
+    results = []
+    for i in range(us_data.shape[0]):
+        results.extend(segmenter.predict(us_data[i : i + 1]))
+        yield
+
+    class_names = results[0].class_names
+    filtered = [
+        np.where(np.isin(r.seg, list(selected_ids)), r.seg, 0).astype(np.int32)
+        for r in results
+    ]
+    mask_3d = np.stack(filtered)
+    # Repeat across channel dimension for correct napari display;
+    # segmenter output is (nframes, H, W) but napari expects (nframes, n_channels, H, W)
+    mask = np.repeat(mask_3d[:, np.newaxis], n_channels, axis=1)
+    if frame_idx is not None:
+        full_mask = np.zeros(us_shape, dtype=np.int32)
+        full_mask[frame_idx] = mask[0]
+        mask = full_mask
+
+    return mask, class_names
 
 
 class SegmentationController(TaskControllerBase):
@@ -157,7 +196,9 @@ class SegmentationController(TaskControllerBase):
             self.patari_controller.pa_data is not None
             and self.patari_controller.active_us_layer is not None
         )
-        dock.generate_tissue_segmentation_button.setEnabled(has_us_layer)
+        dock.generate_tissue_segmentation_button.setEnabled(
+            has_us_layer and not self.patari_controller.task_running
+        )
         dock.generate_roi_button.setEnabled(self.active_seg_mask_2d() is not None)
 
     def segmentation_model_options(self) -> list[str]:
@@ -235,7 +276,7 @@ class SegmentationController(TaskControllerBase):
         self.populate_segmentation_controls()
         dock.roi_class_id_combo.clear()
         self._pending_roi_class_id = None
-        dock.segmentation_status_label.setText(
+        dock.status_label.setText(
             f"Model: {dock.segmentation_model_combo.currentText()}"
         )
 
@@ -283,7 +324,7 @@ class SegmentationController(TaskControllerBase):
             settings = validate_segmentation_settings(settings, model_config.class_names)
             self._apply_preset(settings)
         except (ValueError, OSError) as exc:
-            dock.segmentation_status_label.setText(
+            dock.status_label.setText(
                 f"Could not apply preset: {exc}"
             )
 
@@ -314,7 +355,7 @@ class SegmentationController(TaskControllerBase):
         dock.roi_top_margin_edit.setText(
             self._format_roi_value(settings["roi_top_margin_mm"])
         )
-        dock.segmentation_status_label.setText("Preset applied.")
+        dock.status_label.setText("Preset applied.")
 
     @staticmethod
     def _format_roi_value(value: float | None) -> str:
@@ -333,7 +374,7 @@ class SegmentationController(TaskControllerBase):
         dock = self.patari_controller.segmentation
         selected_class_ids = sorted(self.selected_segmentation_class_ids())
         if not selected_class_ids:
-            dock.segmentation_status_label.setText("Select at least one class.")
+            dock.status_label.setText("Select at least one class.")
             return
 
         try:
@@ -365,19 +406,19 @@ class SegmentationController(TaskControllerBase):
             )
             preset_path = self.preset_store.save(preset_name, preset_values)
         except (KeyError, ValueError, OSError) as exc:
-            dock.segmentation_status_label.setText(
+            dock.status_label.setText(
                 f"Could not save preset: {exc}"
             )
             return
 
         add_preset_to_combo(dock.preset_combo, preset_path)
-        dock.segmentation_status_label.setText(f"Saved preset: {preset_path.name}")
+        dock.status_label.setText(f"Saved preset: {preset_path.name}")
 
     def on_remove_preset_clicked(self) -> None:
         dock = self.patari_controller.segmentation
         preset_path = dock.preset_combo.currentData()
         if preset_path is None:
-            dock.segmentation_status_label.setText("Select a preset to remove.")
+            dock.status_label.setText("Select a preset to remove.")
             return
 
         try:
@@ -385,17 +426,17 @@ class SegmentationController(TaskControllerBase):
                 dock.preset_combo, self.preset_store
             )
         except (ValueError, OSError) as exc:
-            dock.segmentation_status_label.setText(
+            dock.status_label.setText(
                 f"Could not remove preset: {exc}"
             )
             return
         if not removed:
-            dock.segmentation_status_label.setText(
+            dock.status_label.setText(
                 f"Preset not found: {preset_path.name}"
             )
             return
 
-        dock.segmentation_status_label.setText(
+        dock.status_label.setText(
             f"Removed preset: {removed_path.name}"
         )
 
@@ -427,13 +468,13 @@ class SegmentationController(TaskControllerBase):
 
         result = self.active_seg_mask_2d()
         if result is None:
-            seg_dock.segmentation_status_label.setText("No segmentation mask found")
+            seg_dock.status_label.setText("No segmentation mask found")
             return
         seg_2d, seg_layer = result
 
         class_id = seg_dock.roi_class_id_combo.currentData()
         if class_id is None:
-            seg_dock.segmentation_status_label.setText("Select a class id")
+            seg_dock.status_label.setText("Select a class id")
             return
 
         sy, sx = float(seg_layer.scale[-2]), float(seg_layer.scale[-1])
@@ -448,7 +489,7 @@ class SegmentationController(TaskControllerBase):
         height_mm = parse_roi_param(seg_dock.roi_height_edit.text())
 
         if (width_mm is None or height_mm is None) and shape_type in ("rectangle", "ellipse"):
-            seg_dock.segmentation_status_label.setText("Width and height are required")
+            seg_dock.status_label.setText("Width and height are required")
             return
 
         config = ROIPlacementConfig(
@@ -468,7 +509,7 @@ class SegmentationController(TaskControllerBase):
         frame_idx = selected_frame_idx(self.viewer, np.asarray(seg_layer.data).shape[0])
         class_mask = seg_2d == int(class_id)
         if not np.any(class_mask):
-            seg_dock.segmentation_status_label.setText(
+            seg_dock.status_label.setText(
                 "Selected class is not present in the selected frame"
             )
             return
@@ -478,7 +519,7 @@ class SegmentationController(TaskControllerBase):
                 class_mask=class_mask, sy=sy, sx=sx, ty=ty, tx=tx
             )
         except Exception as exc:
-            seg_dock.segmentation_status_label.setText(str(exc))
+            seg_dock.status_label.setText(str(exc))
             return
 
         self.patari_controller.shapes_layer.add(
@@ -487,32 +528,32 @@ class SegmentationController(TaskControllerBase):
         # auto-select the newly added shape, also activates the save button
         new_idx = len(self.patari_controller.shapes_layer.data) - 1
         self.patari_controller.shapes_layer.selected_data = {new_idx}
-        seg_dock.segmentation_status_label.setText(
+        seg_dock.status_label.setText(
             f"ROI generated from class {class_id} in frame {frame_idx}"
         )
 
     def on_generate_tissue_segmentation_clicked(self) -> None:
-        """Run segmentation on the selected frame or all frames and update labels."""
+        """Start segmentation on the selected frame or all frames in a worker thread."""
         seg_dock = self.patari_controller.segmentation
         if seg_dock is None:
             return
 
         us_layer = self.patari_controller.active_us_layer
         if us_layer is None:
-            seg_dock.segmentation_status_label.setText("No US layer found")
+            seg_dock.status_label.setText("No US layer found")
             return
 
         selected_ids = self.selected_segmentation_class_ids()
         if not selected_ids:
-            seg_dock.segmentation_status_label.setText("No classes selected")
+            seg_dock.status_label.setText("No classes selected")
             return
 
         us_raw = np.asarray(us_layer.data)
         us_data = us_raw[:, 0]
         n_frames, n_channels = us_raw.shape[:2]
-        segment_all_frames = seg_dock.all_frames_radio.isChecked()
+        model_id = self.active_segmentation_model_id
 
-        if segment_all_frames:
+        if seg_dock.all_frames_radio.isChecked():
             frame_idx = None
             frame_ids = list(range(n_frames))
             frame_mode = "all"
@@ -522,37 +563,13 @@ class SegmentationController(TaskControllerBase):
             frame_ids = [frame_idx]
             frame_mode = "current"
 
-        segmenter = self.get_segmenter()
-        seg_dock.segmentation_status_label.setText(
-            f"Segmenting {len(frame_ids)} frame(s) with {self.active_segmentation_model_id}..."
-        )
-
-        try:
-            with viewer_busy(self.viewer):
-                with progress(total=len(frame_ids), desc="Segmenting") as progress_bar:
-                    results = segmenter.predict(
-                        us_data, on_frame_complete=progress_bar.update
-                    )
-
-            class_names = results[0].class_names
-
-            filtered = [
-                np.where(np.isin(r.seg, list(selected_ids)), r.seg, 0).astype(np.int32)
-                for r in results
-            ]
-            mask_3d = np.stack(filtered)
-            # Repeat across channel dimension for correct napari display;
-            # segmenter output is (nframes, H, W) but napari expects (nframes, n_channels, H, W)
-            mask = np.repeat(mask_3d[:, np.newaxis], n_channels, axis=1)
-            if frame_idx is not None:
-                full_mask = np.zeros(us_raw.shape, dtype=np.int32)
-                full_mask[frame_idx] = mask[0]
-                mask = full_mask
+        def publish(result) -> None:
+            """Add the finished segmentation as a labels layer. Runs on the main thread."""
+            mask, class_names = result
 
             if self._seg_layer is not None and self._seg_layer in self.viewer.layers:
                 self.viewer.layers.remove(self._seg_layer)
-            self._seg_layer = None
-            label_layer = self.viewer.add_labels(
+            self._seg_layer = self.viewer.add_labels(
                 mask,
                 name="Segmentation",
                 scale=tuple(us_layer.scale),
@@ -563,9 +580,9 @@ class SegmentationController(TaskControllerBase):
                     "frame_mode": frame_mode,
                     "frames": frame_ids,
                     "class_names": class_names,
-                    "source_model_id": self.active_segmentation_model_id,
+                    "source_model_id": model_id,
                     "settings": {
-                        "model_id": self.active_segmentation_model_id,
+                        "model_id": model_id,
                         "selected_class_ids": sorted(selected_ids),
                         "class_names": class_names,
                         "frame_mode": frame_mode,
@@ -574,7 +591,6 @@ class SegmentationController(TaskControllerBase):
                 },
                 units=self.image_units,
             )
-            self._seg_layer = label_layer
 
             # Populate ROI class combo from classes present in the output mask.
             seg_dock.roi_class_id_combo.clear()
@@ -591,11 +607,39 @@ class SegmentationController(TaskControllerBase):
             seg_dock.roi_class_id_combo.setCurrentIndex(roi_class_index)
             self._pending_roi_class_id = None
 
-            seg_dock.segmentation_status_label.setText(
-                f"Segmentation done ({len(frame_ids)} frame(s))"
-            )
-            self.refresh_ui()
+            seg_dock.status_label.setText(f"Finished: {len(frame_ids)} frame(s) segmented")
 
-        except Exception as e:
-            logger.exception("Segmentation failed: %s", e)
-            seg_dock.segmentation_status_label.setText("Segmentation failed")
+        def segment() -> None:
+            seg_dock.status_label.setText(
+                f"Segmenting {len(frame_ids)} frame(s) with {model_id}…"
+            )
+            logger.info(
+                "running segmentation with model '%s' on %s frame(s)",
+                model_id,
+                len(frame_ids),
+            )
+            start_task(
+                self.patari_controller,
+                partial(
+                    _segment_frames,
+                    self.get_segmenter(),
+                    us_data,
+                    selected_ids,
+                    n_channels,
+                    frame_idx,
+                    us_raw.shape,
+                ),
+                total=len(frame_ids),
+                desc="Segmenting",
+                on_result=publish,
+                status_label=seg_dock.status_label,
+            )
+
+        model_config = self._active_segmentation_model_config()
+        download_then(
+            self.patari_controller,
+            get_user_models_dir() / model_config.filename,
+            model_config.url,
+            seg_dock.status_label,
+            segment,
+        )

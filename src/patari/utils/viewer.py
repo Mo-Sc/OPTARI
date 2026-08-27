@@ -7,22 +7,13 @@ from napari.viewer import Viewer
 from qtpy.QtWidgets import QWidget
 
 
-@contextmanager
-def viewer_busy(viewer: Viewer, window: QWidget | None = None):
+def show_activity_dock(viewer: Viewer, visible: bool) -> None:
     """
-    Show progress UI and disable the napari window during a task.
+    Force the activity dock (progress bars, cancel buttons) open or closed.
     _toggle_activity_dock is deprecated private API access, however currently only way to force the activity dock to open
     https://github.com/napari/napari/issues/4598
     """
-    qt_window = viewer.window._qt_window if window is None else window
-    was_enabled = qt_window.isEnabled()
-    viewer.window._status_bar._toggle_activity_dock(True)
-    try:
-        qt_window.setEnabled(False)
-        yield
-    finally:
-        viewer.window._status_bar._toggle_activity_dock(False)
-        qt_window.setEnabled(was_enabled)
+    viewer.window._status_bar._toggle_activity_dock(visible)
 
 
 def selected_frame_idx(viewer: Viewer, n_frames: int) -> int:

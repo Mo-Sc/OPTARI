@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from qtpy.QtCore import Qt
 from qtpy.QtWidgets import (
     QComboBox,
-    QFormLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -35,7 +34,6 @@ SPEED_OF_SOUND_DEFAULT = 1525
 @dataclass
 class ReconstructionDock:
     widget: QWidget
-    scan_status_label: QLabel
     preset_combo: QComboBox
     current_frames_radio: QRadioButton
     all_frames_radio: QRadioButton
@@ -55,11 +53,6 @@ def create_reconstruction_dock(*, enable_scroll: bool = True) -> ReconstructionD
     shell = create_right_dock_shell(enable_scroll=enable_scroll)
     widget = shell.widget
     outer = shell.content_layout
-
-    source_box = QGroupBox("Source")
-    source_form = QFormLayout(source_box)
-    scan_status_label = QLabel("No scan loaded")
-    source_form.addRow(scan_status_label)
 
     setup_box = QGroupBox("Reconstruction Setup")
     setup_layout = QVBoxLayout(setup_box)
@@ -134,19 +127,17 @@ def create_reconstruction_dock(*, enable_scroll: bool = True) -> ReconstructionD
     )
     run_button = QPushButton("Run Reconstruction")
     run_button.setToolTip("Requires a loaded scan and a selected, non-edited preset")
-    status_label = QLabel("Select a preset and run.")
+    status_label = QLabel("No scan loaded.")
     action_layout.addWidget(frame_scope_row)
     action_layout.addWidget(run_button)
     action_layout.addWidget(status_label)
 
-    outer.addWidget(source_box)
     outer.addWidget(setup_box)
     outer.addWidget(action_box)
     outer.addStretch()
 
     return ReconstructionDock(
         widget=widget,
-        scan_status_label=scan_status_label,
         preset_combo=preset_combo,
         current_frames_radio=current_frames_radio,
         all_frames_radio=all_frames_radio,

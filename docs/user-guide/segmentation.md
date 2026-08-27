@@ -19,7 +19,7 @@ The result is added to the viewer as `Segmentation` layer.
     The default model weights are downloaded automatically the first time a given model is used, into the `~/.patari/models` folder. This requires an internet connection once. Inference runs locally via ONNX Runtime, and falls back to CPU automatically if no compatible GPU is available.
 
 !!! note
-    Segmentation runs synchronously. The interface is briefly unresponsive while the segmentation runs, depending on the size of the scan.
+      Segmentation runs in the background and can be interrupted via the Cancel button. The viewer stays fully interactive while it runs, but only one reconstruction, unmixing, or segmentation task can run at a time.
     
 ## Automatic ROI placement
 

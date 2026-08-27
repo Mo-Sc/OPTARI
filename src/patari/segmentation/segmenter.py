@@ -132,22 +132,8 @@ class UKErUSSegAdapter(ModelAdapterBase):
 
         model_path = get_user_models_dir() / model_config.filename
 
-       # check if model exists in user dir, if not, try to download
-        if not model_path.exists():
-            if not model_config.url:
-                raise FileNotFoundError(
-                    f"Model file {model_config.filename} not found and no download URL provided in config."
-                )
-            
-            logger.info(f"Model {model_config.filename} missing. Attempting auto-download from {model_config.url}")
-            try:
-                from patari.utils.misc import download_file
-                download_file(model_config.url, model_path)
-                logger.info(f"Successfully downloaded model {model_config.filename} to {model_path}")
-            except Exception as e:
-                msg = f"Failed to download model {model_config.filename} from {model_config.url}: {e}"
-                logger.error(msg)
-                raise RuntimeError(msg)
+        if not model_path.is_file():
+            raise FileNotFoundError(f"Segmentation model not downloaded: {model_path}")
 
         self.session = ort.InferenceSession(
             str(model_path), providers=["CPUExecutionProvider"]

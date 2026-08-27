@@ -44,7 +44,7 @@ class SegmentationDock:
     generate_tissue_segmentation_button: QPushButton
     current_frames_radio: QRadioButton
     all_frames_radio: QRadioButton
-    segmentation_status_label: QLabel
+    status_label: QLabel
 
 
 def create_segmentation_dock(*, enable_scroll: bool = True) -> SegmentationDock:
@@ -122,7 +122,7 @@ def create_segmentation_dock(*, enable_scroll: bool = True) -> SegmentationDock:
     frame_scope_row, current_frames_radio, all_frames_radio = (
         create_frame_scope_controls()
     )
-    segmentation_status_label = QLabel("Select a model and run segmentation.")
+    status_label = QLabel("Select a model and run segmentation.")
 
     seg_layout.addWidget(QLabel("Preset"))
     seg_layout.addWidget(preset_combo)
@@ -135,7 +135,7 @@ def create_segmentation_dock(*, enable_scroll: bool = True) -> SegmentationDock:
     
     seg_layout.addWidget(frame_scope_row)
     seg_layout.addWidget(generate_tissue_segmentation_button)
-    seg_layout.addWidget(segmentation_status_label)
+    seg_layout.addWidget(status_label)
 
     outer.addWidget(seg_box)
     roi_settings_box = QGroupBox("ROI from Mask")
@@ -172,5 +172,5 @@ def create_segmentation_dock(*, enable_scroll: bool = True) -> SegmentationDock:
         generate_tissue_segmentation_button=generate_tissue_segmentation_button,
         current_frames_radio=current_frames_radio,
         all_frames_radio=all_frames_radio,
-        segmentation_status_label=segmentation_status_label,
+        status_label=status_label,
     )

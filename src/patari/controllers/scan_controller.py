@@ -8,6 +8,7 @@ import re
 import numpy as np
 import patato as pat
 from napari.layers import Image
+from napari.utils.notifications import show_error, show_info
 from patato.io.ithera.read_ithera import iTheraMSOT
 from qtpy.QtWidgets import QFileDialog
 
@@ -71,6 +72,14 @@ class ScanController(TaskControllerBase):
             self.patari_controller.scan_browser.export_layer_button.clicked.disconnect()
         except Exception as e:
             logger.exception("Error unbinding scan browser signals: %s", e)
+
+    def refresh_ui(self) -> None:
+        """Lock the scan browser while a task runs"""
+        if self.patari_controller.scan_browser is None:
+            return
+        self.patari_controller.scan_browser.widget.setEnabled(
+            not self.patari_controller.task_running
+        )
 
     def wavelengths(self) -> "list[int] | None":
         """Return scan wavelengths in nm, or ``None`` if unavailable."""
@@ -467,7 +476,12 @@ class ScanController(TaskControllerBase):
         destination = self._choose_export_path()
         if destination is None:
             return
-        self.export_hdf5(destination)
+
+        # use napari's activity dock to show hdf5 export success/failure 
+        if self.export_hdf5(destination):
+            show_info(f"Exported scan to {destination.name}")
+        else:
+            show_error(f"Failed to export scan to {destination.name} — see log for details")
 
     def _choose_export_path(self) -> Path | None:
         if self.patari_controller.pa_data is None:
