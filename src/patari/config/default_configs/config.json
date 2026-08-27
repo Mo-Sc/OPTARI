@@ -1,5 +1,5 @@
 {
-    "schema_version": 2,
+    "schema_version": 3,
     "general": {
         "LOG_LEVEL" : "INFO",
         "GUI_LOG_LEVEL" : "WARNING",
@@ -10,6 +10,7 @@
         "DEFAULT_FRAME_INDEX": "motion",
         "DEFAULT_CHANNEL_INDEX": 0,
         "DEFAULT_PLAYBACK_FPS": 10,
+        "OPERATOR": "PATARI User",
         "LAYER_COLOR_MAPS":{
             "ultrasounds": "gray",
             "reconstructions": "viridis",

@@ -3,7 +3,7 @@ import json
 
 from patari.utils.setup import archive_user_dir, get_user_config_file, get_user_dir
 
-CURRENT_SCHEMA_VERSION = 2 # adapt in default config.json as well
+CONFIG_SCHEMA_VERSION = 3 # adapt in default config.json as well
 
 @dataclass(frozen=True)
 class GeneralConfig:
@@ -16,6 +16,7 @@ class GeneralConfig:
     DEFAULT_FRAME_INDEX: int | str # frame index or "motion" for motion-based selection
     DEFAULT_CHANNEL_INDEX: int
     DEFAULT_PLAYBACK_FPS: int
+    OPERATOR: str # recorded in the file_origin attribute of exported HDF5 files
     LAYER_COLOR_MAPS: dict = field(default_factory=dict)
 
 @dataclass(frozen=True)
@@ -54,7 +55,7 @@ class PatariConfig:
 
         schema_version = data.get("schema_version")
 
-        if schema_version != CURRENT_SCHEMA_VERSION:
+        if schema_version != CONFIG_SCHEMA_VERSION:
             archive_user_dir(get_user_dir())
             config_path = get_user_config_file()
             data = json.loads(config_path.read_text())

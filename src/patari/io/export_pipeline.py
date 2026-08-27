@@ -11,11 +11,18 @@ import patato as pat
 from qtpy.QtWidgets import QFileDialog
 
 from patari import __version__
+from patari.config import settings
+from patari.config.config import CONFIG_SCHEMA_VERSION
 from patari.patato_bridge import napari_shapes_to_patato_rois
 from patato.io.attribute_tags import HDF5Tags
 
 
 logger = logging.getLogger(__name__)
+
+PATARI_FILE_FORMAT_VERSION = 2  # increment if the HDF5 file format changes in a way that breaks backward compatibility
+PATARI_SOURCE_URL = "https://github.com/Mo-Sc/PATARI"
+PATARI_DOCS_URL = "https://mo-sc.github.io/PATARI/"
+PATARI_PUBLICATION_DOI = "DOI pending publication"  # TODO: fill in once published
 
 
 def export_roi_table_to_xlsx(df_saved) -> str | None:
@@ -77,10 +84,14 @@ def _write_file_origin(destination: Path) -> None:
     file_origin = {
         "tool": "PATARI",
         "tool_version": __version__,
-        "format_version": 1,
-        "operator": "Undefined",
-        "creation_time": dt.datetime.now(dt.timezone.utc)
-        .isoformat(),
+        "operator": settings.general.OPERATOR,
+        "creation_time": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "format_version": PATARI_FILE_FORMAT_VERSION,
+        "config_schema_version": CONFIG_SCHEMA_VERSION,
+        "source_url": PATARI_SOURCE_URL,
+        "documentation_url": PATARI_DOCS_URL,
+        "publication_doi": PATARI_PUBLICATION_DOI,
+
     }
     with h5py.File(destination, "r+") as file:
         file.attrs[HDF5Tags.FILE_ORIGIN] = json.dumps(file_origin)
