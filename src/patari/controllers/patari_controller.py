@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import TYPE_CHECKING
 import warnings
 
 import numpy as np
 import patato as pat # type: ignore
 from napari.layers import Image, Shapes
 from napari.viewer import Viewer
+
+if TYPE_CHECKING:
+    from napari.qt.threading import GeneratorWorker
 
 from patari.utils.misc import parse_float_input
 from patari.widgets.info_dock import InfoDock
@@ -53,6 +57,7 @@ class PatariController:
         self._last_frame_idx: int | None = None
         self.active_recon_layer: Image | None = None
         self.active_us_layer: Image | None = None
+        self.active_task: GeneratorWorker | None = None
 
         # --- left elements ---
         self.info: InfoDock | None = None
@@ -118,6 +123,9 @@ class PatariController:
         Properly clean up resources and disconnect all signals before shutdown.
         Should prevent segfaults on exit
         """
+        if self.active_task is not None:
+            self.active_task.quit()
+
         for controller in (
             self.scan_ctrl,
             self.roi_ctrl,
@@ -253,6 +261,19 @@ class PatariController:
 
     def _init_path(self, path: Path) -> None:
         self.scan_ctrl.init_path(path)
+
+    @property
+    def task_running(self) -> bool:
+        return self.active_task is not None
+
+    def set_active_task(self, worker: GeneratorWorker | None) -> None:
+        """Track the running background task and gate the UI around it.
+
+        Only one heavy task at a time: while one runs, the other run buttons and the scan
+        browser stay disabled.
+        """
+        self.active_task = worker
+        self.refresh_controller_uis()
 
     def refresh_controller_uis(self) -> None:
         """Refresh all controller-owned UI after a state transition."""

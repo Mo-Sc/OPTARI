@@ -2,8 +2,6 @@ import logging
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
-import requests
-from typing import Generator
 import warnings
 
 from imageio.v3 import imread
@@ -137,42 +135,3 @@ def load_startup_logo(viewer):
             name="Welcome to PATARI!",
             metadata={"type": "startup_logo"},
         )
-
-def download_file_stream(url: str, dest_path: Path) -> Generator[float, None, None]:
-    """
-    Downloads a file from a URL to a destination path
-    yield  current progress percentage
-    """
-    response = requests.get(url, stream=True)
-    response.raise_for_status()
-
-    total_size = int(response.headers.get('content-length', 0))
-    downloaded = 0
-    chunk_size = 1024 * 1024
-
-    dest_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Temporary file pointer to prevent corrupted partial downloads if aborted
-    tmp_path = dest_path.with_suffix(dest_path.suffix + ".tmp")
-
-    try:
-        with open(tmp_path, "wb") as f:
-            for chunk in response.iter_content(chunk_size=chunk_size):
-                if chunk:
-                    f.write(chunk)
-                    downloaded += len(chunk)
-                    if total_size > 0:
-                        progress = (downloaded / total_size) * 100
-                        yield progress
-                    else:
-                        yield -1.0 # Unknown total size fallback
-
-        # Download complete, rename temp file to actual file name
-        tmp_path.rename(dest_path)
-        logger.info(f"Successfully downloaded {dest_path.name}")
-        
-    except Exception as e:
-        if tmp_path.exists():
-            tmp_path.unlink() # Clean up the broken partial download
-        logger.error(f"Failed to download file from {url}: {e}")
-        raise e

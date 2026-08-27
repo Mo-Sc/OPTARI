@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import logging
+import os
+import tempfile
 from pathlib import Path
 
 import cv2
-from napari.utils.progress import progress
+from napari.utils.progress import cancelable_progress
 from qtpy.QtWidgets import QFileDialog
 
 from patari.controllers.base import TaskControllerBase
 from patari.io.utils import colorbars_visible
-from patari.utils.viewer import viewer_busy
+from patari.utils.viewer import show_activity_dock
 from patari.widgets.viewer_export_dialog import ViewerExportDialog
 
 logger = logging.getLogger(__name__)
@@ -64,6 +66,12 @@ class ViewerExportController(TaskControllerBase):
 
     @staticmethod
     def _export_video(viewer, parent_widget, default_name: str, n_frames: int, dialog_settings) -> None:
+        """Capture the viewer canvas frame by frame and mux it into an MP4.
+
+        Unlike the reconstruction/unmixing/segmentation tasks, this cannot run in a worker
+        thread. `camera.mouse_pan`/`mouse_zoom` are blocked to prevent the camera drifting mid-capture 
+        since that would corrupt the recording
+        """
         filename, _ = QFileDialog.getSaveFileName(
             parent_widget,
             "Export Video",
@@ -74,25 +82,48 @@ class ViewerExportController(TaskControllerBase):
             return
 
         filename = Path(filename).with_suffix(".mp4")
+        # Write to a scratch file and rename only once every frame is captured, so a
+        # cancelled or failed export can never leave a corrupt file at the real destination.
+        fd, tmp_name = tempfile.mkstemp(dir=filename.parent, prefix=f".{filename.stem}-", suffix=".mp4")
+        os.close(fd)
+        tmp_path = Path(tmp_name)
+        tmp_path.unlink()
+
         fps = dialog_settings["fps"]
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         original_step = viewer.dims.current_step
+        mouse_pan, mouse_zoom = viewer.camera.mouse_pan, viewer.camera.mouse_zoom
         writer = None
+        frames_written = 0
 
         try:
             logger.info("Exporting video to %s at %.3f FPS...", filename, fps)
-            with viewer_busy(viewer, parent_widget):
-                with colorbars_visible(viewer, dialog_settings["include_colorbars"]):
-                    for frame_id in progress(range(n_frames), desc="Exporting video"):
-                        viewer.dims.current_step = (frame_id, *viewer.dims.current_step[1:])
-                        frame = viewer.screenshot(canvas_only=True)[..., :3]
-                        if writer is None:
-                            height, width = frame.shape[:2]
-                            writer = cv2.VideoWriter(str(filename), fourcc, fps, (width, height))
-                        writer.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+            show_activity_dock(viewer, True)
+            viewer.camera.mouse_pan = False
+            viewer.camera.mouse_zoom = False
+            with colorbars_visible(viewer, dialog_settings["include_colorbars"]):
+                for frame_id in cancelable_progress(range(n_frames), desc="Exporting video"):
+                    viewer.dims.current_step = (frame_id, *viewer.dims.current_step[1:])
+                    frame = viewer.screenshot(canvas_only=True)[..., :3]
+                    if writer is None:
+                        height, width = frame.shape[:2]
+                        writer = cv2.VideoWriter(str(tmp_path), fourcc, fps, (width, height))
+                    writer.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+                    frames_written += 1
         finally:
             viewer.dims.current_step = original_step
+            viewer.camera.mouse_pan = mouse_pan
+            viewer.camera.mouse_zoom = mouse_zoom
+            show_activity_dock(viewer, False)
             if writer is not None:
                 writer.release()
-
-        logger.info("Video export done.")
+            if frames_written == n_frames:
+                tmp_path.replace(filename)
+                logger.info("Video export done: %s", filename)
+            else:
+                tmp_path.unlink(missing_ok=True)
+                logger.info(
+                    "Video export cancelled or failed after %s/%s frame(s); discarded",
+                    frames_written,
+                    n_frames,
+                )
