@@ -122,7 +122,7 @@ def scan_metadata_rows(
         ("Wavelengths", np.asarray(pa_data.get_wavelengths())),
         ("Sampling frequency", pa_data.get_sampling_frequency()),
         ("Time samples", pa_data.get_n_samples()),
-        ("Speed of sound", pa_data.get_speed_of_sound()),
+        ("Speed of sound US (m/s)", pa_data.get_speed_of_sound()),
         ("Overall correction factor", np.asarray(pa_data.get_overall_correction_factor())),
         ("Impulse response", np.asarray(pa_data.get_impulse_response())),
         ("Scan geometry (m)", np.asarray(pa_data.get_scan_geometry())),
