@@ -8,6 +8,8 @@ from imageio.v3 import imread
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_CONFIGS_DIR = Path(__file__).resolve().parent.parent / "config" / "default_configs"
+
 
 def _copy_default_presets(default_configs_dir: Path, user_config_dir: Path) -> None:
     default_presets_dir = default_configs_dir / "presets"
@@ -30,9 +32,8 @@ def get_user_dir() -> Path:
     user_dir = Path.home() / ".patari"
     
     config_dir = user_dir / "config"
-    default_configs_dir = Path(__file__).resolve().parent.parent / "config" / "default_configs"
-    if not default_configs_dir.exists():
-        raise FileNotFoundError(f"Default configs directory not found at {default_configs_dir}")
+    if not DEFAULT_CONFIGS_DIR.exists():
+        raise FileNotFoundError(f"Default configs directory not found at {DEFAULT_CONFIGS_DIR}")
 
     # First-run:
     if not (config_dir / "config.json").exists():
@@ -43,12 +44,12 @@ def get_user_dir() -> Path:
         (user_dir / "logs").mkdir(exist_ok=True)
         (user_dir / "models").mkdir(exist_ok=True)
 
-        for config_file in default_configs_dir.glob("*.json"):
+        for config_file in DEFAULT_CONFIGS_DIR.glob("*.json"):
             shutil.copy2(config_file, config_dir / config_file.name)
 
         print(f"Copied default config files to {config_dir}")
 
-    _copy_default_presets(default_configs_dir, config_dir)
+    _copy_default_presets(DEFAULT_CONFIGS_DIR, config_dir)
 
     return user_dir
 
@@ -96,6 +97,10 @@ def get_user_models_dir() -> Path:
 def get_user_seg_models_config_file() -> Path:
     """Returns the path to the segmentation models configuration file."""
     return get_user_dir() / "config" / "segmentation_models.json"
+
+def get_default_config_file() -> Path:
+    """Returns the path to the packaged default configuration file."""
+    return DEFAULT_CONFIGS_DIR / "config.json"
 
 def configure_napari(viewer) -> None:
     """

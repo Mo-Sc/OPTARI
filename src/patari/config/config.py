@@ -1,5 +1,8 @@
 from dataclasses import dataclass, field
 import json
+import os
+from pathlib import Path
+import tempfile
 
 from patari.utils.setup import archive_user_dir, get_user_config_file, get_user_dir
 
@@ -60,11 +63,55 @@ class PatariConfig:
             config_path = get_user_config_file()
             data = json.loads(config_path.read_text())
         
-        return cls(
-            schema_version=data["schema_version"],
-            general=GeneralConfig(**data["general"]),
-            annotation=AnnotationConfig(**data["annotation"]),
-            analysis=AnalysisConfig(**data["analysis"]),
-            segmentation=SegmentationConfig(**data["segmentation"]),
-            export=ExportConfig(**data["export"])
+        return _config_from_dict(data)
+
+
+def _config_from_dict(data: dict) -> PatariConfig:
+    return PatariConfig(
+        schema_version=data["schema_version"],
+        general=GeneralConfig(**data["general"]),
+        annotation=AnnotationConfig(**data["annotation"]),
+        analysis=AnalysisConfig(**data["analysis"]),
+        segmentation=SegmentationConfig(**data["segmentation"]),
+        export=ExportConfig(**data["export"]),
+    )
+
+
+def read_user_config_dict() -> dict:
+    """Return the raw contents of the user's config.json."""
+    return json.loads(get_user_config_file().read_text(encoding="utf-8"))
+
+
+def write_user_config_dict(data: dict) -> Path:
+    """Validate *data* against the config dataclasses and write it atomically.
+    """
+    if data.get("schema_version") != CONFIG_SCHEMA_VERSION:
+        # A mismatch makes the loader archive the whole user directory on next launch.
+        raise ValueError(
+            f"Refusing to write config with schema_version {data.get('schema_version')!r}; "
+            f"expected {CONFIG_SCHEMA_VERSION}."
         )
+
+    # Constructing the sections also works as validation: the loader is intolerant of missing or
+    # unknown keys, so anything it would reject never reaches disk.
+    _config_from_dict(data)
+
+    path = get_user_config_file()
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.stem}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary_file:
+            json.dump(data, temporary_file, indent=4, ensure_ascii=False)
+            temporary_file.write("\n")
+            temporary_path = Path(temporary_file.name)
+        os.replace(temporary_path, path)
+    finally:
+        if temporary_path is not None and temporary_path.exists():
+            temporary_path.unlink()
+    return path

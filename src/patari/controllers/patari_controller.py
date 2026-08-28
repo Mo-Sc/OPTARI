@@ -26,6 +26,7 @@ from patari.widgets.histogram_dock import HistogramDock
 from patari.widgets.spectrum_dock import SpectrumDock
 from patari.widgets.layer_metadata_dialog import LayerMetadataDialog
 from patari.controllers.ui_manager import UiManager
+from patari.controllers.menu_manager import MenuManager
 from patari.controllers.shortcut_manager import ShortcutManager
 from patari.controllers.scan_controller import ScanController
 from patari.controllers.roi_controller import RoiController
@@ -99,8 +100,11 @@ class PatariController:
         self._histograms_dock_widget = None
         self._spectrum_dock_widget = None
 
+        self.settings_dialog = None
+
         self._setup_viewer()
         self._ensure_docks()
+        self.setup_menu()
         self.roi_ctrl.initialize_ui()
         self.segmentation_ctrl.initialize_ui()
         self.unmixing_ctrl.initialize_ui()
@@ -195,6 +199,9 @@ class PatariController:
 
     def register_shortcuts(self) -> None:
         ShortcutManager.register_all(self)
+
+    def setup_menu(self) -> None:
+        MenuManager.setup(self)
 
     def _connect_shapes_layer_events(self) -> None:
         """
