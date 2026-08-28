@@ -74,11 +74,14 @@ class ScanController(TaskControllerBase):
             logger.exception("Error unbinding scan browser signals: %s", e)
 
     def refresh_ui(self) -> None:
-        """Lock the scan browser while a task runs"""
+        """Lock the scan browser while a task runs, and gate HDF5 export on a scan being loaded."""
         if self.patari_controller.scan_browser is None:
             return
         self.patari_controller.scan_browser.widget.setEnabled(
             not self.patari_controller.task_running
+        )
+        self.patari_controller.scan_browser.hdf5_button.setEnabled(
+            self.patari_controller.pa_data is not None
         )
 
     def wavelengths(self) -> "list[int] | None":
@@ -484,10 +487,6 @@ class ScanController(TaskControllerBase):
             show_error(f"Failed to export scan to {destination.name} — see log for details")
 
     def _choose_export_path(self) -> Path | None:
-        if self.patari_controller.pa_data is None:
-            logger.warning("no scan loaded")
-            return None
-
         default_name = (
             f"{Path(self.patari_controller.path).stem}.hdf5"
             if getattr(self.patari_controller, "path", None)

@@ -109,6 +109,8 @@ class PatariController:
         self.segmentation_ctrl.initialize_ui()
         self.unmixing_ctrl.initialize_ui()
         self.reconstruction_ctrl.initialize_ui()
+        self.analysis_ctrl.refresh_ui()
+        self.scan_ctrl.refresh_ui()
         self._connect_events()
         self.register_shortcuts()
 
@@ -401,6 +403,7 @@ class PatariController:
     def on_selection_changed(self, event=None) -> None:
         self._resolve_active_recon_layer()
         self.unmixing_ctrl.refresh_ui()
+        self.analysis_ctrl.refresh_ui()
         if self._snap_dims_to_active_layer():
             return
         self.refresh_all()

@@ -225,6 +225,9 @@ class RoiController(TaskControllerBase):
         self.patari_controller.roi.saved_table.value = self._filter_columns(
             self._saved_full_df, cols
         )
+        has_rows = not self._saved_full_df.empty
+        self.patari_controller.roi.delete_button.setEnabled(has_rows)
+        self.patari_controller.roi.xlsx_button.setEnabled(has_rows)
 
     def _set_live_table_selection(self, selected_rows: list[int]) -> None:
         if self.patari_controller.roi is None:
@@ -335,6 +338,9 @@ class RoiController(TaskControllerBase):
         ann.roi_presets_list.itemDoubleClicked.connect(
             self.on_roi_preset_item_clicked
         )
+        ann.roi_presets_list.itemSelectionChanged.connect(
+            self._update_remove_roi_preset_button_state
+        )
         ann.save_roi_preset_button.clicked.connect(
             self.on_save_roi_preset_clicked
         )
@@ -383,6 +389,9 @@ class RoiController(TaskControllerBase):
             )
             ann.roi_presets_list.itemDoubleClicked.disconnect(
                 self.on_roi_preset_item_clicked
+            )
+            ann.roi_presets_list.itemSelectionChanged.disconnect(
+                self._update_remove_roi_preset_button_state
             )
             ann.save_roi_preset_button.clicked.disconnect(
                 self.on_save_roi_preset_clicked
@@ -616,10 +625,7 @@ class RoiController(TaskControllerBase):
         selected_rows = selection_model.selectedRows()
         selected_indices = [idx.row() for idx in selected_rows]
         if not selected_indices:
-            logger.info("No row selected to delete.")
-            return
-
-        if self._saved_full_df.empty:
+            logger.warning("No row selected to delete.")
             return
 
         self._saved_full_df = self._saved_full_df.drop(selected_indices).reset_index(drop=True)
@@ -628,10 +634,6 @@ class RoiController(TaskControllerBase):
 
     def on_xlsx_export_clicked(self, event=None) -> None:
         if self.patari_controller.roi is None:
-            return
-
-        if self._saved_full_df.empty:
-            logger.info("Saved table empty")
             return
 
         filename = export_roi_table_to_xlsx(self._saved_full_df)
@@ -653,6 +655,14 @@ class RoiController(TaskControllerBase):
             return
         self.patari_controller.annotation.set_roi_preset_names(names)
         self.patari_controller.annotation.roi_presets_description_label.setText("")
+        self._update_remove_roi_preset_button_state()
+
+    def _update_remove_roi_preset_button_state(self) -> None:
+        """Update remove-preset button enabled state based on the current list selection."""
+        if self.patari_controller.annotation is None:
+            return
+        ann = self.patari_controller.annotation
+        ann.remove_roi_preset_button.setEnabled(ann.roi_presets_list.currentItem() is not None)
 
     def on_save_roi_preset_clicked(self, event=None) -> None:
         if self.patari_controller.shapes_layer is None:
@@ -920,6 +930,7 @@ class RoiController(TaskControllerBase):
     def initialize_ui(self) -> None:
         """Initialize ROI preset controls and current ROI display state."""
         self._refresh_roi_presets_ui()
+        self._set_saved_table_view()
         self.refresh_ui()
 
     def refresh_ui(self) -> None:

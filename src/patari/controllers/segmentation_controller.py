@@ -199,7 +199,9 @@ class SegmentationController(TaskControllerBase):
         dock.generate_tissue_segmentation_button.setEnabled(
             has_us_layer and not self.patari_controller.task_running
         )
-        dock.generate_roi_button.setEnabled(self.active_seg_mask_2d() is not None)
+        dock.generate_roi_button.setEnabled(
+            self.active_seg_mask_2d() is not None and not self.patari_controller.task_running
+        )
 
     def segmentation_model_options(self) -> list[str]:
         """Return model IDs for the model combo."""

@@ -22,6 +22,20 @@ class AnalysisController(TaskControllerBase):
     def __init__(self, parent_controller):
         super().__init__(parent_controller)
 
+    def refresh_ui(self) -> None:
+        """Refresh gating for the histogram/spectrum/time-analysis buttons.
+        """
+        has_data = (
+            self.patari_controller.shapes_layer is not None
+            and self.patari_controller.active_recon_layer is not None
+        )
+        if self.patari_controller.time_analysis is not None:
+            self.patari_controller.time_analysis.generate_button.setEnabled(has_data)
+        if self.patari_controller.histograms is not None:
+            self.patari_controller.histograms.refresh_button.setEnabled(has_data)
+        if self.patari_controller.spectrum is not None:
+            self.patari_controller.spectrum.refresh_button.setEnabled(has_data)
+
     def bind_events(self) -> None:
         """Connect analysis dock signals."""
         self.patari_controller.time_analysis.generate_button.clicked.connect(
