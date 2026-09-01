@@ -6,7 +6,7 @@ import tempfile
 
 from patari.utils.setup import archive_user_dir, get_user_config_file, get_user_dir
 
-CONFIG_SCHEMA_VERSION = 3 # adapt in default config.json as well
+CONFIG_SCHEMA_VERSION = 5 # adapt in default config.json as well
 
 @dataclass(frozen=True)
 class GeneralConfig:
@@ -19,13 +19,17 @@ class GeneralConfig:
     DEFAULT_FRAME_INDEX: int | str # frame index or "motion" for motion-based selection
     DEFAULT_CHANNEL_INDEX: int
     DEFAULT_PLAYBACK_FPS: int
-    OPERATOR: str # recorded in the file_origin attribute of exported HDF5 files
+    OPERATOR: str
+    ANALYSIS_ID: str
     LAYER_COLOR_MAPS: dict = field(default_factory=dict)
+    DEFAULT_VISIBLE_DOCKS: dict = field(default_factory=dict)  # dock label -> 0/1, missing = visible
 
 @dataclass(frozen=True)
 class AnnotationConfig:
     roi_colors: list = field(default_factory=list)
     roi_features: dict[str, int] = field(default_factory=dict)
+    show_track_id: bool = True  # label shapes "roi_id/track_id" instead of just "roi_id"
+    roi_label_size: int = 8
 
 @dataclass(frozen=True)
 class AnalysisConfig:

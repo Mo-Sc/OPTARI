@@ -37,6 +37,7 @@ from qtpy.QtWidgets import (
 from patari.config.config import read_user_config_dict, write_user_config_dict
 from patari.roi.roi_features import FEATURE_REGISTRY
 from patari.segmentation.segmenter import load_model_registry
+from patari.widgets.dock_helpers import DOCK_LABELS
 from patari.utils.setup import (
     get_default_config_file,
     get_user_config_file,
@@ -98,6 +99,7 @@ class SettingsDialog(QDialog):
         self.tabs = QTabWidget()
         self.tabs.addTab(self._build_general_tab(), "General")
         self.tabs.addTab(self._build_viewer_tab(), "Viewer")
+        self.tabs.addTab(self._build_docks_tab(), "Docks")
         self.tabs.addTab(self._build_roi_tab(), "ROI Table")
         self.tabs.addTab(self._build_models_tab(), "Models")
         self.tabs.addTab(self._build_paths_tab(), "Paths")
@@ -130,9 +132,13 @@ class SettingsDialog(QDialog):
 
         self.operator_edit = QLineEdit()
         self.operator_edit.setToolTip(
-            "Recorded in the file_origin attribute of exported HDF5 files."
+            "Who is running the analysis. Will be recorded in the exported HDF5 and XLSX files."
         )
         form.addRow("Operator", self.operator_edit)
+
+        self.analysis_id_edit = QLineEdit()
+        self.analysis_id_edit.setToolTip("Name of the analysis, e.g. a study or cohort name. Will be recorded in the exported HDF5 and XLSX files.")
+        form.addRow("Analysis ID", self.analysis_id_edit)
 
         self.log_level_combo = QComboBox()
         self.log_level_combo.addItems(LOG_LEVELS)
@@ -189,6 +195,16 @@ class SettingsDialog(QDialog):
         self.pa_scale_spins = self._add_scale_row(form, "PA fallback scale (mm)")
         self.us_scale_spins = self._add_scale_row(form, "US fallback scale (mm)")
 
+        self.show_track_id_check = QCheckBox("Show track ID on ROI shapes")
+        self.show_track_id_check.setToolTip(
+            "Label shapes as \"roi_id/track_id\" instead of just \"roi_id\"."
+        )
+        form.addRow(self.show_track_id_check)
+
+        self.roi_label_size_spin = QSpinBox()
+        self.roi_label_size_spin.setRange(1, 72)
+        form.addRow("ROI label text size", self.roi_label_size_spin)
+
         colormap_group = QGroupBox("Layer colormaps")
         colormap_form = QFormLayout(colormap_group)
         self.colormap_combos: dict[str, QComboBox] = {}
@@ -217,6 +233,28 @@ class SettingsDialog(QDialog):
             spins.append(spin)
         form.addRow(label, row)
         return spins
+
+    def _build_docks_tab(self) -> QWidget:
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.addWidget(
+            QLabel(
+                "Panels shown when PATARI starts. Any panel can still be shown or hidden at "
+                "any time from PATARI ▸ Docks."
+            )
+        )
+
+        group = QGroupBox("Default visible docks")
+        grid = QGridLayout(group)
+        self.dock_checkboxes: dict[str, QCheckBox] = {}
+        for position, label in enumerate(DOCK_LABELS):
+            checkbox = QCheckBox(label)
+            self.dock_checkboxes[label] = checkbox
+            grid.addWidget(checkbox, position // 3, position % 3)
+        layout.addWidget(group)
+        layout.addStretch()
+
+        return widget
 
     def _build_roi_tab(self) -> QWidget:
         widget = QWidget()
@@ -308,6 +346,7 @@ class SettingsDialog(QDialog):
     def _load_into_widgets(self, data: dict) -> None:
         general = data["general"]
         self.operator_edit.setText(str(general["OPERATOR"]))
+        self.analysis_id_edit.setText(str(general["ANALYSIS_ID"]))
         self.log_level_combo.setCurrentText(str(general["LOG_LEVEL"]).upper())
         self.gui_log_level_combo.setCurrentText(str(general["GUI_LOG_LEVEL"]).upper())
         self.histogram_bins_spin.setValue(int(data["analysis"]["histogram_bins"]))
@@ -330,9 +369,18 @@ class SettingsDialog(QDialog):
             for spin, value in zip(spins, general[key]):
                 spin.setValue(float(value))
 
+        self.show_track_id_check.setChecked(
+            bool(data["annotation"].get("show_track_id", True))
+        )
+        self.roi_label_size_spin.setValue(int(data["annotation"].get("roi_label_size", 8)))
+
         colormaps = general.get("LAYER_COLOR_MAPS", {})
         for key, combo in self.colormap_combos.items():
             combo.setCurrentText(str(colormaps.get(key, "")))
+
+        visible_docks = general.get("DEFAULT_VISIBLE_DOCKS", {})
+        for label, checkbox in self.dock_checkboxes.items():
+            checkbox.setChecked(int(visible_docks.get(label, 1)) == 1)
 
         roi_features = data["annotation"].get("roi_features", {})
         for feature_id, checkbox in self.feature_checkboxes.items():
@@ -347,6 +395,7 @@ class SettingsDialog(QDialog):
     def _collect_from_widgets(self, data: dict) -> dict:
         general = data["general"]
         general["OPERATOR"] = self.operator_edit.text().strip()
+        general["ANALYSIS_ID"] = self.analysis_id_edit.text().strip()
         general["LOG_LEVEL"] = self.log_level_combo.currentText()
         general["GUI_LOG_LEVEL"] = self.gui_log_level_combo.currentText()
         general["DEFAULT_PA_LAYER"] = self.default_pa_layer_edit.text().strip()
@@ -363,8 +412,14 @@ class SettingsDialog(QDialog):
         for key, combo in self.colormap_combos.items():
             general["LAYER_COLOR_MAPS"][key] = combo.currentText().strip()
 
+        general.setdefault("DEFAULT_VISIBLE_DOCKS", {})
+        for label, checkbox in self.dock_checkboxes.items():
+            general["DEFAULT_VISIBLE_DOCKS"][label] = int(checkbox.isChecked())
+
         data["analysis"]["histogram_bins"] = self.histogram_bins_spin.value()
 
+        data["annotation"]["show_track_id"] = self.show_track_id_check.isChecked()
+        data["annotation"]["roi_label_size"] = self.roi_label_size_spin.value()
         data["annotation"].setdefault("roi_features", {})
         for feature_id, checkbox in self.feature_checkboxes.items():
             data["annotation"]["roi_features"][feature_id] = int(checkbox.isChecked())

@@ -35,12 +35,8 @@ Browse through scan data, frames, and toggle between different image layers.
 | **Select All ROIs** | `A` | `A` |
 | **Copy Selected ROI(s)** | `Ctrl` + `C` | `Cmd` + `C` |
 | **Paste Selected ROI(s)** | `Ctrl` + `V` | `Cmd` + `V` |
-| **Delete Selected ROI(s)** | `Delete` or `Backspace` | `Delete` or `Backspace` |
+| **Delete Selected ROI(s)** | `Delete` or `Backspace` | `Delete` or `fn` + `Backspace` |
 | **Save ROI Data*** | `Shift` + `Ctrl` + `S` | `Shift` + `Cmd` + `S` |
-
-!!! warning
-    Delete only works when the ROI is selected **in the viewer**. Selecting a row in the Live/Saved Analysis
-    table and pressing Delete/Backspace does not delete the ROI.
 
 ## Segmentation and Auto-ROI
 

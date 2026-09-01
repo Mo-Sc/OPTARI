@@ -14,16 +14,16 @@ theme:
   logo: assets/logo.png
   favicon: assets/logo.png
   palette:
-    - scheme: slate
-      primary: indigo
-      toggle:
-        icon: material/brightness-4
-        name: Switch to light mode
     - scheme: default
       primary: indigo
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
   features:
     - navigation.tabs
     - navigation.sections
@@ -99,6 +99,7 @@ nav:
       - Architecture: developer-guide/architecture.md
       - Controllers & Widgets: developer-guide/controllers-and-widgets.md
       - Data & Integrations: developer-guide/data-and-integrations.md
+      - The ROI System: developer-guide/roi-system.md
       - Contributing: developer-guide/contributing.md
       - API Reference:
           - PATATO Bridge: developer-guide/api-reference/patato-bridge.md

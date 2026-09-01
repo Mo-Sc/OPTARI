@@ -1,54 +1,53 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from patari.roi.roi_geometry import RoiGeometry
 from patari.utils.presets import PresetStore
 
 
 @dataclass
 class RoiPreset:
-    """Serializable ROI geometry and placement metadata."""
+    """A named, reusable ROI template.
+
+    The shape itself is a :class:`RoiGeometry`, the same FOV-independent
+    representation used by the saved analysis table and HDF5 export.
+    ``source_fov_m`` is kept so it can be re-placed proportionally
+    in a scan with a different fov.
+    """
 
     name: str
     description: str
-    position: str
     created: str
-    shape_type: str
-    vertices: list[list[float]]
-    source_fov_x_mm: float
-    source_fov_y_mm: float
+    geometry: RoiGeometry
+    source_fov_m: tuple[float, float]
 
     def __post_init__(self) -> None:
-        if self.source_fov_x_mm <= 0 or self.source_fov_y_mm <= 0:
+        self.source_fov_m = (float(self.source_fov_m[0]), float(self.source_fov_m[1]))
+        if min(self.source_fov_m) <= 0:
             raise ValueError("ROI preset source FOV must be positive")
 
     @classmethod
     def from_dict(cls, name: str, data: dict) -> "RoiPreset":
-        vertices = [
-            [float(vertex[0]), float(vertex[1])]
-            for vertex in data.get("vertices", [])
-            if isinstance(vertex, (list, tuple)) and len(vertex) >= 2
-        ]
-        if not vertices:
-            raise ValueError(f"ROI preset must contain vertices: {name}")
-
+        if "source_fov_m" not in data:
+            raise ValueError(f"ROI preset must record its source FOV: {name}")
         return cls(
             name=name,
             description=str(data.get("description", "")),
-            position=str(data.get("position", "undefined")),
             created=str(data.get("created", "")),
-            shape_type=str(data.get("shape_type", "polygon")),
-            vertices=vertices,
-            source_fov_x_mm=float(data["source_fov_x_mm"]),
-            source_fov_y_mm=float(data["source_fov_y_mm"]),
+            geometry=RoiGeometry.from_dict(data.get("geometry", {})),
+            source_fov_m=data["source_fov_m"],
         )
 
     def to_dict(self) -> dict:
-        data = asdict(self)
-        data.pop("name")
-        return data
+        return {
+            "description": self.description,
+            "created": self.created,
+            "source_fov_m": list(self.source_fov_m),
+            "geometry": self.geometry.to_dict(),
+        }
 
 
 class RoiPresetStore(PresetStore):
@@ -68,21 +67,14 @@ class RoiPresetStore(PresetStore):
         *,
         name: str,
         description: str,
-        position: str,
-        shape_type: str,
-        vertices: list[list[float]],
-        source_fov_x_mm: float,
-        source_fov_y_mm: float,
+        geometry: RoiGeometry,
+        source_fov_m: tuple[float, float],
     ) -> Path:
-        created = datetime.now(UTC).isoformat()
         preset = RoiPreset(
             name=name,
             description=description,
-            position=position,
-            created=created,
-            shape_type=shape_type,
-            vertices=vertices,
-            source_fov_x_mm=source_fov_x_mm,
-            source_fov_y_mm=source_fov_y_mm,
+            created=datetime.now(UTC).isoformat(),
+            geometry=geometry,
+            source_fov_m=source_fov_m,
         )
         return self.save(name, preset.to_dict())

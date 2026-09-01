@@ -14,12 +14,18 @@ From the **Scan Browser** dock, click **Export HDF5** and choose a destination.
 !!! warning
     HDF5 export always writes to a **new** file. PATARI will never change the source file, and if a file with the same name already exists at the export destination, export will fail. 
 
-## Saved Analysis Table Export (CSV/XLSX)
+## Saved Analysis Table Import/Export (XLSX)
 
-Click **Export** in the ROI dock to write the entire **Saved Analysis** table to a spreadsheet. The export always includes the full computed feature set, regardless of which columns are currently visible in the live view (see
-[ROI Annotation](roi-annotation.md#roi-features)). The exported tables can be used for further statistical analysis. This export also happens automatically at fixed time intervals as a backup, and can be found under (TODO: insert path). 
+Click **Export XLSX** in the ROI dock to write the entire **Saved Analysis** table to a spreadsheet. The export always includes the full computed feature set, regardless of which columns are currently visible in the live view (see
+[ROI Annotation](roi-annotation.md#roi-features)). The exported tables can be used for further statistical analysis.
 
-Using the `Import XLSX` button, you can load a previously exported analysis file into the **Saved Analysis** table, allowing you to continue a previous analysis in a new PATARI instance (not implemented yet). 
+The file contains two sheets: `roi_table` with the measurements, and `patari_meta` with additional info (tool version, operator, analysis ID, creation time, schema version), mirroring the `file_origin` attribute written by the HDF5 export.
+
+The filename is `roi_data_<operator>_<analysis ID>_<timestamp>.xlsx`, built from the `OPERATOR` and `ANALYSIS_ID` settings (see [Configuration](../configuration/configuration-schema.md#general)) with timestamp matching the `creation_time` in the metadata sheet. 
+
+The same file is written automatically as a backup after **every change** to the Saved Analysis table, to `~/.patari/roi_table_autosave.xlsx`. If PATARI closes unexpectedly, import that file to recover the session.
+
+Using the **Import XLSX** button, you can load a previously exported analysis file back into the **Saved Analysis** table, allowing you to continue an earlier analysis or continue on a different machine. Import **appends** to the current table, so analyses from several sessions or machines can be combined in one place. `roi_group_uid` keeps every row attributable to the ROI it was measured from. Identical rows are skipped. Files written by a PATARI version with an incompatible table schema are rejected.
 
 ## ROI Analysis Plot Exports (PNG/...)
 

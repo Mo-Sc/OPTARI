@@ -438,7 +438,7 @@ class ScanController(TaskControllerBase):
                 )
                 self.patari_controller.roi_ctrl.set_roi_records(records)
                 shapes = [
-                    (record.verts, record.kind, record.position, record.source)
+                    (record.verts, record.kind, record.tissue_class, record.source)
                     for record in records
                     if record.frame_id == int(self.viewer.dims.point[0])
                 ]
@@ -447,14 +447,14 @@ class ScanController(TaskControllerBase):
                 if shapes:
                     self.patari_controller.shapes_layer.selected_data = set(range(len(shapes)))
 
-                # add roi_position property to shapes layer
+                # add roi_tissue_class property to shapes layer
                 props = dict(
                     getattr(
                         self.patari_controller.shapes_layer, "properties", {}
                     )
                     or {}
                 )
-                props["roi_position"] = [pos for _, _, pos, _ in shapes]
+                props["roi_tissue_class"] = [tc for _, _, tc, _ in shapes]
                 props["roi_source"] = [src for _, _, _, src in shapes]
                 self.patari_controller.shapes_layer.properties = props
 

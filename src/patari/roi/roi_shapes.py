@@ -16,8 +16,48 @@ class ROIPlacementConfig:
     depth_mm: float | None
 
 
+def largest_component(mask: np.ndarray) -> np.ndarray:
+    """Boolean mask of *mask*'s largest connected component.
+    """
+    mask_u8 = mask.astype(np.uint8)
+    if mask_u8.max() == 1:
+        mask_u8 *= 255  # cv2's connectivity analysis expects a 0/255 image
+    if mask_u8.shape[0] == 0 or mask_u8.shape[1] == 0:
+        raise ValueError("Empty mask")
+
+    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(
+        mask_u8, connectivity=8
+    )
+    if num_labels < 2:
+        raise ValueError("Selected class is empty or not found.")
+
+    largest_label = 1 + np.argmax(stats[1:, cv2.CC_STAT_AREA])
+    return labels == largest_label
+
+
+def _top_at_center_column(largest_mask: np.ndarray) -> tuple[int, int]:
+    """Row and column of *largest_mask*'s topmost pixel at its own horizontal centre."""
+    center_col = largest_mask.shape[1] // 2
+    hit_rows = np.where(largest_mask[:, center_col])[0]
+    if hit_rows.size == 0:
+        raise ValueError("Class not present at image center")
+    return int(hit_rows[0]), center_col
+
+
+def class_top_at_center_column(mask: np.ndarray) -> tuple[int, int]:
+    """Row and column of the topmost pixel of *mask*'s largest component, at the
+    image's horizontal centre.
+
+    used below by the box-shaped ROI generators, and by ROI preset auto-placement
+    (``RoiController._place_roi_preset_auto``) to align a saved preset the same way.
+    """
+    return _top_at_center_column(largest_component(mask))
+
+
 class ROIShape(ABC):
-    """Base class for ROI shapes."""
+    """Base class for ROI shapes.
+    TODO: Should we unify this with ROIGeometry?
+    """
 
     def __init__(self, config: ROIPlacementConfig):
         self.config = config
@@ -53,39 +93,24 @@ class ROIShape(ABC):
         
         Returns: (x0, x1, y0, y1, largest_component_mask)
         """
-        mask_u8 = mask.astype(np.uint8)
-        # Ensure it scales to 255 for OpenCV connectivity analysis
-        if mask_u8.max() == 1:
-            mask_u8 *= 255
-
-        h, w = mask_u8.shape
-        if h == 0 or w == 0:
-            raise ValueError("Empty mask")
         if sy <= 0 or sx <= 0:
             raise ValueError("Invalid scale")
 
         # 1. Isolate the largest connected component
-        num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(
-            mask_u8, connectivity=8
-        )
-        if num_labels < 2:
-            raise ValueError("Selected class is empty or not found.")
-
-        largest_label = 1 + np.argmax(stats[1:, cv2.CC_STAT_AREA])
-        largest_mask = (labels == largest_label).astype(np.uint8)
+        largest_mask = largest_component(mask)
+        h, w = largest_mask.shape
 
         # 2. Establish Reference Points based on conventions
-        center_x = w // 2  
-        
+        center_x = w // 2
+
         if use_center_anchor:
             # Anchor Y to the top of the class at the horizontal center
-            rows = np.where(largest_mask[:, center_x])[0]
-            if rows.size == 0:
-                raise ValueError("Class not present at image center")
-            top_y = int(rows[0])
+            top_y, _ = _top_at_center_column(largest_mask)
         else:
             # Anchor Y to the absolute highest point of the component
-            top_y = int(stats[largest_label, cv2.CC_STAT_TOP])
+            top_y = int(np.where(largest_mask.any(axis=1))[0][0])
+
+        largest_mask = largest_mask.astype(np.uint8)  # cv2.findContours needs this downstream
 
         # 3. Calculate Trim Boundaries
         # Width: Symmetric around the scan center
@@ -128,9 +153,9 @@ class BoxShape(ROIShape):
         # check for overextensions
         # Find the actual vertical extent of the largest component in the center column
         center_x = largest_mask.shape[1] // 2
-        rows = np.where(largest_mask[:, center_x])[0]
-        if rows.size > 0:
-            available_depth = rows[-1] - rows[0] + 1
+        hit_rows = np.where(largest_mask[:, center_x])[0]
+        if hit_rows.size > 0:
+            available_depth = hit_rows[-1] - hit_rows[0] + 1
             requested_height = y1 - y0
             if requested_height > available_depth:
                 raise ValueError(

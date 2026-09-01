@@ -5,6 +5,8 @@ from patari.roi.roi_shapes import (
     Rectangle,
     Polygon,
     ROIPlacementConfig,
+    class_top_at_center_column,
+    largest_component,
 )
 
 __all__ = [
@@ -12,4 +14,6 @@ __all__ = [
     "Rectangle",
     "Polygon",
     "ROIPlacementConfig",
+    "class_top_at_center_column",
+    "largest_component",
 ]
