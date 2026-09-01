@@ -1,10 +1,7 @@
 """Napari viewer utilities."""
 
-from contextlib import contextmanager
-
 import numpy as np
 from napari.viewer import Viewer
-from qtpy.QtWidgets import QWidget
 
 
 def show_activity_dock(viewer: Viewer, visible: bool) -> None:
@@ -17,8 +14,15 @@ def show_activity_dock(viewer: Viewer, visible: bool) -> None:
 
 
 def selected_frame_idx(viewer: Viewer, n_frames: int) -> int:
-    """Return the currently selected frames index, clamped to valid range.
-    TODO: make sure this is used everywhere
-    Also implement for channel
-    """
+    """Return the currently selected frame index, clamped to valid range."""
     return int(np.clip(round(viewer.dims.point[0]), 0, n_frames - 1))
+
+
+def selected_frame_and_channel(viewer: Viewer) -> tuple[int, int] | None:
+    """Current ``(frame, channel)`` from the viewer dims.
+    ``None`` when the viewer has no channel axis.
+    """
+    point = list(viewer.dims.point)
+    if len(point) < 2:
+        return None
+    return int(round(point[0])), int(round(point[1]))

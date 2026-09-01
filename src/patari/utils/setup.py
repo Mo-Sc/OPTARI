@@ -86,6 +86,10 @@ def get_user_config_file() -> Path:
     """Returns the path to the configuration file."""
     return get_user_dir() / "config" / "config.json"
 
+def get_user_roi_autosave_file() -> Path:
+    """Rolling backup of the Saved Analysis table, restorable via Import XLSX."""
+    return get_user_dir() / "roi_table_autosave.xlsx"
+
 def get_user_log_file() -> Path:
     """Returns the path to the log file."""
     return get_user_dir() / "logs" / "patari.log"

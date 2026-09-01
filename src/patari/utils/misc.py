@@ -25,10 +25,10 @@ def parse_float_input(text: str) -> float | None:
         return None
 
 
-def roi_color_for_index(roi_index: int) -> str:
-    """Return the configured display color for a given ROI index."""
+def roi_color_for_index(index: int) -> str:
+    """Return the configured display color for a given roi index."""
     roi_colors = settings.annotation.roi_colors
-    return roi_colors[int(roi_index) % len(roi_colors)]
+    return roi_colors[int(index) % len(roi_colors)]
 
 
 def open_download(url: str | None, dest_name: str) -> tuple[requests.Response, int]:

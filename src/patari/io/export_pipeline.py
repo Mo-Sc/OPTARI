@@ -3,17 +3,23 @@ from __future__ import annotations
 import datetime as dt
 import json
 import logging
+import re
 from pathlib import Path
 
 import h5py
 import numpy as np
+import pandas as pd
 import patato as pat
 from qtpy.QtWidgets import QFileDialog
 
 from patari import __version__
 from patari.config import settings
 from patari.config.config import CONFIG_SCHEMA_VERSION
-from patari.patato_bridge import napari_shapes_to_patato_rois
+from patari.patato_bridge import patato_roi_from_geometry
+from patari.io.utils import _filename_token
+from patari.roi.roi_features import SAVED_FIXED_SOURCE_COLUMNS
+from patari.roi.roi_geometry import RoiGeometry
+from patari.roi.roi_utils import saved_export_columns
 from patato.io.attribute_tags import HDF5Tags
 
 
@@ -24,22 +30,106 @@ PATARI_SOURCE_URL = "https://github.com/Mo-Sc/PATARI"
 PATARI_DOCS_URL = "https://mo-sc.github.io/PATARI/"
 PATARI_PUBLICATION_DOI = "DOI pending publication"  # TODO: fill in once published
 
+# Bump only when the meaning of saved-table columns changes (units, semantics).
+# Columns being added or removed can be handled without a schema version bump.
+ROI_TABLE_SCHEMA_VERSION = 1
+ROI_TABLE_SHEET = "roi_table"
+ROI_TABLE_META_SHEET = "patari_meta"
 
-def export_roi_table_to_xlsx(df_saved) -> str | None:
-    """Prompt for a file path and export the ROI table as an XLSX file."""
-    filename, _ = QFileDialog.getSaveFileName(
-        None,
-        "Save ROIs as Excel",
-        "roi_data.xlsx",
-        "Excel Files (*.xlsx)",
+
+def default_roi_table_filename() -> str:
+    """``roi_data_<operator>_<analysis id>_<timestamp>.xlsx``.
+
+    The timestamp is UTC so it matches ``creation_time`` in the provenance sheet.
+    """
+    timestamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return (
+        f"roi_data_{_filename_token(settings.general.OPERATOR)}"
+        f"_{_filename_token(settings.general.ANALYSIS_ID)}_{timestamp}.xlsx"
     )
-    if not filename:
-        return None
-    if not filename.endswith(".xlsx"):
-        filename += ".xlsx"
 
-    df_saved.to_excel(filename, index=False)
+
+def export_roi_table_to_xlsx(df_saved, path=None) -> str | None:
+    """Write the ROI table as an XLSX file, prompting for a path if *path* is None."""
+
+    if path is not None:
+        filename = str(path)
+    else:
+        filename, _ = QFileDialog.getSaveFileName(
+            None,
+            "Save ROIs as Excel",
+            default_roi_table_filename(),
+            "Excel Files (*.xlsx)",
+        )
+        if not filename:
+            return None
+        if not filename.endswith(".xlsx"):
+            filename += ".xlsx"
+
+    meta = _file_origin(roi_table_schema_version=ROI_TABLE_SCHEMA_VERSION)
+    meta_df = pd.DataFrame(
+        {"key": list(meta.keys()), "value": [str(v) for v in meta.values()]}
+    )
+    with pd.ExcelWriter(Path(filename)) as writer:
+        df_saved.to_excel(writer, sheet_name=ROI_TABLE_SHEET, index=False)
+        meta_df.to_excel(writer, sheet_name=ROI_TABLE_META_SHEET, index=False)
+
     return filename
+
+
+def import_roi_table_from_xlsx(path=None) -> tuple[pd.DataFrame, str] | None:
+    """Read a previously exported ROI table, prompting for a file if *path* is None."""
+    if path is not None:
+        filename = str(path)
+    else:
+        filename, _ = QFileDialog.getOpenFileName(
+            None,
+            "Import ROI Analysis Table",
+            "",
+            "Excel Files (*.xlsx)",
+        )
+        if not filename:
+            return None
+
+    path = Path(filename)
+
+    try:
+        meta_df = pd.read_excel(path, sheet_name=ROI_TABLE_META_SHEET)
+        meta = dict(zip(meta_df["key"], meta_df["value"]))
+    except (ValueError, KeyError) as exc:
+        raise ValueError(f"'{Path(path).name}' is not a PATARI ROI table.") from exc
+
+    file_version = str(meta.get("roi_table_schema_version", ""))
+    if file_version != str(ROI_TABLE_SCHEMA_VERSION):
+        raise ValueError(
+            f"ROI table schema version {file_version or 'missing'} cannot be read by "
+            f"this PATARI version, which expects version {ROI_TABLE_SCHEMA_VERSION}."
+        )
+
+    df = pd.read_excel(path, sheet_name=ROI_TABLE_SHEET)
+
+    missing_required = [c for c in SAVED_FIXED_SOURCE_COLUMNS if c not in df.columns]
+    if missing_required:
+        raise ValueError(
+            f"ROI table is missing required column(s): {', '.join(missing_required)}."
+        )
+
+    # Without a group identity a row cannot be grouped or restored, and a blank one
+    # would drop out of every groupby silently rather than failing.
+    if df["roi_group_uid"].fillna("").astype(str).str.strip().eq("").any():
+        raise ValueError("ROI table has row(s) with no roi_group_uid.")
+
+    # Reconcile by name, not position, the export column set follows FEATURE_REGISTRY
+    # and can grow between releases without a schema version bump.
+    expected = saved_export_columns()
+    dropped = [c for c in df.columns if c not in expected]
+    added = [c for c in expected if c not in df.columns]
+    if dropped:
+        logger.warning("ignoring unknown column(s) in %s: %s", path, ", ".join(dropped))
+    if added:
+        logger.warning("filling absent column(s) in %s: %s", path, ", ".join(added))
+
+    return df.reindex(columns=expected).reset_index(drop=True), filename
 
 
 def export_scan_to_hdf5(controller, destination: Path) -> bool:
@@ -80,21 +170,26 @@ def export_scan_to_hdf5(controller, destination: Path) -> bool:
                 pass
 
 
-def _write_file_origin(destination: Path) -> None:
-    file_origin = {
+def _file_origin(**extra) -> dict:
+    """origin recorded in every file PATARI writes."""
+    return {
         "tool": "PATARI",
         "tool_version": __version__,
         "operator": settings.general.OPERATOR,
+        "analysis_id": settings.general.ANALYSIS_ID,
         "creation_time": dt.datetime.now(dt.timezone.utc).isoformat(),
         "format_version": PATARI_FILE_FORMAT_VERSION,
         "config_schema_version": CONFIG_SCHEMA_VERSION,
         "source_url": PATARI_SOURCE_URL,
         "documentation_url": PATARI_DOCS_URL,
         "publication_doi": PATARI_PUBLICATION_DOI,
-
+        **extra,
     }
+
+
+def _write_file_origin(destination: Path) -> None:
     with h5py.File(destination, "r+") as file:
-        file.attrs[HDF5Tags.FILE_ORIGIN] = json.dumps(file_origin)
+        file.attrs[HDF5Tags.FILE_ORIGIN] = json.dumps(_file_origin())
 
 
 def _write_rois(controller, destination_pa_data) -> None:
@@ -132,20 +227,19 @@ def _write_rois(controller, destination_pa_data) -> None:
             rep = rep_values[frame_idx, channel_idx]
         except (IndexError, KeyError):
             z, run, rep = 0, 0, 0
-        roi = napari_shapes_to_patato_rois(
-            [np.asarray(record.verts, dtype=float)],
-            [record.kind],
-            [record.position],
+        roi = patato_roi_from_geometry(
+            RoiGeometry.from_record(record, fov_x_m, fov_y_m),
             fov_x_m,
             fov_y_m,
-            z,
-            run,
-            rep,
-            frame_idx,
+            z=z,
+            run=run,
+            rep=rep,
+            frame_idx=frame_idx,
             roi_class=export_roi_class,
-            roi_ids=[record.roi_id],
-            roi_group_ids=[record.roi_group_id],
-        )[0]
+            roi_id=record.roi_id,
+            track_id=record.track_id,
+            roi_group_uid=record.roi_group_uid,
+        )
         destination_pa_data.add_roi(roi, generated=True)
 
     logger.info("saved %s PATARI ROI(s)", len(records))

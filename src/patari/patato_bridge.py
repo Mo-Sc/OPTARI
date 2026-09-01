@@ -13,7 +13,8 @@ import patato as pat  # type: ignore[import]
 from patari.utils.motion import k_motion_scores_optimized
 
 from patari.config import settings
-from patari.roi.roi_records import ROIRecord
+from patari.roi.roi_geometry import RoiGeometry
+from patari.roi.roi_records import ROIRecord, new_roi_group_uid
 
 logger = logging.getLogger(__name__)
 
@@ -58,40 +59,6 @@ def scale_from_patato_obj(obj, fallback: tuple) -> tuple:
 def display_data_from_patato_obj(image_sequence) -> np.ndarray:
     """Convert PATATO image data to napari's display orientation."""
     return np.flip(np.array(image_sequence.da[:, :, :, 0, :]), axis=-2)
-
-
-def patato_to_napari(
-    pts_m: np.ndarray, fov_x_m: float, fov_y_m: float
-) -> np.ndarray:
-    """Convert PATATO ``(x_m, y_m)`` polygon vertices to napari ``(y_mm, x_mm)``.
-
-    PATATO: origin at image centre, x→right, y→up, metres.
-    napari:  origin at top-left,   y→down, mm.
-    """
-    x_m = pts_m[:, 0]
-    y_m = pts_m[:, 1]
-    return np.stack(
-        [
-            (fov_y_m / 2.0 - y_m) * 1000.0,  # y_mm  (y-axis flipped)
-            (x_m + fov_x_m / 2.0) * 1000.0,  # x_mm  (origin shifted)
-        ],
-        axis=1,
-    )
-
-
-def napari_to_patato(
-    verts_yx_mm: np.ndarray, fov_x_m: float, fov_y_m: float
-) -> np.ndarray:
-    """Inverse of :func:`patato_to_napari`."""
-    y_mm = verts_yx_mm[:, 0]
-    x_mm = verts_yx_mm[:, 1]
-    return np.stack(
-        [
-            x_mm / 1000.0 - fov_x_m / 2.0,  # patato x (m)
-            fov_y_m / 2.0 - y_mm / 1000.0,  # patato y (m)
-        ],
-        axis=1,
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -302,39 +269,6 @@ def fov_from_objects(patato_objects: dict) -> "tuple[float, float] | None":
 # ---------------------------------------------------------------------------
 
 
-def napari_shapes_from_scan_rois(
-    pa_data: "pat.PAData",
-    fov_x_m: float,
-    fov_y_m: float,
-) -> list[tuple[np.ndarray, str, str, str]]:
-    """Load ROI polygons from *pa_data* as napari ``(y_mm, x_mm)`` vertices.
-
-    Silently skips individual ROIs that cannot be converted.
-    Returns an empty list when no ROIs exist or loading fails.
-    """
-    try:
-        rois = pa_data.get_rois()
-    except Exception:
-        logger.exception("could not load ROIs")
-        return []
-
-    shapes = []
-    for (_name, _number), roi in rois.items():
-        try:
-            pts = np.asarray(roi.points, dtype=float)  # (N, 2): (x_m, y_m)
-            shapes.append(
-                (
-                    patato_to_napari(pts, fov_x_m, fov_y_m),
-                    getattr(roi, "shape_type", "polygon"),
-                    getattr(roi, "position", "undefined"),
-                    str(_name),
-                )
-            )
-        except Exception:
-            logger.exception("skipped ROI %s/%s", _name, _number)
-    return shapes
-
-
 def roi_records_from_scan_rois(
     pa_data: "pat.PAData", fov_x_m: float, fov_y_m: float
 ) -> list[ROIRecord]:
@@ -349,25 +283,35 @@ def roi_records_from_scan_rois(
     records: list[ROIRecord] = []
     used_ids: set[int] = set()
     next_id = 0
-    next_group = 0
+    next_track = 0
     for (_name, _number), roi in rois.items():
-        points = np.asarray(roi.points, dtype=float)
+        geometry = RoiGeometry(
+            verts_m=np.asarray(roi.points, dtype=float),
+            kind=getattr(roi, "shape_type", "polygon"),
+            source=getattr(roi, "roi_class", "PATATO"),
+            tissue_class=getattr(roi, "position", "undefined"),
+        )
         frames = np.asarray(getattr(roi, "ax0_index", []), dtype=int).reshape(-1)
         frames = np.unique(frames[(frames >= 0) & (frames < n_frames)])
         if not frames.size:
             frames = np.arange(n_frames, dtype=int)
 
+        # PATATO calls this "roi_group_id", in PATARI it is `track_id`.
         try:
-            persisted_group = int(getattr(roi, "roi_group_id", None))
+            persisted_track = int(getattr(roi, "roi_group_id", None))
         except (TypeError, ValueError):
-            persisted_group = None
-        group_id = persisted_group if persisted_group is not None else next_group
-        next_group = max(next_group, group_id + 1)
+            persisted_track = None
+        track_id = persisted_track if persisted_track is not None else next_track
+        next_track = max(next_track, track_id + 1)
 
         try:
             persisted_id = int(getattr(roi, "roi_id", None))
         except (TypeError, ValueError):
             persisted_id = None
+
+        # Every frame copy of one ROI shares the group's identity. a scan written
+        # before uids existed gets a fresh one for the whole group, not per frame.
+        group_uid = str(getattr(roi, "roi_group_uid", "") or "") or new_roi_group_uid()
         for frame_id in frames:
             roi_id = persisted_id if len(frames) == 1 else None
             if roi_id is None or roi_id in used_ids:
@@ -377,59 +321,51 @@ def roi_records_from_scan_rois(
             used_ids.add(roi_id)
             next_id = max(next_id, roi_id + 1)
             records.append(
-                ROIRecord(
+                geometry.to_record(
                     roi_id=roi_id,
-                    roi_group_id=group_id,
+                    track_id=track_id,
                     frame_id=int(frame_id),
-                    verts=patato_to_napari(points, fov_x_m, fov_y_m),
-                    kind=getattr(roi, "shape_type", "polygon"),
-                    source=getattr(roi, "roi_class", "PATATO"),
-                    position=getattr(roi, "position", "undefined"),
+                    roi_group_uid=group_uid,
+                    fov_x_m=fov_x_m,
+                    fov_y_m=fov_y_m,
                 )
             )
     return records
 
 
-def napari_shapes_to_patato_rois(
-    shapes: list[np.ndarray],
-    shape_types: list[str],
-    roi_positions: list[str],
+def patato_roi_from_geometry(
+    geometry: RoiGeometry,
     fov_x_m: float,
     fov_y_m: float,
+    *,
     z: float = 0.0,
     run: float = 0.0,
     rep: float = 0.0,
     frame_idx: int = 0,
     roi_class: str = "PATARI",
-    roi_ids: list[int] | None = None,
-    roi_group_ids: list[int] | None = None,
-) -> list[object]:
-    """Convert napari ROI shapes into PATATO ROI objects.
-
-    The returned objects can be persisted with PATATO's native writer API.
-    """
+    roi_id: int | None = None,
+    track_id: int | None = None,
+    roi_group_uid: str | None = None,
+) -> object:
+    """Convert an ROI geometry into a PATATO ROI object for the native writer."""
     from patato.utils.rois.roi_type import ROI as PatatoROI  # type: ignore[import]
 
-    rois: list[object] = []
-    for i, (verts, stype, position) in enumerate(
-        zip(shapes, shape_types, roi_positions)
-    ):
-        verts_yx = np.asarray(verts, dtype=float)[..., -2:]
-        roi = PatatoROI.from_polygon_mm(
-                verts_yx_mm=verts_yx,
-                fov=(fov_x_m, fov_y_m),
-                z_position=z,
-                run=run,
-                repetition=rep,
-                ax0_index=np.array([frame_idx]),
-                roi_class=str(roi_class),
-                position=position,
-                generated=True,
-                shape_type=stype,
-            )
-        if roi_ids is not None:
-            roi.roi_id = int(roi_ids[i])
-        if roi_group_ids is not None:
-            roi.roi_group_id = int(roi_group_ids[i])
-        rois.append(roi)
-    return rois
+    roi = PatatoROI.from_polygon_mm(
+        verts_yx_mm=geometry.verts_mm(fov_x_m, fov_y_m),
+        fov=(fov_x_m, fov_y_m),
+        z_position=z,
+        run=run,
+        repetition=rep,
+        ax0_index=np.array([frame_idx]),
+        roi_class=str(roi_class),
+        position=geometry.tissue_class,  # PATATO's own kwarg name
+        generated=True,
+        shape_type=geometry.kind,
+    )
+    if roi_id is not None:
+        roi.roi_id = int(roi_id)
+    if track_id is not None:
+        roi.roi_group_id = int(track_id)  # PATATO's own attribute name
+    if roi_group_uid is not None:
+        roi.roi_group_uid = str(roi_group_uid)
+    return roi

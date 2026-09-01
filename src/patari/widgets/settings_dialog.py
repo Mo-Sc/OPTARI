@@ -130,9 +130,13 @@ class SettingsDialog(QDialog):
 
         self.operator_edit = QLineEdit()
         self.operator_edit.setToolTip(
-            "Recorded in the file_origin attribute of exported HDF5 files."
+            "Who is running the analysis. Will be recorded in the exported HDF5 and XLSX files."
         )
         form.addRow("Operator", self.operator_edit)
+
+        self.analysis_id_edit = QLineEdit()
+        self.analysis_id_edit.setToolTip("Name of the analysis, e.g. a study or cohort name. Will be recorded in the exported HDF5 and XLSX files.")
+        form.addRow("Analysis ID", self.analysis_id_edit)
 
         self.log_level_combo = QComboBox()
         self.log_level_combo.addItems(LOG_LEVELS)
@@ -188,6 +192,16 @@ class SettingsDialog(QDialog):
 
         self.pa_scale_spins = self._add_scale_row(form, "PA fallback scale (mm)")
         self.us_scale_spins = self._add_scale_row(form, "US fallback scale (mm)")
+
+        self.show_track_id_check = QCheckBox("Show track ID on ROI shapes")
+        self.show_track_id_check.setToolTip(
+            "Label shapes as \"roi_id/track_id\" instead of just \"roi_id\"."
+        )
+        form.addRow(self.show_track_id_check)
+
+        self.roi_label_size_spin = QSpinBox()
+        self.roi_label_size_spin.setRange(1, 72)
+        form.addRow("ROI label text size", self.roi_label_size_spin)
 
         colormap_group = QGroupBox("Layer colormaps")
         colormap_form = QFormLayout(colormap_group)
@@ -308,6 +322,7 @@ class SettingsDialog(QDialog):
     def _load_into_widgets(self, data: dict) -> None:
         general = data["general"]
         self.operator_edit.setText(str(general["OPERATOR"]))
+        self.analysis_id_edit.setText(str(general["ANALYSIS_ID"]))
         self.log_level_combo.setCurrentText(str(general["LOG_LEVEL"]).upper())
         self.gui_log_level_combo.setCurrentText(str(general["GUI_LOG_LEVEL"]).upper())
         self.histogram_bins_spin.setValue(int(data["analysis"]["histogram_bins"]))
@@ -330,6 +345,11 @@ class SettingsDialog(QDialog):
             for spin, value in zip(spins, general[key]):
                 spin.setValue(float(value))
 
+        self.show_track_id_check.setChecked(
+            bool(data["annotation"].get("show_track_id", True))
+        )
+        self.roi_label_size_spin.setValue(int(data["annotation"].get("roi_label_size", 8)))
+
         colormaps = general.get("LAYER_COLOR_MAPS", {})
         for key, combo in self.colormap_combos.items():
             combo.setCurrentText(str(colormaps.get(key, "")))
@@ -347,6 +367,7 @@ class SettingsDialog(QDialog):
     def _collect_from_widgets(self, data: dict) -> dict:
         general = data["general"]
         general["OPERATOR"] = self.operator_edit.text().strip()
+        general["ANALYSIS_ID"] = self.analysis_id_edit.text().strip()
         general["LOG_LEVEL"] = self.log_level_combo.currentText()
         general["GUI_LOG_LEVEL"] = self.gui_log_level_combo.currentText()
         general["DEFAULT_PA_LAYER"] = self.default_pa_layer_edit.text().strip()
@@ -365,6 +386,8 @@ class SettingsDialog(QDialog):
 
         data["analysis"]["histogram_bins"] = self.histogram_bins_spin.value()
 
+        data["annotation"]["show_track_id"] = self.show_track_id_check.isChecked()
+        data["annotation"]["roi_label_size"] = self.roi_label_size_spin.value()
         data["annotation"].setdefault("roi_features", {})
         for feature_id, checkbox in self.feature_checkboxes.items():
             data["annotation"]["roi_features"][feature_id] = int(checkbox.isChecked())

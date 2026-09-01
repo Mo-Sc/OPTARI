@@ -7,17 +7,20 @@ Presets aren't part of the Settings dialog. Instead, each category is managed fr
 
 ## ROI presets (`presets/roi/`)
 
-A saved ROI template, consisting of geometry in mm relative to the field of view it was created on. `position` can be used for automatic placement, by setting it to the respective class in an available segmentation map.
+A saved ROI template. The `geometry` block is the same representation PATARI uses for the saved analysis table and for HDF5 export: vertices in PATATO coordinates, metres, origin at the image centre, so the shape does not depend on the field of view it was drawn on. `tissue_class` can be used for automatic placement, by setting it to the respective class in an available segmentation map.
+
+`source_fov_m` records the field of view the template was drawn on, in metres. It is needed to re-place the template proportionally when it is applied to a scan with a different field of view,
 
 ```json title="clinical_ellipse_10x2mm.json"
 {
   "description": "Ellipse of size 10x2mm similar to 2nd UK PAD study",
-  "position": "muscle",
   "created": "2026-04-08T12:49:27.693948+00:00",
-  "shape_type": "ellipse",
-  "vertices": [[20.0, 15.0], [20.0, 25.0], [22.0, 25.0], [22.0, 15.0]],
-  "source_fov_x_mm": 40.0,
-  "source_fov_y_mm": 40.0
+  "source_fov_m": [0.04, 0.04],
+  "geometry": {
+    "verts_m": [[-0.005, 0.0], [0.005, 0.0], [0.005, -0.002], [-0.005, -0.002]],
+    "kind": "ellipse",
+    "tissue_class": "muscle"
+  }
 }
 ```
 

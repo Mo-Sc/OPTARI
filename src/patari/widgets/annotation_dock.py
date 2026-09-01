@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from qtpy.QtWidgets import (
     QAbstractItemView,
+    QButtonGroup,
     QCheckBox,
     QFormLayout,
     QGroupBox,
@@ -38,7 +39,12 @@ class AnnotationDock:
     include_all_layers_checkbox: QCheckBox
     include_all_frames_checkbox: QCheckBox
     include_all_channels_checkbox: QCheckBox
+    save_scope_selected_radio: QRadioButton
+    save_scope_track_radio: QRadioButton
     time_analysis_feature_combo: QComboBox
+    time_analysis_selected_radio: QRadioButton
+    time_analysis_track_radio: QRadioButton
+    time_analysis_track_id_combo: QComboBox
     roi_presets_list: QListWidget
     roi_presets_description_label: QLabel
     roi_placement_mode_combo: QComboBox
@@ -95,7 +101,9 @@ def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
     roi_placement_mode_combo.addItem("auto", userData="auto")
     roi_placement_mode_combo.setToolTip(
         "Static: uses the preset's saved coordinates. Auto: places it inside the matching "
-        "segmentation class, falling back to static if not found"
+        "segmentation class, falling back to static if not found. With Scope All Frames, "
+        "Auto anchors on each frame's own segmentation, skipping frames the class "
+        "isn't present on"
     )
 
     placement_row = QWidget()
@@ -180,9 +188,33 @@ def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
         else None
     )
 
+    save_scope_selected_radio = QRadioButton("Selected ROI")
+    save_scope_track_radio = QRadioButton("Track ID")
+    save_scope_selected_radio.setChecked(True)
+    save_scope_selected_radio.setToolTip(
+        "Measure every frame in the sequence using exactly the ROI you selected."
+    )
+    save_scope_track_radio.setToolTip(
+        "Measure each frame using that frame's own ROI, if this ROI belongs to"
+        " a tracked group. A frame the track has no record on is skipped."
+    )
+    save_scope_group = QButtonGroup(save_roi_box)
+    save_scope_group.setExclusive(True)
+    save_scope_group.addButton(save_scope_selected_radio)
+    save_scope_group.addButton(save_scope_track_radio)
+
+    save_scope_row = QWidget()
+    save_scope_row_layout = QHBoxLayout(save_scope_row)
+    save_scope_row_layout.setContentsMargins(20, 0, 0, 0)
+    save_scope_row_layout.addWidget(save_scope_selected_radio)
+    save_scope_row_layout.addWidget(save_scope_track_radio)
+    save_scope_row.setEnabled(include_all_frames_checkbox.isChecked())
+    include_all_frames_checkbox.toggled.connect(save_scope_row.setEnabled)
+
     save_roi_layout.addWidget(include_all_layers_checkbox)
-    save_roi_layout.addWidget(include_all_frames_checkbox)
     save_roi_layout.addWidget(include_all_channels_checkbox)
+    save_roi_layout.addWidget(include_all_frames_checkbox)
+    save_roi_layout.addWidget(save_scope_row)
 
     # Time analysis feature selection (default is mean)
     time_analysis_box = QGroupBox("Time Analysis")
@@ -192,7 +224,40 @@ def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
         time_analysis_feature_combo.addItem(feature_id, userData=feature_id)
     time_analysis_feature_combo.setCurrentIndex(time_analysis_feature_combo.findData("mean"))
     time_analysis_layout.addRow("Feature", time_analysis_feature_combo)
-    
+
+    # Scope: "Selected ROI" measures each visible shape's own record on every frame
+    # "Track ID" follows one tracked ROI's own record per frame instead, leaving a gap where it has no record on a frame.
+    time_analysis_selected_radio = QRadioButton("Selected ROI")
+    time_analysis_track_radio = QRadioButton("Track ID")
+    time_analysis_selected_radio.setChecked(True)
+    time_analysis_selected_radio.setToolTip(
+        "Every ROI currently shown on the viewed frame is reused for every frame in the sequence."
+    )
+    time_analysis_track_radio.setToolTip(
+        "Follow one tracked ROI across frames, measuring each frame on"
+        " that frame's own ROI. Frames for which the track has no record on are left"
+        " as a gap."
+    )
+    time_analysis_scope_group = QButtonGroup(time_analysis_box)
+    time_analysis_scope_group.setExclusive(True)
+    time_analysis_scope_group.addButton(time_analysis_selected_radio)
+    time_analysis_scope_group.addButton(time_analysis_track_radio)
+
+    scope_row = QWidget()
+    scope_row_layout = QHBoxLayout(scope_row)
+    scope_row_layout.setContentsMargins(0, 0, 0, 0)
+    scope_row_layout.addWidget(time_analysis_selected_radio)
+    scope_row_layout.addWidget(time_analysis_track_radio)
+    time_analysis_layout.addRow("Scope", scope_row)
+
+    time_analysis_track_id_combo = QComboBox()
+    time_analysis_track_id_combo.setEnabled(False)
+    time_analysis_track_id_combo.setToolTip(
+        "Which tracked ROI to plot. Refreshed each time you generate the plot."
+    )
+    time_analysis_track_radio.toggled.connect(time_analysis_track_id_combo.setEnabled)
+    time_analysis_layout.addRow("Track", time_analysis_track_id_combo)
+
 
     outer.addWidget(roi_presets_box)
     outer.addWidget(roi_box)
@@ -211,7 +276,12 @@ def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
         include_all_layers_checkbox=include_all_layers_checkbox,
         include_all_frames_checkbox=include_all_frames_checkbox,
         include_all_channels_checkbox=include_all_channels_checkbox,
+        save_scope_selected_radio=save_scope_selected_radio,
+        save_scope_track_radio=save_scope_track_radio,
         time_analysis_feature_combo=time_analysis_feature_combo,
+        time_analysis_selected_radio=time_analysis_selected_radio,
+        time_analysis_track_radio=time_analysis_track_radio,
+        time_analysis_track_id_combo=time_analysis_track_id_combo,
         roi_presets_list=roi_presets_list,
         roi_presets_description_label=roi_presets_description_label,
         roi_placement_mode_combo=roi_placement_mode_combo,

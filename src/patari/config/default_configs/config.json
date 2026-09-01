@@ -1,5 +1,5 @@
 {
-    "schema_version": 3,
+    "schema_version": 5,
     "general": {
         "LOG_LEVEL" : "INFO",
         "GUI_LOG_LEVEL" : "WARNING",
@@ -10,7 +10,8 @@
         "DEFAULT_FRAME_INDEX": "motion",
         "DEFAULT_CHANNEL_INDEX": 0,
         "DEFAULT_PLAYBACK_FPS": 10,
-        "OPERATOR": "PATARI User",
+        "OPERATOR": "PATARI-User",
+        "ANALYSIS_ID": "PATARI-Study",
         "LAYER_COLOR_MAPS":{
             "ultrasounds": "gray",
             "reconstructions": "viridis",
@@ -33,7 +34,8 @@
             "#FF7F50"
         ],
         "roi_features": {
-            "roi_index": 1,
+            "roi_id": 1,
+            "roi_group_uid": 0,
             "mean": 1,
             "median": 1,
             "std": 1,
@@ -45,8 +47,8 @@
             "snr": 0,
             "n_pixels": 1,
             "size_mm": 1,
-            "src_layers": 0,
-            "roi_type": 0,
+            "src_layer": 0,
+            "kind": 0,
             "study_folder": 0,
             "scan_folder": 0,
             "scan_name": 0,
@@ -55,8 +57,11 @@
             "roi_ts": 0,
             "scan_ts": 0,
             "roi_centroid": 1,
+            "roi_geometry": 0,
             "filepath": 0
-        }
+        },
+        "show_track_id": true,
+        "roi_label_size": 8
     },
     "analysis": {
         "histogram_bins": 50

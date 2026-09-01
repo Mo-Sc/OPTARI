@@ -8,18 +8,19 @@ import numpy as np
 
 @dataclass(frozen=True)
 class ROIContext:
-    roi_index: int
-    roi_group_id: int
-    src_layers: dict[str, str]
-    roi_type: str
+    roi_id: int
+    track_id: int
+    roi_group_uid: str
+    src_layer: str
+    kind: str
     study_folder: str
     scan_folder: str
     scan_name: str
     frame: int
     channel: object
     scan_ts: str
-    roi_ts: str
     roi_centroid: tuple[float, float]
+    roi_geometry: str
     filepath: str
     vals_raw: np.ndarray
     vals: np.ndarray
@@ -67,14 +68,15 @@ def _size_mm(ctx: ROIContext) -> float:
     """
     returns the size of the ROI in mm^2 (for 2D ROIs) or length in mm (for line ROIs).
     """
-    if ctx.roi_type == "line":
+    if ctx.kind == "line":
         return float(np.linalg.norm(np.diff(ctx.verts, axis=0), axis=1).sum())
     return float(ctx.vals.size * ctx.sy * ctx.sx)
 
 
 FEATURE_REGISTRY: dict[str, FeatureSpec] = {
-    "roi_index": FeatureSpec(int, lambda c: int(c.roi_index)),
-    "roi_group_id": FeatureSpec(int, lambda c: int(c.roi_group_id)),
+    "roi_id": FeatureSpec(int, lambda c: int(c.roi_id)),
+    "track_id": FeatureSpec(int, lambda c: int(c.track_id)),
+    "roi_group_uid": FeatureSpec(str, lambda c: str(c.roi_group_uid)),
     "mean": FeatureSpec(float, lambda c: _nan_stat(c.vals, np.nanmean)),
     "median": FeatureSpec(float, lambda c: _nan_stat(c.vals, np.nanmedian)),
     "std": FeatureSpec(float, lambda c: _nan_stat(c.vals, np.nanstd)),
@@ -86,16 +88,18 @@ FEATURE_REGISTRY: dict[str, FeatureSpec] = {
     "snr": FeatureSpec(float, lambda c: _nan_stat(c.vals, _snr)),
     "n_pixels": FeatureSpec(int, lambda c: int(c.vals.size)),
     "size_mm": FeatureSpec(float, _size_mm),
-    "src_layers": FeatureSpec(object, lambda c: c.src_layers),
-    "roi_type": FeatureSpec(str, lambda c: str(c.roi_type)),
+    "src_layer": FeatureSpec(str, lambda c: str(c.src_layer)),
+    "kind": FeatureSpec(str, lambda c: str(c.kind)), # "shape_type" in napari
     "study_folder": FeatureSpec(str, lambda c: str(c.study_folder)),
     "scan_folder": FeatureSpec(str, lambda c: str(c.scan_folder)),
     "scan_name": FeatureSpec(str, lambda c: str(c.scan_name)),
     "frame": FeatureSpec(int, lambda c: int(c.frame)),
     "channel": FeatureSpec(object, lambda c: c.channel),
-    "roi_ts": FeatureSpec(str, lambda c: str(c.roi_ts)),
+    # following are added by RoiController.on_save_clicked once per save, not computed per ROI
+    "roi_ts": FeatureSpec(str, lambda c: ""),
     "scan_ts": FeatureSpec(str, lambda c: str(c.scan_ts)),
     "roi_centroid": FeatureSpec(tuple, lambda c: c.roi_centroid),
+    "roi_geometry": FeatureSpec(str, lambda c: c.roi_geometry), # JSON blob of vertices in PATATO coordinates, kind, tissue_class and source
     "filepath": FeatureSpec(str, lambda c: str(c.filepath)),
 }
 
@@ -107,16 +111,17 @@ def numeric_feature_ids() -> list[str]:
 
 # Fixed set of columns that are always included in the saved table, regardless of user settings to identify the origin of the ROI
 SAVED_FIXED_SOURCE_COLUMNS: list[str] = [
-    "roi_index",
-    "roi_group_id",
+    "roi_id",
+    "track_id",
+    "roi_group_uid",
     "study_folder",
     "scan_folder",
     "scan_name",
     "frame",
     "channel",
-    "src_layers",
+    "src_layer",
     "roi_ts",
-    "roi_type",
+    "kind",
     "scan_ts",
     "filepath",
 ]

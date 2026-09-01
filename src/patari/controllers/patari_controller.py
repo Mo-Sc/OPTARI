@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
-import warnings
 
 import numpy as np
 import patato as pat # type: ignore
@@ -13,7 +12,7 @@ from napari.viewer import Viewer
 if TYPE_CHECKING:
     from napari.qt.threading import GeneratorWorker
 
-from patari.utils.misc import parse_float_input
+from patari.utils.viewer import selected_frame_and_channel
 from patari.widgets.info_dock import InfoDock
 from patari.widgets.roi_dock import RoiDock
 from patari.widgets.scan_browser_dock import ScanBrowserDock
@@ -76,9 +75,6 @@ class PatariController:
         self._unmixing_dock_widget = None
         self._reconstruction_dock_widget = None
 
-        self.roi_intensity_min: float | None = None
-        self.roi_intensity_max: float | None = None
-        self.roi_intensity_mode: str | None = "clip"
 
         self.scan_ctrl = ScanController(self)
         self.roi_ctrl = RoiController(self)
@@ -220,6 +216,11 @@ class PatariController:
                 self.shapes_layer.events.data,
                 self._on_shapes_data_changed
             ),
+            # Shape copy/paste appends shapes without emitting events.data, so watch set_data too.
+            (
+                self.shapes_layer.events.set_data,
+                self._on_shapes_set_data,
+            ),
             # selected_data.items_changed is the selection signal for viewer -> table sync.
             (
                 self.shapes_layer.selected_data.events.items_changed,
@@ -245,6 +246,9 @@ class PatariController:
     # ============ ROI layer management ============
     def _on_shapes_data_changed(self, event=None) -> None:
         self.roi_ctrl.on_shapes_data_changed(event)
+
+    def _on_shapes_set_data(self, event=None) -> None:
+        self.roi_ctrl.on_shapes_set_data(event)
 
     def _on_shapes_selection_changed(self, event=None) -> None:
         self.roi_ctrl.on_shapes_selection_changed(event)
@@ -372,33 +376,6 @@ class PatariController:
                     layer._keep_auto_contrast = True
                     layer.visible = layer is self.active_recon_layer
 
-    # ============ ROI intensity settings ============
-    def _on_roi_intensity_settings_changed(self) -> None:
-        if self.annotation is None:
-            return
-
-        if self.annotation.roi_exclusion_box.isChecked():
-            self.roi_intensity_mode = "exclude"
-            self.roi_intensity_min = parse_float_input(
-                self.annotation.roi_exclude_min_edit.text()
-            )
-            self.roi_intensity_max = parse_float_input(
-                self.annotation.roi_exclude_max_edit.text()
-            )
-        elif self.annotation.roi_clipping_box.isChecked():
-            self.roi_intensity_mode = "clip"
-            self.roi_intensity_min = parse_float_input(
-                self.annotation.roi_clip_min_edit.text()
-            )
-            self.roi_intensity_max = parse_float_input(
-                self.annotation.roi_clip_max_edit.text()
-            )
-        else:
-            self.roi_intensity_mode = None
-            self.roi_intensity_min = None
-            self.roi_intensity_max = None
-        self.roi_ctrl.update_live_table()
-
     # ============ viewer events ============
     def on_selection_changed(self, event=None) -> None:
         self._resolve_active_recon_layer()
@@ -463,12 +440,10 @@ class PatariController:
         if self.active_recon_layer is None:
             return False
 
-        pt = list(self.viewer.dims.point)
-        if len(pt) < 2:
+        frame_channel = selected_frame_and_channel(self.viewer)
+        if frame_channel is None:
             return False
-
-        frame_idx = int(round(pt[0]))
-        channel_idx = int(round(pt[1]))
+        frame_idx, channel_idx = frame_channel
 
         snapped_frame = self.snap_to_reconstructed_frame(frame_idx)
         snapped_channel = self.snap_to_available_channel(channel_idx)
@@ -533,13 +508,11 @@ class PatariController:
             self.info.set_message("Select a PA image layer")
             return
 
-        pt = list(self.viewer.dims.point)
-        if len(pt) < 2:
+        frame_channel = selected_frame_and_channel(self.viewer)
+        if frame_channel is None:
             self.info.set_rows([("Layer", self.active_recon_layer.name)])
             return
-
-        frame_idx = int(round(pt[0]))
-        channel_idx = int(round(pt[1]))
+        frame_idx, channel_idx = frame_channel
 
         axis1_name = str(
             self.active_recon_layer.metadata.get("axis1_name", "Channel")
