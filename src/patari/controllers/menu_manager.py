@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from qtpy.QtCore import QUrl
 from qtpy.QtGui import QAction, QDesktopServices
 from qtpy.QtWidgets import QMenu
 
+from patari.config import settings
+from patari.widgets.dock_helpers import DOCK_LABELS
 from patari.widgets.settings_dialog import SettingsDialog
 
 if TYPE_CHECKING:
@@ -19,7 +21,7 @@ DOCS_URL = "https://mo-sc.github.io/PATARI/"
 
 # most napari menu items are useless in PATARI, and some can even break it. Hide them to avoid confusion.
 # can be overridden by setting the PATARI_FULL_MENUS=1 env var.
-HIDDEN_NAPARI_MENUS = ("plugins_menu", "layers_menu", "help_menu")
+HIDDEN_NAPARI_MENUS = ("plugins_menu", "layers_menu", "help_menu", "window_menu")
 HIDDEN_FILE_ENTRIES = (
     "napari.window.file.open_files_dialog",
     "napari.window.file._image_from_clipboard",
@@ -36,6 +38,35 @@ HIDDEN_VIEW_ENTRIES = (
     "napari.viewer.toggle_synced_camera",
 )
 
+# How to reach each dock widget named in DOCK_LABELS, from a PatariController. The PATARI-owned
+# docks are attributes set by UiManager.setup_docks(). Layer Controls/List are napari's own,
+# reached through its private QtViewer.
+_DOCK_RESOLVERS: dict[str, Callable[["PatariController"], object]] = {
+    "Scan Browser": lambda c: c._scan_browser_dock_widget,
+    "Active Slice Info": lambda c: c._info_dock_widget,
+    "Tabular": lambda c: c._roi_dock_widget,
+    "Time Analysis": lambda c: c._time_analysis_dock_widget,
+    "Histogram": lambda c: c._histograms_dock_widget,
+    "Spectrum": lambda c: c._spectrum_dock_widget,
+    "Annotation": lambda c: c._annotation_dock_widget,
+    "Segmentation": lambda c: c._segmentation_dock_widget,
+    "Unmixing": lambda c: c._unmixing_dock_widget,
+    "Reconstruction": lambda c: c._reconstruction_dock_widget,
+    "Layer Controls": lambda c: c.viewer.window._qt_viewer.dockLayerControls,
+    "Layer List": lambda c: c.viewer.window._qt_viewer.dockLayerList,
+}
+
+
+def _iter_dock_widgets(controller: "PatariController"):
+    """Yield (label, dock_widget) for every dock in DOCK_LABELS that currently resolves."""
+    for label in DOCK_LABELS:
+        try:
+            dock_widget = _DOCK_RESOLVERS[label](controller)
+        except AttributeError:
+            dock_widget = None
+        if dock_widget is not None:
+            yield label, dock_widget
+
 
 class MenuManager:
     """Add the PATARI menu to napari's menu bar and hide the entries PATARI doesnt support."""
@@ -49,6 +80,7 @@ class MenuManager:
             )
             return
 
+        MenuManager._apply_default_dock_visibility(controller)
         MenuManager._add_patari_menu(controller, window)
 
         if os.getenv("PATARI_FULL_MENUS") == "1":
@@ -78,7 +110,34 @@ class MenuManager:
         )
         menu.addAction(docs_action)
 
+        menu.addSeparator()
+        MenuManager._add_dock_toggles(controller, menu)
+
         window.main_menu.addMenu(menu)
+
+    @staticmethod
+    def _add_dock_toggles(controller: "PatariController", menu: QMenu) -> None:
+        """Add a Docks submenu with a checkable show/hide toggle per dock.
+
+        Reuses QDockWidget's own toggleViewAction(), the same mechanism napari uses for its own
+        Window menu so visibility stays in sync even when a dock is closed some other way.
+        """
+        docks_menu = menu.addMenu("Docks")
+        for label, dock_widget in _iter_dock_widgets(controller):
+            action = dock_widget.toggleViewAction()
+            action.setText(label)
+            docks_menu.addAction(action)
+
+    @staticmethod
+    def _apply_default_dock_visibility(controller: "PatariController") -> None:
+        """Force each dock's visibility to the Settings > Docks defaults.
+
+        Runs on every launch and overrides whatever napari's own session-restore
+        (save_window_state) would otherwise show
+        """
+        defaults = settings.general.DEFAULT_VISIBLE_DOCKS
+        for label, dock_widget in _iter_dock_widgets(controller):
+            dock_widget.setVisible(bool(int(defaults.get(label, 1))))
 
     @staticmethod
     def _show_settings(controller: "PatariController") -> None:

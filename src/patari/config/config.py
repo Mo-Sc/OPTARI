@@ -22,6 +22,7 @@ class GeneralConfig:
     OPERATOR: str
     ANALYSIS_ID: str
     LAYER_COLOR_MAPS: dict = field(default_factory=dict)
+    DEFAULT_VISIBLE_DOCKS: dict = field(default_factory=dict)  # dock label -> 0/1, missing = visible
 
 @dataclass(frozen=True)
 class AnnotationConfig:

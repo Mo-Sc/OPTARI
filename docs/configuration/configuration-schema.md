@@ -18,6 +18,7 @@ Full reference for `~/.patari/config/config.json`. All fields are required unles
 | `OPERATOR` | string | Settings ▸ General | Who is running the analysis. Will be recorded in the exported HDF5 and Excel files. |
 | `ANALYSIS_ID` | string | Settings ▸ General | Name of the analysis, e.g. a study or cohort name. Will be recorded in the exported HDF5 and Excel files. |
 | `LAYER_COLOR_MAPS` | object | Settings ▸ Viewer | Colormap per layer type, e.g. `{"ultrasounds": "gray", "reconstructions": "viridis", "unmixed": "magma", "so2": "twilight_shifted", "thb": "inferno"}`. |
+| `DEFAULT_VISIBLE_DOCKS` | object of `label → 0/1` | Settings ▸ Docks | Which panels are visible when PATARI starts (see [PATARI ▸ Docks](index.md)). A missing label defaults to visible. Applies on every launch, overriding napari's own remembered window layout. |
 
 ## `annotation`
 

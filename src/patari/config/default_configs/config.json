@@ -18,6 +18,11 @@
             "unmixed": "magma",
             "so2": "twilight_shifted",
             "thb": "inferno"
+        },
+        "DEFAULT_VISIBLE_DOCKS": {
+            "Histogram": 0,
+            "Reconstruction": 0,
+            "Segmentation": 0
         }
     },
     "annotation": {
