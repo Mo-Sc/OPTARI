@@ -50,7 +50,9 @@ overlaid. This will show layers next to each other in pairs of two, meaning two 
 
 ## Metadata
 
+
 Click the metadata button in the **Info** dock to open a read-only viewer for the current scan/layer's metadata
 (acquisition settings, timestamps, and other fields carried over from the source file). Double-clicking on a cell shows the full content. If the scan contains clinical metadata, it is also shown here.
 
-<!-- TODO screenshot: viewer-metadata-dialog.png — layer metadata dialog -->
+![Metadata Viewer](../assets/screenshots/placeholders/ss_metadata.png)
+

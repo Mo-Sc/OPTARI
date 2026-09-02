@@ -4,6 +4,10 @@ Batch mode applies one saved analysis to a whole dataset without supervision. Th
 
 Open it from the menu bar: **PATARI → Batch Processing…**
 
+
+![Batch Mode](../assets/screenshots/placeholders/ss_batchmode.png)
+
+
 ## Before you start
 
 Batch mode runs presets, it does not create them. Set up and save the presets you want first:
