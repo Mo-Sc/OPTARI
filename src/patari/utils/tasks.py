@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Generator
@@ -20,6 +21,20 @@ if TYPE_CHECKING:
     from patari.controllers.patari_controller import PatariController
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class BackgroundStep:
+    """Heavy work that has been validated and is ready to run in a worker thread.
+
+    Separating "work out what to run" from "run it" is what lets a dock and an
+    unattended batch run share one compute path: both build a step, one hands it to
+    `start_task`, the other drives it inside a longer sequence.
+    """
+
+    func: Callable[[], Generator]
+    total: int
+    desc: str
 
 
 class TaskFailed(Exception):
@@ -52,12 +67,17 @@ def run_background_task(
     on_result: Callable,
     on_error: Callable[[str], None],
     on_done: Callable[[], None],
+    on_cancel: Callable[[], None] | None = None,
 ) -> GeneratorWorker:
     """Run *func* in a worker thread
     progress bar advances on each yield, and calls *on_result* with the return value when done.
 
     yielding a number instead (e.g. bytes written) advances it by that amount
-    cancelling calls ``worker.quit()``, which stops the generator at its next yield and routes to *on_error*.
+    cancelling calls ``worker.quit()``, which stops the generator at its next yield.
+
+    A cancel routes to *on_cancel* and a genuine failure to *on_error*. They default to
+    the same thing, which is all a single dock needs, but a caller driving a queue has to
+    tell "the user stopped everything" apart from "this one item failed, carry on".
     """
 
     worker = create_worker(_guarded(func), _ignore_errors=True)
@@ -79,7 +99,7 @@ def run_background_task(
 
     worker.yielded.connect(lambda amount: progress_bar.update(amount or 1))
     worker.returned.connect(on_result)
-    worker.aborted.connect(lambda: on_error("Cancelled."))
+    worker.aborted.connect(on_cancel or (lambda: on_error("Cancelled.")))
     worker.errored.connect(report_error)
     worker.finished.connect(finish)
 
@@ -90,24 +110,22 @@ def run_background_task(
 
 def start_task(
     patari_controller: "PatariController",
-    func: Callable[[], Generator],
+    step: BackgroundStep,
     *,
-    total: int,
-    desc: str,
     on_result: Callable,
     status_label: QLabel,
 ) -> None:
-    """Run *func* as the application's single background task.
+    """Run *step* as the application's single background task.
 
     Registering the worker gates the UI (run buttons, scan browser) for its duration,
-    and clearing it on finish is what releases the gate so the two are bound together here
-    rather than left to each call site to remember.
+    and clearing it on finish is what releases the gate, so the two are bound together
+    here rather than left to each call site to remember.
     """
     worker = run_background_task(
         patari_controller.viewer,
-        func,
-        total=total,
-        desc=desc,
+        step.func,
+        total=step.total,
+        desc=step.desc,
         on_result=on_result,
         on_error=status_label.setText,
         on_done=lambda: patari_controller.set_active_task(None),

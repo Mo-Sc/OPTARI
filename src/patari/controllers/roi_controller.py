@@ -30,6 +30,7 @@ from patari.roi.roi_shapes import class_top_at_center_column
 from patari.roi.roi_table import SavedRoiTable
 from patari.roi.roi_utils import (
     IntensityClamp,
+    MeasureScope,
     clear_mask_cache,
     compute_roi_stats,
     layer_fov_m,
@@ -541,23 +542,22 @@ class RoiController(TaskControllerBase):
             if index < len(self._projection_ids)
         }
 
-    def _save_scope(self) -> tuple[bool, bool, bool]:
-        """The three "include all ..." checkboxes, all off without an annotation dock."""
+    def _save_scope(self) -> MeasureScope:
+        """The "include all ..." checkboxes, all off without an annotation dock.
+
+        ``follow_track`` decides which record "Include all frames" uses on each frame:
+        the one the user selected, reused everywhere (default), or that ROI's tracked
+        group's own record per frame, skipping a frame the track has no record on.
+        """
         annotation = self.patari_controller.annotation
         if annotation is None:
-            return False, False, False
-        return (
-            annotation.include_all_layers_checkbox.isChecked(),
-            annotation.include_all_frames_checkbox.isChecked(),
-            annotation.include_all_channels_checkbox.isChecked(),
+            return MeasureScope()
+        return MeasureScope(
+            all_layers=annotation.include_all_layers_checkbox.isChecked(),
+            all_frames=annotation.include_all_frames_checkbox.isChecked(),
+            all_channels=annotation.include_all_channels_checkbox.isChecked(),
+            follow_track=annotation.save_scope_track_radio.isChecked(),
         )
-
-    def _follow_track_across_frames(self) -> bool:
-        """Which record "Include all frames" should use on each frame: the one
-        the user selected, reused everywhere (default), or that ROI's tracked group's own record per frame, skipping a
-        frame the track has no record on."""
-        annotation = self.patari_controller.annotation
-        return annotation is not None and annotation.save_scope_track_radio.isChecked()
 
     def _track_histories_for_selection(
         self, selected_ids: set[int]
@@ -602,8 +602,19 @@ class RoiController(TaskControllerBase):
             return [fallback for fallback, _ in tracks.values()]
         return [track[frame_idx] for _, track in tracks.values() if frame_idx in track]
 
-    def _measure_selected_rois(self, selected_ids: set[int]) -> pd.DataFrame:
-        """Measure the selected ROIs over every layer, frame and channel in scope."""
+    def _measure_selected_rois(
+        self,
+        selected_ids: set[int],
+        *,
+        scope: MeasureScope | None = None,
+        layers: list | None = None,
+    ) -> pd.DataFrame:
+        """Measure the selected ROIs over every layer, frame and channel in scope.
+
+        *scope* defaults to the annotation dock's checkboxes and *layers* to whatever
+        that scope resolves to. Batch mode passes both, so it can measure one
+        reconstruction and its own derived layers rather than every layer present.
+        """
         active_layer = self.patari_controller.active_recon_layer
         if active_layer is None:
             logger.info("Select an image layer to save ROI stats")
@@ -615,17 +626,18 @@ class RoiController(TaskControllerBase):
             return pd.DataFrame()
         frame_idx, channel_idx = frame_channel
 
-        all_layers, all_frames, all_channels = self._save_scope()
-        follow_track = all_frames and self._follow_track_across_frames()
-        target_layers = (
-            [
+        scope = scope if scope is not None else self._save_scope()
+        follow_track = scope.all_frames and scope.follow_track
+        if layers is not None:
+            target_layers = layers
+        elif scope.all_layers:
+            target_layers = [
                 layer
                 for layer in self.viewer.layers
                 if isinstance(layer, Image) and layer.metadata.get("type") == "pa"
             ]
-            if all_layers
-            else [active_layer]
-        )
+        else:
+            target_layers = [active_layer]
 
         tracks = self._track_histories_for_selection(selected_ids)
 
@@ -638,12 +650,12 @@ class RoiController(TaskControllerBase):
             frames_meta = getattr(layer, "metadata", {}).get("frames")
             frame_indices = (
                 [int(f) for f in frames_meta or range(layer_data.shape[0])]
-                if all_frames
+                if scope.all_frames
                 else [frame_idx]
             )
             channel_indices = (
                 list(range(layer_data.shape[1]))
-                if all_layers or all_channels
+                if scope.all_layers or scope.all_channels
                 else [channel_idx]
             )
 
@@ -921,6 +933,12 @@ class RoiController(TaskControllerBase):
                 description=str(description or ""),
                 geometry=geometry,
                 source_fov_m=fov_m,
+                # Save how it is currently being placed, so reusing the preset (here or
+                # in a batch run) reproduces what the user just set up.
+                placement=str(
+                    self.patari_controller.annotation.roi_placement_mode_combo.currentData()
+                    or "static"
+                ),
             )
         except (TypeError, ValueError, OSError) as exc:
             self.patari_controller.annotation.roi_presets_description_label.setText(
@@ -960,6 +978,16 @@ class RoiController(TaskControllerBase):
             combo.setCurrentIndex(idx)
 
     def _default_roi_placement_mode_for_preset(self, preset) -> str:
+        """The mode to preselect for *preset*: what it asks for, if that is possible here.
+
+        The preset records how it wants to be placed. Auto is downgraded to static
+        when this scan has no matching segmentation to anchor onto, so selecting a
+        preset in the dock never arms a placement that is bound to fail. A batch run
+        takes the preset at its word instead, and reports the failure.
+        """
+        if preset.placement != "auto":
+            return "static"
+
         tissue_class = preset.geometry.tissue_class.strip()
         if not tissue_class or tissue_class == "undefined":
             return "static"
@@ -1003,22 +1031,21 @@ class RoiController(TaskControllerBase):
         controller.shapes_layer.selected_data = {new_idx}
 
     @staticmethod
-    def _place_roi_preset_auto(controller, preset) -> tuple[Labels, int] | None:
+    def _place_roi_preset_auto(controller, preset) -> tuple[Labels, int]:
         """Place a saved ROI by aligning it to the selected segmentation class.
 
         Returns the segmentation layer and class id used, so a caller that's
         about to expand this to every frame (`_per_frame_auto_resolver`) can
         re-anchor onto each frame's own mask instead of re-resolving "current
-        frame" a second time. None means placement failed; a message box
-        already explains why.
+        frame" a second time.
+
+        Raises ValueError, message safe to show the user, when placement is not
+        possible. Raising rather than reporting here keeps this usable from an
+        unattended batch run, where a modal dialog would block forever.
         """
         result = controller.segmentation_ctrl.active_seg_mask_2d()
         if result is None:
-            QMessageBox.critical(
-                None, "Auto ROI",
-                "No segmentation mask found. Generate segmentation first.",
-            )
-            return None
+            raise ValueError("No segmentation mask found. Generate segmentation first.")
 
         seg, seg_layer = result
         class_names = (seg_layer.metadata or {}).get("class_names", {})
@@ -1028,11 +1055,9 @@ class RoiController(TaskControllerBase):
 
         target_class_name = preset.geometry.tissue_class.strip()
         if target_class_name not in class_name_to_id:
-            QMessageBox.critical(
-                None, "Auto ROI",
-                f"ROI tissue class '{target_class_name}' not found in segmentation classes.",
+            raise ValueError(
+                f"ROI tissue class '{target_class_name}' not found in segmentation classes."
             )
-            return None
         class_id = class_name_to_id[target_class_name]
 
         target_fov = controller._get_fov()
@@ -1045,8 +1070,7 @@ class RoiController(TaskControllerBase):
                 verts, seg == class_id, seg_layer
             )
         except ValueError as exc:
-            QMessageBox.critical(None, "Auto ROI", f"Class '{target_class_name}': {exc}")
-            return None
+            raise ValueError(f"Class '{target_class_name}': {exc}") from exc
 
         controller.shapes_layer.add(verts_shifted, shape_type=preset.geometry.kind)
         # Auto-select the newly placed ROI so the Save button activates immediately.
@@ -1123,10 +1147,9 @@ class RoiController(TaskControllerBase):
             mode = str(annotation.roi_placement_mode_combo.currentData())
             resolver = None
             if mode == "auto":
-                placed = self._place_roi_preset_auto(self.patari_controller, preset)
-                if placed is None:
-                    return
-                resolver = self._per_frame_auto_resolver(*placed)
+                resolver = self._per_frame_auto_resolver(
+                    *self._place_roi_preset_auto(self.patari_controller, preset)
+                )
             else:
                 self._place_roi_preset_static(self.patari_controller, preset)
             if annotation.all_frames_radio.isChecked():

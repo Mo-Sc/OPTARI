@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 import os
+from contextlib import contextmanager
+from pathlib import Path
 
 from patari.config import settings
 
@@ -70,3 +72,25 @@ def configure_logging() -> None:
         gui_handler.name = "patari_napari_notifications"
         gui_handler.setFormatter(formatter)
         patari_logger.addHandler(gui_handler)
+
+
+@contextmanager
+def run_log_file(destination: Path, level: int = logging.INFO):
+    """Also write the ``patari`` log to *destination* for the duration of the block.
+
+    Used by long unattended runs, where the console log is not where the user will
+    look afterwards. The handler is always removed again, so a failed run cannot
+    leave the file handle attached for the rest of the session.
+    """
+    handler = logging.FileHandler(destination, encoding="utf-8")
+    handler.setLevel(level)
+    handler.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s:%(name)s:%(message)s")
+    )
+    patari_logger = logging.getLogger("patari")
+    patari_logger.addHandler(handler)
+    try:
+        yield destination
+    finally:
+        patari_logger.removeHandler(handler)
+        handler.close()

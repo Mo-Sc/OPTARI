@@ -12,7 +12,7 @@ from napari.utils.progress import cancelable_progress
 from qtpy.QtWidgets import QFileDialog
 
 from patari.controllers.base import TaskControllerBase
-from patari.io.utils import colorbars_visible
+from patari.io.utils import colorbars_visible, save_viewer_screenshot
 from patari.utils.viewer import show_activity_dock
 from patari.widgets.viewer_export_dialog import ViewerExportDialog
 
@@ -59,9 +59,7 @@ class ViewerExportController(TaskControllerBase):
 
         filename = Path(filename).with_suffix(".tiff" if "TIFF" in file_filter else ".png")
 
-        with colorbars_visible(viewer, include_colorbars):
-            image = viewer.screenshot(canvas_only=True)[..., :3]
-        cv2.imwrite(str(filename), cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
+        save_viewer_screenshot(viewer, filename, include_colorbars=include_colorbars)
         logger.info("Exported image to %s", filename)
 
     @staticmethod

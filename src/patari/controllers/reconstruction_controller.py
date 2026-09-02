@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Iterator
+from dataclasses import dataclass
 from functools import partial
 from math import ceil
 from pathlib import Path
@@ -15,7 +16,7 @@ from patari.controllers.base import TaskControllerBase
 from patari.patato_bridge import display_data_from_patato_obj
 from patari.utils.presets import PresetStore
 from patari.utils.setup import get_user_reconstruction_presets_dir
-from patari.utils.tasks import download_then, start_task
+from patari.utils.tasks import BackgroundStep, download_then, start_task
 from patari.widgets.reconstruction_dock import (
     SPEED_OF_SOUND_DEFAULT,
     SPEED_OF_SOUND_MAX,
@@ -31,6 +32,100 @@ from patari.widgets.dock_helpers import (
 logger = logging.getLogger(__name__)
 
 DEEPMB_ALGORITHM = "DeepMB ONNX Reconstruction"
+
+
+@dataclass
+class ReconParams:
+    """Everything one reconstruction run needs, resolved against a loaded scan.
+
+    The dock fills this from its widgets and batch mode from a preset, so neither
+    `prepare` nor `publish` has to reach back into ambient viewer or widget state.
+    """
+
+    settings: dict
+    pa_data_for_run: object
+    algorithm_name: str
+    speed_of_sound: float
+    suffix: str
+    output_frames: list[int]
+    source_frame_count: int
+    scan_path: Path
+    scan_name: str | None = None
+    current_frame_id: int | None = None
+    offset_x_mm: float = 0.0
+    offset_z_mm: float = 0.0
+    timestamps: object = None
+    n_wavelengths: int = 1
+
+    @property
+    def chunk_frames(self) -> int:
+        return max(1, PAT_MAXIMUM_BATCH_SIZE // max(1, self.n_wavelengths))
+
+    @property
+    def layer_name(self) -> str:
+        suffix_part = f"_{self.suffix}" if self.suffix else ""
+        frame_part = (
+            f"_F{self.current_frame_id}" if self.current_frame_id is not None else ""
+        )
+        return f"Recon: {self.algorithm_name}{suffix_part}{frame_part}"
+
+    @classmethod
+    def from_settings(
+        cls,
+        settings_dict: dict,
+        controller,
+        *,
+        speed_of_sound: float | None = None,
+        suffix: str = "",
+        frame_id: int | None = None,
+    ) -> "ReconParams":
+        """Resolve a reconstruction preset against the currently loaded scan.
+
+        *speed_of_sound* defaults to the preset's own value; the dock passes its
+        slider instead, which is what lets the slider override the preset.
+
+        Raises ValueError, message safe to show the user, when the preset cannot be
+        run on this scan.
+        """
+        pa_data = controller.pa_data
+        if pa_data is None:
+            raise ValueError("Load a scan first.")
+
+        settings_dict = dict(settings_dict)
+        if speed_of_sound is None:
+            if ReconAttributeTags.SPEED_OF_SOUND not in settings_dict:
+                raise ValueError("Reconstruction preset has no speed of sound.")
+            speed_of_sound = settings_dict[ReconAttributeTags.SPEED_OF_SOUND]
+        offset_x_mm = float(settings_dict.pop("OFFSET_X", 0.0))
+        offset_z_mm = float(settings_dict.pop("OFFSET_Z", 0.0))
+
+        source_frame_count = int(pa_data.shape[0])
+        pa_data_for_run = pa_data
+        output_frames = list(range(source_frame_count))
+        if frame_id is not None:
+            if not (0 <= frame_id < source_frame_count):
+                raise ValueError("Selected frame is not available.")
+            pa_data_for_run = pa_data[frame_id : frame_id + 1]
+            output_frames = [frame_id]
+
+        return cls(
+            settings=settings_dict,
+            pa_data_for_run=pa_data_for_run,
+            algorithm_name=settings_dict.get(
+                ReconAttributeTags.RECONSTRUCTION_ALGORITHM, "Reconstruction"
+            ),
+            speed_of_sound=float(speed_of_sound),
+            suffix=suffix.strip(),
+            output_frames=output_frames,
+            source_frame_count=source_frame_count,
+            scan_path=Path(controller.path),
+            scan_name=controller.scan_ctrl.scan_name(),
+            current_frame_id=frame_id,
+            offset_x_mm=offset_x_mm,
+            offset_z_mm=offset_z_mm,
+            timestamps=controller.timestamps,
+            n_wavelengths=max(1, int(pa_data.shape[1])),
+        )
 
 
 def _resolve_deepmb_model(settings_dict: dict, model_path: Path) -> None:
@@ -295,154 +390,165 @@ class ReconstructionController(TaskControllerBase):
         dock = self.patari_controller.reconstruction
         dock.speed_of_sound_value_label.setText(f"{value} m/s")
 
+    # ============ run: params -> prepare -> publish ============
+    def _params_from_ui(self) -> ReconParams:
+        """Build run parameters from the dock. Raises ValueError with a user-facing message."""
+        dock = self.patari_controller.reconstruction
+        if dock.preset_combo.currentData() is None:
+            raise ValueError("Select a reconstruction preset.")
+        if self._settings_dirty:
+            raise ValueError("Apply preset before running.")
+
+        frame_id = (
+            int(self.viewer.dims.current_step[0])
+            if dock.current_frames_radio.isChecked()
+            else None
+        )
+        return ReconParams.from_settings(
+            self._applied_settings,
+            self.patari_controller,
+            speed_of_sound=float(dock.speed_of_sound_slider.value()),
+            suffix=dock.suffix_edit.text(),
+            frame_id=frame_id,
+        )
+
+    @staticmethod
+    def deepmb_model_path(params: ReconParams) -> Path | None:
+        """Where this run expects its ONNX weights, or None if it isn't a DeepMB run."""
+        if params.algorithm_name != DEEPMB_ALGORITHM:
+            return None
+        extra = params.settings[ReconAttributeTags.ADDITIONAL_PARAMETERS]
+        return Path(extra["model_path"]).expanduser()
+
+    def prepare(self, params: ReconParams) -> BackgroundStep:
+        """Validate *params* and return the work to run. Raises ValueError if it can't run.
+
+        Model weights are required to already be on disk: fetching them is the caller's
+        job, so an unattended run can download once up front instead of per scan.
+        """
+        model_path = self.deepmb_model_path(params)
+        if model_path is not None:
+            if not model_path.is_file():
+                raise ValueError(f"DeepMB model weights not found: {model_path}")
+            _resolve_deepmb_model(params.settings, model_path)
+
+        n_chunks = ceil(len(params.output_frames) / params.chunk_frames)
+        logger.info(
+            "running reconstruction preset '%s' on %s frame(s) in %s chunk(s) of %s, "
+            "speed of sound=%s m/s",
+            params.algorithm_name,
+            len(params.output_frames),
+            n_chunks,
+            params.chunk_frames,
+            params.speed_of_sound,
+        )
+        return BackgroundStep(
+            func=partial(
+                _reconstruct_frames,
+                params.settings,
+                params.pa_data_for_run,
+                params.speed_of_sound,
+                params.chunk_frames,
+            ),
+            total=n_chunks + 1,
+            desc="Reconstructing",
+        )
+
+    def publish(self, result, params: ReconParams) -> str:
+        """Add the finished reconstruction as a layer. Runs on the main thread."""
+        reconstruction, new_settings = result
+
+        wavelengths = [int(w) for w in reconstruction.ax_1_labels]
+        settings = dict(params.settings)
+        settings.update(new_settings)
+        settings.update(
+            {
+                ReconAttributeTags.RECONSTRUCTION_ALGORITHM: params.algorithm_name,
+                ReconAttributeTags.SPEED_OF_SOUND: params.speed_of_sound,
+                "OFFSET_X": params.offset_x_mm,
+                "OFFSET_Z": params.offset_z_mm,
+                "frame_mode": "current" if params.current_frame_id is not None else "all",
+                "frames": params.output_frames,
+                "suffix": params.suffix,
+            }
+        )
+        layer_metadata = {
+            "type": "pa",
+            "pa_kind": "recon",
+            "wavelengths": wavelengths,
+            "axis1_name": "Channel",
+            "axis1_labels": wavelengths,
+            "filepath": str(params.scan_path),
+            "scan_name": params.scan_name,
+            "timestamps": params.timestamps,
+            "frames": params.output_frames,
+            "settings": settings,
+        }
+
+        data = self._expand_to_source_frames(
+            display_data_from_patato_obj(reconstruction),
+            params.output_frames,
+            params.source_frame_count,
+        )
+
+        # absolute placement: a recon comes from the raw time series, so it must not
+        # inherit (and re-apply) the offset of whichever layer is currently active
+        translate = (0.0,) * (data.ndim - 2) + (params.offset_z_mm, params.offset_x_mm)
+
+        layer_name = params.layer_name
+        self._add_or_update_image_layer(
+            layer_name,
+            data,
+            layer_metadata,
+            reconstruction,
+            colormap="viridis",
+            translate=translate,
+        )
+        self.patari_controller._patato_objects[layer_name] = reconstruction
+        self.patari_controller._derived_patato_objects[layer_name] = reconstruction
+        self.patari_controller._ensure_shapes_layer_on_top()
+
+        logger.info("reconstruction complete: %s", layer_name)
+        return layer_name
+
     def on_run_reconstruction_clicked(self) -> None:
         """Start the selected reconstruction preset on the loaded scan in a worker thread."""
         if self.patari_controller.reconstruction is None:
             return
-
         dock = self.patari_controller.reconstruction
-        pa_data = self.patari_controller.pa_data
 
-        if pa_data is None:
-            dock.status_label.setText("Load a scan first.")
+        try:
+            params = self._params_from_ui()
+        except ValueError as exc:
+            dock.status_label.setText(str(exc))
             return
 
-        if dock.preset_combo.currentData() is None:
-            dock.status_label.setText("Select a reconstruction preset.")
-            return
-
-        if self._settings_dirty:
-            dock.status_label.setText("Apply preset before running.")
-            return
-
-        settings = dict(self._applied_settings)
-        offset_x_mm = float(settings.pop("OFFSET_X", 0.0))
-        offset_z_mm = float(settings.pop("OFFSET_Z", 0.0))
-
-        algorithm_name = settings.get(
-            ReconAttributeTags.RECONSTRUCTION_ALGORITHM, "Reconstruction"
-        )
-        suffix = dock.suffix_edit.text().strip()
-        speed_of_sound = float(dock.speed_of_sound_slider.value())
-
-        source_frame_count = int(pa_data.shape[0])
-        pa_data_for_run = pa_data
-        output_frames = list(range(source_frame_count))
-        current_frame_id = None
-
-        if dock.current_frames_radio.isChecked():
-            current_frame = int(self.viewer.dims.current_step[0])
-            if not (0 <= current_frame < source_frame_count):
-                dock.status_label.setText("Selected frame is not available.")
+        def run() -> None:
+            try:
+                step = self.prepare(params)
+            except ValueError as exc:
+                dock.status_label.setText(str(exc))
                 return
-            pa_data_for_run = pa_data[current_frame : current_frame + 1]
-            output_frames = [current_frame]
-            current_frame_id = current_frame
 
-        n_wavelengths = max(1, int(pa_data.shape[1]))
-        chunk_frames = max(1, PAT_MAXIMUM_BATCH_SIZE // n_wavelengths)
-        n_chunks = ceil(len(output_frames) / chunk_frames)
+            def publish(result) -> None:
+                dock.status_label.setText(f"Finished: {self.publish(result, params)}")
 
-        def publish(result) -> None:
-            """Add the finished reconstruction as a layer. Runs on the main thread."""
-            reconstruction, new_settings = result
-
-            suffix_part = f"_{suffix}" if suffix else ""
-            frame_part = f"_F{current_frame_id}" if current_frame_id is not None else ""
-            layer_name = f"Recon: {algorithm_name}{suffix_part}{frame_part}"
-
-            wavelengths = [int(w) for w in reconstruction.ax_1_labels]
-            settings.update(new_settings)
-            settings.update(
-                {
-                    ReconAttributeTags.RECONSTRUCTION_ALGORITHM: algorithm_name,
-                    ReconAttributeTags.SPEED_OF_SOUND: speed_of_sound,
-                    "OFFSET_X": offset_x_mm,
-                    "OFFSET_Z": offset_z_mm,
-                    "frame_mode": "current" if current_frame_id is not None else "all",
-                    "frames": output_frames,
-                    "suffix": suffix,
-                }
-            )
-            layer_metadata = {
-                "type": "pa",
-                "pa_kind": "recon",
-                "wavelengths": wavelengths,
-                "axis1_name": "Channel",
-                "axis1_labels": wavelengths,
-                "filepath": str(self.patari_controller.path),
-                "timestamps": self.patari_controller.timestamps,
-                "frames": output_frames,
-                "settings": settings,
-            }
-
-            data = self._expand_to_source_frames(
-                display_data_from_patato_obj(reconstruction),
-                output_frames,
-                source_frame_count,
-            )
-
-            # absolute placement: a recon comes from the raw time series, so it must not
-            # inherit (and re-apply) the offset of whichever layer is currently active
-            translate = (0.0,) * (data.ndim - 2) + (offset_z_mm, offset_x_mm)
-
-            self._add_or_update_image_layer(
-                layer_name,
-                data,
-                layer_metadata,
-                reconstruction,
-                colormap="viridis",
-                translate=translate,
-            )
-            self.patari_controller._patato_objects[layer_name] = reconstruction
-            self.patari_controller._derived_patato_objects[layer_name] = reconstruction
-            self.patari_controller._ensure_shapes_layer_on_top()
-
-            dock.status_label.setText(f"Finished: {layer_name}")
-            logger.info("reconstruction complete: %s", layer_name)
-
-        def reconstruct() -> None:
-            dock.status_label.setText(f"Reconstructing {len(output_frames)} frame(s)…")
-            logger.info(
-                "running reconstruction preset '%s' on %s frame(s) in %s chunk(s) of %s, "
-                "speed of sound=%s m/s",
-                algorithm_name,
-                len(output_frames),
-                n_chunks,
-                chunk_frames,
-                speed_of_sound,
+            dock.status_label.setText(
+                f"Reconstructing {len(params.output_frames)} frame(s)…"
             )
             start_task(
-                self.patari_controller,
-                partial(
-                    _reconstruct_frames,
-                    settings,
-                    pa_data_for_run,
-                    speed_of_sound,
-                    chunk_frames,
-                ),
-                total=n_chunks + 1,
-                desc="Reconstructing",
-                on_result=publish,
+                self.patari_controller, step, on_result=publish,
                 status_label=dock.status_label,
             )
 
-        if algorithm_name != DEEPMB_ALGORITHM:
-            reconstruct()
+        model_path = self.deepmb_model_path(params)
+        if model_path is None:
+            run()
             return
 
         # DeepMB needs its ONNX weights on disk before the preset can be built.
-        params = settings[ReconAttributeTags.ADDITIONAL_PARAMETERS]
-        model_path = Path(params["model_path"]).expanduser()
-
-        def resolve_and_reconstruct() -> None:
-            _resolve_deepmb_model(settings, model_path)
-            reconstruct()
-
+        extra = params.settings[ReconAttributeTags.ADDITIONAL_PARAMETERS]
         download_then(
-            self.patari_controller,
-            model_path,
-            params.get("model_url"),
-            dock.status_label,
-            resolve_and_reconstruct,
+            self.patari_controller, model_path, extra.get("model_url"),
+            dock.status_label, run,
         )

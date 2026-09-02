@@ -97,6 +97,7 @@ class PatariController:
         self._spectrum_dock_widget = None
 
         self.settings_dialog = None
+        self.batch_dialog = None
 
         self._setup_viewer()
         self._ensure_docks()

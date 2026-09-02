@@ -77,6 +77,11 @@ def get_user_roi_presets_dir() -> Path:
     return get_user_dir() / "config" / "presets" / "roi"
 
 
+def get_user_batch_presets_dir() -> Path:
+    """Returns the path to the user-editable batch plan presets directory."""
+    return get_user_dir() / "config" / "presets" / "batch"
+
+
 def get_user_segmentation_presets_dir() -> Path:
     """Returns the path to the user-editable segmentation presets directory."""
     return get_user_dir() / "config" / "presets" / "segmentation"

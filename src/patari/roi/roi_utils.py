@@ -47,6 +47,23 @@ def saved_export_columns() -> list[str]:
     """Columns stored and exported: origin columns plus every feature"""
     return _saved_columns(ALL_FEATURE_COLUMNS)
 
+
+@dataclass(frozen=True)
+class MeasureScope:
+    """How wide a save reaches: which layers, frames and channels get measured.
+
+    The annotation dock builds one from its checkboxes; batch mode builds one from
+    its plan. Keeping it a value rather than reading widgets inside the measurement
+    loop is what lets both drive the identical code.
+    """
+
+    all_layers: bool = False
+    all_frames: bool = False
+    all_channels: bool = False
+    # Only meaningful with all_frames: use each frame's own record from the ROI's
+    # track instead of reusing the selected outline everywhere.
+    follow_track: bool = False
+
 def _scale_sy_sx(active_recon_layer) -> tuple[float, float]:
     scale = getattr(active_recon_layer, "scale", (1.0, 1.0, 1.0))
     return float(scale[-2]), float(scale[-1])

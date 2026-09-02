@@ -38,7 +38,8 @@ def main() -> None:
 
     app = QApplication.instance() or QApplication([])
 
-    viewer = Viewer(title=f"PATARI v{__version__.split('+')[0]} (INTERNAL USE ONLY)")
+    # viewer = Viewer(title=f"PATARI v{__version__.split('+')[0]} (INTERNAL USE ONLY)")
+    viewer = Viewer(title=f"PATARI v{__version__.split('+')[0]}")
 
     app.setWindowIcon(
         QIcon(str(Path(__file__).resolve().parent / "config" / "logo.png"))

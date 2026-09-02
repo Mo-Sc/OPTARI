@@ -1,0 +1,21 @@
+{
+  "description": "Skip reconstruction: segment, unmix and measure on the reconstruction already stored in each file.",
+  "steps": {
+    "segmentation": "muscle_poly",
+    "unmixing": "haemoglobin",
+    "roi": "clinical_ellipse_10x2mm_Muskel1"
+  },
+  "source": "Recon: iThera",
+  "frame": "motion",
+  "measure": {
+    "layers": "analysis",
+    "all_channels": true,
+    "all_frames": false
+  },
+  "outputs": {
+    "xlsx": true,
+    "hdf5": false,
+    "overlay_png": true,
+    "overlay_layer": null
+  }
+}

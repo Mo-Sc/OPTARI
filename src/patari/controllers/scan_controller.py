@@ -84,6 +84,13 @@ class ScanController(TaskControllerBase):
             self.patari_controller.pa_data is not None
         )
 
+    def scan_name(self) -> "str | None":
+        """The scan's internal (vendor) name, for stamping onto layers PATARI creates."""
+        scan_info = self.patari_controller._scans.get(
+            getattr(self.patari_controller, "path", None)
+        )
+        return scan_info.internal_name if scan_info is not None else None
+
     def wavelengths(self) -> "list[int] | None":
         """Return scan wavelengths in nm, or ``None`` if unavailable."""
         if self.patari_controller.pa_data is None:
@@ -214,8 +221,13 @@ class ScanController(TaskControllerBase):
         else:
             self.reset_scan_state()
 
-    def load_scan(self, scan_path: Path) -> None:
+    def load_scan(self, scan_path: Path) -> bool:
+        """Open *scan_path* and build its layers. False if the scan could not be loaded.
 
+        Failures fall back to the startup logo rather than raising, which is what the
+        GUI wants; the return value is what lets an unattended caller (batch mode) tell
+        a loaded scan from an empty viewer.
+        """
         logger.info("loading scan: %s", scan_path)
 
         scan_path = Path(scan_path)
@@ -226,9 +238,14 @@ class ScanController(TaskControllerBase):
             logger.warning("scan not found: %s", scan_path)
             load_startup_logo(self.viewer)
             self.patari_controller.refresh_all()
-            return
+            return False
 
         scan_info = self.patari_controller._scans.get(scan_path)
+        if scan_info is None:
+            logger.warning("scan was not discovered in the current folder: %s", scan_path)
+            load_startup_logo(self.viewer)
+            self.patari_controller.refresh_all()
+            return False
 
         try:
             if scan_info.kind == "hdf5":
@@ -243,7 +260,7 @@ class ScanController(TaskControllerBase):
             logger.exception("failed to open scan '%s'", scan_path)
             load_startup_logo(self.viewer)
             self.patari_controller.refresh_all()
-            return
+            return False
 
         try:
             layers = self.layers_from_pa_data()
@@ -252,7 +269,7 @@ class ScanController(TaskControllerBase):
             self.close_current_scan()
             load_startup_logo(self.viewer)
             self.patari_controller.refresh_all()
-            return
+            return False
 
         for data, kw, lt in layers:
             if lt == "image":
@@ -326,6 +343,8 @@ class ScanController(TaskControllerBase):
         except Exception:
             logger.info("failed to reset viewer view", exc_info=True)
 
+        return True
+
     @staticmethod
     def scan_key(scan_path: Path) -> str:
         name = scan_path.stem if scan_path.is_file() else scan_path.name
@@ -375,6 +394,44 @@ class ScanController(TaskControllerBase):
                 exc_info=True,
             )
         return None
+
+    @staticmethod
+    def discover_studies(
+        root: Path, max_depth: int = 3
+    ) -> dict[Path, dict[Path, ScanInfo]]:
+        """Map each study folder under *root* to its scans, in folder-name order.
+
+        A study is simply any folder that holds at least one scan, so a flat folder
+        of scans comes back as a single study and no naming convention is imposed
+        beyond the ``Scan_*`` one ``discover_scans`` already relies on. A folder that
+        is itself a study is not descended into.
+        """
+        root = Path(root)
+        studies: dict[Path, dict[Path, ScanInfo]] = {}
+
+        def walk(folder: Path, depth: int) -> None:
+            scans = ScanController.discover_scans(folder)
+            if scans:
+                studies[folder] = scans
+                return
+            if depth >= max_depth:
+                return
+            try:
+                children = sorted(
+                    child
+                    for child in folder.iterdir()
+                    # Following symlinks here risks walking a cycle or wandering
+                    # outside the dataset the user picked.
+                    if child.is_dir() and not child.is_symlink()
+                )
+            except (PermissionError, OSError):
+                logger.warning("could not list '%s', skipping", folder)
+                return
+            for child in children:
+                walk(child, depth + 1)
+
+        walk(root, 0)
+        return studies
 
     @staticmethod
     def discover_scans(folder: Path) -> dict[Path, ScanInfo]:

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterator
+from dataclasses import dataclass
 from functools import partial
+from pathlib import Path
 
 import numpy as np
 from napari.layers import Labels
@@ -16,7 +18,7 @@ from patari.segmentation.segmenter import (
 )
 from patari.segmentation.segmentation_presets import validate_segmentation_settings
 from patari.utils.viewer import selected_frame_idx
-from patari.utils.tasks import download_then, start_task
+from patari.utils.tasks import BackgroundStep, download_then, start_task
 from patari.controllers.base import TaskControllerBase
 from patari.roi import Ellipse, Rectangle, Polygon, ROIPlacementConfig
 from patari.config import settings
@@ -68,6 +70,62 @@ def _segment_frames(
         mask = full_mask
 
     return mask, class_names
+
+
+@dataclass
+class SegmentParams:
+    """Everything one segmentation run needs, resolved against a loaded scan."""
+
+    model_id: str
+    us_data: np.ndarray          # (n_frames, H, W), already sliced to the frames to run
+    us_shape: tuple              # full (n_frames, n_channels, H, W) of the source layer
+    class_ids: set[int]
+    frame_ids: list[int]
+    us_scale: tuple
+    us_translate: tuple
+    frame_idx: int | None = None  # None means "all frames"
+
+    @property
+    def frame_mode(self) -> str:
+        return "current" if self.frame_idx is not None else "all"
+
+    @property
+    def n_channels(self) -> int:
+        return int(self.us_shape[1])
+
+    @classmethod
+    def build(cls, controller, model_id: str, class_ids: set[int],
+              *, frame_idx: int | None) -> "SegmentParams":
+        """Resolve a segmentation setup against the loaded scan's US layer.
+
+        Raises ValueError, message safe to show the user, when it cannot run here.
+        """
+        us_layer = controller.active_us_layer
+        if us_layer is None:
+            raise ValueError("No US layer found.")
+        if not class_ids:
+            raise ValueError("No classes selected.")
+
+        us_raw = np.asarray(us_layer.data)
+        us_data = us_raw[:, 0]
+        n_frames = int(us_raw.shape[0])
+        frame_ids = list(range(n_frames))
+        if frame_idx is not None:
+            if not (0 <= frame_idx < n_frames):
+                raise ValueError("Selected frame is not available.")
+            us_data = us_data[frame_idx : frame_idx + 1]
+            frame_ids = [frame_idx]
+
+        return cls(
+            model_id=model_id,
+            us_data=us_data,
+            us_shape=us_raw.shape,
+            class_ids=set(class_ids),
+            frame_ids=frame_ids,
+            us_scale=tuple(us_layer.scale),
+            us_translate=tuple(us_layer.translate),
+            frame_idx=frame_idx,
+        )
 
 
 class SegmentationController(TaskControllerBase):
@@ -240,16 +298,18 @@ class SegmentationController(TaskControllerBase):
                 class_ids.add(int(item.data(Qt.ItemDataRole.UserRole)))
         return class_ids
 
-    def get_segmenter(self):
-        """get the segmenter for the active model selection."""
-        if (
-            self._segmenter is None
-            or self._segmenter_model_id != self._active_segmentation_model_id
-        ):
+    def get_segmenter(self, model_id: str | None = None):
+        """The segmenter for *model_id*, defaulting to the dock's current selection.
+
+        A caller that already decided which model to run (a batch plan naming one)
+        must get that model, not whichever the dock happens to be showing.
+        """
+        model_id = model_id or self._active_segmentation_model_id
+        if self._segmenter is None or self._segmenter_model_id != model_id:
             self._segmenter = create_segmenter(
-                self._active_segmentation_model_config()
+                self._segmentation_model_registry[model_id]
             )
-            self._segmenter_model_id = self._active_segmentation_model_id
+            self._segmenter_model_id = model_id
         return self._segmenter
 
 
@@ -534,114 +594,146 @@ class SegmentationController(TaskControllerBase):
             f"ROI generated from class {class_id} in frame {frame_idx}"
         )
 
+
+    # ============ run: params -> prepare -> publish ============
+    def _params_from_ui(self) -> SegmentParams:
+        """Build run parameters from the dock. Raises ValueError with a user-facing message."""
+        seg_dock = self.patari_controller.segmentation
+        us_layer = self.patari_controller.active_us_layer
+        n_frames = int(np.asarray(us_layer.data).shape[0]) if us_layer is not None else 0
+        frame_idx = (
+            None
+            if seg_dock.all_frames_radio.isChecked()
+            else selected_frame_idx(self.viewer, n_frames)
+        )
+        return SegmentParams.build(
+            self.patari_controller,
+            self.active_segmentation_model_id,
+            self.selected_segmentation_class_ids(),
+            frame_idx=frame_idx,
+        )
+
+    def model_weights_path(self, model_id: str) -> Path:
+        """Where the given model's ONNX weights are expected on disk."""
+        if model_id not in self._segmentation_model_registry:
+            raise ValueError(f"Unknown segmentation model: {model_id}")
+        return get_user_models_dir() / self._segmentation_model_registry[model_id].filename
+
+    def prepare(self, params: SegmentParams) -> BackgroundStep:
+        """Validate *params* and return the work to run. Raises ValueError if it can't run.
+
+        Model weights are required to already be on disk: fetching them is the caller's
+        job, so an unattended run can download once up front instead of per scan.
+        """
+        weights = self.model_weights_path(params.model_id)
+        if not weights.is_file():
+            raise ValueError(f"Segmentation model weights not found: {weights}")
+
+        logger.info(
+            "running segmentation with model '%s' on %s frame(s)",
+            params.model_id,
+            len(params.frame_ids),
+        )
+        return BackgroundStep(
+            func=partial(
+                _segment_frames,
+                self.get_segmenter(params.model_id),
+                params.us_data,
+                params.class_ids,
+                params.n_channels,
+                params.frame_idx,
+                params.us_shape,
+            ),
+            total=len(params.frame_ids),
+            desc="Segmenting",
+        )
+
+    def publish(self, result, params: SegmentParams) -> "Labels":
+        """Add the finished segmentation as a labels layer. Runs on the main thread."""
+        mask, class_names = result
+
+        if self._seg_layer is not None and self._seg_layer in self.viewer.layers:
+            self.viewer.layers.remove(self._seg_layer)
+        self._seg_layer = self.viewer.add_labels(
+            mask,
+            name="Segmentation",
+            scale=params.us_scale,
+            translate=params.us_translate,
+            opacity=0.5,
+            metadata={
+                "type": "segmentation",
+                "frame_mode": params.frame_mode,
+                "frames": params.frame_ids,
+                "class_names": class_names,
+                "source_model_id": params.model_id,
+                "settings": {
+                    "model_id": params.model_id,
+                    "selected_class_ids": sorted(params.class_ids),
+                    "class_names": class_names,
+                    "frame_mode": params.frame_mode,
+                    "frames": params.frame_ids,
+                },
+            },
+            units=self.image_units,
+        )
+        self._populate_roi_class_combo(mask, class_names)
+        return self._seg_layer
+
+    def _populate_roi_class_combo(self, mask, class_names: dict) -> None:
+        """Offer only the classes the output mask actually contains."""
+        seg_dock = self.patari_controller.segmentation
+        if seg_dock is None:
+            return
+        seg_dock.roi_class_id_combo.clear()
+        for class_id in sorted(int(c) for c in np.unique(mask)):
+            seg_dock.roi_class_id_combo.addItem(
+                f"{class_id}: {class_names.get(class_id, str(class_id))}",
+                userData=class_id,
+            )
+        roi_class_index = seg_dock.roi_class_id_combo.findData(self._pending_roi_class_id)
+        if roi_class_index < 0:
+            roi_class_index = min(1, seg_dock.roi_class_id_combo.count() - 1)
+        seg_dock.roi_class_id_combo.setCurrentIndex(roi_class_index)
+        self._pending_roi_class_id = None
+
     def on_generate_tissue_segmentation_clicked(self) -> None:
         """Start segmentation on the selected frame or all frames in a worker thread."""
         seg_dock = self.patari_controller.segmentation
         if seg_dock is None:
             return
 
-        us_layer = self.patari_controller.active_us_layer
-        if us_layer is None:
-            seg_dock.status_label.setText("No US layer found")
+        try:
+            params = self._params_from_ui()
+        except ValueError as exc:
+            seg_dock.status_label.setText(str(exc))
             return
 
-        selected_ids = self.selected_segmentation_class_ids()
-        if not selected_ids:
-            seg_dock.status_label.setText("No classes selected")
-            return
+        def run() -> None:
+            try:
+                step = self.prepare(params)
+            except ValueError as exc:
+                seg_dock.status_label.setText(str(exc))
+                return
 
-        us_raw = np.asarray(us_layer.data)
-        us_data = us_raw[:, 0]
-        n_frames, n_channels = us_raw.shape[:2]
-        model_id = self.active_segmentation_model_id
-
-        if seg_dock.all_frames_radio.isChecked():
-            frame_idx = None
-            frame_ids = list(range(n_frames))
-            frame_mode = "all"
-        else:
-            frame_idx = selected_frame_idx(self.viewer, n_frames)
-            us_data = us_data[frame_idx : frame_idx + 1]
-            frame_ids = [frame_idx]
-            frame_mode = "current"
-
-        def publish(result) -> None:
-            """Add the finished segmentation as a labels layer. Runs on the main thread."""
-            mask, class_names = result
-
-            if self._seg_layer is not None and self._seg_layer in self.viewer.layers:
-                self.viewer.layers.remove(self._seg_layer)
-            self._seg_layer = self.viewer.add_labels(
-                mask,
-                name="Segmentation",
-                scale=tuple(us_layer.scale),
-                translate=tuple(us_layer.translate),
-                opacity=0.5,
-                metadata={
-                    "type": "segmentation",
-                    "frame_mode": frame_mode,
-                    "frames": frame_ids,
-                    "class_names": class_names,
-                    "source_model_id": model_id,
-                    "settings": {
-                        "model_id": model_id,
-                        "selected_class_ids": sorted(selected_ids),
-                        "class_names": class_names,
-                        "frame_mode": frame_mode,
-                        "frames": frame_ids,
-                    },
-                },
-                units=self.image_units,
-            )
-
-            # Populate ROI class combo from classes present in the output mask.
-            seg_dock.roi_class_id_combo.clear()
-            for class_id in sorted(int(c) for c in np.unique(mask)):
-                seg_dock.roi_class_id_combo.addItem(
-                    f"{class_id}: {class_names.get(class_id, str(class_id))}",
-                    userData=class_id,
+            def publish(result) -> None:
+                self.publish(result, params)
+                seg_dock.status_label.setText(
+                    f"Finished: {len(params.frame_ids)} frame(s) segmented"
                 )
-            roi_class_index = seg_dock.roi_class_id_combo.findData(
-                self._pending_roi_class_id
-            )
-            if roi_class_index < 0:
-                roi_class_index = min(1, seg_dock.roi_class_id_combo.count() - 1)
-            seg_dock.roi_class_id_combo.setCurrentIndex(roi_class_index)
-            self._pending_roi_class_id = None
 
-            seg_dock.status_label.setText(f"Finished: {len(frame_ids)} frame(s) segmented")
-
-        def segment() -> None:
             seg_dock.status_label.setText(
-                f"Segmenting {len(frame_ids)} frame(s) with {model_id}…"
-            )
-            logger.info(
-                "running segmentation with model '%s' on %s frame(s)",
-                model_id,
-                len(frame_ids),
+                f"Segmenting {len(params.frame_ids)} frame(s) with {params.model_id}…"
             )
             start_task(
-                self.patari_controller,
-                partial(
-                    _segment_frames,
-                    self.get_segmenter(),
-                    us_data,
-                    selected_ids,
-                    n_channels,
-                    frame_idx,
-                    us_raw.shape,
-                ),
-                total=len(frame_ids),
-                desc="Segmenting",
-                on_result=publish,
+                self.patari_controller, step, on_result=publish,
                 status_label=seg_dock.status_label,
             )
 
         model_config = self._active_segmentation_model_config()
         download_then(
             self.patari_controller,
-            get_user_models_dir() / model_config.filename,
+            self.model_weights_path(params.model_id),
             model_config.url,
             seg_dock.status_label,
-            segment,
+            run,
         )
