@@ -54,7 +54,8 @@ studies. PATARI is built specifically as a graphical, non-programming interface 
 - Extract ROI intensities, plot ROI intensities over time and wavelength.
 - AI-based tissue segmentation with automatic ROI placement.
 - Reconstruction and spectral unmixing using PATATO and DeepMB, directly from the GUI.
-- Export to CSV/XLSX, IPASC-compatible HDF5, or PNG/TIFF.
+- Load iThera `.msot`, PATATO HDF5, and IPASC HDF5 scans.
+- Export to CSV/XLSX, open HDF5 with IPASC metadata, native IPASC raw data, or PNG/TIFF.
 
 ## Project Status
 

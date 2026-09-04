@@ -104,31 +104,35 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
         wavelengths = None
 
     # --- ultrasound ---
+    # IPASC scans have no ultrasound. The acquisition frame count then comes from the time series instead.
     us_obj = pa_data.get_ultrasound()
-    us_img = display_data_from_patato_obj(us_obj)
-    n_acq_frames = us_img.shape[0]
-    patato_objects["US"] = us_obj
+    if hasattr(us_obj, "da"):
+        us_img = display_data_from_patato_obj(us_obj)
+        n_acq_frames = us_img.shape[0]
+        patato_objects["US"] = us_obj
 
-    # if motion-based frame selection is enabled, compute motion scores for each frame
-    # TODO: or maybe always include
-    if settings.general.DEFAULT_FRAME_INDEX == "motion":
-        motion_scores = k_motion_scores_optimized(us_img)
-    else:
-        motion_scores = None
+        # if motion-based frame selection is enabled, compute motion scores for each frame
+        # TODO: or maybe always include
+        if settings.general.DEFAULT_FRAME_INDEX == "motion":
+            motion_scores = k_motion_scores_optimized(us_img)
+        else:
+            motion_scores = None
 
-    layers.append(
-        (
-            us_img,
-            {
-                "colormap": _user_cmaps.get(HDF5Tags.ULTRASOUND, _default_cmaps[HDF5Tags.ULTRASOUND]),
-                "name": "US",
-                "scale": scale_from_patato_obj(us_obj, _us_fallback),
-                "opacity": 1.0,
-                "metadata": {"type": "us", "timestamps": timestamps, "motion_scores": motion_scores},
-            },
-            "image",
+        layers.append(
+            (
+                us_img,
+                {
+                    "colormap": _user_cmaps.get(HDF5Tags.ULTRASOUND, _default_cmaps[HDF5Tags.ULTRASOUND]),
+                    "name": "US",
+                    "scale": scale_from_patato_obj(us_obj, _us_fallback),
+                    "opacity": 1.0,
+                    "metadata": {"type": "us", "timestamps": timestamps, "motion_scores": motion_scores},
+                },
+                "image",
+            )
         )
-    )
+    else:
+        n_acq_frames = pa_data.shape[0]
 
     def _frame_list(image_sequence, n_frames: int) -> list[int]:
         frames_info = image_sequence.da.attrs.get(

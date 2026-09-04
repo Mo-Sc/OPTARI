@@ -26,6 +26,7 @@ class ScanBrowserDock:
     browse_button: QPushButton
     scans_list: QListWidget
     hdf5_button: QPushButton
+    ipasc_button: QPushButton
     export_layer_button: QPushButton
 
     def set_folder(self, folder: Path) -> None:
@@ -71,11 +72,16 @@ def create_scan_browser_dock() -> ScanBrowserDock:
     hdf5_button.setToolTip(
         "Export the loaded scan, ROIs, and derived layers as HDF5 (requires a loaded scan)"
     )
+    ipasc_button = QPushButton("Export IPASC")
+    ipasc_button.setToolTip(
+        "Export the raw time series as a IPASC HDF5 file."
+    )
     export_layer_button = QPushButton("Export View")
     export_layer_button.setToolTip(
         "Export the current viewer display as an image or video"
     )
     export_row_layout.addWidget(hdf5_button)
+    export_row_layout.addWidget(ipasc_button)
     export_row_layout.addWidget(export_layer_button)
 
     outer.addWidget(row)
@@ -88,5 +94,6 @@ def create_scan_browser_dock() -> ScanBrowserDock:
         browse_button=browse_button,
         scans_list=scans_list,
         hdf5_button=hdf5_button,
+        ipasc_button=ipasc_button,
         export_layer_button=export_layer_button,
     )

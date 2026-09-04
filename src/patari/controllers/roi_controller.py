@@ -104,7 +104,12 @@ class RoiController(TaskControllerBase):
         return list(self._roi_records.values())
 
     def _n_frames(self) -> int:
-        return int(self.patari_controller.active_us_layer.data.shape[0])
+        layer = self.patari_controller.active_us_layer
+        if layer is None:
+            layer = self.patari_controller.active_recon_layer
+        if layer is not None:
+            return int(layer.data.shape[0])
+        return int(self.patari_controller.pa_data.shape[0])
 
     def _new_record(self, verts, kind: str) -> ROIRecord:
         record = ROIRecord(

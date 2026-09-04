@@ -8,7 +8,7 @@ import re
 import numpy as np
 import patato as pat
 from napari.layers import Image
-from napari.utils.notifications import show_error, show_info
+from napari.utils.notifications import show_error, show_info, show_warning
 from patato.io.ithera.read_ithera import iTheraMSOT
 from qtpy.QtWidgets import QFileDialog
 
@@ -17,7 +17,11 @@ from patari.patato_bridge import (
     fov_from_objects,
     roi_records_from_scan_rois,
 )
-from patari.io.export_pipeline import export_scan_to_hdf5
+from patari.io.export_pipeline import (
+    export_scan_to_hdf5,
+    export_scan_to_ipasc,
+    ipasc_export_report,
+)
 from patari.utils.misc import roi_color_for_index
 from patari.utils.setup import load_startup_logo
 from patari.controllers.base import TaskControllerBase
@@ -32,7 +36,7 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class ScanInfo:
     """Metadata for a discovered scan."""
-    kind: str  # "hdf5" or "ithera"
+    kind: str  # "hdf5", "ipasc", "ithera"
     internal_name: str | None
 
 
@@ -53,6 +57,9 @@ class ScanController(TaskControllerBase):
         self.patari_controller.scan_browser.hdf5_button.clicked.connect(
             self.on_hdf5_export_clicked
         )
+        self.patari_controller.scan_browser.ipasc_button.clicked.connect(
+            self.on_ipasc_export_clicked
+        )
         self.patari_controller.scan_browser.export_layer_button.clicked.connect(
             lambda: ViewerExportController.on_export_clicked(self.patari_controller)
         )
@@ -69,6 +76,9 @@ class ScanController(TaskControllerBase):
             self.patari_controller.scan_browser.hdf5_button.clicked.disconnect(
                 self.on_hdf5_export_clicked
             )
+            self.patari_controller.scan_browser.ipasc_button.clicked.disconnect(
+                self.on_ipasc_export_clicked
+            )
             self.patari_controller.scan_browser.export_layer_button.clicked.disconnect()
         except Exception as e:
             logger.exception("Error unbinding scan browser signals: %s", e)
@@ -81,6 +91,9 @@ class ScanController(TaskControllerBase):
             not self.patari_controller.task_running
         )
         self.patari_controller.scan_browser.hdf5_button.setEnabled(
+            self.patari_controller.pa_data is not None
+        )
+        self.patari_controller.scan_browser.ipasc_button.setEnabled(
             self.patari_controller.pa_data is not None
         )
 
@@ -231,13 +244,14 @@ class ScanController(TaskControllerBase):
         scan_info = self.patari_controller._scans.get(scan_path)
 
         try:
-            if scan_info.kind == "hdf5":
-                self.patari_controller.pa_data = pat.PAData.from_hdf5(
-                    str(scan_path), mode="r"
-                )
-            else:
+            if scan_info.kind == "ithera":
                 self.patari_controller.pa_data = pat.PAData(
                     iTheraMSOT(str(scan_path))
+                )
+            else:
+                # PATATO's reader factory tells the PATATO and IPASC layouts apart itself.
+                self.patari_controller.pa_data = pat.PAData.from_hdf5(
+                    str(scan_path), mode="r"
                 )
         except Exception:
             logger.exception("failed to open scan '%s'", scan_path)
@@ -285,8 +299,12 @@ class ScanController(TaskControllerBase):
         self.patari_controller._connect_shapes_layer_events()
 
         # After adding layers, pick a sensible default selected layer.
-        self.patari_controller._select_default_pa_layer()
-        
+        try:
+            self.patari_controller._select_default_pa_layer()
+        except RuntimeError as e:
+            logger.info("Default PA layer not found", exc_info=True)
+            show_warning(str(e))
+
         # Set the active US layer if available.
         self.patari_controller.active_us_layer = next(
             (
@@ -301,13 +319,16 @@ class ScanController(TaskControllerBase):
 
         # Initialize viewer position to DEFAULT_FRAME_INDEX and DEFAULT_CHANNEL_INDEX
         try:
-            if settings.general.DEFAULT_FRAME_INDEX == "motion":
-                # find frame with lowest motion 
-                motion_scores = self.patari_controller.active_us_layer.metadata.get("motion_scores")
-                frame_id = int(np.argmin(motion_scores))
-                logger.info("motion-based frame selection: selected frame %d with motion score %.4f", frame_id, motion_scores[frame_id])
-            else:
-                frame_id = settings.general.DEFAULT_FRAME_INDEX
+            frame_id = settings.general.DEFAULT_FRAME_INDEX
+            if frame_id == "motion":
+                # Motion scoring needs ultrasound. raw time series scans have none.
+                us_layer = self.patari_controller.active_us_layer
+                scores = us_layer.metadata.get("motion_scores") if us_layer else None
+                if scores is None:
+                    frame_id = 0
+                else:
+                    frame_id = int(np.argmin(scores))
+                    logger.info("motion-based frame selection: selected frame %d with motion score %.4f", frame_id, scores[frame_id])
 
             self.viewer.dims.set_point(0, frame_id)
             self.viewer.dims.set_point(1, settings.general.DEFAULT_CHANNEL_INDEX)
@@ -341,38 +362,58 @@ class ScanController(TaskControllerBase):
         return (1, 0, key)
 
     @staticmethod
-    def _read_internal_scan_name(path: Path) -> str | None:
+    def scan_type(path: Path) -> str | None:
         """
-        Read the internal scan name. 
-        For native ithera, we read it from the .msot XML file instead of constructing the entire iTheraMSOT object,
-        For hdf5 we read it from the HDF5 metadata (cheap)
+        Identify the format of a scan on disk, or ``None`` if the path is not a scan.
         """
+        import h5py
+        from patato.io.attribute_tags import HDF5Tags, IPASCTags
+
+        if path.is_dir():
+            return "ithera" if any(path.glob("*.msot")) else None
+        if path.suffix.lower() != ".hdf5":
+            return None
         try:
-            if path.is_file() and path.suffix.lower() == ".hdf5":
+            with h5py.File(path, "r") as file:
+                if IPASCTags.BINARY_DATA in file:
+                    return "ipasc"
+                if HDF5Tags.RAW_DATA in file:
+                    return "hdf5"
+        except OSError:
+            logger.debug("could not open '%s' as HDF5", path, exc_info=True)
+        return None
+
+    @staticmethod
+    def _read_internal_scan_name(path: Path, kind: str) -> str | None:
+        """
+        Read the name the scanner gave the scan, or ``None`` if the format has none.
+        Tries to avoid reading the whole scan into memory.
+        """
+        if kind == "ipasc":
+            return None
+
+        try:
+            if kind == "ithera":
+                # Parse only the relevant XML node rather than the whole scan.
+                import xml.dom.minidom
+
+                msot = path / f"{path.name}.msot"
+                tree = xml.dom.minidom.parse(str(msot))
+                scan_nodes = tree.getElementsByTagName("ScanNode")
+                if scan_nodes:
+                    name_nodes = scan_nodes[0].getElementsByTagName("Name")
+                    if name_nodes and name_nodes[0].firstChild:
+                        return name_nodes[0].firstChild.nodeValue.strip()
+            else:
                 from patato.io.hdf.hdf5_reader_factory import get_hdf5_reader
 
                 reader = get_hdf5_reader(str(path))
                 name = reader.get_scan_name()
                 reader.close()
                 return str(name) if name else None
-            elif path.is_dir():
-                # iTheraMSOT.__init__ parses all frame data —> too expensive
-                # Parse only the relevant XML node directly.
-                import xml.dom.minidom
-
-                msot = path / f"{path.name}.msot"
-                if msot.exists():
-                    tree = xml.dom.minidom.parse(str(msot))
-                    scan_nodes = tree.getElementsByTagName("ScanNode")
-                    if scan_nodes:
-                        name_nodes = scan_nodes[0].getElementsByTagName("Name")
-                        if name_nodes and name_nodes[0].firstChild:
-                            return name_nodes[0].firstChild.nodeValue.strip()
         except Exception:
             logger.debug(
-                "failed to read internal scan name from '%s'",
-                path,
-                exc_info=True,
+                "failed to read internal scan name from '%s'", path, exc_info=True
             )
         return None
 
@@ -381,18 +422,22 @@ class ScanController(TaskControllerBase):
         # One entry per scan key; if both exist, prefer HDF5 over iThera folder.
         by_key: dict[str, tuple[Path, str, str | None]] = {}
 
-        for p in folder.glob("Scan_*.hdf5"):
-            internal = ScanController._read_internal_scan_name(p)
-            by_key[ScanController.scan_key(p)] = (p, "hdf5", internal)
+        # check every hdf5 file and every Scan_* folder in the directory for a valid scan
+        for p in sorted(folder.glob("*.hdf5")):
+            kind = ScanController.scan_type(p)
+            if kind is None:
+                continue
+            internal = ScanController._read_internal_scan_name(p, kind)
+            by_key[ScanController.scan_key(p)] = (p, kind, internal)
 
         for d in folder.glob("Scan_*"):
-            if not d.is_dir():
+            kind = ScanController.scan_type(d)
+            if kind is None:
                 continue
-            if any(d.glob("*.msot")):
-                key = ScanController.scan_key(d)
-                if key not in by_key:
-                    internal = ScanController._read_internal_scan_name(d)
-                    by_key[key] = (d, "ithera", internal)
+            key = ScanController.scan_key(d)
+            if key not in by_key:
+                internal = ScanController._read_internal_scan_name(d, kind)
+                by_key[key] = (d, kind, internal)
 
         entries = sorted(
             ((v[0], v[1], v[2]) for v in by_key.values()),
@@ -486,15 +531,32 @@ class ScanController(TaskControllerBase):
         else:
             show_error(f"Failed to export scan to {destination.name} — see log for details")
 
-    def _choose_export_path(self) -> Path | None:
+    def on_ipasc_export_clicked(self, event=None) -> None:
+        destination = self._choose_export_path(
+            title="Export raw time series as IPASC", suffix="_ipasc"
+        )
+        if destination is None:
+            return
+
+        if not export_scan_to_ipasc(self.patari_controller, destination):
+            show_error(
+                f"Failed to export scan to {destination.name} — see log for details"
+            )
+            return
+        show_info(f"Exported raw time series to {destination.name}. "
+                  + ipasc_export_report(destination))
+
+    def _choose_export_path(
+        self, title: str = "Export scan as HDF5", suffix: str = ""
+    ) -> Path | None:
         default_name = (
-            f"{Path(self.patari_controller.path).stem}.hdf5"
+            f"{Path(self.patari_controller.path).stem}{suffix}.hdf5"
             if getattr(self.patari_controller, "path", None)
-            else "export.hdf5"
+            else f"export{suffix}.hdf5"
         )
         filename, _ = QFileDialog.getSaveFileName(
             None,
-            "Export scan as HDF5",
+            title,
             str(
                 (
                     Path(self.patari_controller.path).parent

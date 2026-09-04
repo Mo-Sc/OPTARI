@@ -170,6 +170,58 @@ def export_scan_to_hdf5(controller, destination: Path) -> bool:
                 pass
 
 
+def export_scan_to_ipasc(controller, destination: Path) -> bool:
+    """Export the raw time series of the loaded scan as a native IPASC file.
+    """
+    if controller.pa_data is None:
+        logger.warning("no scan loaded")
+        return False
+
+    destination = Path(destination)
+    if destination.suffix.lower() not in {".hdf5", ".h5"}:
+        destination = destination.with_suffix(".hdf5")
+    if destination.exists():
+        logger.error("export target already exists: %s", destination)
+        return False
+
+    try:
+        pat.write_ipasc(controller.pa_data.scan_reader, str(destination))
+    except Exception:
+        logger.exception("failed to export scan to IPASC")
+        return False
+
+    logger.info("exported raw time series to %s", destination)
+    return True
+
+
+def ipasc_export_report(destination: Path) -> str:
+    """Summarise how complete the IPASC metadata of an exported file are.
+
+    Reports which of IPASC's minimal fields are present. Fields IPASC marks "report if
+    present" are absent when the source format never recorded them, so their
+    absence is not a failure and is not counted here.
+    """
+    import pacfish as pf
+    from pacfish import MetadataAcquisitionTags, MetadataDeviceTags
+
+    data = pf.load_data(str(destination))
+    missing = [
+        datum.tag
+        for datum in MetadataAcquisitionTags.TAGS
+        if datum.mandatory and datum.tag not in data.meta_data_acquisition
+    ]
+    general = data.meta_data_device.get("general", {})
+    if MetadataDeviceTags.UNIQUE_IDENTIFIER.tag not in general:
+        missing.append("device identifier")
+    detectors = data.meta_data_device.get("detectors", {})
+    if not detectors:
+        missing.append("detector positions")
+
+    if missing:
+        return f"IPASC minimal metadata incomplete: {', '.join(missing)} not recorded."
+    return f"IPASC minimal metadata complete, {len(detectors)} detection elements."
+
+
 def _file_origin(**extra) -> dict:
     """origin recorded in every file PATARI writes."""
     return {
