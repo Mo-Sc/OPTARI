@@ -103,19 +103,16 @@ class ReconstructionController(TaskControllerBase):
     def unbind_events(self) -> None:
         """Disconnect reconstruction dock signals."""
         dock = self.patari_controller.reconstruction
-        try:
-            dock.preset_combo.currentIndexChanged.disconnect(self.on_preset_changed)
-            dock.all_settings_button.toggled.disconnect(self.on_all_settings_toggled)
-            dock.settings_edit.textChanged.disconnect(self.on_settings_text_changed)
-            dock.apply_preset_button.clicked.disconnect(self.on_apply_preset_clicked)
-            dock.save_preset_button.clicked.disconnect(self.on_save_preset_clicked)
-            dock.remove_preset_button.clicked.disconnect(self.on_remove_preset_clicked)
-            dock.speed_of_sound_slider.valueChanged.disconnect(
-                self.on_speed_of_sound_changed
-            )
-            dock.run_button.clicked.disconnect(self.on_run_reconstruction_clicked)
-        except Exception as e:
-            logger.exception("Error unbinding reconstruction dock signals: %s", e)
+        dock.preset_combo.currentIndexChanged.disconnect(self.on_preset_changed)
+        dock.all_settings_button.toggled.disconnect(self.on_all_settings_toggled)
+        dock.settings_edit.textChanged.disconnect(self.on_settings_text_changed)
+        dock.apply_preset_button.clicked.disconnect(self.on_apply_preset_clicked)
+        dock.save_preset_button.clicked.disconnect(self.on_save_preset_clicked)
+        dock.remove_preset_button.clicked.disconnect(self.on_remove_preset_clicked)
+        dock.speed_of_sound_slider.valueChanged.disconnect(
+            self.on_speed_of_sound_changed
+        )
+        dock.run_button.clicked.disconnect(self.on_run_reconstruction_clicked)
 
     def initialize_ui(self) -> None:
         """Populate the preset combo once."""

@@ -109,30 +109,18 @@ class UnmixingController(TaskControllerBase):
 
     def unbind_events(self) -> None:
         """Disconnect unmixing dock signals."""
-        try:
-            self.patari_controller.unmixing.preset_combo.currentIndexChanged.disconnect(
-                self.on_preset_changed
-            )
-            self.patari_controller.unmixing.chromophores_list.itemChanged.disconnect(
-                self.on_chromophores_changed
-            )
-            self.patari_controller.unmixing.select_all_wavelengths_button.clicked.disconnect(
-                self.on_select_all_wavelengths_clicked
-            )
-            self.patari_controller.unmixing.clear_wavelengths_button.clicked.disconnect(
-                self.on_clear_wavelengths_clicked
-            )
-            self.patari_controller.unmixing.run_button.clicked.disconnect(
-                self.on_run_unmixing_clicked
-            )
-            self.patari_controller.unmixing.save_preset_button.clicked.disconnect(
-                self.on_save_preset_clicked
-            )
-            self.patari_controller.unmixing.remove_preset_button.clicked.disconnect(
-                self.on_remove_preset_clicked
-            )
-        except Exception as e:
-            logger.exception("Error unbinding unmixing dock signals: %s", e)
+        dock = self.patari_controller.unmixing
+        dock.preset_combo.currentIndexChanged.disconnect(self.on_preset_changed)
+        dock.chromophores_list.itemChanged.disconnect(self.on_chromophores_changed)
+        dock.select_all_wavelengths_button.clicked.disconnect(
+            self.on_select_all_wavelengths_clicked
+        )
+        dock.clear_wavelengths_button.clicked.disconnect(
+            self.on_clear_wavelengths_clicked
+        )
+        dock.run_button.clicked.disconnect(self.on_run_unmixing_clicked)
+        dock.save_preset_button.clicked.disconnect(self.on_save_preset_clicked)
+        dock.remove_preset_button.clicked.disconnect(self.on_remove_preset_clicked)
 
     @staticmethod
     def _set_checked_by_text(list_widget, selected: set[str]) -> None:

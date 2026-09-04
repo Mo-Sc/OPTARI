@@ -403,11 +403,11 @@ class RoiController(TaskControllerBase):
     def unbind_events(self) -> None:
         """Disconnect ROI and annotation dock signals."""
         for signal, handler in self._signal_bindings():
-            # Per binding, so one already-disconnected signal cannot abort the rest.
+
             try:
                 signal.disconnect(handler)
-            except (RuntimeError, TypeError):
-                logger.debug("ROI signal was already disconnected", exc_info=True)
+            except TypeError:
+                logger.debug("ROI signal was not connected", exc_info=True)
 
     def _refresh_shape_display(self) -> None:
         """Recolor and relabel ROI shapes from their records."""

@@ -66,22 +66,19 @@ class ScanController(TaskControllerBase):
 
     def unbind_events(self) -> None:
         """Disconnect scan browser signals."""
-        try:
-            self.patari_controller.scan_browser.browse_button.clicked.disconnect(
-                self.on_browse_folder_clicked
-            )
-            self.patari_controller.scan_browser.scans_list.currentRowChanged.disconnect(
-                self.on_scan_selected
-            )
-            self.patari_controller.scan_browser.hdf5_button.clicked.disconnect(
-                self.on_hdf5_export_clicked
-            )
-            self.patari_controller.scan_browser.ipasc_button.clicked.disconnect(
-                self.on_ipasc_export_clicked
-            )
-            self.patari_controller.scan_browser.export_layer_button.clicked.disconnect()
-        except Exception as e:
-            logger.exception("Error unbinding scan browser signals: %s", e)
+        self.patari_controller.scan_browser.browse_button.clicked.disconnect(
+            self.on_browse_folder_clicked
+        )
+        self.patari_controller.scan_browser.scans_list.currentRowChanged.disconnect(
+            self.on_scan_selected
+        )
+        self.patari_controller.scan_browser.hdf5_button.clicked.disconnect(
+            self.on_hdf5_export_clicked
+        )
+        self.patari_controller.scan_browser.ipasc_button.clicked.disconnect(
+            self.on_ipasc_export_clicked
+        )
+        self.patari_controller.scan_browser.export_layer_button.clicked.disconnect()
 
     def refresh_ui(self) -> None:
         """Lock the scan browser while a task runs, and gate HDF5 export on a scan being loaded."""

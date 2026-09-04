@@ -58,21 +58,18 @@ class AnalysisController(TaskControllerBase):
 
     def unbind_events(self) -> None:
         """Disconnect analysis dock signals."""
-        try:
-            self.patari_controller.time_analysis.generate_button.clicked.disconnect(
-                self.on_generate_time_analysis_clicked
-            )
-            self.patari_controller.histograms.refresh_button.clicked.disconnect(
-                self.on_refresh_histograms_clicked
-            )
-            self.patari_controller.spectrum.refresh_button.clicked.disconnect(
-                self.on_refresh_spectrum_clicked
-            )
-            self.patari_controller.annotation.time_analysis_track_radio.toggled.disconnect(
-                self.on_time_analysis_scope_changed
-            )
-        except Exception as e:
-            logger.exception("Error unbinding analysis dock signals: %s", e)
+        self.patari_controller.time_analysis.generate_button.clicked.disconnect(
+            self.on_generate_time_analysis_clicked
+        )
+        self.patari_controller.histograms.refresh_button.clicked.disconnect(
+            self.on_refresh_histograms_clicked
+        )
+        self.patari_controller.spectrum.refresh_button.clicked.disconnect(
+            self.on_refresh_spectrum_clicked
+        )
+        self.patari_controller.annotation.time_analysis_track_radio.toggled.disconnect(
+            self.on_time_analysis_scope_changed
+        )
 
     def on_time_analysis_scope_changed(self, checked: bool) -> None:
         """When the user switches between "Selected ROI" and "Track ID" scopes,

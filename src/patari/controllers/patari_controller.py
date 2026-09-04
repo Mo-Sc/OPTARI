@@ -97,6 +97,7 @@ class PatariController:
         self._spectrum_dock_widget = None
 
         self.settings_dialog = None
+        self._is_shut_down = False
 
         self._setup_viewer()
         self._ensure_docks()
@@ -121,12 +122,24 @@ class PatariController:
         self.refresh_all()
 
     def shutdown(self) -> None:
+        """Disconnect every signal and release resources before the widget tree is destroyed.
+
+        Called from the main window's close event (see UiManager._install_shutdown_hook),
+        which is the last moment at which the dock widgets still exist, and again from the
+        launcher as a fallback
         """
-        Properly clean up resources and disconnect all signals before shutdown.
-        Should prevent segfaults on exit
-        """
+        if self._is_shut_down:
+            return
+        self._is_shut_down = True
+
         if self.active_task is not None:
-            self.active_task.quit()
+            # A worker thread still driving the UI while Qt tears the widget tree down is a
+            # crash, so give it a bounded moment to leave its generator.
+            try:
+                self.active_task.await_workers(msecs=5000)
+            except RuntimeError:
+                logger.warning("background task did not stop within 5 s of shutdown")
+            self.active_task = None
 
         for controller in (
             self.scan_ctrl,
