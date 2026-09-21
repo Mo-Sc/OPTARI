@@ -11,7 +11,7 @@ A saved ROI template. The `geometry` block is the same representation PATARI use
 
 `source_fov_m` records the field of view the template was drawn on, in metres. It is needed to re-place the template proportionally when it is applied to a scan with a different field of view,
 
-`placement` is how the template wants to be positioned, and travels with the preset so that placing it means the same thing in the dock and in a batch run:
+`placement` describes the way the template is positioned:
 
 | Value | Meaning |
 | --- | --- |
@@ -97,9 +97,9 @@ Which model/class to run, and how to place an ROI from the resulting mask (see
 
 ## Batch presets (`presets/batch/`)
 
-An entire analysis applied to a whole dataset. Unlike the other categories a batch preset holds no processing settings of its own: it **names** the presets above, so each step stays tuneable in exactly one place. See the [Batch Processing](../user-guide/batch-processing.md) for how to run one.
+An entire analysis applied to a whole dataset. Unlike the other categories a batch preset holds no processing settings of its own, and isntead it **references** the presets above. See the [Batch Processing](../user-guide/batch-processing.md).
 
-Unlike other presets, these are edited in their own window (**PATARI → Batch Processing…**), which shows the JSON, an **Apply** button to re-check it, and **Save Preset** / **Remove Preset**.
+Batch presets are edited in their own window (**PATARI → Batch Processing…**), which shows the JSON, an **Apply** button to re-check it, and **Save Preset** / **Remove Preset**.
 
 ```json title="clinical_muscle_roi.json"
 {
@@ -115,8 +115,7 @@ Unlike other presets, these are edited in their own window (**PATARI → Batch P
   "measure": {
     "layers": "analysis",
     "all_channels": true,
-    "all_frames": false,
-    "follow_track": false
+    "all_frames": false
   },
   "outputs": {
     "xlsx": true,
@@ -129,7 +128,7 @@ Unlike other presets, these are edited in their own window (**PATARI → Batch P
 
 ### `steps`
 
-Each entry is a **preset name only**. Anything a step does is that preset's business, so there is one place to tune it and one thing to cite. Omit a step to skip it.
+Each entry is a **preset name only**. Omit a step to skip it.
 
 | Key | Preset category | Notes |
 | --- | --- | --- |
@@ -142,7 +141,7 @@ An empty `"steps": {}` with `outputs.hdf5` on is a pure vendor-to-PATARI-HDF5 co
 
 ### `source`
 
-A layer-name **prefix** picking the one reconstruction the run analyses. One batch run works on one reconstruction, which produces one unmixing, so a scan holding several reconstructions still yields one unambiguous analysis.
+A layer-name **prefix** picking the one reconstruction the run analyses. One batch run works on one reconstruction, which produces one unmixing, so a scan holding several reconstructions still produces one analysis.
 
 | Value | Meaning |
 | --- | --- |
@@ -156,8 +155,7 @@ Which frame each scan is analysed on.
 
 | Value | Meaning |
 | --- | --- |
-| `"motion"` | That scan's lowest-motion frame. Requires ultrasound. A raw time series (eg. IPASC) has none and falls back to frame 0. |
-| `"default"` | Follow the `DEFAULT_FRAME_INDEX` setting, exactly as opening the scan by hand would. |
+| `"motion"` (default) | That scan's lowest-motion frame. Requires ultrasound. A raw time series (eg. IPASC) has none and falls back to frame 0. |
 | an integer | That frame number. A scan without it fails. |
 
 ### `measure`
@@ -168,18 +166,17 @@ How wide the measurement reaches. Mirrors the **Include all …** boxes in the A
 | --- | --- | --- |
 | `layers` | `"analysis"` (default), `"all_pa"` | `analysis` measures the `source` reconstruction plus what this run unmixed from it. `all_pa` measures every PA layer in the scan, including reconstructions the plan did not make. |
 | `all_channels` | `true` (default), `false` | Every channel, or just the default one. |
-| `all_frames` | `false` (default), `true` | Every frame. Reconstruction and segmentation then run over all frames too, which is much slower. |
-| `follow_track` | `false` (default), `true` | Only with `all_frames`: use the ROI's own record on each frame instead of reusing the placed outline. |
+| `all_frames` | `false` (default), `true` | Every frame. The ROI is placed on each frame (re-anchored per frame for `auto` placement) and measured there, and reconstruction and segmentation run over all frames too, which is much slower. |
 
 ### `outputs`
 
 | Key | Values | Meaning |
 | --- | --- | --- |
 | `xlsx` | `true` (default), `false` | Write `batch_roi_table.xlsx`, the measurement table. |
-| `hdf5` | `false` (default), `true` | Write each scan to `hdf5/<Study>/<Scan>.hdf5`, mirroring the input layout. |
+| `hdf5` | `false` (default), `true` | Write each scan to `hdf5/<Study>/<Scan>.hdf5`. |
 | `ipasc` | `false` (default), `true` | Write each scan's raw time series to `ipasc/<Study>/<Scan>_ipasc.hdf5` (see [Exporting Data](../user-guide/exporting-data.md#ipasc-export)). |
 | `overlay_png` | `true` (default), `false` | Write one viewer screenshot per scan to `overlays/`. |
-| `overlay_layer` | `null` (default), a layer-name prefix | Which layer the overlay shows. `null` uses the last one the plan produced (sO₂ if unmixing made it, else Unmixed, else the reconstruction). |
+| `overlay_layer` | `null` (default), a layer-name prefix | Which layer the overlay shows. `null` uses the last one the run produced (sO₂ if unmixing made it, else Unmixed, else the reconstruction). A prefix matching nothing fails that scan. |
 
 `batch_report.xlsx` and the run log are always written.
 

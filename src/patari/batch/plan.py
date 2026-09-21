@@ -63,7 +63,7 @@ class OutputSpec:
     hdf5: bool = False
     ipasc: bool = False
     overlay_png: bool = True
-    # Layer-name prefix for the overlay. None means "whatever the plan produced last".
+    # Layer-name prefix for the overlay. None means the last layer the run produced.
     overlay_layer: str | None = None
 
 
@@ -82,7 +82,7 @@ class BatchPlan:
     # Layer-name prefix picking the reconstruction everything downstream runs on.
     # None means the reconstruction step's own output, or the scan's default PA layer.
     source: str | None = None
-    frame: int | str = "default"
+    frame: int | str = "motion"
     measure: MeasureScope = field(default_factory=MeasureScope)
     outputs: OutputSpec = field(default_factory=OutputSpec)
 
@@ -112,25 +112,6 @@ class BatchPlan:
         if self.roi is not None:
             names.append(f"roi ({self.roi_placement})")
         return names
-
-    def expected_layer_prefixes(self) -> list[str]:
-        """Layer-name prefixes this plan will produce, in the order they appear.
-
-        Used to resolve the overlay layer before the run rather than discovering
-        mid-dataset that the requested layer is never generated.
-        """
-        prefixes: list[str] = []
-        if self.reconstruction is not None or self.source is not None:
-            prefixes.append(self.source or "Recon")
-        if self.unmixing is not None:
-            prefixes.append("Unmixed")
-            chromophores = set(self.unmixing.get("SPECTRA", []))
-            if {"Hb", "HbO2"} <= chromophores:
-                if self.unmixing.get("THB", True):
-                    prefixes.append("THb")
-                if self.unmixing.get("SO2", True):
-                    prefixes.append("sO2")
-        return prefixes
 
 
 def _step_preset_name(steps: dict, label: str) -> str | None:
@@ -163,26 +144,24 @@ def _measure_scope(spec: dict) -> MeasureScope:
         raise ValueError(
             f"Invalid measure.layers '{mode}'. Use one of {MEASURE_LAYER_MODES}."
         )
+    all_frames = bool(spec.get("all_frames", False))
     return MeasureScope(
         # "analysis" narrows to this run's own chain, which the runner passes explicitly.
         all_layers=mode == "all_pa",
-        all_frames=bool(spec.get("all_frames", False)),
+        all_frames=all_frames,
         all_channels=bool(spec.get("all_channels", True)),
-        follow_track=bool(spec.get("follow_track", False)),
+        # A batch ROI is placed on every frame it measures, so each frame's own
+        # outline is the only sensible one to use there.
+        follow_track=all_frames,
     )
 
 
 def _frame_selector(value) -> int | str:
-    if isinstance(value, bool):
-        raise ValueError(f"Invalid frame selector: {value!r}")
-    if isinstance(value, int):
+    if isinstance(value, int) and not isinstance(value, bool):
         return value
-    text = str(value or "default")
-    if text not in ("motion", "default"):
-        raise ValueError(
-            f"Invalid frame selector '{text}'. Use 'motion', 'default' or a frame number."
-        )
-    return text
+    if value in (None, "motion"):
+        return "motion"
+    raise ValueError(f"Invalid frame selector {value!r}. Use 'motion' or a frame number.")
 
 
 def build_plan(*, root: Path, batch_preset: dict, output_dir: Path) -> BatchPlan:
@@ -238,7 +217,7 @@ def build_plan(*, root: Path, batch_preset: dict, output_dir: Path) -> BatchPlan
         segmentation=segmentation,
         roi=roi,
         source=(batch_preset.get("source") or None),
-        frame=_frame_selector(batch_preset.get("frame", "default")),
+        frame=_frame_selector(batch_preset.get("frame")),
         measure=_measure_scope(batch_preset.get("measure") or {}),
         outputs=OutputSpec(
             xlsx=bool(outputs_spec.get("xlsx", True)),
@@ -266,7 +245,6 @@ def validate_plan(plan: BatchPlan) -> list[str]:
 
     problems += _validate_segmentation(plan)
     problems += _validate_unmixing(plan)
-    problems += _validate_overlay(plan)
     problems += _validate_output_dir(plan)
     return problems
 
@@ -335,21 +313,6 @@ def _validate_unmixing(plan: BatchPlan) -> list[str]:
     unknown = [c for c in chromophores if c not in SPECTRA_NAMES]
     if unknown:
         return [f"Unknown chromophore(s): {', '.join(unknown)}."]
-    return []
-
-
-def _validate_overlay(plan: BatchPlan) -> list[str]:
-    if not plan.outputs.overlay_png:
-        return []
-    wanted = plan.outputs.overlay_layer
-    if wanted is None:
-        return []
-    prefixes = plan.expected_layer_prefixes()
-    if not any(prefix.startswith(wanted) or wanted.startswith(prefix) for prefix in prefixes):
-        return [
-            f"Overlay layer '{wanted}' is never produced by this plan "
-            f"(it makes: {', '.join(prefixes) or 'nothing'})."
-        ]
     return []
 
 

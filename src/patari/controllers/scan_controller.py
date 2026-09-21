@@ -334,9 +334,7 @@ class ScanController(TaskControllerBase):
 
         # Initialize viewer position to DEFAULT_FRAME_INDEX and DEFAULT_CHANNEL_INDEX
         try:
-            self.viewer.dims.set_point(
-                0, self.resolve_frame(settings.general.DEFAULT_FRAME_INDEX)
-            )
+            self.go_to_frame(settings.general.DEFAULT_FRAME_INDEX)
             self.viewer.dims.set_point(1, settings.general.DEFAULT_CHANNEL_INDEX)
         except Exception:
             logger.warning("failed to set initial viewer position. Setting to (0, 0)", exc_info=True)
@@ -355,17 +353,28 @@ class ScanController(TaskControllerBase):
 
         return True
 
-    def resolve_frame(self, selector: int | str) -> int:
-        """The frame *selector* means for the loaded scan.
+    def go_to_frame(self, selector: int | str) -> int:
+        """Show the frame *selector* means for the loaded scan, and return it.
 
         ``"motion"`` is the lowest-motion frame. The scores are computed here on demand
         if the scan was opened with a different default, and cached on the US layer so
-        the next caller gets them for free. A scan with no ultrasound has nothing to score and falls back to frame 0. Both the viewer and a
+        the next caller gets them for free. A scan with no ultrasound (a raw time
+        series) has nothing to score and falls back to frame 0. Both the viewer and a
         batch run go through this, so "motion" means the same frame in either.
-        """
-        if selector != "motion":
-            return int(selector)
 
+        Raises ValueError for a frame number the scan does not have.
+        """
+        if selector == "motion":
+            frame_id = self._lowest_motion_frame()
+        else:
+            frame_id = int(selector)
+            n_frames = int(self.viewer.dims.nsteps[0]) if self.viewer.dims.ndim else 0
+            if not 0 <= frame_id < n_frames:
+                raise ValueError(f"frame {frame_id} is outside this scan ({n_frames} frames)")
+        self.viewer.dims.set_point(0, frame_id)
+        return frame_id
+
+    def _lowest_motion_frame(self) -> int:
         us_layer = self.patari_controller.active_us_layer
         if us_layer is None:
             logger.info("no ultrasound to score motion on, using frame 0")

@@ -1,7 +1,7 @@
 {
   "description": "No analysis: just read each vendor scan and write it out as PATARI HDF5.",
   "steps": {},
-  "frame": "default",
+  "frame": "motion",
   "measure": {},
   "outputs": {
     "xlsx": false,

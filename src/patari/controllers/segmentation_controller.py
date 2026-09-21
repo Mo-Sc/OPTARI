@@ -18,7 +18,7 @@ from patari.segmentation.segmenter import (
 )
 from patari.segmentation.segmentation_presets import validate_segmentation_settings
 from patari.utils.viewer import selected_frame_idx
-from patari.utils.tasks import BackgroundStep, download_then, start_task
+from patari.utils.tasks import BackgroundStep
 from patari.controllers.base import TaskControllerBase
 from patari.roi import Ellipse, Rectangle, Polygon, ROIPlacementConfig
 from patari.config import settings
@@ -80,14 +80,14 @@ class SegmentParams:
     us_data: np.ndarray          # (n_frames, H, W), already sliced to the frames to run
     us_shape: tuple              # full (n_frames, n_channels, H, W) of the source layer
     class_ids: set[int]
-    frame_ids: list[int]
+    output_frames: list[int]
     us_scale: tuple
     us_translate: tuple
-    frame_idx: int | None = None  # None means "all frames"
+    current_frame_id: int | None = None  # None means "all frames"
 
     @property
     def frame_mode(self) -> str:
-        return "current" if self.frame_idx is not None else "all"
+        return "current" if self.current_frame_id is not None else "all"
 
     @property
     def n_channels(self) -> int:
@@ -95,7 +95,7 @@ class SegmentParams:
 
     @classmethod
     def build(cls, controller, model_id: str, class_ids: set[int],
-              *, frame_idx: int | None) -> "SegmentParams":
+              *, frame_id: int | None) -> "SegmentParams":
         """Resolve a segmentation setup against the loaded scan's US layer.
 
         Raises ValueError, message safe to show the user, when it cannot run here.
@@ -109,22 +109,22 @@ class SegmentParams:
         us_raw = np.asarray(us_layer.data)
         us_data = us_raw[:, 0]
         n_frames = int(us_raw.shape[0])
-        frame_ids = list(range(n_frames))
-        if frame_idx is not None:
-            if not (0 <= frame_idx < n_frames):
+        output_frames = list(range(n_frames))
+        if frame_id is not None:
+            if not (0 <= frame_id < n_frames):
                 raise ValueError("Selected frame is not available.")
-            us_data = us_data[frame_idx : frame_idx + 1]
-            frame_ids = [frame_idx]
+            us_data = us_data[frame_id : frame_id + 1]
+            output_frames = [frame_id]
 
         return cls(
             model_id=model_id,
             us_data=us_data,
             us_shape=us_raw.shape,
             class_ids=set(class_ids),
-            frame_ids=frame_ids,
+            output_frames=output_frames,
             us_scale=tuple(us_layer.scale),
             us_translate=tuple(us_layer.translate),
-            frame_idx=frame_idx,
+            current_frame_id=frame_id,
         )
 
 
@@ -601,7 +601,7 @@ class SegmentationController(TaskControllerBase):
         seg_dock = self.patari_controller.segmentation
         us_layer = self.patari_controller.active_us_layer
         n_frames = int(np.asarray(us_layer.data).shape[0]) if us_layer is not None else 0
-        frame_idx = (
+        frame_id = (
             None
             if seg_dock.all_frames_radio.isChecked()
             else selected_frame_idx(self.viewer, n_frames)
@@ -610,7 +610,7 @@ class SegmentationController(TaskControllerBase):
             self.patari_controller,
             self.active_segmentation_model_id,
             self.selected_segmentation_class_ids(),
-            frame_idx=frame_idx,
+            frame_id=frame_id,
         )
 
     def model_weights_path(self, model_id: str) -> Path:
@@ -618,6 +618,12 @@ class SegmentationController(TaskControllerBase):
         if model_id not in self._segmentation_model_registry:
             raise ValueError(f"Unknown segmentation model: {model_id}")
         return get_user_models_dir() / self._segmentation_model_registry[model_id].filename
+
+    def weights_to_fetch(self, params: SegmentParams) -> tuple[Path, str | None]:
+        return (
+            self.model_weights_path(params.model_id),
+            self._segmentation_model_registry[params.model_id].url,
+        )
 
     def prepare(self, params: SegmentParams) -> BackgroundStep:
         """Validate *params* and return the work to run. Raises ValueError if it can't run.
@@ -632,7 +638,7 @@ class SegmentationController(TaskControllerBase):
         logger.info(
             "running segmentation with model '%s' on %s frame(s)",
             params.model_id,
-            len(params.frame_ids),
+            len(params.output_frames),
         )
         return BackgroundStep(
             func=partial(
@@ -641,14 +647,14 @@ class SegmentationController(TaskControllerBase):
                 params.us_data,
                 params.class_ids,
                 params.n_channels,
-                params.frame_idx,
+                params.current_frame_id,
                 params.us_shape,
             ),
-            total=len(params.frame_ids),
+            total=len(params.output_frames),
             desc="Segmenting",
         )
 
-    def publish(self, result, params: SegmentParams) -> "Labels":
+    def publish(self, result, params: SegmentParams) -> str:
         """Add the finished segmentation as a labels layer. Runs on the main thread."""
         mask, class_names = result
 
@@ -663,7 +669,7 @@ class SegmentationController(TaskControllerBase):
             metadata={
                 "type": "segmentation",
                 "frame_mode": params.frame_mode,
-                "frames": params.frame_ids,
+                "frames": params.output_frames,
                 "class_names": class_names,
                 "source_model_id": params.model_id,
                 "settings": {
@@ -671,13 +677,13 @@ class SegmentationController(TaskControllerBase):
                     "selected_class_ids": sorted(params.class_ids),
                     "class_names": class_names,
                     "frame_mode": params.frame_mode,
-                    "frames": params.frame_ids,
+                    "frames": params.output_frames,
                 },
             },
             units=self.image_units,
         )
         self._populate_roi_class_combo(mask, class_names)
-        return self._seg_layer
+        return f"{len(params.output_frames)} frame(s) segmented"
 
     def _populate_roi_class_combo(self, mask, class_names: dict) -> None:
         """Offer only the classes the output mask actually contains."""
@@ -697,43 +703,5 @@ class SegmentationController(TaskControllerBase):
         self._pending_roi_class_id = None
 
     def on_generate_tissue_segmentation_clicked(self) -> None:
-        """Start segmentation on the selected frame or all frames in a worker thread."""
-        seg_dock = self.patari_controller.segmentation
-        if seg_dock is None:
-            return
-
-        try:
-            params = self._params_from_ui()
-        except ValueError as exc:
-            seg_dock.status_label.setText(str(exc))
-            return
-
-        def run() -> None:
-            try:
-                step = self.prepare(params)
-            except ValueError as exc:
-                seg_dock.status_label.setText(str(exc))
-                return
-
-            def publish(result) -> None:
-                self.publish(result, params)
-                seg_dock.status_label.setText(
-                    f"Finished: {len(params.frame_ids)} frame(s) segmented"
-                )
-
-            seg_dock.status_label.setText(
-                f"Segmenting {len(params.frame_ids)} frame(s) with {params.model_id}…"
-            )
-            start_task(
-                self.patari_controller, step, on_result=publish,
-                status_label=seg_dock.status_label,
-            )
-
-        model_config = self._active_segmentation_model_config()
-        download_then(
-            self.patari_controller,
-            self.model_weights_path(params.model_id),
-            model_config.url,
-            seg_dock.status_label,
-            run,
-        )
+        if self.patari_controller.segmentation is not None:
+            self.run_from_ui(self.patari_controller.segmentation)

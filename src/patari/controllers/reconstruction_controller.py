@@ -16,7 +16,7 @@ from patari.controllers.base import TaskControllerBase
 from patari.patato_bridge import display_data_from_patato_obj
 from patari.utils.presets import PresetStore
 from patari.utils.setup import get_user_reconstruction_presets_dir
-from patari.utils.tasks import BackgroundStep, download_then, start_task
+from patari.utils.tasks import BackgroundStep
 from patari.widgets.reconstruction_dock import (
     SPEED_OF_SOUND_DEFAULT,
     SPEED_OF_SOUND_MAX,
@@ -409,13 +409,12 @@ class ReconstructionController(TaskControllerBase):
             frame_id=frame_id,
         )
 
-    @staticmethod
-    def deepmb_model_path(params: ReconParams) -> Path | None:
-        """Where this run expects its ONNX weights, or None if it isn't a DeepMB run."""
+    def weights_to_fetch(self, params: ReconParams) -> tuple[Path, str | None] | None:
+        """DeepMB needs its ONNX weights on disk before the preset can be built."""
         if params.algorithm_name != DEEPMB_ALGORITHM:
             return None
         extra = params.settings[ReconAttributeTags.ADDITIONAL_PARAMETERS]
-        return Path(extra["model_path"]).expanduser()
+        return Path(extra["model_path"]).expanduser(), extra.get("model_url")
 
     def prepare(self, params: ReconParams) -> BackgroundStep:
         """Validate *params* and return the work to run. Raises ValueError if it can't run.
@@ -423,8 +422,9 @@ class ReconstructionController(TaskControllerBase):
         Model weights are required to already be on disk: fetching them is the caller's
         job, so an unattended run can download once up front instead of per scan.
         """
-        model_path = self.deepmb_model_path(params)
-        if model_path is not None:
+        weights = self.weights_to_fetch(params)
+        if weights is not None:
+            model_path, _ = weights
             if not model_path.is_file():
                 raise ValueError(f"DeepMB model weights not found: {model_path}")
             _resolve_deepmb_model(params.settings, model_path)
@@ -509,43 +509,5 @@ class ReconstructionController(TaskControllerBase):
         return layer_name
 
     def on_run_reconstruction_clicked(self) -> None:
-        """Start the selected reconstruction preset on the loaded scan in a worker thread."""
-        if self.patari_controller.reconstruction is None:
-            return
-        dock = self.patari_controller.reconstruction
-
-        try:
-            params = self._params_from_ui()
-        except ValueError as exc:
-            dock.status_label.setText(str(exc))
-            return
-
-        def run() -> None:
-            try:
-                step = self.prepare(params)
-            except ValueError as exc:
-                dock.status_label.setText(str(exc))
-                return
-
-            def publish(result) -> None:
-                dock.status_label.setText(f"Finished: {self.publish(result, params)}")
-
-            dock.status_label.setText(
-                f"Reconstructing {len(params.output_frames)} frame(s)…"
-            )
-            start_task(
-                self.patari_controller, step, on_result=publish,
-                status_label=dock.status_label,
-            )
-
-        model_path = self.deepmb_model_path(params)
-        if model_path is None:
-            run()
-            return
-
-        # DeepMB needs its ONNX weights on disk before the preset can be built.
-        extra = params.settings[ReconAttributeTags.ADDITIONAL_PARAMETERS]
-        download_then(
-            self.patari_controller, model_path, extra.get("model_url"),
-            dock.status_label, run,
-        )
+        if self.patari_controller.reconstruction is not None:
+            self.run_from_ui(self.patari_controller.reconstruction)

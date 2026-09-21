@@ -1149,20 +1149,36 @@ class RoiController(TaskControllerBase):
             return
 
         try:
-            mode = str(annotation.roi_placement_mode_combo.currentData())
-            resolver = None
-            if mode == "auto":
-                resolver = self._per_frame_auto_resolver(
-                    *self._place_roi_preset_auto(self.patari_controller, preset)
-                )
-            else:
-                self._place_roi_preset_static(self.patari_controller, preset)
-            if annotation.all_frames_radio.isChecked():
-                self.expand_current_projection_to_all_frames(resolver)
+            self.place_preset(
+                preset,
+                placement=str(annotation.roi_placement_mode_combo.currentData()),
+                all_frames=annotation.all_frames_radio.isChecked(),
+            )
         except ValueError as exc:
             annotation.roi_presets_description_label.setText(
                 f"Could not place ROI preset: {exc}"
             )
+
+    def place_preset(self, preset, *, placement: str, all_frames: bool) -> None:
+        """Place *preset* on the current frame, and across every frame if asked.
+
+        Auto placement re-anchors onto each frame's own segmentation when expanding,
+        so every frame gets an ROI that belongs to it. The dock and a batch run both
+        come through here, which is what makes "measure all frames" mean the same thing
+        in both. Raises ValueError with a user-facing message when placement fails.
+        """
+        resolver = None
+        if placement == "auto":
+            resolver = self._per_frame_auto_resolver(
+                *self._place_roi_preset_auto(self.patari_controller, preset)
+            )
+        else:
+            self._place_roi_preset_static(self.patari_controller, preset)
+        # The GUI relies on napari's data events to fold the new shape into the record
+        # store; do it explicitly so a synchronous caller sees it immediately too.
+        self.sync_records_from_shapes()
+        if all_frames:
+            self.expand_current_projection_to_all_frames(resolver)
 
     def on_place_roi_clicked(self, event=None) -> None:
         self._place_selected_roi_preset()

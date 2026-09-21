@@ -14,7 +14,7 @@ from qtpy.QtWidgets import QListWidgetItem
 from patato.io.attribute_tags import UnmixingAttributeTags
 from patato.unmixing.spectra import SPECTRA_NAMES
 from patari.controllers.base import TaskControllerBase
-from patari.utils.tasks import BackgroundStep, start_task
+from patari.utils.tasks import BackgroundStep
 from patari.patato_bridge import display_data_from_patato_obj
 from patari.utils.presets import PresetStore
 from patari.utils.setup import get_user_unmixing_presets_dir
@@ -654,7 +654,7 @@ class UnmixingController(TaskControllerBase):
         self.patari_controller._derived_patato_objects[name] = image
         return name
 
-    def publish(self, result, params: UnmixParams) -> list[str]:
+    def publish(self, result, params: UnmixParams) -> str:
         """Add the finished unmixed/THb/sO2 layers. Runs on the main thread."""
         unmixed, thb, so2 = result
 
@@ -683,27 +683,8 @@ class UnmixingController(TaskControllerBase):
         # Reassert ROI visibility priority after adding multiple result layers.
         self.patari_controller._ensure_shapes_layer_on_top()
         logger.info("unmixing complete: %s", ", ".join(names))
-        return names
+        return ", ".join(names)
 
     def on_run_unmixing_clicked(self) -> None:
-        """Start unmixing for the selected setup in a worker thread."""
-        if self.patari_controller.unmixing is None:
-            return
-        dock = self.patari_controller.unmixing
-
-        try:
-            params = self._params_from_ui()
-            step = self.prepare(params)
-        except ValueError as exc:
-            dock.status_label.setText(str(exc))
-            return
-
-        def publish(result) -> None:
-            names = self.publish(result, params)
-            dock.status_label.setText(f"Finished: {', '.join(names)}")
-
-        dock.status_label.setText(f"Unmixing {len(params.output_frames)} frame(s)…")
-        start_task(
-            self.patari_controller, step, on_result=publish,
-            status_label=dock.status_label,
-        )
+        if self.patari_controller.unmixing is not None:
+            self.run_from_ui(self.patari_controller.unmixing)

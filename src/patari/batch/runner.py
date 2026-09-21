@@ -205,7 +205,7 @@ class BatchRunner:
             raise BatchStepError("could not open scan")
         controller.study_path = job.study_path
 
-        frame_idx = self._select_analysis_frame()
+        frame_idx = _guard("frame", controller.scan_ctrl.go_to_frame, self.plan.frame)
         self.report.note(job, analysis_frame=frame_idx)
         # Measuring across frames needs every frame reconstructed and segmented, not
         # just the one the overlay is taken on.
@@ -238,7 +238,7 @@ class BatchRunner:
                 controller,
                 str(self.plan.segmentation.get("model_id", "")),
                 {int(c) for c in self.plan.segmentation.get("selected_class_ids", [])},
-                frame_idx=run_frame,
+                frame_id=run_frame,
             )
             result = yield _guard(
                 "segmentation", controller.segmentation_ctrl.prepare, params
@@ -257,7 +257,13 @@ class BatchRunner:
             controller.unmixing_ctrl.publish(result, params)
 
         if self.plan.roi is not None:
-            self._place_roi()
+            _guard(
+                "roi",
+                controller.roi_ctrl.place_preset,
+                self.plan.roi,
+                placement=self.plan.roi.placement,
+                all_frames=self.plan.measure.all_frames,
+            )
             rows = self._measure(source_layer)
             self.saved_table.add_measurements(rows)
             self.report.note(job, n_rows=len(rows))
@@ -307,36 +313,6 @@ class BatchRunner:
             if layer.metadata.get("source_layer") == source_layer.name
         ]
 
-    def _select_analysis_frame(self) -> int:
-        """Pick and show the frame this scan is analysed on.
-
-        ``default`` keeps whatever ``load_scan`` already chose from the config, so a
-        plan that says nothing behaves exactly like opening the scan by hand.
-        """
-        if self.plan.frame == "default":
-            return int(self.viewer.dims.current_step[0])
-
-        frame_idx = self.controller.scan_ctrl.resolve_frame(self.plan.frame)
-        n_frames = int(self.viewer.dims.nsteps[0]) if self.viewer.dims.ndim else 0
-        if not (0 <= frame_idx < n_frames):
-            raise BatchStepError(f"frame {frame_idx} is outside this scan ({n_frames} frames)")
-        self.viewer.dims.set_point(0, frame_idx)
-        return frame_idx
-
-    def _place_roi(self) -> None:
-        from patari.controllers.roi_controller import RoiController
-
-        place = (
-            RoiController._place_roi_preset_auto
-            if self.plan.roi_placement == "auto"
-            else RoiController._place_roi_preset_static
-        )
-        _guard("roi", place, self.controller, self.plan.roi)
-        # The GUI relies on napari's data events to fold a new shape into the record
-        # store. Do it explicitly here rather than depending on event delivery inside
-        # one synchronous block.
-        self.controller.roi_ctrl.sync_records_from_shapes()
-
     def _measure(self, source_layer):
         roi_ctrl = self.controller.roi_ctrl
         selected_ids = roi_ctrl._selected_roi_ids()
@@ -382,8 +358,6 @@ class BatchRunner:
 
     def _write_overlay(self, job: BatchJob, frame_idx: int, source_layer) -> Path:
         overlay_layer = self._overlay_layer(source_layer)
-        if overlay_layer is None:
-            raise BatchStepError("no PA layer available for the overlay")
 
         channel_idx = (
             int(self.viewer.dims.current_step[1]) if self.viewer.dims.ndim > 1 else 0
@@ -409,16 +383,18 @@ class BatchRunner:
         """The layer the overlay shows: the one named by the plan, else the last derived.
 
         Restricted to this run's own analysis chain, so the picture matches the numbers.
+        Unmixing publishes Unmixed, THb, sO2 in that order, so "last" is the most
+        derived layer the run made.
         """
         candidates = self._analysis_layers(source_layer)
         wanted = self.plan.outputs.overlay_layer
-        if wanted:
-            return next((l for l in candidates if l.name.startswith(wanted)), None)
-        for prefix in reversed(self.plan.expected_layer_prefixes()):
-            match = next((l for l in candidates if l.name.startswith(prefix)), None)
-            if match is not None:
-                return match
-        return candidates[-1] if candidates else None
+        if not wanted:
+            return candidates[-1]
+        match = next((l for l in candidates if l.name.startswith(wanted)), None)
+        if match is None:
+            names = ", ".join(l.name for l in candidates)
+            raise BatchStepError(f"no layer starting with '{wanted}' for the overlay (have: {names})")
+        return match
 
 
 def _guard(step: str, func, *args, **kwargs):

@@ -1,11 +1,14 @@
 """Base class for task-specific controllers."""
 
+from pathlib import Path
+
 import numpy as np
 
 from napari.layers import Image
 
 from patari.config import settings
 from patari.patato_bridge import scale_from_patato_obj
+from patari.utils.tasks import download_then, start_task
 
 
 class TaskControllerBase:
@@ -13,6 +16,18 @@ class TaskControllerBase:
 
     Each task controller (Analysis, Unmixing, etc)
     inherits from this.
+
+    A controller that runs heavy work implements three methods and gets the dock's
+    Run button (`run_from_ui`) for free:
+
+    - `_params_from_ui()` reads the dock into a params object, raising ValueError
+      with a user-facing message when the run cannot be set up
+    - `prepare(params)` validates and returns a `BackgroundStep`, raising ValueError
+    - `publish(result, params)` adds the layers and returns the text shown after
+      "Finished:"
+
+    Batch mode builds params from a preset instead and calls the same `prepare` and
+    `publish`, which is what keeps its numbers equal to the GUI's.
     """
 
     image_units = ("dimensionless", "dimensionless", "mm", "mm")
@@ -45,6 +60,41 @@ class TaskControllerBase:
     def refresh_ui(self) -> None:
         """Refresh controller-owned UI after application state changes."""
         pass
+
+    # ============ running a step from the dock ============
+    def weights_to_fetch(self, params) -> tuple[Path, str | None] | None:
+        """(local path, download url) a run needs on disk before it can start, or None."""
+        return None
+
+    def run_from_ui(self, dock) -> None:
+        """The dock's Run button: params from widgets, fetch weights if needed, run, publish."""
+        try:
+            params = self._params_from_ui()
+        except ValueError as exc:
+            dock.status_label.setText(str(exc))
+            return
+
+        def run() -> None:
+            try:
+                step = self.prepare(params)
+            except ValueError as exc:
+                dock.status_label.setText(str(exc))
+                return
+            dock.status_label.setText(f"{step.desc}…")
+            start_task(
+                self.patari_controller,
+                step,
+                on_result=lambda result: dock.status_label.setText(
+                    f"Finished: {self.publish(result, params)}"
+                ),
+                status_label=dock.status_label,
+            )
+
+        weights = self.weights_to_fetch(params)
+        if weights is None:
+            run()
+            return
+        download_then(self.patari_controller, *weights, dock.status_label, run)
 
     @staticmethod
     def _expand_to_source_frames(

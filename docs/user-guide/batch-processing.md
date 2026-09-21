@@ -38,7 +38,7 @@ A batch preset is a small JSON file in `~/.patari/config/presets/batch` that **n
 }
 ```
 
-Every key is documented in [Presets](../configuration/presets.md#batch-presets-presetsbatch). In short: `steps` names what runs, `source` picks which reconstruction it runs on, `frame` picks which frame, `measure` says how wide to measure, and `outputs` says what to write.
+Every key is documented in [Presets](../configuration/presets.md#batch-presets-presetsbatch). In short: `steps` names what runs, `source` picks which reconstruction it runs on, `frame` picks which frame (`"motion"` or a number), `measure` says how wide to measure, and `outputs` says what to write.
 
 Edit a plan directly in the batch window: the JSON editor shows the selected preset, **Apply** re-checks it, and **Save Preset** writes it back under a name of your choosing. Nothing needs editing by hand in `~/.patari`.
 
@@ -62,7 +62,7 @@ With `measure.layers` at its default `"analysis"`, the table holds that reconstr
 2. Pick an **empty output folder**. Batch mode refuses to start if it already holds results from an earlier run.
 3. Pick the **batch preset**.
 
-The window then shows the resolved analysis plan and every scan it found. Anything that would make the run fail is listed before it starts, and **Run** stays disabled until the list is empty. Checks made up front include missing presets, an unknown segmentation model, an ROI whose `tissue_class` the chosen model never produces, unknown chromophores, and an overlay layer the plan would not generate.
+The window then shows the resolved analysis plan and every scan it found. Anything that would make the run fail is listed before it starts, and **Run** stays disabled until the list is empty. Checks made up front include missing presets, an unknown segmentation model, an ROI whose `tissue_class` the chosen model never produces, unknown chromophores.
 
 Uncheck individual scans to leave them out. During the run each row gets a live status, and the viewer works through the dataset visibly. Leave it alone while it runs; **Cancel** stops after the current step.
 
@@ -94,7 +94,7 @@ To retry only the failures, sort `batch_report.xlsx` by `status`, then run the s
     A plan with no steps and `hdf5` or `ipasc` enabled is a pure format converter: it reads each vendor scan and writes it out again, with no analysis at all. That is what the shipped `convert_to_hdf5` preset does; switch on `ipasc` instead (or as well) for the interoperable format.
 
 !!! note "Raw time series (IPASC) datasets"
-    An IPASC file holds the raw acoustic signal and no ultrasound, so on such a dataset a plan needs a `reconstruction` step before anything can be measured, and cannot run `segmentation` (that needs ultrasound). `frame: "motion"` also needs ultrasound and falls back to frame 0; use `"default"` or a frame number instead.
+    An IPASC file holds the raw acoustic signal and no ultrasound, so on such a dataset a plan needs a `reconstruction` step before anything can be measured, and cannot run `segmentation` (that needs ultrasound). `frame: "motion"` also needs ultrasound and falls back to frame 0; give a frame number instead.
 
 !!! warning "One run at a time"
     Batch mode uses the same single background-task slot as the docks. It refuses to start while another task is running, and the docks are disabled for the duration of a run.
