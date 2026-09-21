@@ -105,7 +105,12 @@ class RoiController(TaskControllerBase):
         return list(self._roi_records.values())
 
     def _n_frames(self) -> int:
-        return int(self.patari_controller.active_us_layer.data.shape[0])
+        layer = self.patari_controller.active_us_layer
+        if layer is None:
+            layer = self.patari_controller.active_recon_layer
+        if layer is not None:
+            return int(layer.data.shape[0])
+        return int(self.patari_controller.pa_data.shape[0])
 
     def _new_record(self, verts, kind: str) -> ROIRecord:
         record = ROIRecord(
@@ -399,11 +404,11 @@ class RoiController(TaskControllerBase):
     def unbind_events(self) -> None:
         """Disconnect ROI and annotation dock signals."""
         for signal, handler in self._signal_bindings():
-            # Per binding, so one already-disconnected signal cannot abort the rest.
+
             try:
                 signal.disconnect(handler)
-            except (RuntimeError, TypeError):
-                logger.debug("ROI signal was already disconnected", exc_info=True)
+            except TypeError:
+                logger.debug("ROI signal was not connected", exc_info=True)
 
     def _refresh_shape_display(self) -> None:
         """Recolor and relabel ROI shapes from their records."""

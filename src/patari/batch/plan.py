@@ -61,6 +61,7 @@ class BatchJob:
 class OutputSpec:
     xlsx: bool = True
     hdf5: bool = False
+    ipasc: bool = False
     overlay_png: bool = True
     # Layer-name prefix for the overlay. None means "whatever the plan produced last".
     overlay_layer: str | None = None
@@ -242,6 +243,7 @@ def build_plan(*, root: Path, batch_preset: dict, output_dir: Path) -> BatchPlan
         outputs=OutputSpec(
             xlsx=bool(outputs_spec.get("xlsx", True)),
             hdf5=bool(outputs_spec.get("hdf5", False)),
+            ipasc=bool(outputs_spec.get("ipasc", False)),
             overlay_png=bool(outputs_spec.get("overlay_png", True)),
             overlay_layer=outputs_spec.get("overlay_layer") or None,
         ),
@@ -259,8 +261,8 @@ def validate_plan(plan: BatchPlan) -> list[str]:
 
     if not plan.jobs:
         problems.append("No scans found. Pick a folder holding Study_*/Scan_* data.")
-    if not plan.step_names and not plan.outputs.hdf5:
-        problems.append("The plan has no analysis steps and no HDF5 export, so it would do nothing.")
+    if not plan.step_names and not (plan.outputs.hdf5 or plan.outputs.ipasc):
+        problems.append("The plan has no analysis steps and no file export, so it would do nothing.")
 
     problems += _validate_segmentation(plan)
     problems += _validate_unmixing(plan)
@@ -422,7 +424,7 @@ def describe_plan(plan: BatchPlan) -> str:
         )
     wanted = [name for name, on in
               (("xlsx", plan.outputs.xlsx), ("hdf5", plan.outputs.hdf5),
-               ("overlay png", plan.outputs.overlay_png)) if on]
+               ("ipasc", plan.outputs.ipasc), ("overlay png", plan.outputs.overlay_png)) if on]
     lines.append(f"Outputs:    {', '.join(wanted) or 'none'}")
     lines.append(f"Folder:     {plan.output_dir}")
     return "\n".join(lines)

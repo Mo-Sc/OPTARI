@@ -77,9 +77,10 @@ When the run ends a summary dialog appears, listing any failures, and the per-sc
   batch_<timestamp>.log     # the full run log, including tracebacks
   overlays/<Study>_<Scan>_F<frame>_C<channel>.png
   hdf5/<Study>/<Scan>.hdf5
+  ipasc/<Study>/<Scan>_ipasc.hdf5
 ```
 
-HDF5 export mirrors the input layout, so a converted dataset opens exactly like the original. Overlays stay in one flat folder, since flipping through them in order is the point.
+HDF5 and IPASC exports mirror the input layout, so a converted dataset opens exactly like the original. Overlays stay in one flat folder, since flipping through them in order is the point.
 
 `batch_roi_table.xlsx` is the main deliverable and is identical in shape to the [Saved Analysis export](exporting-data.md#saved-analysis-table-importexport-xlsx), so it imports back into the ROI dock and combines with tables from other sessions. Both it and the report are rewritten after **every** scan, so a run interrupted after four hours keeps everything measured so far.
 
@@ -90,7 +91,10 @@ A failing scan never stops the run. The failure is logged, that scan is marked `
 To retry only the failures, sort `batch_report.xlsx` by `status`, then run the same plan again into a new output folder with only those scans checked.
 
 !!! tip "Converting vendor data in bulk"
-    A plan with no steps and `hdf5` enabled is a pure format converter: it reads each vendor scan and writes it out as PATARI HDF5, with no analysis at all. That is what the shipped `convert_to_hdf5` preset does.
+    A plan with no steps and `hdf5` or `ipasc` enabled is a pure format converter: it reads each vendor scan and writes it out again, with no analysis at all. That is what the shipped `convert_to_hdf5` preset does; switch on `ipasc` instead (or as well) for the interoperable format.
+
+!!! note "Raw time series (IPASC) datasets"
+    An IPASC file holds the raw acoustic signal and no ultrasound, so on such a dataset a plan needs a `reconstruction` step before anything can be measured, and cannot run `segmentation` (that needs ultrasound). `frame: "motion"` also needs ultrasound and falls back to frame 0; use `"default"` or a frame number instead.
 
 !!! warning "One run at a time"
     Batch mode uses the same single background-task slot as the docks. It refuses to start while another task is running, and the docks are disabled for the duration of a run.

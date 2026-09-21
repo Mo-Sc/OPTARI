@@ -19,6 +19,7 @@ from qtpy.QtWidgets import (
 
 from patari.utils.metadata import (
     clinical_metadata_rows,
+    ipasc_metadata_rows,
     layer_metadata_rows,
     scan_metadata_rows,
 )
@@ -48,6 +49,7 @@ class LayerMetadataDialog(QDialog):
             ),
             "Scan",
         )
+        tabs.addTab(self._create_table(ipasc_metadata_rows(pa_data)), "IPASC")
         tabs.addTab(
             self._create_table(
                 clinical_metadata_rows(

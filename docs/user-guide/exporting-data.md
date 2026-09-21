@@ -5,14 +5,24 @@ Depending on the type of data that should be exported (scan data, tabular measur
 
 ## Full Scan Export (HDF5)
 
-Exports the loaded scan together with any drawn ROIs and derived layers (new reconstructions, unmixed chromophore maps, SO₂/THb, segmentation
-results) into an HDF5 file that uses a custom, but PATATO-inspired, format with IPASC-compliant metadata (see
-[why a custom format?](../developer-guide/data-and-integrations.md#why-patatos-hdf5-schema-instead-of-the-raw-ipasc-format)). This way, you can also convert proprietary vendor data (e.g. iThera `.msot`) into an open, shareable format by importing the scan into PATARI and exporting it again. PATARI cannot write back into the proprietary vendor format.
+Exports the loaded scan together with any drawn ROIs and derived layers (new reconstructions, unmixed chromophore maps, SO₂/THb)
+into an HDF5 file that uses a custom, PATATO-inspired format carrying IPASC-conform metadata (see
+[why a custom format?](../developer-guide/data-and-integrations.md#why-not-the-raw-ipasc-format)). This way, you can also convert proprietary vendor data (e.g. iThera `.msot`) into an open, shareable format by importing the scan into PATARI and exporting it again. PATARI cannot write back into the proprietary vendor format.
 
 From the **Scan Browser** dock, click **Export HDF5** and choose a destination.
 
+## IPASC Export
+
+Click **Export IPASC** to write the scan's raw time series as a native
+[IPASC](https://www.ipasc.science) file. After a successful export PATARI reports how many IPASC minimal metadata fields the file contains.
+
 !!! warning
-    HDF5 export always writes to a **new** file. PATARI will never change the source file, and if a file with the same name already exists at the export destination, export will fail. 
+    The IPASC format covers **raw time series data only**. Reconstructions, ultrasound, unmixed layers and ROIs are **not** included. Use the HDF5 export above to keep them.
+
+
+!!! warning
+    Both HDF5 exports always write to a **new** file. PATARI never changes the source file, and if a file with the
+    same name already exists at the destination, the export fails.
 
 ## Saved Analysis Table Import/Export (XLSX)
 

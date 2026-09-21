@@ -34,6 +34,7 @@ REPORT_COLUMNS = [
     "n_rows",
     "duration_s",
     "hdf5_path",
+    "ipasc_path",
     "overlay_path",
     "started_at",
     "finished_at",
@@ -54,6 +55,7 @@ class _Entry:
     analysis_frame: int | None = None
     n_rows: int = 0
     hdf5_path: str = ""
+    ipasc_path: str = ""
     overlay_path: str = ""
     finished_at: dt.datetime | None = None
 

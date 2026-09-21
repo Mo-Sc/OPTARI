@@ -5,6 +5,8 @@
     from previous versions and dont show the most recent version of PATARIs UI or features.
     Updated screenshots will be added soon.
 
+!!! note "Batch Mode"
+    The batch mode is missing in version 0.6.3.
 
 **P**hoto**A**coustic imaging **T**oolkit based on nap**ARI** — an open-source desktop application for analyzing
 clinical photoacoustic (PA) and ultrasound (US) studies.
@@ -54,7 +56,8 @@ studies. PATARI is built specifically as a graphical, non-programming interface 
 - Extract ROI intensities, plot ROI intensities over time and wavelength.
 - AI-based tissue segmentation with automatic ROI placement.
 - Reconstruction and spectral unmixing using PATATO and DeepMB, directly from the GUI.
-- Export to CSV/XLSX, IPASC-compatible HDF5, or PNG/TIFF.
+- Load iThera `.msot`, PATATO HDF5, and IPASC HDF5 scans.
+- Export to CSV/XLSX, open HDF5 with IPASC metadata, native IPASC raw data, or PNG/TIFF.
 
 ## Project Status
 

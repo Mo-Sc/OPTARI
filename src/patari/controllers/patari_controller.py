@@ -98,6 +98,7 @@ class PatariController:
 
         self.settings_dialog = None
         self.batch_dialog = None
+        self._is_shut_down = False
 
         self._setup_viewer()
         self._ensure_docks()
@@ -122,12 +123,24 @@ class PatariController:
         self.refresh_all()
 
     def shutdown(self) -> None:
+        """Disconnect every signal and release resources before the widget tree is destroyed.
+
+        Called from the main window's close event (see UiManager._install_shutdown_hook),
+        which is the last moment at which the dock widgets still exist, and again from the
+        launcher as a fallback
         """
-        Properly clean up resources and disconnect all signals before shutdown.
-        Should prevent segfaults on exit
-        """
+        if self._is_shut_down:
+            return
+        self._is_shut_down = True
+
         if self.active_task is not None:
-            self.active_task.quit()
+            # A worker thread still driving the UI while Qt tears the widget tree down is a
+            # crash, so give it a bounded moment to leave its generator.
+            try:
+                self.active_task.await_workers(msecs=5000)
+            except RuntimeError:
+                logger.warning("background task did not stop within 5 s of shutdown")
+            self.active_task = None
 
         for controller in (
             self.scan_ctrl,
@@ -325,9 +338,8 @@ class PatariController:
         # Find layer default PA layer, otherwise pick first PA layer found
         first_pa = None
         default_pa = settings.general.DEFAULT_PA_LAYER
-        for layer in self.viewer.layers:
-            if not isinstance(layer, Image):
-                continue
+        images = [l for l in self.viewer.layers if isinstance(l, Image)]
+        for layer in images:
             if layer.name == default_pa:
                 self.viewer.layers.selection.select_only(layer)
                 return
@@ -336,6 +348,10 @@ class PatariController:
 
         if first_pa is not None:
             self.viewer.layers.selection.select_only(first_pa)
+            return
+
+        if not images:
+            # Raw time series scans (e.g. IPASC) carry no images until reconstructed.
             return
 
         raise RuntimeError(
@@ -504,7 +520,8 @@ class PatariController:
     def update_info_labels(self, event=None) -> None:
         if self.info is None:
             return
-        self.info.metadata_button.setEnabled(self.active_recon_layer is not None)
+        # Scan, IPASC and clinical metadata need no layer, only the Layer tab does.
+        self.info.metadata_button.setEnabled(self.pa_data is not None)
         if self.active_recon_layer is None:
             self.info.set_message("Select a PA image layer")
             return
@@ -569,14 +586,12 @@ class PatariController:
         )
 
     def on_metadata_clicked(self) -> None:
-        """Open metadata window for the currently selected image layer."""
+        """Open the metadata window. Scan metadata are shown even without an image layer."""
         selected_layers = list(self.viewer.layers.selection)
         layer = next(
             (candidate for candidate in reversed(selected_layers) if isinstance(candidate, Image)),
             self.active_recon_layer,
         )
-        if layer is None:
-            return
 
         scan_info = self._scans.get(getattr(self, "path", Path()))
         dialog = LayerMetadataDialog(

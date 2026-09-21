@@ -152,6 +152,21 @@ class UiManager:
 
 
     @staticmethod
+    def _install_shutdown_hook(controller: "PatariController") -> None:
+        """Run controller teardown from the main window's close event.
+        """
+        window = controller.viewer.window._qt_window
+        napari_close_event = window.closeEvent
+
+        def close_event(event) -> None:
+            napari_close_event(event)
+            # napari ignores the event when the user cancels its confirm-close dialog.
+            if event.isAccepted():
+                controller.shutdown()
+
+        window.closeEvent = close_event
+
+    @staticmethod
     def connect_events(controller: "PatariController") -> None:
         # -------- viewer core events --------
         controller._connect_shapes_layer_events()
@@ -163,14 +178,7 @@ class UiManager:
             controller.on_metadata_clicked
         )
 
-        # close the currently open scan handle when Qt starts shutting down
-        # probably not necessary, just for cleanup
-        # but might help in the future for multiple viewer windows / sessions in the same process
-        from qtpy.QtWidgets import QApplication
-
-        app = QApplication.instance()
-        if app is not None:
-            app.aboutToQuit.connect(controller._close_current_scan)
+        UiManager._install_shutdown_hook(controller)
 
         # TODO: should reordering / adding / removing layers trigger anything?
         # controller.viewer.layers.events.reordered.connect(controller.on_layers_changed)

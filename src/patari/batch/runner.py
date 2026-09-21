@@ -21,7 +21,6 @@ from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
-import numpy as np
 from napari.layers import Image
 from qtpy.QtCore import QTimer
 
@@ -30,7 +29,7 @@ from patari.batch.report import BatchReport
 from patari.controllers.reconstruction_controller import ReconParams
 from patari.controllers.segmentation_controller import SegmentParams
 from patari.controllers.unmixing_controller import UnmixParams
-from patari.io.export_pipeline import export_scan_to_hdf5
+from patari.io.export_pipeline import export_scan_to_hdf5, export_scan_to_ipasc
 from patari.io.utils import save_viewer_screenshot
 from patari.roi.roi_table import SavedRoiTable
 from patari.utils.logging import run_log_file
@@ -60,9 +59,9 @@ def _only_visible(viewer, keep):
     show whatever the previous scan happened to leave switched on.
     """
     previous = [(layer, layer.visible) for layer in viewer.layers]
-    keep_set = {id(layer) for layer in keep if layer is not None}
+    keep = [layer for layer in keep if layer is not None]
     for layer, _ in previous:
-        layer.visible = id(layer) in keep_set
+        layer.visible = layer in keep
     try:
         yield
     finally:
@@ -120,6 +119,8 @@ class BatchRunner:
 
     def _advance(self, outcome) -> None:
         """Resume the plan generator with the last step's outcome. Main thread only."""
+        if self.controller._is_shut_down:
+            return
         kind, value = outcome
         try:
             if kind == "ok":
@@ -312,19 +313,10 @@ class BatchRunner:
         ``default`` keeps whatever ``load_scan`` already chose from the config, so a
         plan that says nothing behaves exactly like opening the scan by hand.
         """
-        frame = self.plan.frame
-        if frame == "default":
+        if self.plan.frame == "default":
             return int(self.viewer.dims.current_step[0])
 
-        if frame == "motion":
-            us_layer = self.controller.active_us_layer
-            scores = (us_layer.metadata or {}).get("motion_scores") if us_layer else None
-            if scores is None:
-                raise BatchStepError("no motion scores available for frame selection")
-            frame_idx = int(np.argmin(scores))
-        else:
-            frame_idx = int(frame)
-
+        frame_idx = self.controller.scan_ctrl.resolve_frame(self.plan.frame)
         n_frames = int(self.viewer.dims.nsteps[0]) if self.viewer.dims.ndim else 0
         if not (0 <= frame_idx < n_frames):
             raise BatchStepError(f"frame {frame_idx} is outside this scan ({n_frames} frames)")
@@ -363,21 +355,30 @@ class BatchRunner:
         return rows
 
     def _write_outputs(self, job: BatchJob, frame_idx: int, source_layer) -> None:
+        # Exports mirror the input layout, so a converted dataset can be reopened
+        # exactly like the original: <out>/<format>/Study_X/Scan_Y.hdf5
         if self.plan.outputs.hdf5:
-            # Mirror the input layout, so a converted dataset can be reopened exactly
-            # like the original: <out>/hdf5/Study_X/Scan_Y.hdf5
-            destination = (
-                self.plan.output_dir / "hdf5" / job.study_path.name / f"{job.scan_stem}.hdf5"
-            )
-            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination = self._export_path(job, "hdf5", f"{job.scan_stem}.hdf5")
             if not export_scan_to_hdf5(self.controller, destination):
                 raise BatchStepError(f"HDF5 export failed (see log): {destination.name}")
             self.report.note(job, hdf5_path=str(destination))
+
+        if self.plan.outputs.ipasc:
+            # Same suffix the Scan Browser's IPASC export uses.
+            destination = self._export_path(job, "ipasc", f"{job.scan_stem}_ipasc.hdf5")
+            if not export_scan_to_ipasc(self.controller, destination):
+                raise BatchStepError(f"IPASC export failed (see log): {destination.name}")
+            self.report.note(job, ipasc_path=str(destination))
 
         if self.plan.outputs.overlay_png:
             self.report.note(
                 job, overlay_path=str(self._write_overlay(job, frame_idx, source_layer))
             )
+
+    def _export_path(self, job: BatchJob, kind: str, filename: str) -> Path:
+        destination = self.plan.output_dir / kind / job.study_path.name / filename
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        return destination
 
     def _write_overlay(self, job: BatchJob, frame_idx: int, source_layer) -> Path:
         overlay_layer = self._overlay_layer(source_layer)

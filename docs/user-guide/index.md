@@ -1,6 +1,6 @@
 # User Guide Overview
 
-PATARI's window is built from napari's dock system around a central image viewer:
+PATARI's window is built from napari's dock system around a central image viewer. **Docks can be added or removed** by clicking `PATARI` in the menu bar and selecting `Docks`.
 
 | Position | Docks |
 |---|---|

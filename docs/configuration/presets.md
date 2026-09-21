@@ -156,7 +156,7 @@ Which frame each scan is analysed on.
 
 | Value | Meaning |
 | --- | --- |
-| `"motion"` | That scan's lowest-motion frame. |
+| `"motion"` | That scan's lowest-motion frame. Requires ultrasound. A raw time series (eg. IPASC) has none and falls back to frame 0. |
 | `"default"` | Follow the `DEFAULT_FRAME_INDEX` setting, exactly as opening the scan by hand would. |
 | an integer | That frame number. A scan without it fails. |
 
@@ -177,6 +177,7 @@ How wide the measurement reaches. Mirrors the **Include all …** boxes in the A
 | --- | --- | --- |
 | `xlsx` | `true` (default), `false` | Write `batch_roi_table.xlsx`, the measurement table. |
 | `hdf5` | `false` (default), `true` | Write each scan to `hdf5/<Study>/<Scan>.hdf5`, mirroring the input layout. |
+| `ipasc` | `false` (default), `true` | Write each scan's raw time series to `ipasc/<Study>/<Scan>_ipasc.hdf5` (see [Exporting Data](../user-guide/exporting-data.md#ipasc-export)). |
 | `overlay_png` | `true` (default), `false` | Write one viewer screenshot per scan to `overlays/`. |
 | `overlay_layer` | `null` (default), a layer-name prefix | Which layer the overlay shows. `null` uses the last one the plan produced (sO₂ if unmixing made it, else Unmixed, else the reconstruction). |
 

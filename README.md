@@ -1,5 +1,4 @@
-# PATARI — Photoacoustic Analysis Toolkit for NAPARI
-
+# PhotoAcoustic imaging Toolkit based on napARI
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](LICENSE)
 [![Python >=3.12](https://img.shields.io/badge/python-%3E%3D3.12-blue)](https://www.python.org/)
 [![Docs](https://img.shields.io/badge/docs-mkdocs--material-blue)](https://mo-sc.github.io/PATARI/)
@@ -7,12 +6,15 @@
 
 PATARI is an open-source, GUI-based desktop application for analyzing clinical photoacoustic (PA) and ultrasound
 (US) studies. It is built on [napari](https://napari.org) for visualization and [PATATO](https://github.com/BohndiekLab/patato)
-for data I/O and processing. TODO: mention mac / os / windows support. Mention intended for easy use in clinical studies. TODO: mention ipasc compatible
-
-TODO: add a screenshot
+for data I/O and processing. It runs on Windows, macOS, and Linux, and is intended for direct use in
+clinical studies without scripting. Scans are read from iThera `.msot`, PATATO HDF5, and
+[IPASC](https://www.ipasc.science) HDF5 files.
 
 
 **Full documentation, inlcuding instructions, sample workflows, and API references: [mo-sc.github.io/PATARI](https://mo-sc.github.io/PATARI/)**.
+
+![Demo Layers](docs/assets/screenshots/placeholders/ss_home.png)
+
 
 ## Key features
 
@@ -22,7 +24,8 @@ TODO: add a screenshot
 - Extract ROI intensities, plot ROI intensities over time and wavelength.
 - AI-based tissue segmentation with automatic ROI placement.
 - Reconstruction and spectral unmixing using PATATO and DeepMB, directly from the GUI.
-- Export to CSV/XLSX, IPASC-compatible HDF5, or PNG/TIFF.
+- Load iThera `.msot`, PATATO HDF5, and IPASC HDF5 scans.
+- Export to CSV/XLSX, open HDF5, IPASC raw data, or PNG/TIFF.
 
 
 ## Quickstart

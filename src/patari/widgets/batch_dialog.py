@@ -68,7 +68,6 @@ class BatchDialog(QDialog):
         self._plan = None
         self._runner = None
         self._row_for_key: dict[str, int] = {}
-        self._completed = 0
         self._running = False
 
         layout = QVBoxLayout(self)
@@ -355,7 +354,6 @@ class BatchDialog(QDialog):
             return
 
         self._set_running(True)
-        self._completed = 0
         self.progress_bar.setRange(0, len(jobs))
         self.progress_bar.setValue(0)
 
@@ -380,8 +378,9 @@ class BatchDialog(QDialog):
         if status == "running":
             self.status_label.setText(f"Processing {job.study_path.name} / {job.scan_path.name}")
             return
-        self._completed += 1
-        self.progress_bar.setValue(self._completed)
+        # The report already counts finished scans, the bar just mirrors it.
+        finished = sum(n for s, n in self._runner.report.counts().items() if s != "running")
+        self.progress_bar.setValue(finished)
 
     def on_run_finished(self) -> None:
         """Leave the finished run on screen. Re-planning is an explicit next action.
