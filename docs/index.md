@@ -46,7 +46,6 @@ visualization, then adds a multi-patient study workflow, ROI annotation, automat
 Most existing tools for PA-US analysis are either hardware-locked vendor software, or script-based engineering
 frameworks aimed at algorithmic research. They are not intended for fast, multi-patient workflows in clinical
 studies. PATARI is built specifically as a graphical, non-programming interface that is intuitive to use and assists clinicians with automatic parameter selection and shareable configurations.
-<!-- TODO: sentence on how this hopefully helps clinical translation of PA imaging -->
 
 ## Key Features
 
@@ -63,11 +62,5 @@ studies. PATARI is built specifically as a graphical, non-programming interface 
 
 PATARI is under active development. The source code, standalone installers, and example scans are available on
 [GitHub](https://github.com/Mo-Sc/PATARI) under the BSD-3-Clause license. Contributions and issue reports are
-welcome — see [Contributing](developer-guide/contributing.md). For license, citation, and funding information,
+welcome (see [Contributing](developer-guide/contributing.md)). For license, citation, and funding information,
 see [Credits](credits.md).
-
-## Changelog
-
-Release notes are published alongside each tagged release (see
-[GitHub Releases](https://github.com/Mo-Sc/PATARI/releases)).
-

@@ -46,7 +46,7 @@ patari
 ```bash
 git clone git@github.com:Mo-Sc/PATARI.git
 cd PATARI
-pip install -e ".[docs]"   # docs only if docs are changed
+pip install -e ".[test,docs]"
 pytest                     # run tests
 ```
 
@@ -65,8 +65,6 @@ If you find a bug, or have a feature request, [file an issue](https://github.com
 
 
 PATARI is distributed under the [BSD-3-Clause license](https://github.com/Mo-Sc/PATARI/blob/main/LICENSE).
-Free and open source, for both research and clinical use.
-
 
 If PATARI is useful in your research, please cite the accompanying paper:
 

@@ -1,4 +1,5 @@
 import logging
+import os
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -27,10 +28,10 @@ def _copy_default_presets(default_configs_dir: Path, user_config_dir: Path) -> N
 
 
 def get_user_dir() -> Path:
-    """sets env var for user home dir and fills it with defaults if it doesn't exist."""
+    """The user directory, ``PATARI_USER_DIR`` or ``~/.patari``, seeded with defaults on first use."""
 
-    user_dir = Path.home() / ".patari"
-    
+    user_dir = Path(os.environ.get("PATARI_USER_DIR", Path.home() / ".patari"))
+
     config_dir = user_dir / "config"
     if not DEFAULT_CONFIGS_DIR.exists():
         raise FileNotFoundError(f"Default configs directory not found at {DEFAULT_CONFIGS_DIR}")
