@@ -1,4 +1,3 @@
-import os
 import logging
 from os import _exit as os_exit
 from pathlib import Path
@@ -28,11 +27,7 @@ def main() -> None:
     print(f"Starting PATARI... (GUI log level: {settings.general.GUI_LOG_LEVEL}, general log level: {settings.general.LOG_LEVEL})")
     
     configure_logging()
-    user_dir = get_user_dir()
-
-    os.environ.setdefault("PATARI_USER_DIR", str(user_dir))
-    os.environ.setdefault("PATARI_LOG_LEVEL", settings.general.LOG_LEVEL)
-    os.environ.setdefault("PATARI_GUI_LOG_LEVEL", settings.general.GUI_LOG_LEVEL)
+    get_user_dir()
 
     from napari import Viewer, run
 

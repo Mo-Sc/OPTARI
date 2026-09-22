@@ -42,7 +42,7 @@ def test_discover_studies_finds_both_scans(tmp_path):
 
 def test_build_layers_from_hdf5_scan(hdf5_scan, vendor_recon):
     layers, objects = build_napari_layers(hdf5_scan)
-    (us, us_kw, _), (recon, recon_kw, _) = layers
+    (us, us_kw), (recon, recon_kw) = layers
 
     assert us_kw["name"] == "US" and us.shape == (26, 13, 210, 210)
     assert us_kw["scale"] == pytest.approx((1, 40 / 210, 40 / 210), rel=1e-6)
@@ -63,7 +63,7 @@ def test_build_layers_from_hdf5_scan(hdf5_scan, vendor_recon):
 
 def test_ithera_scan_builds_the_same_layer_structure(ithera_scan, hdf5_scan):
     def structure(layers):
-        return [(data.shape, kw["name"], tuple(kw["scale"]), sorted(kw["metadata"])) for data, kw, _ in layers]
+        return [(data.shape, kw["name"], tuple(kw["scale"]), sorted(kw["metadata"])) for data, kw in layers]
 
     assert structure(build_napari_layers(ithera_scan)[0]) == structure(build_napari_layers(hdf5_scan)[0])
     assert ithera_scan.get_scan_name() == "Study_19_2PRE"

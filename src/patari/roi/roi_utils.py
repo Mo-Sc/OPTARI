@@ -6,10 +6,9 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
-import cv2
 import numpy as np
 import pandas as pd
-from skimage.draw import polygon
+from skimage.draw import ellipse, polygon
 from patari.config import settings
 from patari.roi.roi_geometry import RoiGeometry
 from patari.roi.roi_features import (
@@ -353,31 +352,14 @@ def polygon_mask(verts_px, image_shape):
 
 
 def ellipse_mask(verts_px, image_shape):
-    """Rasterize a 4-point ellipse vertex representation to a boolean mask."""
-    p0, p1, p2, p3 = verts_px
-    cx, cy = verts_px.mean(axis=0)[::-1]  # (x,y)
-
-    v01 = p1 - p0
-    v12 = p2 - p1
-    width = np.linalg.norm(v01)
-    height = np.linalg.norm(v12)
-
-    rx, ry = width / 2.0, height / 2.0
-    angle = np.degrees(np.arctan2(v01[0], v01[1]))
-
-    # OpenCV ellipse mask
-    mask = np.zeros(image_shape, dtype=np.uint8)
-    cv2.ellipse(
-        mask,
-        center=(int(cx), int(cy)),
-        axes=(int(rx), int(ry)),
-        angle=angle,
-        startAngle=0,
-        endAngle=360,
-        color=1,
-        thickness=-1,
-    )
-    return mask.astype(bool)
+    """Rasterize napari's 4-corner ellipse box (may be rotated) to a boolean mask."""
+    p0, p1, p2 = verts_px[:3]
+    cy, cx = verts_px.mean(axis=0)
+    rr, cc = ellipse(cy, cx, np.linalg.norm(p2 - p1) / 2, np.linalg.norm(p1 - p0) / 2,
+                     shape=image_shape, rotation=-np.arctan2(*(p1 - p0)))
+    mask = np.zeros(image_shape, dtype=bool)
+    mask[rr, cc] = True
+    return mask
 
 
 def compute_roi_stats(

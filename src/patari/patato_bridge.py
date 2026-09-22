@@ -37,19 +37,15 @@ def scale_from_patato_obj(obj, fallback: tuple) -> tuple:
     ``shape_2d`` (``(ny, nx)`` in pixels).  Returns *fallback* if either
     value is absent or zero.
     """
-    try:
-        fov = obj.fov  # (fov_x_m, fov_y_m) metres
-        shape = obj.shape_2d  # (ny, nx) pixels
-        if fov is None or None in fov or len(shape) < 2:
-            return fallback
-        fov_x_m, fov_y_m = _fov_size(fov[0]), _fov_size(fov[1])
-        ny, nx = int(shape[-2]), int(shape[-1])
-        if ny == 0 or nx == 0 or fov_x_m == 0 or fov_y_m == 0:
-            return fallback
-        return (fallback[0], fov_y_m / ny * 1000, fov_x_m / nx * 1000)
-    except Exception:
-        logger.warning(f"could not derive scale from object {obj}, using fallback {fallback}")
+    fov = obj.fov  # (fov_x_m, fov_y_m) metres
+    ny, nx = obj.shape_2d[-2:]  # pixels
+    if fov is None or None in fov:
         return fallback
+    fov_x_m, fov_y_m = _fov_size(fov[0]), _fov_size(fov[1])
+    if not (ny and nx and fov_x_m and fov_y_m):
+        logger.warning("no usable FOV on %s, using fallback scale %s", obj, fallback)
+        return fallback
+    return (fallback[0], fov_y_m / ny * 1000, fov_x_m / nx * 1000)
 
 # ---------------------------------------------------------------------------
 # Coordinate conversion
@@ -67,12 +63,13 @@ def display_data_from_patato_obj(image_sequence) -> np.ndarray:
 
 
 def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
-    """Build napari LayerData tuples from an open *pa_data* handle.
+    """Build napari image layers from an open *pa_data* handle.
 
     Returns
     -------
-    layers : list of ``(data, kwargs, layer_type)`` tuples
-        Ready to pass to ``viewer.add_image`` / ``viewer.add_labels``.
+    layers : list of ``(data, kwargs)`` tuples
+        Ready to pass to ``viewer.add_image``. Everything a scan holds is an image.
+        annotations and segmentations are layers PATARI creates, not loads.
     patato_objects : dict
         Maps napari layer name → PATATO ``ImageSequence`` for later use
         (e.g. FOV queries, scale derivation).
@@ -94,14 +91,8 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
     patato_objects: dict = {}
     layers: list = []
 
-    try:
-        timestamps = np.array(pa_data.get_timestamps())
-    except Exception:
-        timestamps = None
-    try:
-        wavelengths = [int(w) for w in pa_data.get_wavelengths()]
-    except Exception:
-        wavelengths = None
+    timestamps = np.array(pa_data.get_timestamps())
+    wavelengths = [int(w) for w in pa_data.get_wavelengths()]
 
     # --- ultrasound ---
     # IPASC scans have no ultrasound. The acquisition frame count then comes from the time series instead.
@@ -128,7 +119,6 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
                     "opacity": 1.0,
                     "metadata": {"type": "us", "timestamps": timestamps, "motion_scores": motion_scores},
                 },
-                "image",
             )
         )
     else:
@@ -189,7 +179,6 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
                         "frames": recon_frame_list,
                     },
                 },
-                "image",
             )
         )
 
@@ -237,7 +226,6 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
                         "opacity": 1.0,
                         "metadata": metadata,
                     },
-                    "image",
                 )
             )
 
@@ -255,16 +243,12 @@ def fov_from_objects(patato_objects: dict) -> "tuple[float, float] | None":
     Returns ``None`` if no object exposes usable FOV metadata.
     """
     for obj in patato_objects.values():
-        try:
-            fov = obj.fov
-            if fov is None or len(fov) < 2 or None in fov:
-                continue
-            fov_x_m, fov_y_m = _fov_size(fov[0]), _fov_size(fov[1])
-            if fov_x_m > 0 and fov_y_m > 0:
-                return fov_x_m, fov_y_m
-        except Exception:
-            logger.warning(f"could not derive FOV from object {obj}")
+        fov = obj.fov
+        if fov is None or None in fov:
             continue
+        fov_x_m, fov_y_m = _fov_size(fov[0]), _fov_size(fov[1])
+        if fov_x_m > 0 and fov_y_m > 0:
+            return fov_x_m, fov_y_m
     return None
 
 
@@ -279,7 +263,7 @@ def roi_records_from_scan_rois(
     """Load PATATO ROIs as one frame-owned record per valid frame."""
     try:
         rois = pa_data.get_rois()
-        n_frames = int(np.asarray(pa_data.get_ultrasound().da).shape[0])
+        n_frames = int(pa_data.shape[0])
     except Exception:
         logger.exception("could not load ROI records")
         return []

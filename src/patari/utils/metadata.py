@@ -123,6 +123,7 @@ def scan_metadata_rows(
         ("Internal name", getattr(scan_info, "internal_name", None)),
         ("File origin", pa_data.get_file_origin()),
         ("Acquisition date", pa_data.get_scan_datetime()),
+        ("Device info", pa_data.get_device_info()),
         ("Clinical scan", pa_data.is_clinical()),
         ("Acquisition shape", getattr(pa_data, "shape", None)),
         ("Wavelengths", np.asarray(pa_data.get_wavelengths())),

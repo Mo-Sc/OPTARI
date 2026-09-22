@@ -64,8 +64,7 @@ class ROIShape(ABC):
 
     @property
     @abstractmethod
-    def shape_type(self) -> str:
-        raise NotImplementedError
+    def shape_type(self) -> str: ...
 
     @abstractmethod
     def to_napari_verts_world(
@@ -78,7 +77,6 @@ class ROIShape(ABC):
         tx: float = 0.0,
     ) -> np.ndarray:
         """Convert the shape into Napari world coordinate vertices."""
-        pass
 
     def _get_pixel_bounds(
         self, mask: np.ndarray, sy: float, sx: float, use_center_anchor: bool = False
@@ -150,26 +148,15 @@ class BoxShape(ROIShape):
         # Get standardized bounds
         x0, x1, y0, y1, largest_mask = self._get_pixel_bounds(class_mask, sy, sx, use_center_anchor=True)
 
-        # check for overextensions
-        # Find the actual vertical extent of the largest component in the center column
-        center_x = largest_mask.shape[1] // 2
-        hit_rows = np.where(largest_mask[:, center_x])[0]
-        if hit_rows.size > 0:
-            available_depth = hit_rows[-1] - hit_rows[0] + 1
-            requested_height = y1 - y0
-            if requested_height > available_depth:
-                raise ValueError(
-                    f"Error: ROI height ({requested_height}px) exceeds class depth ({available_depth}px)."
-                    )
-
-        # Alternative: strict pixel-level check for any overextension outside the class mask
-        # roi_region = np.zeros_like(largest_mask)
-        # roi_region[y0:y1, x0:x1] = 1
-        # # Check if any pixel in the ROI region is NOT in the class mask
-        # overextension = cv2.bitwise_and(roi_region, cv2.bitwise_not(largest_mask))
-        # if cv2.countNonZero(overextension) > 0:
-        #     raise ValueError("Error: ROI extends outside the selected segmentation class.")
-
+        # The box must not reach below the class at the centre column (non-empty: the
+        # anchor above was found there).
+        hit_rows = np.flatnonzero(largest_mask[:, largest_mask.shape[1] // 2])
+        available_depth = hit_rows[-1] - hit_rows[0] + 1
+        requested_height = y1 - y0
+        if requested_height > available_depth:
+            raise ValueError(
+                f"Error: ROI height ({requested_height}px) exceeds class depth ({available_depth}px)."
+            )
 
         y0w = float(ty) + float(y0) * float(sy)
         y1w = float(ty) + float(y1) * float(sy)

@@ -39,7 +39,6 @@ def controller_with(pa_data, records=(), derived=None):
         roi_ctrl=SimpleNamespace(sync_records_from_shapes=lambda: True, roi_records=list(records)),
         _get_fov=lambda: FOV,
         _derived_patato_objects=derived or {},
-        viewer=SimpleNamespace(dims=SimpleNamespace(current_step=(FRAME, 0))),
     )
 
 
@@ -71,9 +70,9 @@ def test_hdf5_export_round_trip(ithera_scan, tmp_path):
 
     reopened = pat.PAData.from_hdf5(str(destination), mode="r")
     layers, _ = build_napari_layers(reopened)
-    names = [kw["name"] for _, kw, _ in layers]
+    names = [kw["name"] for _, kw in layers]
     assert names[:2] == ["US", "Recon: iThera BP-40mm(res:100μm)_0"] and names[2].startswith("Unmixed: ")
-    unmixed_data, unmixed_kw, _ = layers[2]
+    unmixed_data, unmixed_kw = layers[2]
     assert unmixed_data.shape == (26, 2, 400, 400) and unmixed_kw["metadata"]["frames"] == [FRAME]
     assert unmixed_kw["metadata"]["chromophores"] == ["Hb", "HbO2"]
     np.testing.assert_allclose(unmixed_data[FRAME], display_data_from_patato_obj(unmixed)[0])
@@ -95,7 +94,14 @@ def test_ipasc_export_reloads_as_raw_scan(ithera_scan, tmp_path):
 
     reopened = pat.PAData.from_hdf5(str(destination), mode="r")
     np.testing.assert_allclose(reopened.get_wavelengths(), ithera_scan.get_wavelengths())  # stored in metres
-    np.testing.assert_allclose(reopened.get_timestamps(), ithera_scan.get_timestamps())
+    # Each reader reports wall clock seconds on its own clock: iThera on the scanner's local
+    # clock, IPASC on UTC. IPASC also keeps one time per frame, so the per-wavelength
+    # sub-second stamps do not survive the export.
+    offset = ithera_scan.get_scan_datetime().utcoffset().total_seconds()
+    np.testing.assert_allclose(
+        np.asarray(reopened.get_timestamps())[:, 0],
+        np.asarray(ithera_scan.get_timestamps())[:, 0] - offset,
+    )
     assert reopened.shape == (26, 13)
     # Raw time series only: no ultrasound and nothing reconstructed yet.
     assert build_napari_layers(reopened)[0] == []

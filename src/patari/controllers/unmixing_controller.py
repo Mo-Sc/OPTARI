@@ -552,7 +552,7 @@ class UnmixingController(TaskControllerBase):
         export_attrs = {
             "frames": np.asarray(output_frames, dtype=int),
             "source_layer": str(source_layer_name),
-            "axis1_labels": np.asarray(axis1_labels, dtype=str),
+            "axis1_labels": [str(label) for label in axis1_labels],
             "pa_kind": str(pa_kind),
             "source_frame_mode": str(frame_mode),
         }

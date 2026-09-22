@@ -283,22 +283,9 @@ class ScanController(TaskControllerBase):
             self.patari_controller.refresh_all()
             return False
 
-        for data, kw, lt in layers:
-            if lt == "image":
-                kw = dict(kw)
-                kw.setdefault("metadata", {})
-                kw["units"] = self.image_units
-                kw["metadata"].setdefault("filepath", str(scan_path))
-                kw["metadata"].setdefault("scan_name", scan_info.internal_name)
-                layer = self.viewer.add_image(data, **kw)
-                layer.colorbar.visible = True
-            else:
-                kw = dict(kw)
-                kw.setdefault("metadata", {})
-                kw["units"] = self.image_units
-                kw["metadata"].setdefault("filepath", str(scan_path))
-                kw["metadata"].setdefault("scan_name", scan_info.internal_name)
-                self.viewer.add_labels(data, **kw)
+        for data, kw in layers:
+            kw["metadata"] = {"filepath": str(scan_path), "scan_name": scan_info.internal_name, **kw["metadata"]}
+            self.viewer.add_image(data, units=self.image_units, **kw).colorbar.visible = True
 
         # Create the ROIs layer after image layers so it stays on top.
         self.patari_controller.shapes_layer = self.viewer.add_shapes(

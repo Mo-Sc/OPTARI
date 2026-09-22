@@ -7,7 +7,6 @@ import re
 from pathlib import Path
 
 import h5py
-import numpy as np
 import pandas as pd
 import patato as pat
 from qtpy.QtWidgets import QFileDialog
@@ -138,11 +137,8 @@ def export_scan_to_hdf5(controller, destination: Path) -> bool:
         logger.warning("no scan loaded")
         return False
 
-    destination = Path(destination)
-    if destination.suffix.lower() not in {".hdf5", ".h5"}:
-        destination = destination.with_suffix(".hdf5")
-    if destination.exists():
-        logger.error("export target already exists: %s", destination)
+    destination = _hdf5_destination(destination)
+    if destination is None:
         return False
 
     try:
@@ -177,11 +173,8 @@ def export_scan_to_ipasc(controller, destination: Path) -> bool:
         logger.warning("no scan loaded")
         return False
 
-    destination = Path(destination)
-    if destination.suffix.lower() not in {".hdf5", ".h5"}:
-        destination = destination.with_suffix(".hdf5")
-    if destination.exists():
-        logger.error("export target already exists: %s", destination)
+    destination = _hdf5_destination(destination)
+    if destination is None:
         return False
 
     try:
@@ -202,7 +195,7 @@ def ipasc_export_report(destination: Path) -> str:
     absence is not a failure and is not counted here.
     """
     import pacfish as pf
-    from pacfish import MetadataAcquisitionTags, MetadataDeviceTags
+    from pacfish import MetadataAcquisitionTags
 
     data = pf.load_data(str(destination))
     missing = [
@@ -210,9 +203,6 @@ def ipasc_export_report(destination: Path) -> str:
         for datum in MetadataAcquisitionTags.TAGS
         if datum.mandatory and datum.tag not in data.meta_data_acquisition
     ]
-    general = data.meta_data_device.get("general", {})
-    if MetadataDeviceTags.UNIQUE_IDENTIFIER.tag not in general:
-        missing.append("device identifier")
     detectors = data.meta_data_device.get("detectors", {})
     if not detectors:
         missing.append("detector positions")
@@ -220,6 +210,17 @@ def ipasc_export_report(destination: Path) -> str:
     if missing:
         return f"IPASC minimal metadata incomplete: {', '.join(missing)} not recorded."
     return f"IPASC minimal metadata complete, {len(detectors)} detection elements."
+
+
+def _hdf5_destination(destination: Path) -> Path | None:
+    """*destination* with an .hdf5 suffix, or None (logged) when a file is already there."""
+    destination = Path(destination)
+    if destination.suffix.lower() not in {".hdf5", ".h5"}:
+        destination = destination.with_suffix(".hdf5")
+    if destination.exists():
+        logger.error("export target already exists: %s", destination)
+        return None
+    return destination
 
 
 def _file_origin(**extra) -> dict:
@@ -269,14 +270,14 @@ def _write_rois(controller, destination_pa_data) -> None:
     z_values = controller.pa_data.scan_reader.get_scanner_z_position()
     run_values = controller.pa_data.scan_reader.get_run_numbers()
     rep_values = controller.pa_data.scan_reader.get_repetition_numbers()
-    channel_idx = int(controller.viewer.dims.current_step[1])
 
     for record in records:
         frame_idx = int(record.frame_id)
+        # Position, run and repetition belong to the frame; every wavelength shares them.
         try:
-            z = z_values[frame_idx, channel_idx]
-            run = run_values[frame_idx, channel_idx]
-            rep = rep_values[frame_idx, channel_idx]
+            z = z_values[frame_idx, 0]
+            run = run_values[frame_idx, 0]
+            rep = rep_values[frame_idx, 0]
         except (IndexError, KeyError):
             z, run, rep = 0, 0, 0
         roi = patato_roi_from_geometry(
@@ -301,10 +302,7 @@ def _write_derived_images(controller, destination_pa_data) -> None:
     if not controller._derived_patato_objects:
         return
 
-    # Keep export logic simple: write all runtime-generated derived datasets.
     for image in controller._derived_patato_objects.values():
-        # Sanitize attributes to make them h5py-compatible (fix numpy string dtypes).
-        _sanitize_image_attributes(image)
         destination_pa_data.scan_writer.add_image(image)
 
     logger.info(
@@ -312,29 +310,3 @@ def _write_derived_images(controller, destination_pa_data) -> None:
         len(controller._derived_patato_objects),
     )
 
-
-def _sanitize_image_attributes(image) -> None:
-    """Clean image attributes in place to ensure h5py compatibility."""
-    if not hasattr(image, "attributes"):
-        return
-
-    attrs = image.attributes
-    for key in list(attrs.keys()):
-        val = attrs[key]
-        # Convert numpy string arrays to Python lists of strings (h5py-safe).
-        if isinstance(val, np.ndarray) and val.dtype.kind == "U":
-            attrs[key] = val.tolist()
-        # Convert single numpy strings to Python strings.
-        elif isinstance(val, (np.str_, np.bytes_)):
-            attrs[key] = str(val)
-        # Convert dict values recursively for nested attributes.
-        elif isinstance(val, dict):
-            for nested_key in list(val.keys()):
-                nested_val = val[nested_key]
-                if (
-                    isinstance(nested_val, np.ndarray)
-                    and nested_val.dtype.kind == "U"
-                ):
-                    val[nested_key] = nested_val.tolist()
-                elif isinstance(nested_val, (np.str_, np.bytes_)):
-                    val[nested_key] = str(nested_val)

@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 import tempfile
 
-from patari.utils.setup import archive_user_dir, get_user_config_file, get_user_dir
+from patari.utils.setup import archive_config_dir, get_user_config_file
 
 CONFIG_SCHEMA_VERSION = 5 # adapt in default config.json as well
 
@@ -63,7 +63,7 @@ class PatariConfig:
         schema_version = data.get("schema_version")
 
         if schema_version != CONFIG_SCHEMA_VERSION:
-            archive_user_dir(get_user_dir())
+            archive_config_dir(config_path.parent)
             config_path = get_user_config_file()
             data = json.loads(config_path.read_text())
         

@@ -39,7 +39,7 @@ def get_user_dir() -> Path:
     # First-run:
     if not (config_dir / "config.json").exists():
         # create the user dir and subdirs for config, logs, models
-        print(f"Creating user directory at {user_dir}")
+        print(f"creating PATARI user directory at {user_dir}")
         user_dir.mkdir(parents=True, exist_ok=True)
         config_dir.mkdir(exist_ok=True)
         (user_dir / "logs").mkdir(exist_ok=True)
@@ -48,18 +48,19 @@ def get_user_dir() -> Path:
         for config_file in DEFAULT_CONFIGS_DIR.glob("*.json"):
             shutil.copy2(config_file, config_dir / config_file.name)
 
-        print(f"Copied default config files to {config_dir}")
+        print(f"copied default config files to {config_dir}")
 
     _copy_default_presets(DEFAULT_CONFIGS_DIR, config_dir)
 
     return user_dir
 
 
-def archive_user_dir(user_dir: Path) -> Path:
+def archive_config_dir(config_dir: Path) -> Path:
+    """Move an outdated config folder aside; models and logs next to it stay in place."""
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    archive_dir = user_dir.with_name(f"{user_dir.name}_old_{timestamp}")
-    user_dir.rename(archive_dir)
-    print(f"Archived PATARI user directory to {archive_dir}")
+    archive_dir = config_dir.with_name(f"{config_dir.name}_old_{timestamp}")
+    config_dir.rename(archive_dir)
+    print(f"archived outdated PATARI config to {archive_dir}")
     return archive_dir
 
 

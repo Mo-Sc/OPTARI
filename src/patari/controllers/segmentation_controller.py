@@ -542,31 +542,20 @@ class SegmentationController(TaskControllerBase):
         sy, sx = float(seg_layer.scale[-2]), float(seg_layer.scale[-1])
         ty, tx = float(seg_layer.translate[-2]), float(seg_layer.translate[-1])
 
-        def parse_roi_param(text: str) -> float | None:
-            return float(text) if text.strip() else None
-
         shape_type = str(seg_dock.roi_shape_combo.currentData() or "ellipse")
-        top_margin_mm = parse_roi_param(seg_dock.roi_top_margin_edit.text())
-        width_mm = parse_roi_param(seg_dock.roi_width_edit.text())
-        height_mm = parse_roi_param(seg_dock.roi_height_edit.text())
-
+        try:
+            top_margin_mm = self._parse_roi_value(seg_dock.roi_top_margin_edit.text(), "Top margin")
+            width_mm = self._parse_roi_value(seg_dock.roi_width_edit.text(), "Width")
+            height_mm = self._parse_roi_value(seg_dock.roi_height_edit.text(), "Height")
+        except ValueError as exc:
+            seg_dock.status_label.setText(str(exc))
+            return
         if (width_mm is None or height_mm is None) and shape_type in ("rectangle", "ellipse"):
             seg_dock.status_label.setText("Width and height are required")
             return
 
-        config = ROIPlacementConfig(
-            width_mm=width_mm,
-            height_mm=height_mm,
-            depth_mm=top_margin_mm or 0.0,
-        )
-        if shape_type == "ellipse":
-            shape = Ellipse(config)
-        elif shape_type == "rectangle":
-            shape = Rectangle(config)
-        elif shape_type == "polygon":
-            shape = Polygon(config)
-        else:
-            raise ValueError(f"Unknown ROI shape type: {shape_type}")
+        config = ROIPlacementConfig(width_mm=width_mm, height_mm=height_mm, depth_mm=top_margin_mm or 0.0)
+        shape = {"ellipse": Ellipse, "rectangle": Rectangle, "polygon": Polygon}[shape_type](config)
 
         frame_idx = selected_frame_idx(self.viewer, np.asarray(seg_layer.data).shape[0])
         class_mask = seg_2d == int(class_id)
@@ -580,7 +569,7 @@ class SegmentationController(TaskControllerBase):
             verts = shape.to_napari_verts_world(
                 class_mask=class_mask, sy=sy, sx=sx, ty=ty, tx=tx
             )
-        except Exception as exc:
+        except ValueError as exc:
             seg_dock.status_label.setText(str(exc))
             return
 

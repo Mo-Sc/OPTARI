@@ -56,9 +56,8 @@ def test_ellipse_area_is_close_to_analytic(image_layer):
     )
     rows = compute_roi_stats([ellipse], layer, frame_idx=0, channel_idx=0)
 
-    # cv2 fills boundary pixels, which over-counts by roughly half the perimeter.
-    assert rows.iloc[0]["n_pixels"] == pytest.approx(np.pi * 50 * 20, rel=0.10)
-    assert rows.iloc[0]["size_mm"] == pytest.approx(np.pi * 5 * 2, rel=0.10)
+    assert rows.iloc[0]["n_pixels"] == pytest.approx(np.pi * 50 * 20, rel=0.03)
+    assert rows.iloc[0]["size_mm"] == pytest.approx(np.pi * 5 * 2, rel=0.03)
 
 
 def test_clamp_clip_keeps_pixels_exclude_drops_them(image_layer):
