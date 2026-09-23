@@ -317,6 +317,7 @@ class ScanController(TaskControllerBase):
             None,
         )
         self.patari_controller._resolve_active_recon_layer()
+        self.patari_controller.segmentation_ctrl.restore_from_scan(self.patari_controller.pa_data)
         self.patari_controller.refresh_controller_uis()
 
         # Initialize viewer position to DEFAULT_FRAME_INDEX and DEFAULT_CHANNEL_INDEX

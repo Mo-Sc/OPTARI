@@ -70,6 +70,10 @@ addopts = ["-ra", "--strict-markers", "--strict-config"]
 xfail_strict = true
 log_cli_level = "INFO"
 testpaths = ["tests"]
+filterwarnings = [
+    # caused by napari
+    "ignore:`json_encoders` is deprecated:DeprecationWarning",
+]
 
 [tool.black]
 line-length = 79

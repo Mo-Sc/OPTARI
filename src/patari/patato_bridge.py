@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 
 import numpy as np
@@ -250,6 +251,29 @@ def fov_from_objects(patato_objects: dict) -> "tuple[float, float] | None":
         if fov_x_m > 0 and fov_y_m > 0:
             return fov_x_m, fov_y_m
     return None
+
+
+# ---------------------------------------------------------------------------
+# Segmentation I/O
+# ---------------------------------------------------------------------------
+
+
+def segmentation_from_scan(pa_data: "pat.PAData") -> dict | None:
+    """Load a previously exported segmentation mask and its class metadata.
+
+    Returns ``None`` when the scan has no segmentation, or one that has not patari compatible metadata
+    """
+    seg = pa_data.get_segmentation()
+    if seg is None:
+        return None
+    dataset = pa_data.scan_reader.file[HDF5Tags.SEGMENTATION]
+    if "patari_meta" not in dataset.attrs:
+        logger.info("scan has a segmentation dataset PATARI did not write, ignoring it")
+        return None
+    meta = json.loads(dataset.attrs["patari_meta"])
+    meta["mask"] = np.asarray(seg, dtype=np.int32)  # (n_frames, H, W)
+    meta["class_names"] = {int(k): v for k, v in meta["class_names"].items()}
+    return meta
 
 
 # ---------------------------------------------------------------------------

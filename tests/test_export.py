@@ -39,6 +39,7 @@ def controller_with(pa_data, records=(), derived=None):
         roi_ctrl=SimpleNamespace(sync_records_from_shapes=lambda: True, roi_records=list(records)),
         _get_fov=lambda: FOV,
         _derived_patato_objects=derived or {},
+        segmentation_ctrl=SimpleNamespace(seg_layer=None),  # _write_derived_data reads this
     )
 
 

@@ -11,6 +11,7 @@ from napari.layers import Labels
 from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QListWidgetItem
 
+from patari.patato_bridge import segmentation_from_scan
 from patari.segmentation.segmenter import (
     create_segmenter,
     load_model_registry,
@@ -313,18 +314,51 @@ class SegmentationController(TaskControllerBase):
         return self._segmenter
 
 
+    @property
+    def seg_layer(self) -> "Labels | None":
+        """The current segmentation layer, generated or restored, or None."""
+        if self._seg_layer is not None and self._seg_layer not in self.viewer.layers:
+            self._seg_layer = None
+        return self._seg_layer
+
     def active_seg_mask_2d(self) -> tuple[np.ndarray, "Labels"] | None:
         """Return (H, W) segmentation mask for the current viewer frame, or None."""
-        if (
-            self._seg_layer is None
-            or self._seg_layer not in self.viewer.layers
-        ):
-            self._seg_layer = None
+        seg_layer = self.seg_layer
+        if seg_layer is None:
             return None
-        seg_layer = self._seg_layer
         seg = np.asarray(seg_layer.data)
         frame_idx = selected_frame_idx(self.viewer, seg.shape[0])
         return seg[frame_idx, 0], seg_layer
+
+    def restore_from_scan(self, pa_data) -> None:
+        """Rebuild the segmentation layer from scan data.
+        """
+        us_layer = self.patari_controller.active_us_layer
+        if us_layer is None:
+            return
+        restored = segmentation_from_scan(pa_data)
+        if restored is None:
+            return
+
+        n_channels = int(np.asarray(us_layer.data).shape[1])
+        mask = np.repeat(restored["mask"][:, np.newaxis], n_channels, axis=1)
+        class_names = restored["class_names"]
+        self._seg_layer = self.viewer.add_labels(
+            mask,
+            name="Segmentation",
+            scale=us_layer.scale,
+            translate=us_layer.translate,
+            opacity=0.5,
+            metadata={
+                "type": "segmentation",
+                "frame_mode": restored["frame_mode"],
+                "frames": restored["frames"],
+                "class_names": class_names,
+                "source_model_id": restored["source_model_id"],
+            },
+            units=self.image_units,
+        )
+        self._populate_roi_class_combo(mask, class_names)
 
     def on_segmentation_model_changed(self) -> None:
         if self.patari_controller.segmentation is None:

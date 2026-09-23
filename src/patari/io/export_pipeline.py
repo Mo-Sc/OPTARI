@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 
 import h5py
+import numpy as np
 import pandas as pd
 import patato as pat
 from qtpy.QtWidgets import QFileDialog
@@ -152,7 +153,7 @@ def export_scan_to_hdf5(controller, destination: Path) -> bool:
     try:
         destination_pa_data = pat.PAData.from_hdf5(str(destination), mode="r+")
         _write_rois(controller, destination_pa_data)
-        _write_derived_images(controller, destination_pa_data)
+        _write_derived_data(controller, destination_pa_data)
         logger.info("exported scan to %s", destination)
         return True
     except Exception:
@@ -298,15 +299,29 @@ def _write_rois(controller, destination_pa_data) -> None:
     logger.info("saved %s PATARI ROI(s)", len(records))
 
 
-def _write_derived_images(controller, destination_pa_data) -> None:
-    if not controller._derived_patato_objects:
-        return
+def _write_derived_data(controller, destination_pa_data) -> None:
+    """Write runtime-only PATARI additions: derived PA images and the segmentation mask.
 
+    replaces any existing derived data and segmentation mask in the export.
+    """
     for image in controller._derived_patato_objects.values():
         destination_pa_data.scan_writer.add_image(image)
+    if controller._derived_patato_objects:
+        logger.info("saved %s derived image dataset(s)", len(controller._derived_patato_objects))
 
-    logger.info(
-        "saved %s derived image dataset(s)",
-        len(controller._derived_patato_objects),
-    )
+    seg_layer = controller.segmentation_ctrl.seg_layer
+    if seg_layer is None:
+        return
+    writer = destination_pa_data.scan_writer
+    if HDF5Tags.SEGMENTATION in writer.file:
+        del writer.file[HDF5Tags.SEGMENTATION]
+    writer.set_segmentation(np.asarray(seg_layer.data)[:, 0].astype(np.int32))
+    meta = {
+        "source_model_id": seg_layer.metadata.get("source_model_id", ""),
+        "frame_mode": seg_layer.metadata.get("frame_mode", "all"),
+        "frames": [int(f) for f in seg_layer.metadata.get("frames", [])],
+        "class_names": {str(k): v for k, v in seg_layer.metadata.get("class_names", {}).items()},
+    }
+    writer.file[HDF5Tags.SEGMENTATION].attrs["patari_meta"] = json.dumps(meta)
+    logger.info("saved segmentation mask (model '%s')", meta["source_model_id"])
 

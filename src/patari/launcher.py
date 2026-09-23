@@ -33,7 +33,6 @@ def main() -> None:
 
     app = QApplication.instance() or QApplication([])
 
-    # viewer = Viewer(title=f"PATARI v{__version__.split('+')[0]} (INTERNAL USE ONLY)")
     viewer = Viewer(title=f"PATARI v{__version__.split('+')[0]}")
 
     app.setWindowIcon(
@@ -56,7 +55,7 @@ def main() -> None:
                 logger.info("PATARI shutdown complete.")
             except Exception as e:
                 logger.exception("Error during controller shutdown: %s", e)
-        # os._exit bypasses Pythons GC. Probably not ideal, but avoids a segfault on shutdown due to Qt objects. TODO
+        # os._exit bypasses Pythons GC. Probably not ideal, but avoids a segfault on shutdown due to Qt objects
         # being destroyed in the wrong order after the event loop has stopped.
         os_exit(0)
 
