@@ -5,8 +5,6 @@
     from previous versions and dont show the most recent version of PATARIs UI or features.
     Updated screenshots will be added soon.
 
-!!! note "Batch Mode"
-    The batch mode is missing in version 0.6.3.
 
 **P**hoto**A**coustic imaging **T**oolkit based on nap**ARI** — an open-source desktop application for analyzing
 clinical photoacoustic (PA) and ultrasound (US) studies.
