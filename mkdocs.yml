@@ -77,6 +77,7 @@ nav:
   - User Guide:
       - Overview: user-guide/index.md
       - Viewer & Navigation: user-guide/viewer-and-navigation.md
+      - Metadata: user-guide/metadata.md
       - ROI Annotation: user-guide/roi-annotation.md
       - Temporal & Spectral Analysis: user-guide/temporal-and-spectral-analysis.md
       - Segmentation: user-guide/segmentation.md

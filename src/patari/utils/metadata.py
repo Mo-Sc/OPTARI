@@ -74,36 +74,6 @@ def layer_metadata_rows(layer) -> list[tuple[str, str, str]]:
     ]
 
 
-def clinical_metadata_rows(metadata) -> list[tuple[str, str, str]]:
-    """
-    clinical metadata can be a dict in the HDF5 with arbitrary keys
-    """
-
-    # just for debugging: dummy metadata TODO: remove
-    # metadata = {
-    #     "Patient ID": "12345",
-    #     "Patient Name": "John Doe",
-    #     "Patient Age": 45,
-    #     "Patient Sex": "Male",
-    #     "Patient Weight": 80.5,
-    #     "Patient Height": 180.0,
-    #     "Clinical Notes": "This is a test note.",
-    # }
-
-    if not metadata:
-        return [
-            (
-                "Status",
-                "No clinical metadata available",
-                "No clinical metadata available",
-            )
-        ]
-    return [
-        (str(label), _format(value), _format(value, details=True))
-        for label, value in metadata.items()
-    ]
-
-
 def scan_metadata_rows(
     pa_data,
     scan_path: Path | None = None,

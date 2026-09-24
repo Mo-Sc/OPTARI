@@ -52,6 +52,7 @@ class PatariController:
         self.pa_data: pat.PAData | None = None
         self._patato_objects: dict[str, pat.ImageSequence] = {}
         self._derived_patato_objects: dict[str, pat.ImageSequence] = {}
+        self.clinical_metadata_edits: dict[str, str] | None = None
 
         self.shapes_layer: Shapes | None = None
         self._last_frame_idx: int | None = None
@@ -610,6 +611,7 @@ class PatariController:
             scan_path=getattr(self, "path", None),
             study_path=getattr(self, "study_path", None),
             scan_info=scan_info,
+            controller=self,
             parent=self.viewer.window._qt_window,
         )
         dialog.exec()

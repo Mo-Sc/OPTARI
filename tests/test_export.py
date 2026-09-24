@@ -40,6 +40,7 @@ def controller_with(pa_data, records=(), derived=None):
         _get_fov=lambda: FOV,
         _derived_patato_objects=derived or {},
         segmentation_ctrl=SimpleNamespace(seg_layer=None),  # _write_derived_data reads this
+        clinical_metadata_edits=None,  # _write_derived_data reads this
     )
 
 

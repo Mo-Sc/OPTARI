@@ -135,6 +135,7 @@ class ScanController(TaskControllerBase):
         self.patari_controller.pa_data = None
         self.patari_controller._patato_objects = {}
         self.patari_controller._derived_patato_objects = {}
+        self.patari_controller.clinical_metadata_edits = None
 
     def reset_scan_state(self, restore_startup_logo: bool = True) -> None:
         """Clear current scan state and remove all viewer layers."""

@@ -48,11 +48,5 @@ overlaid. This will show layers next to each other in pairs of two, meaning two 
 
 ![Grid Mode](../assets/screenshots/placeholders/ss_gridmode.png)
 
-## Metadata
-
-
-Click the metadata button in the **Info** dock to open a read-only viewer for the current scan/layer's metadata
-(acquisition settings, timestamps, and other fields carried over from the source file). Double-clicking on a cell shows the full content. If the scan contains clinical metadata, it is also shown here.
-
-![Metadata Viewer](../assets/screenshots/placeholders/ss_metadata.png)
+For the current scan/layer's metadata, see [Metadata](metadata.md).
 
