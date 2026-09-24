@@ -2,24 +2,43 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 
+from napari.utils.notifications import (
+    ErrorNotification,
+    notification_manager,
+    show_error,
+    show_info,
+    show_warning,
+)
+
 from patari.config import settings
+from patari.utils.setup import get_user_logs_dir
+
+# one file per session (e.g. if two PATARI instances run side by side)
+KEPT_SESSION_LOGS = 20
+FILE_FORMAT = "%(asctime)s %(levelname)s %(threadName)s %(name)s: %(message)s"
 
 
 class _NapariNotificationHandler(logging.Handler):
-    """Forward log messages to napari notifications when available."""
+    """Show patari log records as napari notifications, with the traceback left to the log file."""
+
+    def __init__(self, level: int | str, log_file: Path) -> None:
+        super().__init__(level)
+        self.log_file = log_file
 
     def emit(self, record: logging.LogRecord) -> None:
+        # notifications create Qt widgets, which only the main thread may do; worker records
+        # still reach the console and the log file
+        if threading.current_thread() is not threading.main_thread():
+            return
         try:
-            from napari.utils.notifications import (
-                show_error,
-                show_info,
-                show_warning,
-            )
-
-            message = self.format(record)
+            message = record.getMessage()
+            if record.exc_info:
+                message += f"\nDetails in {self.log_file}"
             if record.levelno >= logging.ERROR:
                 show_error(message)
             elif record.levelno >= logging.WARNING:
@@ -27,51 +46,56 @@ class _NapariNotificationHandler(logging.Handler):
             else:
                 show_info(message)
         except Exception:
-            # Never let GUI notification failures break application logging.
-            pass
+            self.handleError(record)
 
 
-def configure_logging() -> None:
-    """Configure PATARI logging from environment.
+def _new_session_log_file() -> Path:
+    logs_dir = get_user_logs_dir()
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    # timestamped names sort chronologically; keep room for the file created below
+    for old_log in sorted(logs_dir.glob("patari_*.log"))[: -(KEPT_SESSION_LOGS - 1)]:
+        old_log.unlink()
+    timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
+    return logs_dir / f"patari_{timestamp}_{os.getpid()}.log"
 
-    Uses ``PATARI_LOG_LEVEL`` (default ``INFO``) for the ``patari`` logger
-    namespace only, and keep the root logger at ``WARNING`` to avoid
-    debug output from other packages (e.g. napari/matplotlib).
+
+def _log_napari_error(notification) -> None:
+    """Exceptions raised in napari event callbacks only reach napari's popup otherwise."""
+    if isinstance(notification, ErrorNotification):
+        exception = notification.exception
+        logging.getLogger("napari").error(
+            "uncaught exception", exc_info=(type(exception), exception, exception.__traceback__)
+        )
+
+
+def configure_logging() -> Path:
+    """Configure console, session log file and napari notifications; return the log file.
+
+    The ``patari`` logger runs at ``PATARI_LOG_LEVEL`` (default: config ``LOG_LEVEL``) and
+    propagates to the root handlers, while other packages (napari, PATATO, ...) only log
+    warnings and above. ``patari`` records at ``PATARI_GUI_LOG_LEVEL`` (default: config
+    ``GUI_LOG_LEVEL``) and above also show up as napari notifications.
     """
-    level_name = os.getenv("PATARI_LOG_LEVEL", settings.general.LOG_LEVEL).upper()
-    level = getattr(logging, level_name, logging.INFO)
+    log_file = _new_session_log_file()
+
+    console = logging.StreamHandler()
+    console.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
+    session_file = logging.FileHandler(log_file, encoding="utf-8")
+    session_file.setFormatter(logging.Formatter(FILE_FORMAT))
 
     root = logging.getLogger()
     root.setLevel(logging.WARNING)
+    root.addHandler(console)
+    root.addHandler(session_file)
 
+    # setLevel raises on an unknown level name, which catches typos in config.json
     patari_logger = logging.getLogger("patari")
-    patari_logger.setLevel(level)
-    patari_logger.propagate = False
+    patari_logger.setLevel(os.getenv("PATARI_LOG_LEVEL", settings.general.LOG_LEVEL).upper())
+    gui_level = os.getenv("PATARI_GUI_LOG_LEVEL", settings.general.GUI_LOG_LEVEL).upper()
+    patari_logger.addHandler(_NapariNotificationHandler(gui_level, log_file))
 
-    formatter = logging.Formatter("%(levelname)s:%(name)s:%(message)s")
-
-    if not any(
-        getattr(h, "name", "") == "patari_stream"
-        for h in patari_logger.handlers
-    ):
-        stream_handler = logging.StreamHandler()
-        stream_handler.name = "patari_stream"
-        stream_handler.setFormatter(formatter)
-        patari_logger.addHandler(stream_handler)
-
-    gui_level_name = os.getenv(
-        "PATARI_GUI_LOG_LEVEL", settings.general.GUI_LOG_LEVEL
-    ).upper()
-    gui_level = getattr(logging, gui_level_name, logging.WARNING)
-
-    if not any(
-        getattr(h, "name", "") == "patari_napari_notifications"
-        for h in patari_logger.handlers
-    ):
-        gui_handler = _NapariNotificationHandler(level=gui_level)
-        gui_handler.name = "patari_napari_notifications"
-        gui_handler.setFormatter(formatter)
-        patari_logger.addHandler(gui_handler)
+    notification_manager.notification_ready.connect(_log_napari_error)
+    return log_file
 
 
 @contextmanager
@@ -84,9 +108,7 @@ def run_log_file(destination: Path, level: int = logging.INFO):
     """
     handler = logging.FileHandler(destination, encoding="utf-8")
     handler.setLevel(level)
-    handler.setFormatter(
-        logging.Formatter("%(asctime)s %(levelname)s:%(name)s:%(message)s")
-    )
+    handler.setFormatter(logging.Formatter(FILE_FORMAT))
     patari_logger = logging.getLogger("patari")
     patari_logger.addHandler(handler)
     try:

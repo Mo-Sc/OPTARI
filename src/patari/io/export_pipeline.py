@@ -135,7 +135,7 @@ def import_roi_table_from_xlsx(path=None) -> tuple[pd.DataFrame, str] | None:
 def export_scan_to_hdf5(controller, destination: Path) -> bool:
     """Export scan data and PATARI additions (ROIs and derived images)."""
     if controller.pa_data is None:
-        logger.warning("no scan loaded")
+        logger.warning("No scan loaded, nothing to export")
         return False
 
     destination = _hdf5_destination(destination)
@@ -146,7 +146,7 @@ def export_scan_to_hdf5(controller, destination: Path) -> bool:
         controller.pa_data.save_hdf5(str(destination))
         _write_file_origin(destination)
     except Exception:
-        logger.exception("failed to export scan to HDF5")
+        logger.exception("Failed to export scan to %s", destination.name)
         return False
 
     destination_pa_data = None
@@ -157,7 +157,7 @@ def export_scan_to_hdf5(controller, destination: Path) -> bool:
         logger.info("exported scan to %s", destination)
         return True
     except Exception:
-        logger.exception("exported scan, but failed to write PATARI additions")
+        logger.exception("Exported scan to %s, but failed to write ROIs and derived images", destination.name)
         return False
     finally:
         if destination_pa_data is not None:
@@ -171,7 +171,7 @@ def export_scan_to_ipasc(controller, destination: Path) -> bool:
     """Export the raw time series of the loaded scan as a native IPASC file.
     """
     if controller.pa_data is None:
-        logger.warning("no scan loaded")
+        logger.warning("No scan loaded, nothing to export")
         return False
 
     destination = _hdf5_destination(destination)
@@ -181,7 +181,7 @@ def export_scan_to_ipasc(controller, destination: Path) -> bool:
     try:
         pat.write_ipasc(controller.pa_data.scan_reader, str(destination))
     except Exception:
-        logger.exception("failed to export scan to IPASC")
+        logger.exception("Failed to export raw time series to %s", destination.name)
         return False
 
     logger.info("exported raw time series to %s", destination)
@@ -219,7 +219,7 @@ def _hdf5_destination(destination: Path) -> Path | None:
     if destination.suffix.lower() not in {".hdf5", ".h5"}:
         destination = destination.with_suffix(".hdf5")
     if destination.exists():
-        logger.error("export target already exists: %s", destination)
+        logger.error("Not exported, the file already exists: %s", destination)
         return None
     return destination
 

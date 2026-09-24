@@ -28,7 +28,7 @@ def test_shipped_presets_resolve_against_the_dataset(tmp_path):
 
     assert [job.key for job in plan.jobs] == ["Study_19_Scan_2", "Study_19_Scan_3"]
     assert [job.scan_path for job in plan.jobs] == [ITHERA_SCAN, HDF5_SCAN]
-    assert plan.jobs[1].scan_name == "Study_19_3PRE"
+    assert plan.jobs[1].scan_name == "DEMO_SCAN_3"
     assert plan.step_names == ["reconstruction", "segmentation", "unmixing", "roi (auto)"]
     assert plan.reconstruction["RECONSTRUCTION_ALGORITHM"] == "Reference Backprojection"
     assert plan.unmixing["SPECTRA"] == ["Hb", "HbO2"]

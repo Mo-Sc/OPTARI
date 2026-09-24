@@ -19,8 +19,8 @@ def test_discover_studies_finds_both_scans(tmp_path):
     scans = studies[STUDY_DIR]
     assert list(scans) == [ITHERA_SCAN, HDF5_SCAN]
     assert [(info.kind, info.internal_name) for info in scans.values()] == [
-        ("ithera", "Study_19_2PRE"),
-        ("hdf5", "Study_19_3PRE"),
+        ("ithera", "DEMO_SCAN_2"),
+        ("hdf5", "DEMO_SCAN_3"),
     ]
 
     # Numeric ordering, not lexical: Scan_10 comes after Scan_2.
@@ -66,7 +66,7 @@ def test_ithera_scan_builds_the_same_layer_structure(ithera_scan, hdf5_scan):
         return [(data.shape, kw["name"], tuple(kw["scale"]), sorted(kw["metadata"])) for data, kw in layers]
 
     assert structure(build_napari_layers(ithera_scan)[0]) == structure(build_napari_layers(hdf5_scan)[0])
-    assert ithera_scan.get_scan_name() == "Study_19_2PRE"
+    assert ithera_scan.get_scan_name() == "DEMO_SCAN_2"
 
 
 def test_motion_frame_selection(hdf5_scan, ithera_scan):

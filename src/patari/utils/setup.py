@@ -96,9 +96,9 @@ def get_user_roi_autosave_file() -> Path:
     """Rolling backup of the Saved Analysis table, restorable via Import XLSX."""
     return get_user_dir() / "roi_table_autosave.xlsx"
 
-def get_user_log_file() -> Path:
-    """Returns the path to the log file."""
-    return get_user_dir() / "logs" / "patari.log"
+def get_user_logs_dir() -> Path:
+    """Returns the directory holding one log file per session."""
+    return get_user_dir() / "logs"
 
 def get_user_models_dir() -> Path:
     """Returns the path to the models directory."""
@@ -133,7 +133,7 @@ def configure_napari(viewer) -> None:
     # private _qt_viewer (public qt_viewer is deprecated), still present in napari 0.9.1
     viewer.window._qt_viewer.layers.keyboardSearch = lambda s: None
 
-    logger.info("PATARI: Clinical environment preferences applied successfully.")
+    logger.info("napari preferences applied")
 
 
 def load_startup_logo(viewer):

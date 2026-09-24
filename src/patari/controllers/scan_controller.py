@@ -8,7 +8,7 @@ import re
 import numpy as np
 import patato as pat
 from napari.layers import Image
-from napari.utils.notifications import show_error, show_info, show_warning
+from napari.utils.notifications import show_info, show_warning
 from patato.io.ithera.read_ithera import iTheraMSOT
 from qtpy.QtWidgets import QFileDialog
 
@@ -593,11 +593,8 @@ class ScanController(TaskControllerBase):
         if destination is None:
             return
 
-        # use napari's activity dock to show hdf5 export success/failure 
         if self.export_hdf5(destination):
             show_info(f"Exported scan to {destination.name}")
-        else:
-            show_error(f"Failed to export scan to {destination.name} — see log for details")
 
     def on_ipasc_export_clicked(self, event=None) -> None:
         destination = self._choose_export_path(
@@ -607,9 +604,6 @@ class ScanController(TaskControllerBase):
             return
 
         if not export_scan_to_ipasc(self.patari_controller, destination):
-            show_error(
-                f"Failed to export scan to {destination.name} — see log for details"
-            )
             return
         show_info(f"Exported raw time series to {destination.name}. "
                   + ipasc_export_report(destination))

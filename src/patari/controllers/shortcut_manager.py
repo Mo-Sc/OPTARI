@@ -48,7 +48,7 @@ class ShortcutManager:
             action_name="Run Segmentation"
         )
         
-        logger.info(f"PATARI: Registered custom keyboard shortcuts: {SHORTCUTS}")
+        logger.info("registered keyboard shortcuts: %s", SHORTCUTS)
 
     @classmethod
     def _bind_shortcut_to_button(cls, controller, shortcut_id: str, button_getter: callable, action_name: str) -> None:
@@ -63,7 +63,7 @@ class ShortcutManager:
         @viewer.bind_key(shortcut, overwrite=True)
         def trigger_button(v):
 
-            logger.info(f"PATARI Shortcut: {shortcut} triggered.")
+            logger.info("shortcut %s triggered", shortcut)
             
             button = button_getter(controller)
             
@@ -78,4 +78,4 @@ class ShortcutManager:
                     # magicgui: .clicked())
                     button.clicked()
             else:
-                logger.warning(f"PATARI Shortcut: {shortcut} ignored: {action_name} button is disabled.")
+                logger.warning("shortcut %s ignored: %s button is disabled", shortcut, action_name)

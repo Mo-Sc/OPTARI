@@ -200,5 +200,5 @@ def create_segmenter(
             f"Unknown adapter class: {model_config.adapter_class}. "
             f"Available adapters: {[k for k in globals() if k.endswith('Adapter')]}"
         )
-    logger.info(f"Creating segmenter with model {model_config.model_id} using adapter {model_config.adapter_class}")
+    logger.info("creating segmenter with model %s using adapter %s", model_config.model_id, model_config.adapter_class)
     return adapter_cls(model_config)

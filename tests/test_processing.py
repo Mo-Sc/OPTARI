@@ -56,7 +56,7 @@ def test_recon_params_from_preset(hdf5_scan):
     preset = PresetStore(get_user_reconstruction_presets_dir()).load("backproject_ithera")
     controller = SimpleNamespace(
         pa_data=hdf5_scan, path=HDF5_SCAN, timestamps=None,
-        scan_ctrl=SimpleNamespace(scan_name=lambda: "Study_19_3PRE"),
+        scan_ctrl=SimpleNamespace(scan_name=lambda: "DEMO_SCAN_3"),
     )
 
     params = ReconParams.from_settings(preset, controller, frame_id=FRAME)
