@@ -38,7 +38,7 @@ from patari.roi.roi_utils import (
     visible_feature_columns,
 )
 from patari.utils.misc import parse_float_input, roi_color_for_index
-from patari.utils.setup import get_user_roi_autosave_file, get_user_roi_presets_dir
+from patari.utils.setup import get_user_autosave_dir, get_user_roi_presets_dir, new_session_file
 from patari.utils.viewer import selected_frame_and_channel, selected_frame_idx
 
 from napari.layers import Image
@@ -90,7 +90,9 @@ class RoiController(TaskControllerBase):
 
     def __init__(self, parent_controller):
         super().__init__(parent_controller)
-        self.saved_table = SavedRoiTable(get_user_roi_autosave_file())
+        self.saved_table = SavedRoiTable(
+            new_session_file(get_user_autosave_dir(), "roi_table", ".xlsx")
+        )
         self._syncing = False
         self._roi_records: dict[int, ROIRecord] = {}
         self._projection_ids: list[int] = []

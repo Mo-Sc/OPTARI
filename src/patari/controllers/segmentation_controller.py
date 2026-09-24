@@ -50,6 +50,9 @@ def _segment_frames(
     batches multiple frames into one inference call regardless of chunk size (each frame is
     a separate ONNX session.run). The mask post-processing (class filtering, channel repeat, frame-padding) that used to
     run on the main thread after predict() is done here too
+
+    Returns the mask, the class names and the positions in *us_data* of blank frames, which
+    got an empty mask
     """
     results = []
     for i in range(us_data.shape[0]):
@@ -70,7 +73,8 @@ def _segment_frames(
         full_mask[frame_idx] = mask[0]
         mask = full_mask
 
-    return mask, class_names
+    blank_positions = [i for i, r in enumerate(results) if r.blank]
+    return mask, class_names, blank_positions
 
 
 @dataclass
@@ -679,7 +683,7 @@ class SegmentationController(TaskControllerBase):
 
     def publish(self, result, params: SegmentParams) -> str:
         """Add the finished segmentation as a labels layer. Runs on the main thread."""
-        mask, class_names = result
+        mask, class_names, blank_positions = result
 
         if self._seg_layer is not None and self._seg_layer in self.viewer.layers:
             self.viewer.layers.remove(self._seg_layer)
@@ -706,7 +710,17 @@ class SegmentationController(TaskControllerBase):
             units=self.image_units,
         )
         self._populate_roi_class_combo(mask, class_names)
-        return f"{len(params.output_frames)} frame(s) segmented"
+        if not blank_positions:
+            return f"{len(params.output_frames)} frame(s) segmented"
+        blank_frames = [params.output_frames[i] for i in blank_positions]
+        logger.warning(
+            "%d frame(s) contain no image data and were left unsegmented: %s",
+            len(blank_frames), blank_frames,
+        )
+        return (
+            f"{len(params.output_frames)} frame(s) segmented, "
+            f"{len(blank_frames)} without image data left empty"
+        )
 
     def _populate_roi_class_combo(self, mask, class_names: dict) -> None:
         """Offer only the classes the output mask actually contains."""

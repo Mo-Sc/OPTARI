@@ -10,6 +10,11 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_CONFIGS_DIR = Path(__file__).resolve().parent.parent / "config" / "default_configs"
 
+# Names this session's log and ROI table backup. Start time plus process id, so PATARI instances
+# running side by side never write to the same file, and a session's log and backup match.
+SESSION_ID = f"{datetime.now():%Y%m%dT%H%M%S}_{os.getpid()}"
+KEPT_SESSION_FILES = 20
+
 
 def _copy_default_presets(default_configs_dir: Path, user_config_dir: Path) -> None:
     default_presets_dir = default_configs_dir / "presets"
@@ -92,9 +97,9 @@ def get_user_config_file() -> Path:
     """Returns the path to the configuration file."""
     return get_user_dir() / "config" / "config.json"
 
-def get_user_roi_autosave_file() -> Path:
-    """Rolling backup of the Saved Analysis table, restorable via Import XLSX."""
-    return get_user_dir() / "roi_table_autosave.xlsx"
+def get_user_autosave_dir() -> Path:
+    """Returns the directory holding one Saved Analysis table backup per session."""
+    return get_user_dir() / "autosave"
 
 def get_user_logs_dir() -> Path:
     """Returns the directory holding one log file per session."""
@@ -107,6 +112,17 @@ def get_user_models_dir() -> Path:
 def get_user_seg_models_config_file() -> Path:
     """Returns the path to the segmentation models configuration file."""
     return get_user_dir() / "config" / "segmentation_models.json"
+
+def new_session_file(directory: Path, prefix: str, suffix: str) -> Path:
+    """This session's file in *directory*, after deleting all but the newest older ones.
+
+    Timestamped names sort chronologically. Room is kept for the new file, so the directory
+    holds at most ``KEPT_SESSION_FILES`` files with this prefix.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    for old_file in sorted(directory.glob(f"{prefix}_*{suffix}"))[: -(KEPT_SESSION_FILES - 1)]:
+        old_file.unlink()
+    return directory / f"{prefix}_{SESSION_ID}{suffix}"
 
 def get_default_config_file() -> Path:
     """Returns the path to the packaged default configuration file."""

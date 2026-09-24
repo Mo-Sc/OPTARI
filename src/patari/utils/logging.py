@@ -4,7 +4,6 @@ import logging
 import os
 import threading
 from contextlib import contextmanager
-from datetime import datetime
 from pathlib import Path
 
 from napari.utils.notifications import (
@@ -16,10 +15,8 @@ from napari.utils.notifications import (
 )
 
 from patari.config import settings
-from patari.utils.setup import get_user_logs_dir
+from patari.utils.setup import get_user_logs_dir, new_session_file
 
-# one file per session (e.g. if two PATARI instances run side by side)
-KEPT_SESSION_LOGS = 20
 FILE_FORMAT = "%(asctime)s %(levelname)s %(threadName)s %(name)s: %(message)s"
 
 
@@ -49,16 +46,6 @@ class _NapariNotificationHandler(logging.Handler):
             self.handleError(record)
 
 
-def _new_session_log_file() -> Path:
-    logs_dir = get_user_logs_dir()
-    logs_dir.mkdir(parents=True, exist_ok=True)
-    # timestamped names sort chronologically; keep room for the file created below
-    for old_log in sorted(logs_dir.glob("patari_*.log"))[: -(KEPT_SESSION_LOGS - 1)]:
-        old_log.unlink()
-    timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
-    return logs_dir / f"patari_{timestamp}_{os.getpid()}.log"
-
-
 def _log_napari_error(notification) -> None:
     """Exceptions raised in napari event callbacks only reach napari's popup otherwise."""
     if isinstance(notification, ErrorNotification):
@@ -76,7 +63,7 @@ def configure_logging() -> Path:
     warnings and above. ``patari`` records at ``PATARI_GUI_LOG_LEVEL`` (default: config
     ``GUI_LOG_LEVEL``) and above also show up as napari notifications.
     """
-    log_file = _new_session_log_file()
+    log_file = new_session_file(get_user_logs_dir(), "patari", ".log")
 
     console = logging.StreamHandler()
     console.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
