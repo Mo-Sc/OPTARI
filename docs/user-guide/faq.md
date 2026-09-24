@@ -36,12 +36,26 @@ feature in the Live Analysis table shows its length in millimeters. See
 
 ## How do I set a fixed contrast limit instead of auto-scaling?
 
-Select the layer in the Layer List, click the auto-contrast `continuous` button in the layer controls panel, then
-click `once`. The contrast limits are now constant for that layer — useful for consistent viewing across
-frames/channels, and for exported images or video. To set specific values manually instead, right-click the
+PA layers open with the auto-contrast `continuous` button switched on, which rescales every frame and channel
+to its own range. Select the layer in the Layer List and click `once` in the layer controls panel. This switches
+`continuous` off and keeps the current contrast limits constant for that layer. To set specific values manually instead, right-click the
 `contrast limits` slider.
 
-## Something else
+## Why can't I see ROIs overlaid on images in grid mode?
 
-Search or open an issue on [GitHub](https://github.com/Mo-Sc/PATARI/issues) — bug report, feature request, and
-documentation-gap templates are all available there.
+In grid mode napari draws every cell as a separate view, and a layer can only live in one cell. PATARI shows one layer per cell,
+so the ROIs layer gets a cell of its own and can't be drawn on top of the images next to it. This is a napari limitation: there is
+currently no way to show one layer in several cells.
+
+**Workaround:** right-click the grid mode icon below the layer list and set `stride` to `2` (or `-2`). Every cell then overlays
+two consecutive layers of the layer list. Move the ROIs layer directly above the image you want to annotate. Keep in mind that the
+pairs are counted over the whole layer list, including hidden layers, so they shift whenever a layer is added (for example after
+unmixing) and only one image can be paired with the ROIs. PATARI resets the stride to one layer per cell on the next start.
+
+**Known issue with napari 0.9.1:** with a stride other than `1`/`-1`, unhiding a layer while grid mode is on can raise
+`TypeError: unsupported operand type(s) for /: 'float' and 'NoneType'`, and the layer may not appear even though it is ticked in
+the layer list. In this mode napari detaches the colorbar of a hidden layer from the canvas. When the layer is shown again, napari
+refreshes the image before it reattaches the colorbar, and the `continuous` auto-contrast of PA layers changes the contrast limits
+during that refresh. The colorbar then tries to redraw its tick labels without a canvas and fails. To avoid it, leave grid mode
+(`Ctrl+G` / `Cmd+G`), unhide the layer and switch grid mode back on, or click `once` in the auto-contrast controls of the layer
+before unhiding it.

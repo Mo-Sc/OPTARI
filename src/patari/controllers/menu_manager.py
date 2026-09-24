@@ -35,8 +35,8 @@ HIDDEN_FILE_ENTRIES = (
     "napari/file/io_utilities",
 )
 HIDDEN_VIEW_ENTRIES = (
-    "napari.window.view.toggle_ndisplay",
-    "napari.viewer.toggle_synced_camera",
+    "napari.scene.toggle_ndisplay",
+    "napari.scene.toggle_synced_camera",
 )
 
 # How to reach each dock widget named in DOCK_LABELS, from a PatariController. The PATARI-owned

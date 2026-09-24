@@ -97,9 +97,7 @@ class ScanController(TaskControllerBase):
 
     def scan_name(self) -> "str | None":
         """The scan's internal (vendor) name, for stamping onto layers PATARI creates."""
-        scan_info = self.patari_controller._scans.get(
-            getattr(self.patari_controller, "path", None)
-        )
+        scan_info = self.patari_controller._scans.get(self.patari_controller.path)
         return scan_info.internal_name if scan_info is not None else None
 
     def wavelengths(self) -> "list[int] | None":
@@ -619,22 +617,12 @@ class ScanController(TaskControllerBase):
     def _choose_export_path(
         self, title: str = "Export scan as HDF5", suffix: str = ""
     ) -> Path | None:
-        default_name = (
-            f"{Path(self.patari_controller.path).stem}{suffix}.hdf5"
-            if getattr(self.patari_controller, "path", None)
-            else f"export{suffix}.hdf5"
-        )
+        scan_path = self.patari_controller.path
+        default_name = f"{scan_path.stem if scan_path else 'export'}{suffix}.hdf5"
         filename, _ = QFileDialog.getSaveFileName(
             None,
             title,
-            str(
-                (
-                    Path(self.patari_controller.path).parent
-                    if getattr(self.patari_controller, "path", None)
-                    else Path.cwd()
-                )
-                / default_name
-            ),
+            str((scan_path.parent if scan_path else Path.cwd()) / default_name),
             "HDF5 files (*.hdf5 *.h5)",
         )
         if not filename:

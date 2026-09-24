@@ -13,7 +13,7 @@ from patato import PAT_MAXIMUM_BATCH_SIZE
 from patato.io.attribute_tags import ReconAttributeTags
 from qtpy.QtCore import Qt
 from patari.controllers.base import TaskControllerBase
-from patari.patato_bridge import display_data_from_patato_obj
+from patari.patato_bridge import display_data_from_patato_obj, expand_to_acquisition_frames
 from patari.utils.presets import PresetStore
 from patari.utils.setup import get_user_reconstruction_presets_dir
 from patari.utils.tasks import BackgroundStep
@@ -482,7 +482,7 @@ class ReconstructionController(TaskControllerBase):
             "settings": settings,
         }
 
-        data = self._expand_to_source_frames(
+        data = expand_to_acquisition_frames(
             display_data_from_patato_obj(reconstruction),
             params.output_frames,
             params.source_frame_count,

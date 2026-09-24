@@ -3,7 +3,6 @@ import os
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
-import warnings
 
 from imageio.v3 import imread
 
@@ -115,32 +114,26 @@ def get_default_config_file() -> Path:
 
 def configure_napari(viewer) -> None:
     """
-    configure PATRI specific napari settings (playback fps, save window state, grid stride).
+    configure PATARI specific napari settings (playback fps, save window state, grid stride).
     Deactivate keyboard search in layers panel to avoid accidental layer selection during ROI drawing.
     """
-    try:
-        import napari
-        from patari.config import settings
-        
-        napari_settings = napari.settings.get_settings()
-        
-        napari_settings.application.playback_fps = settings.general.DEFAULT_PLAYBACK_FPS
-        napari_settings.application.save_window_state = True
-        napari_settings.application.grid_stride = -2
-        napari_settings.appearance.theme = "dark"
+    # imported here: patari.config imports this module, and headless users of it shouldn't load napari
+    from napari.settings import get_settings
+    from patari.config import settings
 
-        # deactivate keyboard search in layers panel because it slows done keyboard-based ROI drawing
-        # workaround described here: https://github.com/napari/napari/issues/7551
-        # but gets deprecation warning, so suppress it for now
-        # TODO: check how to handle in future versions (still works in 0.80)
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=FutureWarning)
-            viewer.window.qt_viewer.layers.keyboardSearch = lambda s: None
+    napari_settings = get_settings()
+    napari_settings.application.playback_fps = settings.general.DEFAULT_PLAYBACK_FPS
+    napari_settings.application.save_window_state = True
+    # one layer per grid cell, in layer list order.
+    napari_settings.application.grid_stride = -1
+    napari_settings.appearance.theme = "dark"
 
+    # deactivate keyboard search in layers panel because it slows down keyboard-based ROI drawing
+    # workaround described here: https://github.com/napari/napari/issues/7551
+    # private _qt_viewer (public qt_viewer is deprecated), still present in napari 0.9.1
+    viewer.window._qt_viewer.layers.keyboardSearch = lambda s: None
 
-        logger.info("PATARI: Clinical environment preferences applied successfully.")
-    except Exception as e:
-        logger.warning(f"Could not apply Napari preferences: {e}")
+    logger.info("PATARI: Clinical environment preferences applied successfully.")
 
 
 def load_startup_logo(viewer):

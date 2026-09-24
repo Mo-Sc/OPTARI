@@ -177,6 +177,7 @@ def create_bottom_dock_header(
 ) -> tuple[QLabel, QPushButton]:
     """Add the standard status label and primary action row for bottom docks."""
     status_label = QLabel(status_text)
+    status_label.setWordWrap(True)
     action_button = QPushButton(button_text)
     layout.addWidget(status_label)
     layout.addWidget(action_button)

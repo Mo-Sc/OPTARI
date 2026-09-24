@@ -58,6 +58,27 @@ def display_data_from_patato_obj(image_sequence) -> np.ndarray:
     return np.flip(np.array(image_sequence.da[:, :, :, 0, :]), axis=-2)
 
 
+def expand_to_acquisition_frames(
+    data: np.ndarray, frames: list[int], n_acq_frames: int
+) -> np.ndarray:
+    """Place per-output-frame *data* at its *frames* on the acquisition frame axis.
+
+    Frames that were not processed stay zero, so every PA layer shares the frame slider
+    with the ultrasound. Data that already spans the acquisition is returned unchanged.
+    """
+    if data.shape[0] == n_acq_frames:
+        return data
+    # A frame list that does not match the data would put images on the wrong frames.
+    if len(frames) != data.shape[0] or not all(0 <= f < n_acq_frames for f in frames):
+        raise ValueError(
+            f"frame indices {frames} do not match {data.shape[0]} image frame(s) "
+            f"within {n_acq_frames} acquisition frame(s)"
+        )
+    expanded = np.zeros((n_acq_frames, *data.shape[1:]), dtype=data.dtype)
+    expanded[frames] = data
+    return expanded
+
+
 # ---------------------------------------------------------------------------
 # Layer building
 # ---------------------------------------------------------------------------
@@ -131,34 +152,15 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
         )
         if frames_info is None:
             return list(range(n_frames))
-        if isinstance(frames_info, (np.int64, float, int, str)):
-            return [int(frames_info)]
-        if isinstance(frames_info, (list, np.ndarray)):
-            return [int(f) for f in frames_info]
-        return list(range(n_frames))
-
-    def _expand_to_acquisition_frames(
-        raw_data: np.ndarray, frame_list: list[int]
-    ) -> np.ndarray:
-        if (
-            raw_data.shape[0] == n_acq_frames
-            and len(frame_list) == n_acq_frames
-        ):
-            return raw_data
-
-        expanded = np.zeros(
-            (n_acq_frames, *raw_data.shape[1:]), dtype=raw_data.dtype
-        )
-        for i, frame in enumerate(frame_list):
-            if 0 <= int(frame) < n_acq_frames and i < raw_data.shape[0]:
-                expanded[int(frame)] = raw_data[i]
-        return expanded
+        # atleast_1d covers a scalar of any numpy/Python int type as well as lists and
+        # arrays. anything int() rejects is a corrupt attribute and should fail
+        return [int(f) for f in np.atleast_1d(frames_info)]
 
     # --- reconstructions ---
     for (recon_name, idx), recon in pa_data.get_scan_reconstructions().items():
         recon_raw = display_data_from_patato_obj(recon)
         recon_frame_list = _frame_list(recon, recon_raw.shape[0])
-        recon_img = _expand_to_acquisition_frames(recon_raw, recon_frame_list)
+        recon_img = expand_to_acquisition_frames(recon_raw, recon_frame_list, n_acq_frames)
 
         layer_name = f"Recon: {recon_name}_{idx}"
         patato_objects[layer_name] = recon
@@ -170,6 +172,8 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
                     "name": layer_name,
                     "scale": scale_from_patato_obj(recon, _pa_fallback),
                     "opacity": 1.0,
+                    "blending": "multiplicative",
+                    "auto_contrast": True,
                     "metadata": {
                         "type": "pa",
                         "pa_kind": "recon",
@@ -195,7 +199,7 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
         ).items():
             raw = display_data_from_patato_obj(image)
             frame_list = _frame_list(image, raw.shape[0])
-            data = _expand_to_acquisition_frames(raw, frame_list)
+            data = expand_to_acquisition_frames(raw, frame_list, n_acq_frames)
 
             axis1_labels = list(
                 map(str, np.asarray(image.ax_1_labels).tolist())
@@ -225,6 +229,8 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
                         "name": f"{prefix}: {dataset_name}_{idx}",
                         "scale": scale_from_patato_obj(image, _pa_fallback),
                         "opacity": 1.0,
+                        "blending": "multiplicative",
+                        "auto_contrast": True,
                         "metadata": metadata,
                     },
                 )

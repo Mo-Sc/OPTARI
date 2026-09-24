@@ -96,24 +96,6 @@ class TaskControllerBase:
             return
         download_then(self.patari_controller, *weights, dock.status_label, run)
 
-    @staticmethod
-    def _expand_to_source_frames(
-        data: np.ndarray,
-        output_frames: list[int],
-        source_frame_count: int,
-    ) -> np.ndarray:
-        """Pad sparse output frames back to the acquisition frame axis."""
-        if data.shape[0] == source_frame_count:
-            return data
-
-        expanded = np.zeros(
-            (source_frame_count, *data.shape[1:]), dtype=data.dtype
-        )
-        for i, frame in enumerate(output_frames):
-            if i < data.shape[0] and 0 <= int(frame) < source_frame_count:
-                expanded[int(frame)] = data[i]
-        return expanded
-
     def _add_or_update_image_layer(
         self,
         name: str,
@@ -158,6 +140,7 @@ class TaskControllerBase:
                 "metadata": metadata,
                 "opacity": 1.0,
                 "blending": "multiplicative", # blending always multiplicative for better overlay
+                "auto_contrast": True,
                 "units": self.image_units,
             }
             if translate is not None:

@@ -39,6 +39,7 @@ def main() -> None:
         QIcon(str(Path(__file__).resolve().parent / "config" / "logo.png"))
     )
     controller = None
+    exit_code = 0
 
     try:
         configure_napari(viewer)
@@ -47,6 +48,11 @@ def main() -> None:
         controller = PatariController(viewer)
 
         run()
+
+    except Exception:
+        # os_exit below ends the process before a re-raised exception could print its traceback
+        logger.exception("PATARI stopped on an unhandled error")
+        exit_code = 1
 
     finally:
         if controller is not None:
@@ -57,7 +63,7 @@ def main() -> None:
                 logger.exception("Error during controller shutdown: %s", e)
         # os._exit bypasses Pythons GC. Probably not ideal, but avoids a segfault on shutdown due to Qt objects
         # being destroyed in the wrong order after the event loop has stopped.
-        os_exit(0)
+        os_exit(exit_code)
 
 if __name__ == "__main__":
     main()

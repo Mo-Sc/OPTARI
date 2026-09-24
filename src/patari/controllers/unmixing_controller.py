@@ -15,7 +15,7 @@ from patato.io.attribute_tags import UnmixingAttributeTags
 from patato.unmixing.spectra import SPECTRA_NAMES
 from patari.controllers.base import TaskControllerBase
 from patari.utils.tasks import BackgroundStep
-from patari.patato_bridge import display_data_from_patato_obj
+from patari.patato_bridge import display_data_from_patato_obj, expand_to_acquisition_frames
 from patari.utils.presets import PresetStore
 from patari.utils.setup import get_user_unmixing_presets_dir
 from patari.widgets.dock_helpers import (
@@ -642,7 +642,7 @@ class UnmixingController(TaskControllerBase):
         name = f"{prefix}: {params.name_stem}"
         self._add_or_update_image_layer(
             name=name,
-            data=self._expand_to_source_frames(
+            data=expand_to_acquisition_frames(
                 display_data_from_patato_obj(image),
                 params.output_frames,
                 params.source_frame_count,

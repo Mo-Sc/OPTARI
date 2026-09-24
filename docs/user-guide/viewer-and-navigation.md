@@ -24,7 +24,7 @@ The **Scan Browser** dock lists available scans in the selected folder.
 ![Layer Controls](../assets/screenshots/placeholders/ss_layers.png)
 
 !!! tip
-    To set a specific, **fixed contrast limit** for all frames and channels instead of auto-scaling, select the respective layer from the Layer List, click the auto-contrast: `continuous` button in the layer controls panel and then click the `once` button. The contrast limits are now constant.
+    To set a specific, **fixed contrast limit** for all frames and channels instead of auto-scaling, select the respective layer from the Layer List and click the auto-contrast `once` button in the layer controls panel. This switches off `continuous`, which PA layers have on by default, and the contrast limits stay constant.
 
 
 ## Automatic frame selection
@@ -38,7 +38,9 @@ When a new scan is loaded, it automatically selects the frame with lowest motion
 ## Grid mode
 
 Press `Ctrl+G` (`Cmd+G` on macOS) or click the grid mode icon below the layer list to view multiple layers side by side instead of
-overlaid. This will show layers next to each other in pairs of two, meaning two consecutive layers will always be overlaid. This is a workaround to be able to see ROIs on top of images. To change which layers are overlaid and which ones are displayed next to each other, switch the order of the layers in the layer list.
+overlaid. Every visible layer gets its own cell, in the same order as the layer list (top left is the top of the list). The ROIs layer is shown in its own cell too, so ROIs are
+not drawn on top of the images in grid mode. See [Why can't I see ROIs overlaid on images in grid mode?](faq.md#why-cant-i-see-rois-overlaid-on-images-in-grid-mode)
+for the reason.
 
 !!! note
     PATARI does not yet support a true multi-viewer layout with synchronized annotations across separately
