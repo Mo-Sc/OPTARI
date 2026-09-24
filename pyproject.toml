@@ -15,10 +15,11 @@ classifiers = [
     "Operating System :: MacOS :: MacOS X",
     "Operating System :: Microsoft :: Windows",
 ]
-requires-python = ">=3.12"
+# the PATATO wheels below are built for CPython 3.12 only
+requires-python = ">=3.12,<3.13"
 dependencies = [
     "napari==0.9.1",
-    "PyQt6==6.10.2",
+    "PySide6==6.11.2",
     "numpy==2.4.6",
     "pandas==3.0.5",
     "magicgui==0.10.2",

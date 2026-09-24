@@ -223,6 +223,10 @@ class PatariController:
         if self.shapes_layer is None:
             return
 
+        # drop the previous scan's bindings, the live table signal would otherwise fire twice
+        for evt, handler in self._shapes_layer_bindings:
+            evt.disconnect(handler)
+
         self._shapes_layer_bindings = [
             # Shapes layer data changes drive ROI table refresh, label updates, and formatting.
             (
@@ -245,13 +249,6 @@ class PatariController:
                 self.roi_ctrl.on_live_table_selection_changed,
             ),
         ]
-
-        # Disconnect and reconnect to avoid duplicate connections if this is called multiple times.
-        for evt, handler in self._shapes_layer_bindings:
-            try:
-                evt.disconnect(handler)
-            except Exception:
-                pass
 
         for evt, handler in self._shapes_layer_bindings:
             evt.connect(handler)

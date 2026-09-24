@@ -20,7 +20,6 @@ jobs:
         with:
           python-version: "3.12"
 
-      # Qt libraries PyQt6 links against even when no window is ever opened.
       - name: Install system libraries
         run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon-x11-0 libdbus-1-3
 
