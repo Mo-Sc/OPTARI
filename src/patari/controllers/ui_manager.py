@@ -179,11 +179,10 @@ class UiManager:
         )
 
         UiManager._install_shutdown_hook(controller)
-
-        # TODO: should reordering / adding / removing layers trigger anything?
+        # TODO: should reordering / adding layers trigger anything?
         # controller.viewer.layers.events.reordered.connect(controller.on_layers_changed)
         # controller.viewer.layers.events.inserted.connect(controller.on_layers_changed)
-        # controller.viewer.layers.events.removed.connect(controller.on_layers_changed)
+        controller.viewer.layers.events.removed.connect(controller.on_layer_removed)
 
         # -------- dock signal wiring in controllers --------
         controller.scan_ctrl.bind_events()

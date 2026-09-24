@@ -22,14 +22,15 @@ Most buttons, checkboxes, and other controls have a tooltip. Hover over one for 
 
 1. [Viewer & Navigation](viewer-and-navigation.md) — the Scan Browser, Layer List, and moving through frames and
    wavelengths.
-2. [ROI Annotation](roi-annotation.md) — drawing ROIs, the Live/Saved tables, and the ROI Library.
-3. [Temporal & Spectral Analysis](temporal-and-spectral-analysis.md) — plotting ROI intensity over time and
+2. [Metadata](metadata.md) — the metadata viewer's tabs, and editing clinical metadata.
+3. [ROI Annotation](roi-annotation.md) — drawing ROIs, the Live/Saved tables, and the ROI Library.
+4. [Temporal & Spectral Analysis](temporal-and-spectral-analysis.md) — plotting ROI intensity over time and
    wavelength, and viewing intensity histograms.
-4. [Segmentation](segmentation.md) — automatic tissue detection and automated ROI placement.
-5. [Reconstruction](reconstruction.md) — running PATATO reconstruction presets from the GUI.
-6. [Unmixing](unmixing.md) — spectral unmixing and derived SO₂/THb parameters.
-7. [Exporting Data](exporting-data.md) — HDF5, spreadsheet, and image/video export.
-8. [Keyboard Shortcuts](keyboard-shortcuts.md) — the full shortcut reference.
-9. [FAQ](faq.md) — common questions about everyday usage.
+5. [Segmentation](segmentation.md) — automatic tissue detection and automated ROI placement.
+6. [Reconstruction](reconstruction.md) — running PATATO reconstruction presets from the GUI.
+7. [Unmixing](unmixing.md) — spectral unmixing and derived SO₂/THb parameters.
+8. [Exporting Data](exporting-data.md) — HDF5, spreadsheet, and image/video export.
+9. [Keyboard Shortcuts](keyboard-shortcuts.md) — the full shortcut reference.
+10. [FAQ](faq.md) — common questions about everyday usage.
 
 For examples of how we used PATARI in clinical PA studies, see [Sample Workflow](../clinical-workflows/manual-roi-workflow.md).

@@ -41,8 +41,9 @@ from patari.widgets.dock_helpers import DOCK_LABELS
 from patari.utils.setup import (
     get_default_config_file,
     get_user_config_file,
+    get_user_autosave_dir,
     get_user_dir,
-    get_user_log_file,
+    get_user_logs_dir,
     get_user_models_dir,
     get_user_reconstruction_presets_dir,
 )
@@ -328,7 +329,8 @@ class SettingsDialog(QDialog):
             ("Config file", get_user_config_file()),
             ("Presets", get_user_reconstruction_presets_dir().parent),
             ("Models", get_user_models_dir()),
-            ("Log file", get_user_log_file()),
+            ("Logs", get_user_logs_dir()),
+            ("ROI table backups", get_user_autosave_dir()),
         ):
             row = QWidget()
             row_layout = QHBoxLayout(row)

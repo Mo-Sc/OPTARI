@@ -8,7 +8,7 @@ import re
 import numpy as np
 import patato as pat
 from napari.layers import Image
-from napari.utils.notifications import show_error, show_info, show_warning
+from napari.utils.notifications import show_info, show_warning
 from patato.io.ithera.read_ithera import iTheraMSOT
 from qtpy.QtWidgets import QFileDialog
 
@@ -23,6 +23,7 @@ from patari.io.export_pipeline import (
     ipasc_export_report,
 )
 from patari.utils.misc import roi_color_for_index
+from patari.utils.motion import k_motion_scores_optimized
 from patari.utils.setup import load_startup_logo
 from patari.controllers.base import TaskControllerBase
 from patari.controllers.viewer_export_controller import ViewerExportController
@@ -94,6 +95,11 @@ class ScanController(TaskControllerBase):
             self.patari_controller.pa_data is not None
         )
 
+    def scan_name(self) -> "str | None":
+        """The scan's internal (vendor) name, for stamping onto layers PATARI creates."""
+        scan_info = self.patari_controller._scans.get(self.patari_controller.path)
+        return scan_info.internal_name if scan_info is not None else None
+
     def wavelengths(self) -> "list[int] | None":
         """Return scan wavelengths in nm, or ``None`` if unavailable."""
         if self.patari_controller.pa_data is None:
@@ -127,6 +133,7 @@ class ScanController(TaskControllerBase):
         self.patari_controller.pa_data = None
         self.patari_controller._patato_objects = {}
         self.patari_controller._derived_patato_objects = {}
+        self.patari_controller.clinical_metadata_edits = None
 
     def reset_scan_state(self, restore_startup_logo: bool = True) -> None:
         """Clear current scan state and remove all viewer layers."""
@@ -224,8 +231,13 @@ class ScanController(TaskControllerBase):
         else:
             self.reset_scan_state()
 
-    def load_scan(self, scan_path: Path) -> None:
+    def load_scan(self, scan_path: Path) -> bool:
+        """Open *scan_path* and build its layers. False if the scan could not be loaded.
 
+        Failures fall back to the startup logo rather than raising, which is what the
+        GUI wants; the return value is what lets an unattended caller (batch mode) tell
+        a loaded scan from an empty viewer.
+        """
         logger.info("loading scan: %s", scan_path)
 
         scan_path = Path(scan_path)
@@ -236,9 +248,14 @@ class ScanController(TaskControllerBase):
             logger.warning("scan not found: %s", scan_path)
             load_startup_logo(self.viewer)
             self.patari_controller.refresh_all()
-            return
+            return False
 
         scan_info = self.patari_controller._scans.get(scan_path)
+        if scan_info is None:
+            logger.warning("scan was not discovered in the current folder: %s", scan_path)
+            load_startup_logo(self.viewer)
+            self.patari_controller.refresh_all()
+            return False
 
         try:
             if scan_info.kind == "ithera":
@@ -254,7 +271,7 @@ class ScanController(TaskControllerBase):
             logger.exception("failed to open scan '%s'", scan_path)
             load_startup_logo(self.viewer)
             self.patari_controller.refresh_all()
-            return
+            return False
 
         try:
             layers = self.layers_from_pa_data()
@@ -263,24 +280,11 @@ class ScanController(TaskControllerBase):
             self.close_current_scan()
             load_startup_logo(self.viewer)
             self.patari_controller.refresh_all()
-            return
+            return False
 
-        for data, kw, lt in layers:
-            if lt == "image":
-                kw = dict(kw)
-                kw.setdefault("metadata", {})
-                kw["units"] = self.image_units
-                kw["metadata"].setdefault("filepath", str(scan_path))
-                kw["metadata"].setdefault("scan_name", scan_info.internal_name)
-                layer = self.viewer.add_image(data, **kw)
-                layer.colorbar.visible = True
-            else:
-                kw = dict(kw)
-                kw.setdefault("metadata", {})
-                kw["units"] = self.image_units
-                kw["metadata"].setdefault("filepath", str(scan_path))
-                kw["metadata"].setdefault("scan_name", scan_info.internal_name)
-                self.viewer.add_labels(data, **kw)
+        for data, kw in layers:
+            kw["metadata"] = {"filepath": str(scan_path), "scan_name": scan_info.internal_name, **kw["metadata"]}
+            self.viewer.add_image(data, units=self.image_units, **kw).colorbar.visible = True
 
         # Create the ROIs layer after image layers so it stays on top.
         self.patari_controller.shapes_layer = self.viewer.add_shapes(
@@ -312,22 +316,12 @@ class ScanController(TaskControllerBase):
             None,
         )
         self.patari_controller._resolve_active_recon_layer()
+        self.patari_controller.segmentation_ctrl.restore_from_scan(self.patari_controller.pa_data)
         self.patari_controller.refresh_controller_uis()
 
         # Initialize viewer position to DEFAULT_FRAME_INDEX and DEFAULT_CHANNEL_INDEX
         try:
-            frame_id = settings.general.DEFAULT_FRAME_INDEX
-            if frame_id == "motion":
-                # Motion scoring needs ultrasound. raw time series scans have none.
-                us_layer = self.patari_controller.active_us_layer
-                scores = us_layer.metadata.get("motion_scores") if us_layer else None
-                if scores is None:
-                    frame_id = 0
-                else:
-                    frame_id = int(np.argmin(scores))
-                    logger.info("motion-based frame selection: selected frame %d with motion score %.4f", frame_id, scores[frame_id])
-
-            self.viewer.dims.set_point(0, frame_id)
+            self.go_to_frame(settings.general.DEFAULT_FRAME_INDEX)
             self.viewer.dims.set_point(1, settings.general.DEFAULT_CHANNEL_INDEX)
         except Exception:
             logger.warning("failed to set initial viewer position. Setting to (0, 0)", exc_info=True)
@@ -343,6 +337,45 @@ class ScanController(TaskControllerBase):
             self.viewer.reset_view()
         except Exception:
             logger.info("failed to reset viewer view", exc_info=True)
+
+        return True
+
+    def go_to_frame(self, selector: int | str) -> int:
+        """Show the frame *selector* means for the loaded scan, and return it.
+
+        ``"motion"`` is the lowest-motion frame. The scores are computed here on demand
+        if the scan was opened with a different default, and cached on the US layer so
+        the next caller gets them for free. A scan with no ultrasound (a raw time
+        series) has nothing to score and falls back to frame 0. Both the viewer and a
+        batch run go through this, so "motion" means the same frame in either.
+
+        Raises ValueError for a frame number the scan does not have.
+        """
+        if selector == "motion":
+            frame_id = self._lowest_motion_frame()
+        else:
+            frame_id = int(selector)
+            n_frames = int(self.viewer.dims.nsteps[0]) if self.viewer.dims.ndim else 0
+            if not 0 <= frame_id < n_frames:
+                raise ValueError(f"frame {frame_id} is outside this scan ({n_frames} frames)")
+        self.viewer.dims.set_point(0, frame_id)
+        return frame_id
+
+    def _lowest_motion_frame(self) -> int:
+        us_layer = self.patari_controller.active_us_layer
+        if us_layer is None:
+            logger.info("no ultrasound to score motion on, using frame 0")
+            return 0
+
+        scores = us_layer.metadata.get("motion_scores")
+        if scores is None:
+            scores = k_motion_scores_optimized(np.asarray(us_layer.data))
+            us_layer.metadata["motion_scores"] = scores
+        frame_id = int(np.argmin(scores))
+        logger.info(
+            "motion-based frame selection: frame %d, score %.4f", frame_id, scores[frame_id]
+        )
+        return frame_id
 
     @staticmethod
     def scan_key(scan_path: Path) -> str:
@@ -413,6 +446,44 @@ class ScanController(TaskControllerBase):
                 "failed to read internal scan name from '%s'", path, exc_info=True
             )
         return None
+
+    @staticmethod
+    def discover_studies(
+        root: Path, max_depth: int = 3
+    ) -> dict[Path, dict[Path, ScanInfo]]:
+        """Map each study folder under *root* to its scans, in folder-name order.
+
+        A study is simply any folder that holds at least one scan, so a flat folder
+        of scans comes back as a single study and no naming convention is imposed
+        beyond the ``Scan_*`` one ``discover_scans`` already relies on. A folder that
+        is itself a study is not descended into.
+        """
+        root = Path(root)
+        studies: dict[Path, dict[Path, ScanInfo]] = {}
+
+        def walk(folder: Path, depth: int) -> None:
+            scans = ScanController.discover_scans(folder)
+            if scans:
+                studies[folder] = scans
+                return
+            if depth >= max_depth:
+                return
+            try:
+                children = sorted(
+                    child
+                    for child in folder.iterdir()
+                    # Following symlinks here risks walking a cycle or wandering
+                    # outside the dataset the user picked.
+                    if child.is_dir() and not child.is_symlink()
+                )
+            except (PermissionError, OSError):
+                logger.warning("could not list '%s', skipping", folder)
+                return
+            for child in children:
+                walk(child, depth + 1)
+
+        walk(root, 0)
+        return studies
 
     @staticmethod
     def discover_scans(folder: Path) -> dict[Path, ScanInfo]:
@@ -522,11 +593,8 @@ class ScanController(TaskControllerBase):
         if destination is None:
             return
 
-        # use napari's activity dock to show hdf5 export success/failure 
         if self.export_hdf5(destination):
             show_info(f"Exported scan to {destination.name}")
-        else:
-            show_error(f"Failed to export scan to {destination.name} — see log for details")
 
     def on_ipasc_export_clicked(self, event=None) -> None:
         destination = self._choose_export_path(
@@ -536,9 +604,6 @@ class ScanController(TaskControllerBase):
             return
 
         if not export_scan_to_ipasc(self.patari_controller, destination):
-            show_error(
-                f"Failed to export scan to {destination.name} — see log for details"
-            )
             return
         show_info(f"Exported raw time series to {destination.name}. "
                   + ipasc_export_report(destination))
@@ -546,22 +611,12 @@ class ScanController(TaskControllerBase):
     def _choose_export_path(
         self, title: str = "Export scan as HDF5", suffix: str = ""
     ) -> Path | None:
-        default_name = (
-            f"{Path(self.patari_controller.path).stem}{suffix}.hdf5"
-            if getattr(self.patari_controller, "path", None)
-            else f"export{suffix}.hdf5"
-        )
+        scan_path = self.patari_controller.path
+        default_name = f"{scan_path.stem if scan_path else 'export'}{suffix}.hdf5"
         filename, _ = QFileDialog.getSaveFileName(
             None,
             title,
-            str(
-                (
-                    Path(self.patari_controller.path).parent
-                    if getattr(self.patari_controller, "path", None)
-                    else Path.cwd()
-                )
-                / default_name
-            ),
+            str((scan_path.parent if scan_path else Path.cwd()) / default_name),
             "HDF5 files (*.hdf5 *.h5)",
         )
         if not filename:

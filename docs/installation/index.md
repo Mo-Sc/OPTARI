@@ -6,8 +6,15 @@ PATARI is designed to run on Windows, macOS and Linux, without external dependen
 
 No Python, no terminal, no admin rights required.
 
-1. Download the executable for your operating system from the
-   [latest release](https://github.com/Mo-Sc/PATARI/releases).
+1. Download the executable for your operating system:
+
+    <!-- TODO: replace with the release download links -->
+    [:fontawesome-brands-apple: macOS (Apple Silicon)](#){ .md-button }
+    [:fontawesome-brands-windows: Windows](#){ .md-button }
+    [:fontawesome-brands-linux: Linux](#){ .md-button }
+
+    Older versions are listed on the [releases page](https://github.com/Mo-Sc/PATARI/releases).
+
 2. Unpack the downloaded archive and run the `patari-v` file.
 3. **On First run only** — your operating system may warn that the app is unverified, since it isn't signed:
       - **Windows**: click **More info** → **Run anyway**.
@@ -27,6 +34,8 @@ No Python, no terminal, no admin rights required.
     well.
 
 ## Option B: From source (recommended for development)
+
+Installing from source into a Python 3.12 environment (the PATATO binaries PATARI depends on are only available for 3.12):
 
 ```bash
 git clone git@github.com:Mo-Sc/PATARI.git

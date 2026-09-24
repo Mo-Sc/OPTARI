@@ -33,7 +33,7 @@ The file contains two sheets: `roi_table` with the measurements, and `patari_met
 
 The filename is `roi_data_<operator>_<analysis ID>_<timestamp>.xlsx`, built from the `OPERATOR` and `ANALYSIS_ID` settings (see [Configuration](../configuration/configuration-schema.md#general)) with timestamp matching the `creation_time` in the metadata sheet. 
 
-The same file is written automatically as a backup after **every change** to the Saved Analysis table, to `~/.patari/roi_table_autosave.xlsx`. If PATARI closes unexpectedly, import that file to recover the session.
+The same file is written automatically as a backup after **every change** to the Saved Analysis table, one file per session: `~/.patari/autosave/roi_table_<date>T<time>_<pid>.xlsx`, named after the session's start time and process ID (the matching log file in `~/.patari/logs/` has the same name). If PATARI closes unexpectedly, start it again and import the newest backup from before the crash. The newest 20 backups are kept.
 
 Using the **Import XLSX** button, you can load a previously exported analysis file back into the **Saved Analysis** table, allowing you to continue an earlier analysis or continue on a different machine. Import **appends** to the current table, so analyses from several sessions or machines can be combined in one place. `roi_group_uid` keeps every row attributable to the ROI it was measured from. Identical rows are skipped. Files written by a PATARI version with an incompatible table schema are rejected.
 

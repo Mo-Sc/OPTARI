@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterator
+from dataclasses import dataclass
 from functools import partial
 from math import ceil
 
@@ -13,8 +14,8 @@ from qtpy.QtWidgets import QListWidgetItem
 from patato.io.attribute_tags import UnmixingAttributeTags
 from patato.unmixing.spectra import SPECTRA_NAMES
 from patari.controllers.base import TaskControllerBase
-from patari.utils.tasks import start_task
-from patari.patato_bridge import display_data_from_patato_obj
+from patari.utils.tasks import BackgroundStep
+from patari.patato_bridge import display_data_from_patato_obj, expand_to_acquisition_frames
 from patari.utils.presets import PresetStore
 from patari.utils.setup import get_user_unmixing_presets_dir
 from patari.widgets.dock_helpers import (
@@ -30,6 +31,156 @@ logger = logging.getLogger(__name__)
 # Unlike PATATO's reconstruction/preprocessing, SpectralUnmixer.run has no internal batch
 # loop or GPU/ONNX call. We chunk it ourselves to allow progress updates and cancellation.
 UNMIXING_CHUNK_FRAMES = 4
+
+
+def resolve_unmixing_wavelengths(preset: dict, available: list[int]) -> list[int]:
+    """Which of a scan's *available* wavelengths a preset selects.
+
+    Presets name either an explicit list or an inclusive range, and both are resolved
+    per scan rather than per preset: two scans in the same study can be acquired at
+    different wavelengths, and a range must not invent one the scan does not have.
+    """
+    explicit = preset.get(UnmixingAttributeTags.UNMIXING_WAVELENGTHS)
+    if explicit is not None:
+        wanted = {int(w) for w in explicit}
+        return sorted(w for w in available if w in wanted)
+
+    wavelength_range = preset.get(UnmixingAttributeTags.WAVELENGTH_RANGE)
+    if wavelength_range is not None and len(wavelength_range) == 2:
+        start, end = int(wavelength_range[0]), int(wavelength_range[1])
+        return sorted(w for w in available if start <= w <= end)
+
+    return []
+
+
+@dataclass
+class UnmixParams:
+    """Everything one unmixing run needs, resolved against a loaded scan."""
+
+    recon_for_run: object
+    source_layer_name: str
+    source_layer_metadata: dict
+    source_frame_count: int
+    wavelengths: list[int]
+    chromophores: list[str]
+    output_frames: list[int]
+    reduce_factor: int = 1
+    suffix: str = ""
+    generate_thb: bool = False
+    generate_so2: bool = False
+    current_frame_id: int | None = None
+
+    @property
+    def frame_mode(self) -> str:
+        return "current" if self.current_frame_id is not None else "all"
+
+    @property
+    def name_stem(self) -> str:
+        source_name = self.source_layer_name.replace("Recon: ", "")
+        suffix_part = f"_{self.suffix}" if self.suffix else ""
+        # Encode the acquisition-frame index when only a single frame is unmixed.
+        frame_part = (
+            f"_F{self.current_frame_id}" if self.current_frame_id is not None else ""
+        )
+        return f"{source_name}{suffix_part}{frame_part}"
+
+    @property
+    def settings(self) -> dict:
+        return {
+            "wavelengths": self.wavelengths,
+            "chromophores": self.chromophores,
+            "resolution_reduction_factor": self.reduce_factor,
+            "suffix": self.suffix,
+            "frame_mode": self.frame_mode,
+            "frames": self.output_frames,
+            "generate_thb": self.generate_thb,
+            "generate_so2": self.generate_so2,
+        }
+
+    @classmethod
+    def build(
+        cls,
+        controller,
+        *,
+        wavelengths: list[int],
+        chromophores: list[str],
+        reduce_factor: int = 1,
+        suffix: str = "",
+        generate_thb: bool = False,
+        generate_so2: bool = False,
+        frame_id: int | None = None,
+    ) -> "UnmixParams":
+        """Resolve an unmixing setup against the active reconstruction layer.
+
+        Raises ValueError, message safe to show the user, when it cannot run here.
+        """
+        active_layer = controller.active_recon_layer
+        if active_layer is None:
+            raise ValueError("Select a PA reconstruction layer.")
+        recon = controller._patato_objects.get(active_layer.name)
+        if recon is None:
+            raise ValueError("Source layer must be a reconstruction.")
+        if not wavelengths:
+            raise ValueError("Select at least one wavelength.")
+        if not chromophores:
+            raise ValueError("Select at least one chromophore.")
+
+        frame_numbers = list(
+            active_layer.metadata.get("frames") or range(recon.shape[0])
+        )
+        recon_for_run = recon
+        output_frames = frame_numbers
+        if frame_id is not None:
+            if frame_id not in frame_numbers:
+                raise ValueError("Selected frame is not reconstructed.")
+            # PATATO expects a contiguous slice, then we remap to acquisition frame ids.
+            recon_idx = frame_numbers.index(frame_id)
+            recon_for_run = recon[recon_idx : recon_idx + 1]
+            output_frames = [frame_id]
+
+        return cls(
+            recon_for_run=recon_for_run,
+            source_layer_name=active_layer.name,
+            source_layer_metadata=dict(active_layer.metadata),
+            source_frame_count=int(np.asarray(active_layer.data).shape[0]),
+            wavelengths=wavelengths,
+            chromophores=chromophores,
+            output_frames=output_frames,
+            reduce_factor=int(reduce_factor),
+            suffix=suffix.strip(),
+            generate_thb=bool(generate_thb),
+            generate_so2=bool(generate_so2),
+            current_frame_id=frame_id,
+        )
+
+    @classmethod
+    def from_preset(cls, preset: dict, controller, *, frame_id: int | None = None):
+        """Resolve an unmixing preset against the loaded scan's own wavelengths."""
+        active_layer = controller.active_recon_layer
+        if active_layer is None:
+            raise ValueError("Select a PA reconstruction layer.")
+        available = [int(w) for w in active_layer.metadata.get("wavelengths") or []]
+        wavelengths = resolve_unmixing_wavelengths(preset, available)
+        if not wavelengths:
+            raise ValueError(
+                "None of the preset's wavelengths were acquired in this scan "
+                f"(scan has {available or 'none'})."
+            )
+        chromophores = list(preset.get(UnmixingAttributeTags.SPECTRA, []))
+        # THb/sO2 need the haemoglobin pair, same rule the dock enforces.
+        hb_pair = {"Hb", "HbO2"} <= set(chromophores)
+        return cls.build(
+            controller,
+            wavelengths=wavelengths,
+            chromophores=chromophores,
+            reduce_factor=int(preset.get(UnmixingAttributeTags.RESOLUTION_REDUCE, 1)),
+            suffix=str(preset.get(UnmixingAttributeTags.SUFFIX, "")),
+            generate_thb=hb_pair
+            and bool(preset.get(UnmixingAttributeTags.COMPUTE_THB, True)),
+            generate_so2=hb_pair
+            and bool(preset.get(UnmixingAttributeTags.COMPUTE_SO2, True)),
+            frame_id=frame_id,
+        )
 
 
 def _unmix_frames(
@@ -372,6 +523,7 @@ class UnmixingController(TaskControllerBase):
         filepath,
         timestamps,
         pa_kind: str,
+        scan_name: str | None = None,
         frame_mode: str,
         parameter: str | None = None,
         include_chromophores: bool = False,
@@ -386,6 +538,9 @@ class UnmixingController(TaskControllerBase):
             "axis1_name": "Channel",
             "axis1_labels": axis1_labels,
             "filepath": filepath,
+            # Belongs to the whole scan, not the layer, so it has to ride along every
+            # derived layer or it drops out of the measurement table.
+            "scan_name": scan_name,
             "timestamps": timestamps,
         }
         if include_chromophores:
@@ -397,7 +552,7 @@ class UnmixingController(TaskControllerBase):
         export_attrs = {
             "frames": np.asarray(output_frames, dtype=int),
             "source_layer": str(source_layer_name),
-            "axis1_labels": np.asarray(axis1_labels, dtype=str),
+            "axis1_labels": [str(label) for label in axis1_labels],
             "pa_kind": str(pa_kind),
             "source_frame_mode": str(frame_mode),
         }
@@ -406,216 +561,130 @@ class UnmixingController(TaskControllerBase):
 
         return layer_metadata, export_attrs
 
-    def on_run_unmixing_clicked(self) -> None:
-        """Start unmixing for the selected setup in a worker thread."""
-        if self.patari_controller.unmixing is None:
-            return
 
+    # ============ run: params -> prepare -> publish ============
+    def _params_from_ui(self) -> UnmixParams:
+        """Build run parameters from the dock. Raises ValueError with a user-facing message."""
         dock = self.patari_controller.unmixing
-
-        if self.patari_controller.active_recon_layer is None:
-            dock.status_label.setText("Select a PA reconstruction layer.")
-            return
-
-        recon = self.patari_controller._patato_objects.get(
-            self.patari_controller.active_recon_layer.name
-        )
-        if recon is None:
-            dock.status_label.setText("Source layer must be a reconstruction.")
-            return
-
-        selected_wavelengths = [
+        wavelengths = [
             int(dock.wavelengths_list.item(i).data(Qt.UserRole))
             for i in range(dock.wavelengths_list.count())
             if dock.wavelengths_list.item(i).checkState() == Qt.Checked
         ]
-        selected_chromophores = [
+        chromophores = [
             dock.chromophores_list.item(i).text()
             for i in range(dock.chromophores_list.count())
             if dock.chromophores_list.item(i).checkState() == Qt.Checked
         ]
-
-        if not selected_wavelengths:
-            dock.status_label.setText("Select at least one wavelength.")
-            return
-        if not selected_chromophores:
-            dock.status_label.setText("Select at least one chromophore.")
-            return
-
-        frame_numbers = list(
-            self.patari_controller.active_recon_layer.metadata.get("frames")
-            or range(recon.shape[0])
+        frame_id = (
+            int(self.viewer.dims.current_step[0])
+            if dock.current_frames_radio.isChecked()
+            else None
         )
-        # Run against all reconstructed frames by default.
-        recon_for_run = recon
-        output_frames = frame_numbers
-        current_frame_id = None
-        frame_mode = "all"
-
-        if dock.current_frames_radio.isChecked():
-            current_frame = int(self.viewer.dims.current_step[0])
-            if current_frame not in frame_numbers:
-                dock.status_label.setText("Selected frame is not reconstructed.")
-                return
-            recon_idx = frame_numbers.index(current_frame)
-            # PATATO expects a contiguous slice, then we remap to acquisition frame ids.
-            recon_for_run = recon[recon_idx : recon_idx + 1]
-            output_frames = [current_frame]
-            current_frame_id = current_frame
-            frame_mode = "current"
-
-        suffix = dock.suffix_edit.text().strip()
-        reduce_factor = int(dock.resolution_reduction_factor.value())
-        generate_thb = dock.generate_thb_checkbox.isChecked()
-        generate_so2 = dock.generate_so2_checkbox.isChecked()
-        settings = {
-            "wavelengths": selected_wavelengths,
-            "chromophores": selected_chromophores,
-            "resolution_reduction_factor": reduce_factor,
-            "suffix": suffix,
-            "frame_mode": frame_mode,
-            "frames": output_frames,
-            "generate_thb": generate_thb,
-            "generate_so2": generate_so2,
-        }
-
-        n_chunks = ceil(len(output_frames) / UNMIXING_CHUNK_FRAMES)
-        source_layer_name = self.patari_controller.active_recon_layer.name
-        source_layer_metadata = dict(self.patari_controller.active_recon_layer.metadata)
-        source_frame_count = int(
-            np.asarray(self.patari_controller.active_recon_layer.data).shape[0]
+        return UnmixParams.build(
+            self.patari_controller,
+            wavelengths=wavelengths,
+            chromophores=chromophores,
+            reduce_factor=int(dock.resolution_reduction_factor.value()),
+            suffix=dock.suffix_edit.text(),
+            generate_thb=dock.generate_thb_checkbox.isChecked(),
+            generate_so2=dock.generate_so2_checkbox.isChecked(),
+            frame_id=frame_id,
         )
-        source_name = source_layer_name.replace("Recon: ", "")
-        suffix_part = f"_{suffix}" if suffix else ""
-        # Encode the acquisition-frame index when only a single frame is unmixed.
-        frame_part = f"_F{current_frame_id}" if current_frame_id is not None else ""
 
-        def publish(result) -> None:
-            """Add the finished unmixed/THb/sO2 layers. Runs on the main thread."""
-            unmixed, thb, so2 = result
-            generated = ["unmixed"]
-
-            unmixed_axis1_labels = list(map(str, unmixed.ax_1_labels))
-            unmixed_metadata, unmixed_export_attrs = self._build_output_metadata(
-                source_layer_name=source_layer_name,
-                output_frames=output_frames,
-                axis1_labels=unmixed_axis1_labels,
-                filepath=source_layer_metadata.get("filepath"),
-                timestamps=source_layer_metadata.get("timestamps"),
-                pa_kind="unmixed",
-                frame_mode=frame_mode,
-                include_chromophores=True,
-                settings=settings,
-            )
-            self._set_export_frame_attrs(unmixed, unmixed_export_attrs)
-
-            unmixed_name = f"Unmixed: {source_name}{suffix_part}{frame_part}"
-            unmixed_data = self._expand_to_source_frames(
-                display_data_from_patato_obj(unmixed),
-                output_frames,
-                source_frame_count,
-            )
-            # Channel labels are used by downstream spectrum displays.
-            self._add_or_update_image_layer(
-                name=unmixed_name,
-                data=unmixed_data,
-                metadata=unmixed_metadata,
-                patato_obj=unmixed,
-                colormap="magma",
-            )
-            # Keep PATATO outputs available for future derived computations.
-            self.patari_controller._derived_patato_objects[unmixed_name] = unmixed
-
-            if thb is not None:
-                thb_metadata, thb_export_attrs = self._build_output_metadata(
-                    source_layer_name=source_layer_name,
-                    output_frames=output_frames,
-                    axis1_labels=["thb"],
-                    filepath=source_layer_metadata.get("filepath"),
-                    timestamps=source_layer_metadata.get("timestamps"),
-                    pa_kind="unmixed_param",
-                    frame_mode=frame_mode,
-                    parameter="thb",
-                    settings=settings,
-                )
-                self._set_export_frame_attrs(thb, thb_export_attrs)
-                thb_name = f"THb: {source_name}{suffix_part}{frame_part}"
-                self._add_or_update_image_layer(
-                    name=thb_name,
-                    data=self._expand_to_source_frames(
-                        display_data_from_patato_obj(thb),
-                        output_frames,
-                        source_frame_count,
-                    ),
-                    metadata=thb_metadata,
-                    patato_obj=thb,
-                    colormap="inferno",
-                )
-                self.patari_controller._derived_patato_objects[thb_name] = thb
-                generated.append("thb")
-
-            if so2 is not None:
-                so2_metadata, so2_export_attrs = self._build_output_metadata(
-                    source_layer_name=source_layer_name,
-                    output_frames=output_frames,
-                    axis1_labels=["so2"],
-                    filepath=source_layer_metadata.get("filepath"),
-                    timestamps=source_layer_metadata.get("timestamps"),
-                    pa_kind="unmixed_param",
-                    frame_mode=frame_mode,
-                    parameter="so2",
-                    settings=settings,
-                )
-                self._set_export_frame_attrs(so2, so2_export_attrs)
-                so2_name = f"sO2: {source_name}{suffix_part}{frame_part}"
-                self._add_or_update_image_layer(
-                    name=so2_name,
-                    data=self._expand_to_source_frames(
-                        display_data_from_patato_obj(so2),
-                        output_frames,
-                        source_frame_count,
-                    ),
-                    metadata=so2_metadata,
-                    patato_obj=so2,
-                    colormap="twilight_shifted",
-                )
-                self.patari_controller._derived_patato_objects[so2_name] = so2
-                generated.append("so2")
-
-            # Reassert ROI visibility priority after adding multiple result layers.
-            self.patari_controller._ensure_shapes_layer_on_top()
-
-            dock.status_label.setText(f"Finished: {', '.join(generated)}")
-            logger.info("unmixing complete: %s", ", ".join(generated))
-
-        dock.status_label.setText(f"Unmixing {len(output_frames)} frame(s)…")
+    def prepare(self, params: UnmixParams) -> BackgroundStep:
+        """Return the work to run for *params*."""
+        n_chunks = ceil(len(params.output_frames) / UNMIXING_CHUNK_FRAMES)
         logger.info(
             "running unmixing for %s with %s wavelength(s), %s chromophore(s), reduce=%s, "
             "in %s chunk(s) of %s",
-            source_layer_name,
-            len(selected_wavelengths),
-            len(selected_chromophores),
-            reduce_factor,
+            params.source_layer_name,
+            len(params.wavelengths),
+            len(params.chromophores),
+            params.reduce_factor,
             n_chunks,
             UNMIXING_CHUNK_FRAMES,
         )
-
-        start_task(
-            self.patari_controller,
-            partial(
+        return BackgroundStep(
+            func=partial(
                 _unmix_frames,
-                recon_for_run,
+                params.recon_for_run,
                 self.patari_controller.pa_data,
-                selected_wavelengths,
-                selected_chromophores,
-                reduce_factor,
-                suffix,
-                generate_thb,
-                generate_so2,
+                params.wavelengths,
+                params.chromophores,
+                params.reduce_factor,
+                params.suffix,
+                params.generate_thb,
+                params.generate_so2,
                 UNMIXING_CHUNK_FRAMES,
             ),
             total=n_chunks,
             desc="Unmixing",
-            on_result=publish,
-            status_label=dock.status_label,
         )
+
+    def _publish_one(self, image, params: UnmixParams, *, prefix, axis1_labels,
+                     pa_kind, colormap, parameter=None, include_chromophores=False) -> str:
+        """Add one unmixing output as a layer and register it for export."""
+        metadata, export_attrs = self._build_output_metadata(
+            source_layer_name=params.source_layer_name,
+            output_frames=params.output_frames,
+            axis1_labels=axis1_labels,
+            filepath=params.source_layer_metadata.get("filepath"),
+            scan_name=params.source_layer_metadata.get("scan_name"),
+            timestamps=params.source_layer_metadata.get("timestamps"),
+            pa_kind=pa_kind,
+            frame_mode=params.frame_mode,
+            parameter=parameter,
+            include_chromophores=include_chromophores,
+            settings=params.settings,
+        )
+        self._set_export_frame_attrs(image, export_attrs)
+        name = f"{prefix}: {params.name_stem}"
+        self._add_or_update_image_layer(
+            name=name,
+            data=expand_to_acquisition_frames(
+                display_data_from_patato_obj(image),
+                params.output_frames,
+                params.source_frame_count,
+            ),
+            metadata=metadata,
+            patato_obj=image,
+            colormap=colormap,
+        )
+        self.patari_controller._derived_patato_objects[name] = image
+        return name
+
+    def publish(self, result, params: UnmixParams) -> str:
+        """Add the finished unmixed/THb/sO2 layers. Runs on the main thread."""
+        unmixed, thb, so2 = result
+
+        names = [
+            self._publish_one(
+                unmixed, params,
+                prefix="Unmixed",
+                # Channel labels are used by downstream spectrum displays.
+                axis1_labels=list(map(str, unmixed.ax_1_labels)),
+                pa_kind="unmixed",
+                colormap="magma",
+                include_chromophores=True,
+            )
+        ]
+        if thb is not None:
+            names.append(self._publish_one(
+                thb, params, prefix="THb", axis1_labels=["thb"],
+                pa_kind="unmixed_param", colormap="inferno", parameter="thb",
+            ))
+        if so2 is not None:
+            names.append(self._publish_one(
+                so2, params, prefix="sO2", axis1_labels=["so2"],
+                pa_kind="unmixed_param", colormap="twilight_shifted", parameter="so2",
+            ))
+
+        # Reassert ROI visibility priority after adding multiple result layers.
+        self.patari_controller._ensure_shapes_layer_on_top()
+        logger.info("unmixing complete: %s", ", ".join(names))
+        return ", ".join(names)
+
+    def on_run_unmixing_clicked(self) -> None:
+        if self.patari_controller.unmixing is not None:
+            self.run_from_ui(self.patari_controller.unmixing)

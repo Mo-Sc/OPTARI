@@ -1,0 +1,22 @@
+{
+  "description": "Reconstruct, segment, unmix and place the clinical 10x2mm muscle ROI on each scan's lowest-motion frame.",
+  "steps": {
+    "reconstruction": "backproject_ithera",
+    "segmentation": "muscle_poly",
+    "unmixing": "haemoglobin",
+    "roi": "clinical_ellipse_10x2mm_Muskel1"
+  },
+  "source": null,
+  "frame": "motion",
+  "measure": {
+    "layers": "analysis",
+    "all_channels": true,
+    "all_frames": false
+  },
+  "outputs": {
+    "xlsx": true,
+    "hdf5": false,
+    "overlay_png": true,
+    "overlay_layer": null
+  }
+}

@@ -77,18 +77,19 @@ nav:
   - User Guide:
       - Overview: user-guide/index.md
       - Viewer & Navigation: user-guide/viewer-and-navigation.md
+      - Metadata: user-guide/metadata.md
       - ROI Annotation: user-guide/roi-annotation.md
       - Temporal & Spectral Analysis: user-guide/temporal-and-spectral-analysis.md
       - Segmentation: user-guide/segmentation.md
       - Reconstruction: user-guide/reconstruction.md
       - Unmixing: user-guide/unmixing.md
+      - Batch Processing: user-guide/batch-processing.md
       - Exporting Data: user-guide/exporting-data.md
       - Keyboard Shortcuts: user-guide/keyboard-shortcuts.md
       - FAQ: user-guide/faq.md
   - Sample Workflow:
       - Manual ROI Workflow: clinical-workflows/manual-roi-workflow.md
       - Segmentation + Unmixing Workflow: clinical-workflows/segmentation-unmixing-workflow.md
-      - Batch Processing Workflow: clinical-workflows/batch-processing-workflow.md
       - Pixel Counting: clinical-workflows/pixel-counting.md
   - Configuration:
       - Overview: configuration/index.md

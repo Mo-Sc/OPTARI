@@ -54,6 +54,7 @@ def create_unmixing_dock(*, enable_scroll: bool = True) -> UnmixingDock:
     source_box = QGroupBox("Source")
     source_form = QFormLayout(source_box)
     source_layer_label = QLabel("Select a PA reconstruction layer")
+    source_layer_label.setWordWrap(True)
     source_form.addRow(source_layer_label)
 
     setup_box = QGroupBox("Unmixing Setup")
@@ -144,6 +145,7 @@ def create_unmixing_dock(*, enable_scroll: bool = True) -> UnmixingDock:
         "chromophore selected (Shift+Ctrl+U / Shift+Cmd+U)"
     )
     status_label = QLabel("Select wavelengths and chromophores.")
+    status_label.setWordWrap(True)
     action_layout.addWidget(frame_scope_row)
     action_layout.addWidget(run_button)
     action_layout.addWidget(status_label)

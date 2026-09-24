@@ -128,6 +128,7 @@ def create_reconstruction_dock(*, enable_scroll: bool = True) -> ReconstructionD
     run_button = QPushButton("Run Reconstruction")
     run_button.setToolTip("Requires a loaded scan and a selected, non-edited preset")
     status_label = QLabel("No scan loaded.")
+    status_label.setWordWrap(True)
     action_layout.addWidget(frame_scope_row)
     action_layout.addWidget(run_button)
     action_layout.addWidget(status_label)

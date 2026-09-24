@@ -123,6 +123,7 @@ def create_segmentation_dock(*, enable_scroll: bool = True) -> SegmentationDock:
         create_frame_scope_controls()
     )
     status_label = QLabel("Select a model and run segmentation.")
+    status_label.setWordWrap(True)
 
     seg_layout.addWidget(QLabel("Preset"))
     seg_layout.addWidget(preset_combo)

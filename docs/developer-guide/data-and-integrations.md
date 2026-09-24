@@ -35,7 +35,7 @@ Unit conversions are done in `patato.io.ipasc.conversions`:
 | Quantity | PATATO | IPASC |
 | --- | --- | --- |
 | Wavelengths | nm | m |
-| Acquisition times | seconds on the .NET epoch (like in ithera files) | seconds since the Unix epoch |
+| Acquisition times | seconds on the .NET epoch, on the scanner's local clock (like in iThera files) | seconds since the Unix epoch, UTC |
 | Temperature | degrees Celsius | kelvin |
 | Detector positions | m | m |
 
@@ -57,8 +57,7 @@ Absent, because no supported format records them:
   `<ULTRA-SOUND-FIELD-OF-VIEW>` for the ultrasound image. 
 
 ### UUIDs
-No ithera device parameter follows IPASC's required UUID structure. But they contain the records `DeviceSN`, `TransducerSN`, `LaserSN`, `DAQ_MACaddress` and `SW_Version` in the scan node. The PATATO fork reads them into a dictionary (`ReaderInterface.get_device_info`), stores it in the `device_info` root attribute. 
-So our IPASC layer hashes the `DeviceSN` and `DAQ_MACaddress` into a version 5 UUID as device `unique_identifier`.
+No iThera device parameter follows IPASC's required UUID structure, so the device `unique_identifier` is left absent.
 
 The data `uuid` is a generated value, since it should identify the file being written rather than anything about the
 source.

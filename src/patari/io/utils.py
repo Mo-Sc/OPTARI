@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from pathlib import Path
 import re
+
+import cv2
 from napari.layers import Image
 from napari.viewer import Viewer
 
@@ -28,3 +31,16 @@ def _filename_token(text: str) -> str:
     """Reduce free text to something safe to embed in a filename."""
     token = re.sub(r"[^A-Za-z0-9]+", "-", str(text)).strip("-")
     return token or "unknown"
+
+
+def save_viewer_screenshot(
+    viewer: Viewer, destination: Path, *, include_colorbars: bool = True
+) -> None:
+    """Write the current canvas to *destination* as PNG/TIFF.
+
+    Shared by the Export View dialog and batch mode so an overlay saved by a batch
+    run is the same image the user would have exported by hand.
+    """
+    with colorbars_visible(viewer, include_colorbars):
+        image = viewer.screenshot(canvas_only=True)[..., :3]
+    cv2.imwrite(str(destination), cv2.cvtColor(image, cv2.COLOR_RGB2BGR))

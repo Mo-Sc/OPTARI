@@ -1,14 +1,19 @@
 import logging
+import os
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
-import warnings
 
 from imageio.v3 import imread
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_CONFIGS_DIR = Path(__file__).resolve().parent.parent / "config" / "default_configs"
+
+# Names this session's log and ROI table backup. Start time plus process id, so PATARI instances
+# running side by side never write to the same file, and a session's log and backup match.
+SESSION_ID = f"{datetime.now():%Y%m%dT%H%M%S}_{os.getpid()}"
+KEPT_SESSION_FILES = 20
 
 
 def _copy_default_presets(default_configs_dir: Path, user_config_dir: Path) -> None:
@@ -27,10 +32,10 @@ def _copy_default_presets(default_configs_dir: Path, user_config_dir: Path) -> N
 
 
 def get_user_dir() -> Path:
-    """sets env var for user home dir and fills it with defaults if it doesn't exist."""
+    """The user directory, ``PATARI_USER_DIR`` or ``~/.patari``, seeded with defaults on first use."""
 
-    user_dir = Path.home() / ".patari"
-    
+    user_dir = Path(os.environ.get("PATARI_USER_DIR", Path.home() / ".patari"))
+
     config_dir = user_dir / "config"
     if not DEFAULT_CONFIGS_DIR.exists():
         raise FileNotFoundError(f"Default configs directory not found at {DEFAULT_CONFIGS_DIR}")
@@ -38,7 +43,7 @@ def get_user_dir() -> Path:
     # First-run:
     if not (config_dir / "config.json").exists():
         # create the user dir and subdirs for config, logs, models
-        print(f"Creating user directory at {user_dir}")
+        print(f"creating PATARI user directory at {user_dir}")
         user_dir.mkdir(parents=True, exist_ok=True)
         config_dir.mkdir(exist_ok=True)
         (user_dir / "logs").mkdir(exist_ok=True)
@@ -47,18 +52,19 @@ def get_user_dir() -> Path:
         for config_file in DEFAULT_CONFIGS_DIR.glob("*.json"):
             shutil.copy2(config_file, config_dir / config_file.name)
 
-        print(f"Copied default config files to {config_dir}")
+        print(f"copied default config files to {config_dir}")
 
     _copy_default_presets(DEFAULT_CONFIGS_DIR, config_dir)
 
     return user_dir
 
 
-def archive_user_dir(user_dir: Path) -> Path:
+def archive_config_dir(config_dir: Path) -> Path:
+    """Move an outdated config folder aside; models and logs next to it stay in place."""
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    archive_dir = user_dir.with_name(f"{user_dir.name}_old_{timestamp}")
-    user_dir.rename(archive_dir)
-    print(f"Archived PATARI user directory to {archive_dir}")
+    archive_dir = config_dir.with_name(f"{config_dir.name}_old_{timestamp}")
+    config_dir.rename(archive_dir)
+    print(f"archived outdated PATARI config to {archive_dir}")
     return archive_dir
 
 
@@ -77,6 +83,11 @@ def get_user_roi_presets_dir() -> Path:
     return get_user_dir() / "config" / "presets" / "roi"
 
 
+def get_user_batch_presets_dir() -> Path:
+    """Returns the path to the user-editable batch plan presets directory."""
+    return get_user_dir() / "config" / "presets" / "batch"
+
+
 def get_user_segmentation_presets_dir() -> Path:
     """Returns the path to the user-editable segmentation presets directory."""
     return get_user_dir() / "config" / "presets" / "segmentation"
@@ -86,13 +97,13 @@ def get_user_config_file() -> Path:
     """Returns the path to the configuration file."""
     return get_user_dir() / "config" / "config.json"
 
-def get_user_roi_autosave_file() -> Path:
-    """Rolling backup of the Saved Analysis table, restorable via Import XLSX."""
-    return get_user_dir() / "roi_table_autosave.xlsx"
+def get_user_autosave_dir() -> Path:
+    """Returns the directory holding one Saved Analysis table backup per session."""
+    return get_user_dir() / "autosave"
 
-def get_user_log_file() -> Path:
-    """Returns the path to the log file."""
-    return get_user_dir() / "logs" / "patari.log"
+def get_user_logs_dir() -> Path:
+    """Returns the directory holding one log file per session."""
+    return get_user_dir() / "logs"
 
 def get_user_models_dir() -> Path:
     """Returns the path to the models directory."""
@@ -102,38 +113,43 @@ def get_user_seg_models_config_file() -> Path:
     """Returns the path to the segmentation models configuration file."""
     return get_user_dir() / "config" / "segmentation_models.json"
 
+def new_session_file(directory: Path, prefix: str, suffix: str) -> Path:
+    """This session's file in *directory*, after deleting all but the newest older ones.
+
+    Timestamped names sort chronologically. Room is kept for the new file, so the directory
+    holds at most ``KEPT_SESSION_FILES`` files with this prefix.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    for old_file in sorted(directory.glob(f"{prefix}_*{suffix}"))[: -(KEPT_SESSION_FILES - 1)]:
+        old_file.unlink()
+    return directory / f"{prefix}_{SESSION_ID}{suffix}"
+
 def get_default_config_file() -> Path:
     """Returns the path to the packaged default configuration file."""
     return DEFAULT_CONFIGS_DIR / "config.json"
 
 def configure_napari(viewer) -> None:
     """
-    configure PATRI specific napari settings (playback fps, save window state, grid stride).
+    configure PATARI specific napari settings (playback fps, save window state, grid stride).
     Deactivate keyboard search in layers panel to avoid accidental layer selection during ROI drawing.
     """
-    try:
-        import napari
-        from patari.config import settings
-        
-        napari_settings = napari.settings.get_settings()
-        
-        napari_settings.application.playback_fps = settings.general.DEFAULT_PLAYBACK_FPS
-        napari_settings.application.save_window_state = True
-        napari_settings.application.grid_stride = -2
-        napari_settings.appearance.theme = "dark"
+    # imported here: patari.config imports this module, and headless users of it shouldn't load napari
+    from napari.settings import get_settings
+    from patari.config import settings
 
-        # deactivate keyboard search in layers panel because it slows done keyboard-based ROI drawing
-        # workaround described here: https://github.com/napari/napari/issues/7551
-        # but gets deprecation warning, so suppress it for now
-        # TODO: check how to handle in future versions (still works in 0.80)
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=FutureWarning)
-            viewer.window.qt_viewer.layers.keyboardSearch = lambda s: None
+    napari_settings = get_settings()
+    napari_settings.application.playback_fps = settings.general.DEFAULT_PLAYBACK_FPS
+    napari_settings.application.save_window_state = True
+    # one layer per grid cell, in layer list order.
+    napari_settings.application.grid_stride = -1
+    napari_settings.appearance.theme = "dark"
 
+    # deactivate keyboard search in layers panel because it slows down keyboard-based ROI drawing
+    # workaround described here: https://github.com/napari/napari/issues/7551
+    # private _qt_viewer (public qt_viewer is deprecated), still present in napari 0.9.1
+    viewer.window._qt_viewer.layers.keyboardSearch = lambda s: None
 
-        logger.info("PATARI: Clinical environment preferences applied successfully.")
-    except Exception as e:
-        logger.warning(f"Could not apply Napari preferences: {e}")
+    logger.info("napari preferences applied")
 
 
 def load_startup_logo(viewer):

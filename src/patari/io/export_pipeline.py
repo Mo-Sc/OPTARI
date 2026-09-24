@@ -135,32 +135,29 @@ def import_roi_table_from_xlsx(path=None) -> tuple[pd.DataFrame, str] | None:
 def export_scan_to_hdf5(controller, destination: Path) -> bool:
     """Export scan data and PATARI additions (ROIs and derived images)."""
     if controller.pa_data is None:
-        logger.warning("no scan loaded")
+        logger.warning("No scan loaded, nothing to export")
         return False
 
-    destination = Path(destination)
-    if destination.suffix.lower() not in {".hdf5", ".h5"}:
-        destination = destination.with_suffix(".hdf5")
-    if destination.exists():
-        logger.error("export target already exists: %s", destination)
+    destination = _hdf5_destination(destination)
+    if destination is None:
         return False
 
     try:
         controller.pa_data.save_hdf5(str(destination))
         _write_file_origin(destination)
     except Exception:
-        logger.exception("failed to export scan to HDF5")
+        logger.exception("Failed to export scan to %s", destination.name)
         return False
 
     destination_pa_data = None
     try:
         destination_pa_data = pat.PAData.from_hdf5(str(destination), mode="r+")
         _write_rois(controller, destination_pa_data)
-        _write_derived_images(controller, destination_pa_data)
+        _write_derived_data(controller, destination_pa_data)
         logger.info("exported scan to %s", destination)
         return True
     except Exception:
-        logger.exception("exported scan, but failed to write PATARI additions")
+        logger.exception("Exported scan to %s, but failed to write ROIs and derived images", destination.name)
         return False
     finally:
         if destination_pa_data is not None:
@@ -174,20 +171,17 @@ def export_scan_to_ipasc(controller, destination: Path) -> bool:
     """Export the raw time series of the loaded scan as a native IPASC file.
     """
     if controller.pa_data is None:
-        logger.warning("no scan loaded")
+        logger.warning("No scan loaded, nothing to export")
         return False
 
-    destination = Path(destination)
-    if destination.suffix.lower() not in {".hdf5", ".h5"}:
-        destination = destination.with_suffix(".hdf5")
-    if destination.exists():
-        logger.error("export target already exists: %s", destination)
+    destination = _hdf5_destination(destination)
+    if destination is None:
         return False
 
     try:
         pat.write_ipasc(controller.pa_data.scan_reader, str(destination))
     except Exception:
-        logger.exception("failed to export scan to IPASC")
+        logger.exception("Failed to export raw time series to %s", destination.name)
         return False
 
     logger.info("exported raw time series to %s", destination)
@@ -202,7 +196,7 @@ def ipasc_export_report(destination: Path) -> str:
     absence is not a failure and is not counted here.
     """
     import pacfish as pf
-    from pacfish import MetadataAcquisitionTags, MetadataDeviceTags
+    from pacfish import MetadataAcquisitionTags
 
     data = pf.load_data(str(destination))
     missing = [
@@ -210,9 +204,6 @@ def ipasc_export_report(destination: Path) -> str:
         for datum in MetadataAcquisitionTags.TAGS
         if datum.mandatory and datum.tag not in data.meta_data_acquisition
     ]
-    general = data.meta_data_device.get("general", {})
-    if MetadataDeviceTags.UNIQUE_IDENTIFIER.tag not in general:
-        missing.append("device identifier")
     detectors = data.meta_data_device.get("detectors", {})
     if not detectors:
         missing.append("detector positions")
@@ -220,6 +211,17 @@ def ipasc_export_report(destination: Path) -> str:
     if missing:
         return f"IPASC minimal metadata incomplete: {', '.join(missing)} not recorded."
     return f"IPASC minimal metadata complete, {len(detectors)} detection elements."
+
+
+def _hdf5_destination(destination: Path) -> Path | None:
+    """*destination* with an .hdf5 suffix, or None (logged) when a file is already there."""
+    destination = Path(destination)
+    if destination.suffix.lower() not in {".hdf5", ".h5"}:
+        destination = destination.with_suffix(".hdf5")
+    if destination.exists():
+        logger.error("Not exported, the file already exists: %s", destination)
+        return None
+    return destination
 
 
 def _file_origin(**extra) -> dict:
@@ -269,14 +271,14 @@ def _write_rois(controller, destination_pa_data) -> None:
     z_values = controller.pa_data.scan_reader.get_scanner_z_position()
     run_values = controller.pa_data.scan_reader.get_run_numbers()
     rep_values = controller.pa_data.scan_reader.get_repetition_numbers()
-    channel_idx = int(controller.viewer.dims.current_step[1])
 
     for record in records:
         frame_idx = int(record.frame_id)
+        # Position, run and repetition belong to the frame; every wavelength shares them.
         try:
-            z = z_values[frame_idx, channel_idx]
-            run = run_values[frame_idx, channel_idx]
-            rep = rep_values[frame_idx, channel_idx]
+            z = z_values[frame_idx, 0]
+            run = run_values[frame_idx, 0]
+            rep = rep_values[frame_idx, 0]
         except (IndexError, KeyError):
             z, run, rep = 0, 0, 0
         roi = patato_roi_from_geometry(
@@ -297,44 +299,32 @@ def _write_rois(controller, destination_pa_data) -> None:
     logger.info("saved %s PATARI ROI(s)", len(records))
 
 
-def _write_derived_images(controller, destination_pa_data) -> None:
-    if not controller._derived_patato_objects:
-        return
+def _write_derived_data(controller, destination_pa_data) -> None:
+    """Write runtime-only PATARI additions: derived PA images, the segmentation mask, and clinical metadata.
 
-    # Keep export logic simple: write all runtime-generated derived datasets.
+    replaces any existing derived data, segmentation mask, and clinical metadata in the export.
+    """
     for image in controller._derived_patato_objects.values():
-        # Sanitize attributes to make them h5py-compatible (fix numpy string dtypes).
-        _sanitize_image_attributes(image)
         destination_pa_data.scan_writer.add_image(image)
+    if controller._derived_patato_objects:
+        logger.info("saved %s derived image dataset(s)", len(controller._derived_patato_objects))
 
-    logger.info(
-        "saved %s derived image dataset(s)",
-        len(controller._derived_patato_objects),
-    )
+    seg_layer = controller.segmentation_ctrl.seg_layer
+    if seg_layer is not None:
+        writer = destination_pa_data.scan_writer
+        if HDF5Tags.SEGMENTATION in writer.file:
+            del writer.file[HDF5Tags.SEGMENTATION]
+        writer.set_segmentation(np.asarray(seg_layer.data)[:, 0].astype(np.int32))
+        meta = {
+            "source_model_id": seg_layer.metadata.get("source_model_id", ""),
+            "frame_mode": seg_layer.metadata.get("frame_mode", "all"),
+            "frames": [int(f) for f in seg_layer.metadata.get("frames", [])],
+            "class_names": {str(k): v for k, v in seg_layer.metadata.get("class_names", {}).items()},
+        }
+        writer.file[HDF5Tags.SEGMENTATION].attrs["patari_meta"] = json.dumps(meta)
+        logger.info("saved segmentation mask (model '%s')", meta["source_model_id"])
 
+    if controller.clinical_metadata_edits is not None:
+        destination_pa_data.scan_writer.set_clinical_metadata(controller.clinical_metadata_edits)
+        logger.info("saved clinical metadata (%s field(s))", len(controller.clinical_metadata_edits))
 
-def _sanitize_image_attributes(image) -> None:
-    """Clean image attributes in place to ensure h5py compatibility."""
-    if not hasattr(image, "attributes"):
-        return
-
-    attrs = image.attributes
-    for key in list(attrs.keys()):
-        val = attrs[key]
-        # Convert numpy string arrays to Python lists of strings (h5py-safe).
-        if isinstance(val, np.ndarray) and val.dtype.kind == "U":
-            attrs[key] = val.tolist()
-        # Convert single numpy strings to Python strings.
-        elif isinstance(val, (np.str_, np.bytes_)):
-            attrs[key] = str(val)
-        # Convert dict values recursively for nested attributes.
-        elif isinstance(val, dict):
-            for nested_key in list(val.keys()):
-                nested_val = val[nested_key]
-                if (
-                    isinstance(nested_val, np.ndarray)
-                    and nested_val.dtype.kind == "U"
-                ):
-                    val[nested_key] = nested_val.tolist()
-                elif isinstance(nested_val, (np.str_, np.bytes_)):
-                    val[nested_key] = str(nested_val)

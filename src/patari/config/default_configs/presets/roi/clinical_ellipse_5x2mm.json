@@ -5,6 +5,7 @@
     0.04,
     0.04
   ],
+  "placement": "static",
   "geometry": {
     "verts_m": [
       [

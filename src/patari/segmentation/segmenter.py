@@ -22,10 +22,14 @@ class SegmentationResult:
         (H, W) integer class id map.
     class_names:
         Mapping of class id -> display name.
+    blank:
+        The frame was constant (e.g. a zero-padded frame that was never acquired) and
+        got an empty mask instead of a prediction.
     """
 
     seg: np.ndarray
     class_names: dict[int, str]
+    blank: bool = False
 
 
 @dataclass(frozen=True)
@@ -104,10 +108,19 @@ class ModelAdapterBase(ABC):
         """
         results = []
         for frame_2d in frames:
-            frame_2d_pre = self.preprocess(frame_2d)
-            mask_2d = self.infer(frame_2d_pre)
-            mask_2d_post = self.postprocess(mask_2d)
-            results.append(SegmentationResult(seg=mask_2d_post, class_names=dict(self.class_names)))
+            # A constant frame has nothing to segment, and its z-score normalization would divide
+            # by a zero std and feed NaN to the model, which returns a meaningless mask.
+            if np.ptp(frame_2d) == 0:
+                results.append(SegmentationResult(
+                    seg=np.zeros(frame_2d.shape, dtype=np.int64),
+                    class_names=dict(self.class_names),
+                    blank=True,
+                ))
+            else:
+                frame_2d_pre = self.preprocess(frame_2d)
+                mask_2d = self.infer(frame_2d_pre)
+                mask_2d_post = self.postprocess(mask_2d)
+                results.append(SegmentationResult(seg=mask_2d_post, class_names=dict(self.class_names)))
             if on_frame_complete is not None:
                 on_frame_complete(1)
         return results
@@ -200,5 +213,5 @@ def create_segmenter(
             f"Unknown adapter class: {model_config.adapter_class}. "
             f"Available adapters: {[k for k in globals() if k.endswith('Adapter')]}"
         )
-    logger.info(f"Creating segmenter with model {model_config.model_id} using adapter {model_config.adapter_class}")
+    logger.info("creating segmenter with model %s using adapter %s", model_config.model_id, model_config.adapter_class)
     return adapter_cls(model_config)

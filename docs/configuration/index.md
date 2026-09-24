@@ -35,8 +35,8 @@ PATARI's settings and presets are stored in the `~/.patari/` folder as human-rea
 │       ├── unmixing/*.json
 │       ├── roi/*.json
 │       └── segmentation/*.json
-├── logs/
-│   └── patari.log
+├── autosave/                        # one roi_table_<date>T<time>_<pid>.xlsx backup per session, newest 20 kept
+├── logs/                            # one patari_<date>T<time>_<pid>.log per session, newest 20 kept
 └── models/                          # downloaded segmentation model weights
 ```
 

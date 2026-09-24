@@ -43,15 +43,14 @@ class PatariController:
     def __init__(self, viewer: Viewer):
 
         self.viewer = viewer
-        # self.path = Path(path) if path is not None else Path()
-        # self.study_path: Path | None = (
-        #     self.path if self.path.is_dir() else self.path.parent
-        # )
+        self.path: Path | None = None
+        self.study_path: Path | None = None
 
         self._scans: dict[Path, ScanInfo] = {}
         self.pa_data: pat.PAData | None = None
         self._patato_objects: dict[str, pat.ImageSequence] = {}
         self._derived_patato_objects: dict[str, pat.ImageSequence] = {}
+        self.clinical_metadata_edits: dict[str, str] | None = None
 
         self.shapes_layer: Shapes | None = None
         self._last_frame_idx: int | None = None
@@ -97,6 +96,7 @@ class PatariController:
         self._spectrum_dock_widget = None
 
         self.settings_dialog = None
+        self.batch_dialog = None
         self._is_shut_down = False
 
         self._setup_viewer()
@@ -196,10 +196,10 @@ class PatariController:
 
     # ============ viewer setup ============
     def _setup_viewer(self) -> None:
-        self.viewer.axes.visible = False # dont show axes by default
-        self.viewer.axes.labels = True
-        self.viewer.grid.enabled = False
-        self.viewer.scale_bar.visible = True
+        self.viewer.scene.overlays.axes.visible = False # dont show axes by default
+        self.viewer.scene.overlays.axes.labels = True
+        self.viewer.canvas.grid.enabled = False
+        self.viewer.canvas.overlays.scale_bar.visible = True
         self.viewer.dims.axis_labels = ("Frame", "Channel", "z", "x")
 
     def _ensure_docks(self) -> None:
@@ -223,6 +223,10 @@ class PatariController:
         if self.shapes_layer is None:
             return
 
+        # drop the previous scan's bindings, the live table signal would otherwise fire twice
+        for evt, handler in self._shapes_layer_bindings:
+            evt.disconnect(handler)
+
         self._shapes_layer_bindings = [
             # Shapes layer data changes drive ROI table refresh, label updates, and formatting.
             (
@@ -245,13 +249,6 @@ class PatariController:
                 self.roi_ctrl.on_live_table_selection_changed,
             ),
         ]
-
-        # Disconnect and reconnect to avoid duplicate connections if this is called multiple times.
-        for evt, handler in self._shapes_layer_bindings:
-            try:
-                evt.disconnect(handler)
-            except Exception:
-                pass
 
         for evt, handler in self._shapes_layer_bindings:
             evt.connect(handler)
@@ -367,7 +364,7 @@ class PatariController:
             # no layer selected or multiple layers selected
             return
 
-        selected_layer = getattr(selection, "active", None)
+        selected_layer = selection.active
 
         # only change active layer if selected layer is a PA image layer
         if (
@@ -380,19 +377,25 @@ class PatariController:
 
             self.active_recon_layer = selected_layer
             logger.info("active layer set to %s", self.active_recon_layer.name)
-            # keep PA layers visually consistent; show only the active PA layer
-            # set all other PA layers to invisible
-            # set blending and auto contrast for all PA layers
+            # show only the active PA layer. blending and auto contrast are set when PA layers are created
             for layer in self.viewer.layers:
                 if (
                     isinstance(layer, Image)
                     and layer.metadata.get("type") == "pa"
                 ):
-                    layer.blending = "multiplicative"
-                    layer._keep_auto_contrast = True
                     layer.visible = layer is self.active_recon_layer
 
     # ============ viewer events ============
+    def on_layer_removed(self, event) -> None:
+        """Drop any PATATO object tracked under a removed layer's name.
+
+        Otherwise a deleted reconstruction/unmixed layer stays in `_derived_patato_objects`
+        and gets written into the next HDF5 export as if it were still on screen.
+        """
+        name = event.value.name
+        self._patato_objects.pop(name, None)
+        self._derived_patato_objects.pop(name, None)
+
     def on_selection_changed(self, event=None) -> None:
         self._resolve_active_recon_layer()
         self.unmixing_ctrl.refresh_ui()
@@ -403,19 +406,15 @@ class PatariController:
 
     def on_dims_changed(self, event=None) -> None:
         # snap dims to what is available in the selected PA layer
-        try:
-            if self._snap_dims_to_active_layer():
-                return
+        if self._snap_dims_to_active_layer():
+            return
 
-            frame_idx = int(round(self.viewer.dims.point[0]))
-            if frame_idx != self._last_frame_idx:
-                self._last_frame_idx = frame_idx
-                self.roi_ctrl.project_current_frame()
+        frame_idx = int(round(self.viewer.dims.point[0]))
+        if frame_idx != self._last_frame_idx:
+            self._last_frame_idx = frame_idx
+            self.roi_ctrl.project_current_frame()
 
-            self.refresh_all()
-
-        except Exception:
-            logger.exception("on_dims_changed failed")
+        self.refresh_all()
 
     # ============ update everything ============
     def refresh_all(self) -> None:
@@ -565,15 +564,11 @@ class PatariController:
         )
 
         ts, ts_delta = self.timestamp_for_slice(frame_idx, channel_idx)
-        scan_folder = str(self.path.stem) if getattr(self, "path", None) else "N/A"
-        scan_info = self._scans.get(getattr(self, "path", Path()))
+        scan_folder = self.path.stem if self.path else "N/A"
+        scan_info = self._scans.get(self.path)
         scan_name = scan_info.internal_name if scan_info and scan_info.internal_name else ""
         scan_display = f"{scan_folder} ({scan_name})" if scan_name else scan_folder
-        study_str = (
-            str(self.study_path.stem)
-            if getattr(self, "study_path", None)
-            else "N/A"
-        )
+        study_str = self.study_path.stem if self.study_path else "N/A"
         self.info.set_rows(
             [
                 ("Study", study_str),
@@ -592,13 +587,13 @@ class PatariController:
             self.active_recon_layer,
         )
 
-        scan_info = self._scans.get(getattr(self, "path", Path()))
         dialog = LayerMetadataDialog(
             layer=layer,
             pa_data=self.pa_data,
-            scan_path=getattr(self, "path", None),
-            study_path=getattr(self, "study_path", None),
-            scan_info=scan_info,
+            scan_path=self.path,
+            study_path=self.study_path,
+            scan_info=self._scans.get(self.path),
+            controller=self,
             parent=self.viewer.window._qt_window,
         )
         dialog.exec()

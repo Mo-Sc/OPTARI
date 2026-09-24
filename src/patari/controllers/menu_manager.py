@@ -10,6 +10,7 @@ from qtpy.QtWidgets import QMenu
 
 from patari.config import settings
 from patari.widgets.dock_helpers import DOCK_LABELS
+from patari.widgets.batch_dialog import BatchDialog
 from patari.widgets.settings_dialog import SettingsDialog
 
 if TYPE_CHECKING:
@@ -34,8 +35,8 @@ HIDDEN_FILE_ENTRIES = (
     "napari/file/io_utilities",
 )
 HIDDEN_VIEW_ENTRIES = (
-    "napari.window.view.toggle_ndisplay",
-    "napari.viewer.toggle_synced_camera",
+    "napari.scene.toggle_ndisplay",
+    "napari.scene.toggle_synced_camera",
 )
 
 # How to reach each dock widget named in DOCK_LABELS, from a PatariController. The PATARI-owned
@@ -94,7 +95,7 @@ class MenuManager:
     def _add_patari_menu(controller: "PatariController", window) -> None:
         menu = QMenu("PATARI", window._qt_window)
 
-        settings_action = QAction("Settings...", menu)
+        settings_action = QAction("Settings", menu)
         # macOS moves any action whose text mentions settings/preferences/options into the
         # application menu unless the role is pinned.
         settings_action.setMenuRole(QAction.NoRole)
@@ -102,6 +103,11 @@ class MenuManager:
             lambda: MenuManager._show_settings(controller)
         )
         menu.addAction(settings_action)
+
+        batch_action = QAction("Batch Mode", menu)
+        batch_action.setMenuRole(QAction.NoRole)
+        batch_action.triggered.connect(lambda: MenuManager._show_batch(controller))
+        menu.addAction(batch_action)
 
         menu.addSeparator()
         docs_action = QAction("Documentation", menu)
@@ -149,6 +155,15 @@ class MenuManager:
         controller.settings_dialog.activateWindow()
 
     # ============ napari menu pruning ============
+    @staticmethod
+    def _show_batch(controller: "PatariController") -> None:
+        if controller.batch_dialog is None:
+            qt_window = controller.viewer.window._qt_window
+            controller.batch_dialog = BatchDialog(qt_window, controller)
+        controller.batch_dialog.show()
+        controller.batch_dialog.raise_()
+        controller.batch_dialog.activateWindow()
+
     @staticmethod
     def _prune_napari_menus(window) -> None:
         for attribute in HIDDEN_NAPARI_MENUS:

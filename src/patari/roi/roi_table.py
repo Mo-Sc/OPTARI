@@ -21,6 +21,9 @@ from patari.roi.roi_utils import saved_export_columns, saved_table_columns
 
 logger = logging.getLogger(__name__)
 
+# unique measurement key within the table
+MEASUREMENT_KEY = ["roi_group_uid", "roi_ts", "src_layer", "frame", "channel"]
+
 
 class SavedRoiTable:
     """Measured ROI rows, mirrored to *autosave_path* after every change.
@@ -107,9 +110,8 @@ class SavedRoiTable:
         every row attributable to the ROI it was measured from.
         """
         combined = pd.concat([self._rows, rows], ignore_index=True)
-        # Compare as text so a value and its post-XLSX string form (e.g. roi_centroid is a
-        # tuple in memory, its repr on the way back) count as equal.
-        duplicates = combined.astype(str).duplicated()
+        # A measurement is identified by what was measured where and when.
+        duplicates = combined[MEASUREMENT_KEY].astype(str).duplicated()
         self._rows = combined[~duplicates].reset_index(drop=True)
         self._autosave()
 

@@ -38,6 +38,7 @@ Browse through scan data, frames, and toggle between different image layers.
 | **Delete Selected ROI(s)** | `Delete` or `Backspace` | `Delete` or `fn` + `Backspace` |
 | **Save ROI Data*** | `Shift` + `Ctrl` + `S` | `Shift` + `Cmd` + `S` |
 
+<!-- TODO: the spacebar pan and zoom mid draw should be a tip, outside of the table -->
 ## Segmentation and Auto-ROI
 
 | Action | Windows / Linux | macOS |

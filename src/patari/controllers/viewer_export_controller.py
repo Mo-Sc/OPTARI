@@ -12,7 +12,7 @@ from napari.utils.progress import cancelable_progress
 from qtpy.QtWidgets import QFileDialog
 
 from patari.controllers.base import TaskControllerBase
-from patari.io.utils import colorbars_visible
+from patari.io.utils import colorbars_visible, save_viewer_screenshot
 from patari.utils.viewer import show_activity_dock
 from patari.widgets.viewer_export_dialog import ViewerExportDialog
 
@@ -59,9 +59,7 @@ class ViewerExportController(TaskControllerBase):
 
         filename = Path(filename).with_suffix(".tiff" if "TIFF" in file_filter else ".png")
 
-        with colorbars_visible(viewer, include_colorbars):
-            image = viewer.screenshot(canvas_only=True)[..., :3]
-        cv2.imwrite(str(filename), cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
+        save_viewer_screenshot(viewer, filename, include_colorbars=include_colorbars)
         logger.info("Exported image to %s", filename)
 
     @staticmethod
@@ -92,15 +90,15 @@ class ViewerExportController(TaskControllerBase):
         fps = dialog_settings["fps"]
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         original_step = viewer.dims.current_step
-        mouse_pan, mouse_zoom = viewer.camera.mouse_pan, viewer.camera.mouse_zoom
+        mouse_pan, mouse_zoom = viewer.scene.camera.mouse_pan, viewer.scene.camera.mouse_zoom
         writer = None
         frames_written = 0
 
         try:
             logger.info("Exporting video to %s at %.3f FPS...", filename, fps)
             show_activity_dock(viewer, True)
-            viewer.camera.mouse_pan = False
-            viewer.camera.mouse_zoom = False
+            viewer.scene.camera.mouse_pan = False
+            viewer.scene.camera.mouse_zoom = False
             with colorbars_visible(viewer, dialog_settings["include_colorbars"]):
                 for frame_id in cancelable_progress(range(n_frames), desc="Exporting video"):
                     viewer.dims.current_step = (frame_id, *viewer.dims.current_step[1:])
@@ -112,8 +110,8 @@ class ViewerExportController(TaskControllerBase):
                     frames_written += 1
         finally:
             viewer.dims.current_step = original_step
-            viewer.camera.mouse_pan = mouse_pan
-            viewer.camera.mouse_zoom = mouse_zoom
+            viewer.scene.camera.mouse_pan = mouse_pan
+            viewer.scene.camera.mouse_zoom = mouse_zoom
             show_activity_dock(viewer, False)
             if writer is not None:
                 writer.release()

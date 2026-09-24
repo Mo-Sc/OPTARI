@@ -1,6 +1,6 @@
 # PhotoAcoustic imaging Toolkit based on napARI
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](LICENSE)
-[![Python >=3.12](https://img.shields.io/badge/python-%3E%3D3.12-blue)](https://www.python.org/)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue)](https://www.python.org/)
 [![Docs](https://img.shields.io/badge/docs-mkdocs--material-blue)](https://mo-sc.github.io/PATARI/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
@@ -32,7 +32,7 @@ clinical studies without scripting. Scans are read from iThera `.msot`, PATATO H
 
 The easiest way to use PATARI is by using one of the standalone executables: (todo: link to doc about quick installation)
 
-Alternatively, install from source:
+Alternatively, install from source into a Python 3.12 environment (the PATATO binaries PATARI depends on are only available for 3.12):
 
 ```bash
 git clone git@github.com:Mo-Sc/PATARI.git
@@ -46,7 +46,7 @@ patari
 ```bash
 git clone git@github.com:Mo-Sc/PATARI.git
 cd PATARI
-pip install -e ".[docs]"   # docs only if docs are changed
+pip install -e ".[test,docs]"
 pytest                     # run tests
 ```
 
@@ -65,8 +65,6 @@ If you find a bug, or have a feature request, [file an issue](https://github.com
 
 
 PATARI is distributed under the [BSD-3-Clause license](https://github.com/Mo-Sc/PATARI/blob/main/LICENSE).
-Free and open source, for both research and clinical use.
-
 
 If PATARI is useful in your research, please cite the accompanying paper:
 
