@@ -394,6 +394,16 @@ class PatariController:
                     layer.visible = layer is self.active_recon_layer
 
     # ============ viewer events ============
+    def on_layer_removed(self, event) -> None:
+        """Drop any PATATO object tracked under a removed layer's name.
+
+        Otherwise a deleted reconstruction/unmixed layer stays in `_derived_patato_objects`
+        and gets written into the next HDF5 export as if it were still on screen.
+        """
+        name = event.value.name
+        self._patato_objects.pop(name, None)
+        self._derived_patato_objects.pop(name, None)
+
     def on_selection_changed(self, event=None) -> None:
         self._resolve_active_recon_layer()
         self.unmixing_ctrl.refresh_ui()
