@@ -71,9 +71,7 @@ plugins:
 
 nav:
   - Home: index.md
-  - Installation:
-      - Overview: installation/index.md
-      - Troubleshooting: installation/troubleshooting.md
+  - Installation: installation/index.md
   - User Guide:
       - Overview: user-guide/index.md
       - Viewer & Navigation: user-guide/viewer-and-navigation.md
@@ -90,7 +88,8 @@ nav:
   - Sample Workflow:
       - Manual ROI Workflow: clinical-workflows/manual-roi-workflow.md
       - Segmentation + Unmixing Workflow: clinical-workflows/segmentation-unmixing-workflow.md
-      - Pixel Counting: clinical-workflows/pixel-counting.md
+      - Tracking Intensity over Time: clinical-workflows/time-tracking-workflow.md
+      - Batch Mode Workflow: clinical-workflows/batch-mode-workflow.md
   - Configuration:
       - Overview: configuration/index.md
       - Configuration Schema: configuration/configuration-schema.md

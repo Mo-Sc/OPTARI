@@ -29,7 +29,7 @@ No Python, no terminal, no admin rights required.
     Pretrained segmentation models are downloaded automatically the first time you run segmentation (see
     [Segmentation](../user-guide/segmentation.md)) — this also requires an internet connection.
 
-    [DeepMB](../developer-guide/data-and-integrations.md#deepmb-reconstruction) reconstruction weights are available
+    DeepMB reconstruction weights are available
     from the original authors upon reasonable request and don't come with OPTARI by default. If you've been
     provided a download link, they will be downloaded automatically on first run of the reconstruction adapter as
     well.
@@ -57,6 +57,11 @@ python -m optari.launcher
 ```
 
 See [Contributing](../developer-guide/contributing.md) for detailed information.
+
+## GPU support
+
+GPU processing for DeepMB reconstruction and segmentation is only supported on Ubuntu and requires an NVIDIA GPU
+with the matching CUDA stack installed on the system (NVIDIA driver 580 or newer, CUDA 13, and cuDNN 9 for CUDA 13). Without them, both fall back to the CPU.
 
 ## Uninstalling
 

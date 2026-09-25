@@ -4,7 +4,7 @@
 
 OPTARI includes a number of algorithms to reconstruct raw PA time series into 2D images:
 
-A simple, but fast **backprojection algorithm** (delay and sum) is provided via the PATATO framework, as well as an experimental **model-based** reconstruction. We also implemented an adapter for the [**DeepMB**](../developer-guide/data-and-integrations.md#deepmb-reconstruction) reconstruction algorithm, a deep-learning model trained on clinical iThera Acuity data that reaches near-identical quality to iterative model-based reconstruction, at a fraction of the runtime.
+A simple, but fast **backprojection algorithm** (delay and sum) is provided via the PATATO framework, as well as an experimental **model-based** reconstruction. We also implemented an adapter for the **DeepMB** reconstruction algorithm, a deep-learning model trained on clinical iThera Acuity data that reaches near-identical quality to iterative model-based reconstruction, at a fraction of the runtime.
 DeepMB requires a pretrained model, which does not come with OPTARI by default, but might be provided by the authors upon reasonable request.
 
 To create a new reconstruction, raw time series data must be available — either as HDF5 or in a vendor format that OPTARI can read.

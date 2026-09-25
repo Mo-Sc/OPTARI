@@ -61,3 +61,32 @@ No iThera device parameter follows IPASC's required UUID structure, so the devic
 
 The data `uuid` is a generated value, since it should identify the file being written rather than anything about the
 source.
+
+## Extending OPTARI
+
+### Reconstruction and preprocessing algorithms
+
+Reconstruction lives in the [PATATO fork](https://github.com/Mo-Sc/patato). Subclass `ReconstructionAlgorithm` and add
+it to `RECONSTRUCTION_METHODS` in `patato/recon/__init__.py` (preprocessing: `PREPROCESSING_METHODS` in
+`patato/processing/preprocessing_types.py`). A reconstruction preset then selects it by its `get_algorithm_name()`
+under `RECONSTRUCTION_ALGORITHM`, and `RECONSTRUCTION_PARAMS` is passed to its constructor. OPTARI needs no changes,
+but the PATATO wheels referenced in `pyproject.toml` have to be rebuilt.
+
+### Unmixing algorithms and spectra
+
+New chromophores are added in PATATO as a `Spectrum` subclass in `patato/unmixing/spectra/__init__.py`. They appear in
+the Unmixing dock automatically. PATATO only provides linear unmixing (`SpectralUnmixer`). A new unmixing algorithm would be added to PATATO too, but
+OPTARI calls `pat.SpectralUnmixer` directly in `_unmix_frames` (`src/optari/controllers/unmixing_controller.py`), so
+that call has to be switched as well.
+
+### Segmentation models
+
+A model with the same input format as an existing one only needs an entry in the model registry (see
+[Segmentation Models](../configuration/segmentation-models.md)). Anything else gets its own `ModelAdapterBase`
+subclass in `src/optari/segmentation/segmenter.py` implementing `preprocess()`, `infer()` and `postprocess()`, which
+the registry references by class name in `adapter_class`.
+
+### ROI features
+
+ROI features are entries in `FEATURE_REGISTRY` (`src/optari/roi/roi_features.py`). See
+[Measurement](roi-system.md#measurement-roicontext-and-the-feature-registry) in the ROI system guide.

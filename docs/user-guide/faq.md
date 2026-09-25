@@ -1,32 +1,19 @@
 # FAQ
 
-## My `config.json` edits aren't taking effect
+## My `config.json` edits or settings changes aren't taking effect
 
 Configuration is loaded once at startup — restart OPTARI after editing any file under
 `~/.optari/config/`. See [Configuration](../configuration/index.md).
 
-## OPTARI reset my settings after an update
-
-If a new version ships an incompatible configuration schema, OPTARI automatically archives your existing
-`~/.optari` folder (to `~/.optari_old_<timestamp>`) and starts fresh from the new defaults, rather than crashing
-on an incompatible file. Nothing is deleted — copy specific presets or settings back over from the backup folder
-if needed. See [Configuration](../configuration/index.md#schema-versioning-and-migration).
-
 ## Deleting an ROI with the keyboard isn't working
 
-Delete/Backspace only deletes an ROI when it's selected **in the viewer**, not when a row is selected in an
+On MacOS, Delete/Backspace only deletes an ROI when it's selected **in the viewer**, not when a row is selected in an
 analysis table. See [ROI Annotation](roi-annotation.md#drawing-and-editing-rois).
 
 ## HDF5 export fails with a "file exists" error
 
-Export always writes to a **new** file — it can't overwrite or append to an existing one. Choose a different
+Export always writes to a **new** file, it can't overwrite or append to an existing one. Choose a different
 filename. See [Exporting Data](exporting-data.md#full-scan-export-hdf5).
-
-## Automatic ROI placement looks wrong for my scan
-
-Segmentation quality depends on how close your data is to the model's training distribution. New anatomical sites
-or scanner types may need a fine-tuned model — see [Segmentation Models](../configuration/segmentation-models.md)
-for how models are registered, and consider filing an issue with an example scan.
 
 ## Can I measure distances in OPTARI?
 

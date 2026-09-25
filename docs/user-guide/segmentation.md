@@ -46,4 +46,4 @@ Segmentation-based placement can also be combined with the ROI Library ([See Pla
 ![Auto ROI using Library](../assets/screenshots/placeholders/ss_autoroilib.png)
 
 !!! note
-    Automated placement quality depends on how close the current scan is to the model's training distribution. New anatomical sites or scanner types might require fine-tuning the model. See [FAQ](faq.md#automatic-roi-placement-looks-wrong-for-my-scan).
+    Automated placement quality depends on how close the current scan is to the model's training distribution. New anatomical sites or scanner types might require fine-tuning the model. See [Extending OPTARI](../developer-guide/data-and-integrations.md#segmentation-models) for how to add your own model.

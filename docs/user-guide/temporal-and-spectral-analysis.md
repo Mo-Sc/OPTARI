@@ -12,7 +12,7 @@ The ROI feature for the y-axis can be selected in the Annotation dock on the rig
 **Scope** controls which record is measured on each frame:
 
 - **Selected ROI** (default): every ROI currently shown on the viewed frame is **reused on every frame**. This works if the movement within a sequence is low.
-- **Track ID**: pick one tracked ROI from the dropdown (populated from ROIs currently in the viewer), and instead of a fixed position, all the ROIs that **have the same `track_id`** are measured on their respective frame and used for the plot. This can be used to account for movement, for example by placing a ROI preset across all scans and then adjust its position on each scan (see TODO workflow example). A frame the track has no ROI on is left as a gap in the plot.
+- **Track ID**: pick one tracked ROI from the dropdown (populated from ROIs currently in the viewer), and instead of a fixed position, all the ROIs that **have the same `track_id`** are measured on their respective frame and used for the plot. This can be used to account for movement, for example by placing a ROI preset across all scans and then adjust its position on each scan (see [Tracking Intensity over Time](../clinical-workflows/time-tracking-workflow.md)). A frame the track has no ROI on is left as a gap in the plot.
 ![Time Analysis](../assets/screenshots/placeholders/ss_timeanalysis.png)
 
 !!! note

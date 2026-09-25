@@ -58,8 +58,7 @@ installed.
 
 ## Adding a custom model
 
-!!! note
-    TODO: link to section in developer guide on how to implement custom models.
+See [Extending OPTARI](../developer-guide/data-and-integrations.md#segmentation-models) in the developer guide.
 
 <!-- 1. Implement a `ModelAdapterBase` subclass (`preprocess()` → `infer()` → `postprocess()`) if your model needs
    different pre/postprocessing than the existing adapters — otherwise reuse an existing `adapter_class`.
