@@ -148,9 +148,13 @@ class UKErUSSegAdapter(ModelAdapterBase):
         if not model_path.is_file():
             raise FileNotFoundError(f"Segmentation model not downloaded: {model_path}")
 
-        self.session = ort.InferenceSession(
-            str(model_path), providers=["CPUExecutionProvider"]
-        )
+        # CUDA is only available with onnxruntime-gpu (Linux). Elsewhere this resolves to CPU.
+        providers = [
+            p for p in ("CUDAExecutionProvider", "CPUExecutionProvider")
+            if p in ort.get_available_providers()
+        ]
+        self.session = ort.InferenceSession(str(model_path), providers=providers)
+        logger.info("segmentation running on %s", self.session.get_providers()[0])
         self.input_name = self.session.get_inputs()[0].name
         self.output_name = self.session.get_outputs()[0].name
 
