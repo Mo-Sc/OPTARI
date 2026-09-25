@@ -56,6 +56,8 @@ build-backend = "setuptools.build_meta"
 include-package-data = true
 
 [tool.setuptools.packages.find]
+# scoped to src/ -> figures/ (manuscript figure scripts, top-level) is never picked up
+# by the wheel. MANIFEST.in also prunes it from the sdist.
 where = ["src"]
 
 [tool.setuptools.package-data]

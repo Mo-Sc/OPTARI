@@ -1,0 +1,4 @@
+# figures/ (manuscript figure scripts + exported panels) is not part of the package.
+# The wheel already excludes it (packages.find is scoped to src/); this keeps it out of
+# the sdist too.
+prune figures

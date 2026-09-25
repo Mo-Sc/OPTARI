@@ -53,6 +53,11 @@ jobs:
           PYAPP_PROJECT_NAME: "patari"
           PYAPP_EXEC_SPEC: "patari.launcher:main"
           PYAPP_PYTHON_VERSION: "3.12"
+          # Lets `<exe> self python`/`self python-path` show up in `<exe> self --help`.
+          # Used to run figures/benchmark_pipeline.py on machines with only the binary
+          # installed, against the exact interpreter/deps that ship in this build.
+          PYAPP_EXPOSE_PYTHON: "true"
+          PYAPP_EXPOSE_PYTHON_PATH: "true"
         run: |
           # Find the built wheel file dynamically
           export PYAPP_PROJECT_PATH=$(ls dist/patari-*.whl | head -n 1)
