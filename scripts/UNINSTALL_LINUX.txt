@@ -1,0 +1,4 @@
+To uninstall OPTARI on Linux:
+- open a terminal in the folder containing the OPTARI file
+- run: ./optari-v... self remove   (use the full file name)
+You successfully removed OPTARI from your system

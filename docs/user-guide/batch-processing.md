@@ -38,7 +38,7 @@ A batch preset is a small JSON file in `~/.optari/config/presets/batch` that **n
 }
 ```
 
-Every key is documented in [Presets](../configuration/presets.md#batch-presets-presetsbatch). In short: `steps` names what runs, `source` picks which reconstruction it runs on, `frame` picks which frame (`"motion"` or a number), `measure` says how wide to measure, and `outputs` says what to write.
+Every key is documented in [Presets](../configuration/presets.md#batch-presets-presetsbatch). In short: `steps` names what runs, `source` picks which reconstruction it runs on, `frame` picks the anchor frame for the overlay/report (`"motion"` or a number), `measure` says how wide to measure, and `outputs` says what to write.
 
 Edit a plan directly in the batch window: the JSON editor shows the selected preset, **Apply** re-checks it, and **Save Preset** writes it back under a name of your choosing. Nothing needs editing by hand in `~/.optari`.
 

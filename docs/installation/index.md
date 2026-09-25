@@ -20,6 +20,7 @@ No Python, no terminal, no admin rights required.
       - **Windows**: click **More info** → **Run anyway**.
       - **macOS**: open **System Settings** → **Privacy & Security**, scroll to Security, then click
         **Open Anyway** next to the "optari was blocked" message.
+      - **Linux**: Run `chmod +x optari-v...` in the terminal to make the file executable.
 4. On first launch, OPTARI downloads its remaining dependencies — make sure your computer is connected to the
    internet. **This can take a few minutes**.
 5. Once set up, OPTARI launches automatically. On later runs, just open the same `optari-v` file again.
@@ -65,6 +66,7 @@ To remove OPTARI from your computer:
   `optari.exe self remove` for you — no manual command needed.
 - **macOS**: open Terminal (`Cmd + Space`, then type `Terminal`), drag and drop the `optari-v...` file into the
   Terminal window, type ` self remove` (don't forget the leading space), then press Enter.
+- **Linux**: in a terminal next to the file, run `./optari-v... self remove` (with the full file name).
 
 You successfully removed OPTARI from your system.
 

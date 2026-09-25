@@ -14,6 +14,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Operating System :: MacOS :: MacOS X",
     "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
 ]
 # the PATATO wheels below are built for CPython 3.12 only
 requires-python = ">=3.12,<3.13"
@@ -29,7 +30,8 @@ dependencies = [
     "scikit-image==0.26.0",
     "opencv-python-headless==5.0.0.93",
     "onnxruntime==1.28.0",
-    "jax[cpu]>=0.4.13",
+    "jax[cpu]==0.11.2",
+    "pacfish==0.4.4",
     "openpyxl==3.1.5",
     "patato @ https://github.com/Mo-Sc/patato/releases/download/patari-v0.8.0/patato-0.7.1.dev1+g9f83bb7a6-cp312-cp312-win_amd64.whl ; sys_platform == 'win32'",
     "patato @ https://github.com/Mo-Sc/patato/releases/download/patari-v0.8.0/patato-0.7.1.dev1+g9f83bb7a6-cp312-cp312-macosx_11_0_arm64.whl ; sys_platform == 'darwin' and platform_machine == 'arm64'",

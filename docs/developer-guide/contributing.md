@@ -13,8 +13,8 @@ pip install -e ".[test,docs]"
 
 ### Test data
 
-The data-driven tests use two scans, recorded by the iThera MSOT Acuity Scanner, taken from [link to pub]. They can be downloaded [here]().
-<!-- TODO: links -->
+The tests use two scans, recorded by the iThera MSOT Acuity Scanner, taken from [doi.org/10.5281/zenodo.22044239](https://doi.org/10.5281/zenodo.22044239). They can be downloaded [here](https://faubox.rrze.uni-erlangen.de/dl/fiQB2F1YwFh3axKna8TSAC/Study_19.zip).
+
 
 ```
 Study_19/
@@ -24,7 +24,7 @@ Study_19/
 
 ## Running the tests
 
-Put the test folder under tests/testdata/ and run:
+Unzip the archive, put the test folder under tests/testdata/ and run:
 
 ```bash
 python -m pytest

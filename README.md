@@ -42,6 +42,8 @@ pip install .
 optari
 ```
 
+To try OPTARI, download and unzip the [test scans](https://mo-sc.github.io/OPTARI/developer-guide/contributing/#test-data) (Test scans are taken from [doi.org/10.5281/zenodo.22044239](https://doi.org/10.5281/zenodo.22044239)).
+
 ## For Development
 
 ```bash
@@ -64,13 +66,21 @@ If you find a bug, or have a feature request, [file an issue](https://github.com
 
 ## Citing & License
 
-
 OPTARI is distributed under the [BSD-3-Clause license](https://github.com/Mo-Sc/OPTARI/blob/main/LICENSE).
 
 If OPTARI is useful in your research, please cite the accompanying paper:
 
-TODO: format
-    Schillinger, M., Bader, M., Buehler, A., Wachter, F., Breininger, K. *OPTARI: An open-source software
-    framework for clinical translation of optoacoustic imaging.* — citation details to be added once
-    published.
+> Schillinger, M., Bader, M., Buehler, A., Wachter, F., Knieling, F., Ntziachristos, V., & Breininger, K. (2026).
+> OPTARI: An open-source software framework for clinical translation of optoacoustic imaging.
+> *Publication details will be added once available.*
+
+```bibtex
+@unpublished{Schillinger2026-optari,
+  title  = {{OPTARI}: An open-source software framework for clinical translation of optoacoustic imaging},
+  author = {Schillinger, Moritz and Bader, Maximilian and Buehler, Adrian and Wachter, Felix and
+            Knieling, Ferdinand and Ntziachristos, Vasilis and Breininger, Katharina},
+  year   = {2026},
+  note   = {Publication details will be added once available}
+}
+```
 

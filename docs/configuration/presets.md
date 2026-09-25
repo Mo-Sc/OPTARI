@@ -151,7 +151,7 @@ A layer-name **prefix** picking the one reconstruction the run analyses. One bat
 
 ### `frame`
 
-Which frame each scan is analysed on.
+The anchor frame: where a `static` ROI's shape is drawn, and which frame the overlay PNG and the report's `analysis_frame` column come from. It does **not** decide how many frames get analysed, which is selected by `measure.all_frames` below.
 
 | Value | Meaning |
 | --- | --- |
@@ -166,7 +166,7 @@ How wide the measurement reaches. Mirrors the **Include all …** boxes in the A
 | --- | --- | --- |
 | `layers` | `"analysis"` (default), `"all_pa"` | `analysis` measures the `source` reconstruction plus what this run unmixed from it. `all_pa` measures every PA layer in the scan, including reconstructions the plan did not make. |
 | `all_channels` | `true` (default), `false` | Every channel, or just the default one. |
-| `all_frames` | `false` (default), `true` | Every frame. The ROI is placed on each frame (re-anchored per frame for `auto` placement) and measured there, and reconstruction and segmentation run over all frames too, which is much slower. |
+| `all_frames` | `false` (default), `true` | Every frame, overriding `frame` above. Reconstruction, segmentation and measurement all run over every frame instead of just the anchor frame. The ROI is placed on each frame (re-anchored per frame for `auto` placement) and measured there. `frame` still picks the overlay/report anchor. |
 
 ### `outputs`
 

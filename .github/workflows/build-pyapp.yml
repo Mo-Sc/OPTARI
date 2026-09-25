@@ -16,10 +16,17 @@ jobs:
             os_name: windows
             exe_suffix: .exe
             binary_path: target/release/pyapp.exe
+            uninstall_file: UNINSTALL_WINDOWS.bat
           - os: macos-latest
             os_name: macos
             exe_suffix: ""
             binary_path: target/release/pyapp
+            uninstall_file: UNINSTALL_MACOS.txt
+          - os: ubuntu-22.04
+            os_name: linux
+            exe_suffix: ""
+            binary_path: target/release/pyapp
+            uninstall_file: UNINSTALL_LINUX.txt
 
     steps:
       - name: Checkout Code
@@ -43,7 +50,7 @@ jobs:
       - name: Download PyApp Source
         shell: bash
         run: |
-          curl -L https://github.com/ofek/pyapp/releases/latest/download/source.tar.gz -o pyapp-source.tar.gz
+          curl -L https://github.com/ofek/pyapp/releases/download/v0.29.0/source.tar.gz -o pyapp-source.tar.gz
           tar -xzf pyapp-source.tar.gz
           mv pyapp-v* pyapp-source
 
@@ -78,8 +85,7 @@ jobs:
           mv "$GITHUB_WORKSPACE/pyapp-source/target/release/${{ env.FINAL_NAME }}" "$GITHUB_WORKSPACE/release_package/"
           cp "$GITHUB_WORKSPACE/docs/OPTARI_Instructions.pdf" "$GITHUB_WORKSPACE/release_package/" || true
           cp "$GITHUB_WORKSPACE/docs/OPTARI_Shortcuts.pdf" "$GITHUB_WORKSPACE/release_package/" || true
-          cp "$GITHUB_WORKSPACE/scripts/UNINSTALL_MACOS.txt" "$GITHUB_WORKSPACE/release_package/" || true
-          cp "$GITHUB_WORKSPACE/scripts/UNINSTALL_WINDOWS.bat" "$GITHUB_WORKSPACE/release_package/" || true
+          cp "$GITHUB_WORKSPACE/scripts/${{ matrix.uninstall_file }}" "$GITHUB_WORKSPACE/release_package/"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
