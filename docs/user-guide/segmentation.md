@@ -2,11 +2,11 @@
 
 <!-- TODO screenshot: segmentation-overview.png — Segmentation dock with a generated tissue mask overlaid on the US image -->
 
-PATARI includes a deep-learning-based segmentation module to generate tissue maps from the US scans, as well as to automatically place ROIs in the target tissue. 
+OPTARI includes a deep-learning-based segmentation module to generate tissue maps from the US scans, as well as to automatically place ROIs in the target tissue. 
 
 ## Running segmentation
 
-1. In the **Segmentation** dock, choose a **model** from the registry. PATARI comes with a pretrained model for three clinical examination sites that are common in PA imaging (see [Segmentation Models](../configuration/segmentation-models.md)).
+1. In the **Segmentation** dock, choose a **model** from the registry. OPTARI comes with a pretrained model for three clinical examination sites that are common in PA imaging (see [Segmentation Models](../configuration/segmentation-models.md)).
 2. The **Classes** list shows the available tissue classes for the selected model. Pick which classes to segment.
 3. **Scope** chooses whether the segmentation map will be generated only for the currently selected frame or for all the frames in the scan.
 4. Click **Generate Tissue Segmentation** (or press `Shift+Ctrl+T` / `Shift+Cmd+T`).
@@ -16,14 +16,14 @@ The result is added to the viewer as `Segmentation` layer.
 ![Segmentation](../assets/screenshots/placeholders/ss_segmentation.png)
 
 !!! note
-    The default model weights are downloaded automatically the first time a given model is used, into the `~/.patari/models` folder. This requires an internet connection once. Inference runs locally via ONNX Runtime, and falls back to CPU automatically if no compatible GPU is available.
+    The default model weights are downloaded automatically the first time a given model is used, into the `~/.optari/models` folder. This requires an internet connection once. Inference runs locally via ONNX Runtime, and falls back to CPU automatically if no compatible GPU is available.
 
 !!! note
       Segmentation runs in the background and can be interrupted via the Cancel button. The viewer stays fully interactive while it runs, but only one reconstruction, unmixing, or segmentation task can run at a time.
     
 ## Automatic ROI placement
 
-Once a segmentation mask exists, PATARI can place an ROI directly inside the target tissue class:
+Once a segmentation mask exists, OPTARI can place an ROI directly inside the target tissue class:
 
 - **Class ID** — which segmented class to place the ROI in (must be in the segmentation mask).
 - **Shape** — ellipse, rectangle, or polygon. The polygon simply follows the outline of the segmented target tissue.

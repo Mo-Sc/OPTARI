@@ -1,13 +1,13 @@
 # Presets
 
-Reusable processing configuration, stored as one JSON file per preset under `~/.patari/config/presets/<category>/`.
+Reusable processing configuration, stored as one JSON file per preset under `~/.optari/config/presets/<category>/`.
 
 Presets aren't part of the Settings dialog. Instead, each category is managed from its own dock's
 **Save Preset** / **Remove Preset** controls.
 
 ## ROI presets (`presets/roi/`)
 
-A saved ROI template. The `geometry` block is the same representation PATARI uses for the saved analysis table and for HDF5 export: vertices in PATATO coordinates, metres, origin at the image centre, so the shape does not depend on the field of view it was drawn on. `tissue_class` can be used for automatic placement, by setting it to the respective class in an available segmentation map.
+A saved ROI template. The `geometry` block is the same representation OPTARI uses for the saved analysis table and for HDF5 export: vertices in PATATO coordinates, metres, origin at the image centre, so the shape does not depend on the field of view it was drawn on. `tissue_class` can be used for automatic placement, by setting it to the respective class in an available segmentation map.
 
 `source_fov_m` records the field of view the template was drawn on, in metres. It is needed to re-place the template proportionally when it is applied to a scan with a different field of view,
 
@@ -99,7 +99,7 @@ Which model/class to run, and how to place an ROI from the resulting mask (see
 
 An entire analysis applied to a whole dataset. Unlike the other categories a batch preset holds no processing settings of its own, and isntead it **references** the presets above. See the [Batch Processing](../user-guide/batch-processing.md).
 
-Batch presets are edited in their own window (**PATARI → Batch Processing…**), which shows the JSON, an **Apply** button to re-check it, and **Save Preset** / **Remove Preset**.
+Batch presets are edited in their own window (**OPTARI → Batch Processing…**), which shows the JSON, an **Apply** button to re-check it, and **Save Preset** / **Remove Preset**.
 
 ```json title="clinical_muscle_roi.json"
 {
@@ -137,7 +137,7 @@ Each entry is a **preset name only**. Omit a step to skip it.
 | `unmixing` | `presets/unmixing/` | Wavelengths resolve per scan, so a scan missing them fails on its own. |
 | `roi` | `presets/roi/` | The ROI placed and measured. Its `placement` decides static or auto. |
 
-An empty `"steps": {}` with `outputs.hdf5` on is a pure vendor-to-PATARI-HDF5 converter.
+An empty `"steps": {}` with `outputs.hdf5` on is a pure vendor-to-OPTARI-HDF5 converter.
 
 ### `source`
 
@@ -182,4 +182,4 @@ How wide the measurement reaches. Mirrors the **Include all …** boxes in the A
 
 ## Sharing presets
 
-Any preset is just a JSON file that can be copied into another machines `~/.patari/config/presets/<category>/` to reuse the same configuration across workstations.
+Any preset is just a JSON file that can be copied into another machines `~/.optari/config/presets/<category>/` to reuse the same configuration across workstations.

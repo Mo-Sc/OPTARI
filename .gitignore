@@ -1,5 +1,6 @@
 dev
 tests/testdata/
+figures/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

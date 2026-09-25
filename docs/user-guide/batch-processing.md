@@ -2,7 +2,7 @@
 
 Batch mode applies one saved analysis to a whole dataset without supervision. The intended workflow is to tune the analysis on a single representative scan in the GUI, save each step as a preset, and then point batch mode at the study folder. Because batch mode drives the same controllers the docks do, the numbers it writes are the numbers you would have produced by hand.
 
-Open it from the menu bar: **PATARI → Batch Processing…**
+Open it from the menu bar: **OPTARI → Batch Processing…**
 
 
 ![Batch Mode](../assets/screenshots/placeholders/ss_batchmode.png)
@@ -14,14 +14,14 @@ Batch mode runs presets, it does not create them. Set up and save the presets yo
 
 | Step | Where you tune it | Preset folder |
 | --- | --- | --- |
-| Reconstruction | Reconstruction dock | `~/.patari/config/presets/reconstruction` |
-| Segmentation | Segmentation dock | `~/.patari/config/presets/segmentation` |
-| Unmixing | Unmixing dock | `~/.patari/config/presets/unmixing` |
-| ROI | Annotation dock, **Save ROI preset** | `~/.patari/config/presets/roi` |
+| Reconstruction | Reconstruction dock | `~/.optari/config/presets/reconstruction` |
+| Segmentation | Segmentation dock | `~/.optari/config/presets/segmentation` |
+| Unmixing | Unmixing dock | `~/.optari/config/presets/unmixing` |
+| ROI | Annotation dock, **Save ROI preset** | `~/.optari/config/presets/roi` |
 
 ## The batch preset
 
-A batch preset is a small JSON file in `~/.patari/config/presets/batch` that **names** the presets above rather than copying them. A step is a preset name and nothing else, so every setting has exactly one home and one thing to cite. Three are shipped: `clinical_muscle_roi`, `existing_recon_roi` and `convert_to_hdf5`.
+A batch preset is a small JSON file in `~/.optari/config/presets/batch` that **names** the presets above rather than copying them. A step is a preset name and nothing else, so every setting has exactly one home and one thing to cite. Three are shipped: `clinical_muscle_roi`, `existing_recon_roi` and `convert_to_hdf5`.
 
 ```json
 {
@@ -40,7 +40,7 @@ A batch preset is a small JSON file in `~/.patari/config/presets/batch` that **n
 
 Every key is documented in [Presets](../configuration/presets.md#batch-presets-presetsbatch). In short: `steps` names what runs, `source` picks which reconstruction it runs on, `frame` picks which frame (`"motion"` or a number), `measure` says how wide to measure, and `outputs` says what to write.
 
-Edit a plan directly in the batch window: the JSON editor shows the selected preset, **Apply** re-checks it, and **Save Preset** writes it back under a name of your choosing. Nothing needs editing by hand in `~/.patari`.
+Edit a plan directly in the batch window: the JSON editor shows the selected preset, **Apply** re-checks it, and **Save Preset** writes it back under a name of your choosing. Nothing needs editing by hand in `~/.optari`.
 
 Note that how an ROI is placed (`static` or `auto`) belongs to the **ROI preset**, not the batch plan, so an ROI behaves the same whether you place it from the dock or from a batch run.
 

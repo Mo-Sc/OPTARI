@@ -1,10 +1,10 @@
-site_name: PATARI
+site_name: OPTARI
 site_description: >-
-  Documentation for PATARI, an open-source napari-based toolkit for
-  clinical photoacoustic imaging analysis.
-site_url: https://mo-sc.github.io/PATARI/
-repo_url: https://github.com/Mo-Sc/PATARI
-repo_name: Mo-Sc/PATARI
+  Documentation for OPTARI, an open-source napari-based toolkit for
+  clinical photoacoustic/optoacoustic imaging analysis.
+site_url: https://mo-sc.github.io/OPTARI/
+repo_url: https://github.com/Mo-Sc/OPTARI
+repo_name: Mo-Sc/OPTARI
 edit_uri: edit/main/docs/
 docs_dir: docs
 copyright: Copyright &copy; 2026 Moritz Schillinger

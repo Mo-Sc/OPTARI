@@ -1,4 +1,4 @@
-"""Exporting scans: PATARI HDF5 with ROIs and derived images, IPASC raw data, batch report."""
+"""Exporting scans: OPTARI HDF5 with ROIs and derived images, IPASC raw data, batch report."""
 
 import json
 from pathlib import Path
@@ -11,18 +11,18 @@ import patato as pat
 import pytest
 from patato.io.attribute_tags import HDF5Tags
 
-from patari.batch.plan import BatchJob
-from patari.batch.report import REPORT_COLUMNS, REPORT_SHEET, BatchReport
-from patari.controllers.scan_controller import ScanController, ScanInfo
-from patari.controllers.unmixing_controller import UnmixingController, _unmix_frames
-from patari.io.export_pipeline import (
-    PATARI_FILE_FORMAT_VERSION,
+from optari.batch.plan import BatchJob
+from optari.batch.report import REPORT_COLUMNS, REPORT_SHEET, BatchReport
+from optari.controllers.scan_controller import ScanController, ScanInfo
+from optari.controllers.unmixing_controller import UnmixingController, _unmix_frames
+from optari.io.export_pipeline import (
+    OPTARI_FILE_FORMAT_VERSION,
     ROI_TABLE_META_SHEET,
     export_scan_to_hdf5,
     export_scan_to_ipasc,
 )
-from patari.patato_bridge import build_napari_layers, display_data_from_patato_obj, roi_records_from_scan_rois
-from patari.roi.roi_records import ROIRecord
+from optari.patato_bridge import build_napari_layers, display_data_from_patato_obj, roi_records_from_scan_rois
+from optari.roi.roi_records import ROIRecord
 from tests.conftest import ITHERA_SCAN, needs_study, run_to_end
 
 pytestmark = needs_study
@@ -32,7 +32,7 @@ FOV = (0.04, 0.04)
 
 
 def controller_with(pa_data, records=(), derived=None):
-    """The slice of PatariController that the export pipeline reads."""
+    """The slice of OptariController that the export pipeline reads."""
     return SimpleNamespace(
         pa_data=pa_data,
         shapes_layer=SimpleNamespace(data=[r.verts for r in records]),
@@ -67,7 +67,7 @@ def test_hdf5_export_round_trip(ithera_scan, tmp_path):
 
     with h5py.File(destination) as file:
         origin = json.loads(file.attrs[HDF5Tags.FILE_ORIGIN])
-    assert origin["tool"] == "PATARI" and origin["format_version"] == PATARI_FILE_FORMAT_VERSION
+    assert origin["tool"] == "OPTARI" and origin["format_version"] == OPTARI_FILE_FORMAT_VERSION
     assert ScanController.scan_type(destination) == "hdf5"
 
     reopened = pat.PAData.from_hdf5(str(destination), mode="r")

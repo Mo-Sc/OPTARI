@@ -8,14 +8,14 @@ import numpy as np
 import pytest
 from napari.layers import Labels
 
-from patari.controllers.reconstruction_controller import ReconParams, _reconstruct_frames
-from patari.controllers.roi_controller import RoiController
-from patari.controllers.unmixing_controller import UnmixParams, _unmix_frames, resolve_unmixing_wavelengths
-from patari.patato_bridge import display_data_from_patato_obj
-from patari.roi.roi_shapes import class_top_at_center_column
-from patari.segmentation.segmenter import create_segmenter
-from patari.utils.presets import PresetStore
-from patari.utils.setup import (
+from optari.controllers.reconstruction_controller import ReconParams, _reconstruct_frames
+from optari.controllers.roi_controller import RoiController
+from optari.controllers.unmixing_controller import UnmixParams, _unmix_frames, resolve_unmixing_wavelengths
+from optari.patato_bridge import display_data_from_patato_obj
+from optari.roi.roi_shapes import class_top_at_center_column
+from optari.segmentation.segmenter import create_segmenter
+from optari.utils.presets import PresetStore
+from optari.utils.setup import (
     get_user_reconstruction_presets_dir,
     get_user_unmixing_presets_dir,
 )

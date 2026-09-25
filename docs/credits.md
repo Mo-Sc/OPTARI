@@ -2,15 +2,15 @@
 
 ## License
 
-PATARI is distributed under the [BSD-3-Clause license](https://github.com/Mo-Sc/PATARI/blob/main/LICENSE).
+OPTARI is distributed under the [BSD-3-Clause license](https://github.com/Mo-Sc/OPTARI/blob/main/LICENSE).
 
-## Citing PATARI
+## Citing OPTARI
 
-If PATARI is useful in your research, please cite the paper:
+If OPTARI is useful in your research, please cite the paper:
 
 !!! quote "Citation (placeholder)"
-    Schillinger, M., Bader, M., Buehler, A., Wachter, F., Breininger, K. *PATARI: An open-source software
-    framework for clinical translation of photoacoustic imaging.* — citation details to be added once
+    Schillinger, M., Bader, M., Buehler, A., Wachter, F., Breininger, K. *OPTARI: An open-source software
+    framework for clinical translation of optoacoustic imaging.* — citation details to be added once
     published.
 
 ## Acknowledgments

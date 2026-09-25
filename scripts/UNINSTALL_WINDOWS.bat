@@ -1,11 +1,11 @@
 @echo off
-title PATARI Uninstaller
+title OPTARI Uninstaller
 echo ===================================================
-echo     PATARI Environment Cleanup Tool
+echo     OPTARI Environment Cleanup Tool
 echo ===================================================
 echo.
-for %%F in ("%~dp0patari*.exe") do if exist "%%~fF" (
-    echo Removing PATARI from "%%~nxF"
+for %%F in ("%~dp0optari*.exe") do if exist "%%~fF" (
+    echo Removing OPTARI from "%%~nxF"
     "%%~fF" self remove
     echo.
     echo SUCCESS: The environment cache has been completely removed!
@@ -14,8 +14,8 @@ for %%F in ("%~dp0patari*.exe") do if exist "%%~fF" (
     goto :done
 )
 
-echo ERROR: Could not find an executable starting with 'patari'.
-echo Please make sure this uninstaller is in the exact same folder as the PATARI app.
+echo ERROR: Could not find an executable starting with 'optari'.
+echo Please make sure this uninstaller is in the exact same folder as the OPTARI app.
 
 :done
 echo.

@@ -8,13 +8,13 @@ import numpy as np
 import pytest
 from napari.components import ViewerModel
 
-from patari.batch.plan import BatchJob, BatchPlan, OutputSpec, build_plan, plan_warnings, validate_plan
-from patari.batch.report import BatchReport
-from patari.batch.runner import BatchRunner, BatchStepError, Tick
-from patari.controllers.scan_controller import ScanInfo
-from patari.roi.roi_utils import MeasureScope
-from patari.utils.presets import PresetStore
-from patari.utils.setup import get_user_batch_presets_dir, get_user_models_dir
+from optari.batch.plan import BatchJob, BatchPlan, OutputSpec, build_plan, plan_warnings, validate_plan
+from optari.batch.report import BatchReport
+from optari.batch.runner import BatchRunner, BatchStepError, Tick
+from optari.controllers.scan_controller import ScanInfo
+from optari.roi.roi_utils import MeasureScope
+from optari.utils.presets import PresetStore
+from optari.utils.setup import get_user_batch_presets_dir, get_user_models_dir
 from tests.conftest import HDF5_SCAN, ITHERA_SCAN, STUDY_DIR, needs_study
 
 

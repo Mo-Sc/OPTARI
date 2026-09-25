@@ -1,7 +1,7 @@
 [project]
-name = "patari"
+name = "optari"
 dynamic = ["version"]
-description = "Analysis tool for clinical PA studies based on PATATO and NAPARI"
+description = "Analysis tool for clinical photoacoustic/optoacoustic studies based on PATATO and NAPARI"
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [
@@ -46,7 +46,7 @@ docs = [
 ]
 
 [project.gui-scripts]
-patari = "patari.launcher:main"
+optari = "optari.launcher:main"
 
 [build-system]
 requires = ["setuptools>=68", "setuptools-scm>=8"]
@@ -59,10 +59,10 @@ include-package-data = true
 where = ["src"]
 
 [tool.setuptools.package-data]
-"patari" = ["config/default_configs/*.json", "config/default_configs/**/*.json", "config/startup.png", "config/logo.png"]
+"optari" = ["config/default_configs/*.json", "config/default_configs/**/*.json", "config/startup.png", "config/logo.png"]
 
 [tool.setuptools_scm]
-write_to = "src/patari/_version.py"
+write_to = "src/optari/_version.py"
 fallback_version = "0.0.1+nogit"
 
 [tool.pytest.ini_options]

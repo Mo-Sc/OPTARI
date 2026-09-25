@@ -1,6 +1,6 @@
 # User Guide Overview
 
-PATARI's window is built from napari's dock system around a central image viewer. **Docks can be added or removed** by clicking `PATARI` in the menu bar and selecting `Docks`.
+OPTARI's window is built from napari's dock system around a central image viewer. **Docks can be added or removed** by clicking `OPTARI` in the menu bar and selecting `Docks`.
 
 | Position | Docks |
 |---|---|
@@ -33,4 +33,4 @@ Most buttons, checkboxes, and other controls have a tooltip. Hover over one for 
 9. [Keyboard Shortcuts](keyboard-shortcuts.md) — the full shortcut reference.
 10. [FAQ](faq.md) — common questions about everyday usage.
 
-For examples of how we used PATARI in clinical PA studies, see [Sample Workflow](../clinical-workflows/manual-roi-workflow.md).
+For examples of how we used OPTARI in clinical PA studies, see [Sample Workflow](../clinical-workflows/manual-roi-workflow.md).

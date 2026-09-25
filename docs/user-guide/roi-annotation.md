@@ -19,12 +19,12 @@ Each ROI shape is labelled with its `roi_id`, and optionally its track ID (`roi_
     On macOS, ROI deletion by keyboard, when a row is selected in the Live Analysis table, requires the `Delete` (forward-delete) key (`fn` + `Backspace`), not just the ordinary `Backspace`.
 
 !!! tip
-    The line shape (shortcut `L`) can be used as a **measurement tool for distances**. Simply draw a line along the distance you want to measure. The `size_mm` feature in the Live Analysis table will display its length in mm — see [FAQ](faq.md#can-i-measure-distances-in-patari).
+    The line shape (shortcut `L`) can be used as a **measurement tool for distances**. Simply draw a line along the distance you want to measure. The `size_mm` feature in the Live Analysis table will display its length in mm — see [FAQ](faq.md#can-i-measure-distances-in-optari).
 
 
 ## Live Analysis vs. Saved Analysis tables
 
-PATARI uses a dual-table system so you can get live information to place the ROI, but choose only selected ROIs for analysis:
+OPTARI uses a dual-table system so you can get live information to place the ROI, but choose only selected ROIs for analysis:
 
 ### Live Analysis
 
@@ -60,7 +60,7 @@ implemented
 TODO: when a ROI is restored and added to the saved table again, currently we create duplicate group uuids. Is that intended? or should we better give them a completely new id? Or fail and prompt the user to tell him he has to delete the previous record first or copy paste it
 Group downstream analysis by **`roi_group_uid`**, not by `roi_id`. `roi_id` and `track_id` are per-session counters, so after an import, or when combining exports from several machines, two unrelated ROIs can share them. `roi_group_uid` is unique and persists through export, import and re-measurement.
 
-Add **`roi_ts`** when you want a single measurement rather than a region's whole history. Saving never overwrites: restore an ROI, adjust it and save again, and the table holds both sets of rows under the same `roi_group_uid` with different `roi_ts` values. That is deliberate, since discarding a saved measurement is your decision, not PATARI's — delete the old rows yourself if you want them gone. It does mean `groupby("roi_group_uid")` alone would average the before and after measurements together. `(roi_group_uid, roi_ts, frame, channel)` uniquely identifies one measured shape. -->
+Add **`roi_ts`** when you want a single measurement rather than a region's whole history. Saving never overwrites: restore an ROI, adjust it and save again, and the table holds both sets of rows under the same `roi_group_uid` with different `roi_ts` values. That is deliberate, since discarding a saved measurement is your decision, not OPTARI's — delete the old rows yourself if you want them gone. It does mean `groupby("roi_group_uid")` alone would average the before and after measurements together. `(roi_group_uid, roi_ts, frame, channel)` uniquely identifies one measured shape. -->
 
 ### ROI Features
 
@@ -102,7 +102,7 @@ The ROI Presets library is constantly synced with [`.json` files](../configurati
 
 By default, ROI placement is set to `static`, meaning the ROI will be placed at the exact coordinates defined in the preset. 
 
-However, if it is set to `automatic`, PATARI will try to automatically place the ROI in the tissue that is defined as the `position` attribute in the preset, ignoring the coordinates. This requires the scan to have a [**Segmentation**](segmentation.md) layer that contains a class with the same name as the one set in the position attribute. If no Segmentation layer or no corresponding tissue class is found, it will default back to static placement.
+However, if it is set to `automatic`, OPTARI will try to automatically place the ROI in the tissue that is defined as the `position` attribute in the preset, ignoring the coordinates. This requires the scan to have a [**Segmentation**](segmentation.md) layer that contains a class with the same name as the one set in the position attribute. If no Segmentation layer or no corresponding tissue class is found, it will default back to static placement.
 
 With Scope set to `All Frames`, `automatic` placement re-anchors independently on **each frame's own segmentation mask** rather than copying the first frame's position everywhere: a frame the tissue class isn't present on is skipped.
 

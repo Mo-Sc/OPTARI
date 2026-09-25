@@ -1,6 +1,6 @@
 # Data & Integrations
 
-PATARI does not implement its own file I/O. Everything goes through a custom [PATATO fork](https://github.com/Mo-Sc/patato), and `src/patari/patato_bridge.py` converts PATATO objects into napari layers and back.
+OPTARI does not implement its own file I/O. Everything goes through a custom [PATATO fork](https://github.com/Mo-Sc/patato), and `src/optari/patato_bridge.py` converts PATATO objects into napari layers and back.
 
 ## Supported input formats
 
@@ -20,10 +20,10 @@ reconstruction.
 The [IPASC data format](https://www.ipasc.science) is two things:
 
 **The container** is intended for raw time series data. The paper states that it "does not yet
-support the inclusion of data from bimodal systems, such as combined photoacoustic and ultrasound systems". Reconstructions, Annotations, etc are out of scope.
-So the primary PATARI export uses a custom schema, inspired by PATATO's HDF5 files.
+support the inclusion of data from bimodal systems, such as combined optoacoustic and ultrasound systems". Reconstructions, Annotations, etc are out of scope.
+So the primary OPTARI export uses a custom schema, inspired by PATATO's HDF5 files.
 
-**The metadata dictionary** is independent, and PATARI adopts it. Every PATARI HDF5 file carries
+**The metadata dictionary** is independent, and OPTARI adopts it. Every OPTARI HDF5 file carries
 an `/ipasc` group holding `meta_data` and `meta_data_device` in the layout IPASC defines, written under IPASC tag
 names in IPASC units.
 

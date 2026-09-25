@@ -7,21 +7,21 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-# PATARI reads ~/.patari on import, so the run gets a user directory of its own.
+# OPTARI reads ~/.optari on import, so the run gets a user directory of its own.
 # Segmentation weights are large downloads and are linked in from the real one.
-_user_dir = tempfile.TemporaryDirectory(prefix="patari-test-")
-os.environ["PATARI_USER_DIR"] = _user_dir.name
-from patari.utils.setup import get_user_models_dir, get_user_roi_presets_dir  # noqa: E402
+_user_dir = tempfile.TemporaryDirectory(prefix="optari-test-")
+os.environ["OPTARI_USER_DIR"] = _user_dir.name
+from optari.utils.setup import get_user_models_dir, get_user_roi_presets_dir  # noqa: E402
 
-for weights in (Path.home() / ".patari" / "models").glob("*.onnx"):
+for weights in (Path.home() / ".optari" / "models").glob("*.onnx"):
     (get_user_models_dir() / weights.name).symlink_to(weights)
 
 import patato as pat  # noqa: E402
 from napari.layers import Image  # noqa: E402
 from patato.io.ithera.read_ithera import iTheraMSOT  # noqa: E402
 
-from patari.roi.roi_presets import RoiPresetStore  # noqa: E402
-from patari.segmentation.segmenter import load_model_registry  # noqa: E402
+from optari.roi.roi_presets import RoiPresetStore  # noqa: E402
+from optari.segmentation.segmenter import load_model_registry  # noqa: E402
 
 STUDY_DIR = Path(__file__).parent / "testdata" / "Study_19"
 ITHERA_SCAN = STUDY_DIR / "Scan_2"

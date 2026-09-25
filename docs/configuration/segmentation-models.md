@@ -1,6 +1,6 @@
 # Segmentation Models
 
-The segmentation model registry (`~/.patari/config/segmentation_models.json`) declares every model PATARI can run,
+The segmentation model registry (`~/.optari/config/segmentation_models.json`) declares every model OPTARI can run,
 independent of the segmentation preset. See [Segmentation](../user-guide/segmentation.md) for the workflow and [Data & Integrations](../developer-guide/data-and-integrations.md) for the adapter pattern behind it.
 
 ## Registry format
@@ -42,17 +42,17 @@ independent of the segmentation preset. See [Segmentation](../user-guide/segment
 |---|---|
 | `id` | Unique model identifier, referenced by segmentation presets (`model_id`) and by `segmentation.default_model` in `config.json`. |
 | `adapter_class` | Name of the `ModelAdapterBase` subclass implementing this model's pre/postprocessing. |
-| `filename` | ONNX weights filename, expected under `~/.patari/models/`. |
+| `filename` | ONNX weights filename, expected under `~/.optari/models/`. |
 | `input_height` / `input_width` | Expected input frame size for the model. |
 | `class_names` | Class-id → name map for the model's segmentation output. |
 | `default_class` | Class selected by default in the Segmentation dock. |
 | `postprocessing_config` | Postprocessing steps for the mask. Integers refer to class IDs: keep only the largest connected component per class, merge specific class groups, and remove small objects below a pixel threshold. |
-| `url` |  Model download URL. If the weights file is missing locally, PATARI tries to download it from here on first use. |
+| `url` |  Model download URL. If the weights file is missing locally, OPTARI tries to download it from here on first use. |
 
 ## Pretrained models
 
-PATARI comes with pretrained models for common clinical examination sites. The weights are not bundled with the
-installer but are download automatically into `~/.patari/models/` the first time a given model is used, keeping
+OPTARI comes with pretrained models for common clinical examination sites. The weights are not bundled with the
+installer but are download automatically into `~/.optari/models/` the first time a given model is used, keeping
 the base installation small. **Settings → Models** shows whether a given model's weights are already
 installed.
 
@@ -64,7 +64,7 @@ installed.
 <!-- 1. Implement a `ModelAdapterBase` subclass (`preprocess()` → `infer()` → `postprocess()`) if your model needs
    different pre/postprocessing than the existing adapters — otherwise reuse an existing `adapter_class`.
 2. Add an entry to `segmentation_models.json` with a unique `id`, the weights filename, and class metadata.
-3. Place the `.onnx` weights file in `~/.patari/models/`, or provide a `url` for automatic download.
+3. Place the `.onnx` weights file in `~/.optari/models/`, or provide a `url` for automatic download.
 
-No changes to any controller should be required. The registry is the only thing PATARI reads to discover available
+No changes to any controller should be required. The registry is the only thing OPTARI reads to discover available
 models. -->

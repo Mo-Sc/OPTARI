@@ -5,9 +5,9 @@ import numpy as np
 import pytest
 from patato.io.attribute_tags import HDF5Tags, IPASCTags
 
-from patari.controllers.scan_controller import ScanController
-from patari.patato_bridge import build_napari_layers, display_data_from_patato_obj, fov_from_objects
-from patari.utils.motion import k_motion_scores_optimized
+from optari.controllers.scan_controller import ScanController
+from optari.patato_bridge import build_napari_layers, display_data_from_patato_obj, fov_from_objects
+from optari.utils.motion import k_motion_scores_optimized
 from tests.conftest import HDF5_SCAN, ITHERA_SCAN, STUDY_DIR, needs_study
 
 pytestmark = needs_study

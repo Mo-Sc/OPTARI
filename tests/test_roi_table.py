@@ -4,15 +4,15 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from patari.io.export_pipeline import (
+from optari.io.export_pipeline import (
     ROI_TABLE_META_SHEET,
     ROI_TABLE_SHEET,
     export_roi_table_to_xlsx,
     import_roi_table_from_xlsx,
 )
-from patari.roi.roi_records import ROIRecord
-from patari.roi.roi_table import SavedRoiTable
-from patari.roi.roi_utils import compute_roi_stats, saved_export_columns
+from optari.roi.roi_records import ROIRecord
+from optari.roi.roi_table import SavedRoiTable
+from optari.roi.roi_utils import compute_roi_stats, saved_export_columns
 
 
 @pytest.fixture
@@ -46,7 +46,7 @@ def test_xlsx_export_import_round_trip_and_dedupe(measured_rows, tmp_path):
     assert list(imported.columns) == saved_export_columns()
     np.testing.assert_allclose(imported["mean"], table.rows["mean"])
     meta = dict(pd.read_excel(path, sheet_name=ROI_TABLE_META_SHEET).values)
-    assert meta["tool"] == "PATARI" and {"operator", "analysis_id", "creation_time"} <= set(meta)
+    assert meta["tool"] == "OPTARI" and {"operator", "analysis_id", "creation_time"} <= set(meta)
 
     # Rows already in the table are skipped: the session's own export and a second import.
     assert table.merge_imported(imported) == (0, len(imported))
@@ -57,7 +57,7 @@ def test_xlsx_export_import_round_trip_and_dedupe(measured_rows, tmp_path):
 
 def test_import_rejects_foreign_or_outdated_tables(measured_rows, tmp_path):
     measured_rows.to_excel(tmp_path / "foreign.xlsx", index=False)
-    with pytest.raises(ValueError, match="not a PATARI ROI table"):
+    with pytest.raises(ValueError, match="not a OPTARI ROI table"):
         import_roi_table_from_xlsx(tmp_path / "foreign.xlsx")
 
     with pd.ExcelWriter(tmp_path / "outdated.xlsx") as writer:

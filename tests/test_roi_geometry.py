@@ -3,8 +3,8 @@
 import numpy as np
 import pytest
 
-from patari.roi.roi_geometry import RoiGeometry, napari_to_patato, patato_to_napari
-from patari.roi.roi_presets import RoiPreset, RoiPresetStore
+from optari.roi.roi_geometry import RoiGeometry, napari_to_patato, patato_to_napari
+from optari.roi.roi_presets import RoiPreset, RoiPresetStore
 
 FOV = (0.04, 0.03)  # (fov_x_m, fov_y_m)
 

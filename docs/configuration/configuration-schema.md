@@ -1,6 +1,6 @@
 # Configuration Schema
 
-Full reference for `~/.patari/config/config.json`. All fields are required unless noted, and every edit needs an app restart.
+Full reference for `~/.optari/config/config.json`. All fields are required unless noted, and every edit needs an app restart.
 
 ## `general`
 
@@ -18,7 +18,7 @@ Full reference for `~/.patari/config/config.json`. All fields are required unles
 | `OPERATOR` | string | Settings ▸ General | Who is running the analysis. Will be recorded in the exported HDF5 and Excel files. |
 | `ANALYSIS_ID` | string | Settings ▸ General | Name of the analysis, e.g. a study or cohort name. Will be recorded in the exported HDF5 and Excel files. |
 | `LAYER_COLOR_MAPS` | object | Settings ▸ Viewer | Colormap per layer type, e.g. `{"ultrasounds": "gray", "reconstructions": "viridis", "unmixed": "magma", "so2": "twilight_shifted", "thb": "inferno"}`. |
-| `DEFAULT_VISIBLE_DOCKS` | object of `label → 0/1` | Settings ▸ Docks | Which panels are visible when PATARI starts (see [PATARI ▸ Docks](index.md)). A missing label defaults to visible. Applies on every launch, overriding napari's own remembered window layout. |
+| `DEFAULT_VISIBLE_DOCKS` | object of `label → 0/1` | Settings ▸ Docks | Which panels are visible when OPTARI starts (see [OPTARI ▸ Docks](index.md)). A missing label defaults to visible. Applies on every launch, overriding napari's own remembered window layout. |
 
 ## `annotation`
 
@@ -38,7 +38,7 @@ Available feature names:
 A fixed set of columns (`roi_id`, `track_id`, `roi_group_uid`, `study_folder`, `scan_folder`, `scan_name`,
 `frame`, `channel`, `src_layer`, `roi_ts`, `kind`, `scan_ts`, `filepath`) is always included in the **Saved Analysis table**, independent of the live-visibility settings here, so saved records are always fully identifiable.
 
-PATARI identifies an ROI at three scopes. `roi_id` is one shape on one frame, a per-session counter, and it is the number drawn on the shape in the viewer. `track_id` links the copies of one ROI across frames within a session. `roi_group_uid` is the group's unique identity.
+OPTARI identifies an ROI at three scopes. `roi_id` is one shape on one frame, a per-session counter, and it is the number drawn on the shape in the viewer. `track_id` links the copies of one ROI across frames within a session. `roi_group_uid` is the group's unique identity.
 
 `src_layer` names the image layer an ROI was measured on. `roi_geometry` is a JSON dictionary holding the ROI
 vertices in PATATO coordinates (metres, origin at the image centre) together with its shape kind, tissue class
@@ -61,10 +61,10 @@ exported by default but hidden from the tables unless enabled here.
 
 ## Schema versioning
 
-`config.json` contains a `schema_version` field.  If PATARI detects that your existing configuration was written by
+`config.json` contains a `schema_version` field.  If OPTARI detects that your existing configuration was written by
 an incompatible older version, it automatically:
 
-1. Renames your existing `~/.patari` folder to a timestamped backup, `~/.patari_old_<timestamp>`.
-2. Creates a fresh `~/.patari` from the packaged defaults.
+1. Renames your existing `~/.optari` folder to a timestamped backup, `~/.optari_old_<timestamp>`.
+2. Creates a fresh `~/.optari` from the packaged defaults.
 
 Your previous settings, presets, downloaded models, and logs remain intact in the backup folder.

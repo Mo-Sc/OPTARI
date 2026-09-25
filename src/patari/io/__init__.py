@@ -1,1 +1,0 @@
-"""PATARI I/O helpers."""

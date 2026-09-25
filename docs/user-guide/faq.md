@@ -2,13 +2,13 @@
 
 ## My `config.json` edits aren't taking effect
 
-Configuration is loaded once at startup — restart PATARI after editing any file under
-`~/.patari/config/`. See [Configuration](../configuration/index.md).
+Configuration is loaded once at startup — restart OPTARI after editing any file under
+`~/.optari/config/`. See [Configuration](../configuration/index.md).
 
-## PATARI reset my settings after an update
+## OPTARI reset my settings after an update
 
-If a new version ships an incompatible configuration schema, PATARI automatically archives your existing
-`~/.patari` folder (to `~/.patari_old_<timestamp>`) and starts fresh from the new defaults, rather than crashing
+If a new version ships an incompatible configuration schema, OPTARI automatically archives your existing
+`~/.optari` folder (to `~/.optari_old_<timestamp>`) and starts fresh from the new defaults, rather than crashing
 on an incompatible file. Nothing is deleted — copy specific presets or settings back over from the backup folder
 if needed. See [Configuration](../configuration/index.md#schema-versioning-and-migration).
 
@@ -28,7 +28,7 @@ Segmentation quality depends on how close your data is to the model's training d
 or scanner types may need a fine-tuned model — see [Segmentation Models](../configuration/segmentation-models.md)
 for how models are registered, and consider filing an issue with an example scan.
 
-## Can I measure distances in PATARI?
+## Can I measure distances in OPTARI?
 
 Yes — select the line shape (shortcut `L`) and draw it along the distance you want to measure. The `size_mm`
 feature in the Live Analysis table shows its length in millimeters. See
@@ -43,14 +43,14 @@ to its own range. Select the layer in the Layer List and click `once` in the lay
 
 ## Why can't I see ROIs overlaid on images in grid mode?
 
-In grid mode napari draws every cell as a separate view, and a layer can only live in one cell. PATARI shows one layer per cell,
+In grid mode napari draws every cell as a separate view, and a layer can only live in one cell. OPTARI shows one layer per cell,
 so the ROIs layer gets a cell of its own and can't be drawn on top of the images next to it. This is a napari limitation: there is
 currently no way to show one layer in several cells.
 
 **Workaround:** right-click the grid mode icon below the layer list and set `stride` to `2` (or `-2`). Every cell then overlays
 two consecutive layers of the layer list. Move the ROIs layer directly above the image you want to annotate. Keep in mind that the
 pairs are counted over the whole layer list, including hidden layers, so they shift whenever a layer is added (for example after
-unmixing) and only one image can be paired with the ROIs. PATARI resets the stride to one layer per cell on the next start.
+unmixing) and only one image can be paired with the ROIs. OPTARI resets the stride to one layer per cell on the next start.
 
 **Known issue with napari 0.9.1:** with a stride other than `1`/`-1`, unhiding a layer while grid mode is on can raise
 `TypeError: unsupported operand type(s) for /: 'float' and 'NoneType'`, and the layer may not appear even though it is ticked in

@@ -3,9 +3,9 @@
 import numpy as np
 import pytest
 
-from patari.roi.roi_records import ROIRecord
-from patari.roi.roi_shapes import Polygon, Rectangle, ROIPlacementConfig
-from patari.roi.roi_utils import (
+from optari.roi.roi_records import ROIRecord
+from optari.roi.roi_shapes import Polygon, Rectangle, ROIPlacementConfig
+from optari.roi.roi_utils import (
     IntensityClamp,
     compute_roi_spectra,
     compute_roi_stats,

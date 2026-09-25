@@ -2,7 +2,7 @@
 
 <!-- TODO screenshot: unmixing-dock.png — Unmixing dock with chromophores and derived SO2/THb layers -->
 
-PATARI can unmix PA scans recorded at different wavelengths into chromophore concentration maps, using linear spectral unmixing. At each pixel, PATARI (via PATATO) multiplies the multi-wavelength signal by the Moore-Penrose pseudoinverse of the selected chromophores' reference spectra and solves the mixing model by least squares.
+OPTARI can unmix PA scans recorded at different wavelengths into chromophore concentration maps, using linear spectral unmixing. At each pixel, OPTARI (via PATATO) multiplies the multi-wavelength signal by the Moore-Penrose pseudoinverse of the selected chromophores' reference spectra and solves the mixing model by least squares.
 
 ![Unmixing 1](../assets/screenshots/placeholders/ss_unmixing.png)
 
