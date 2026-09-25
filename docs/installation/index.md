@@ -21,7 +21,7 @@ No Python, no terminal, no admin rights required.
       - **macOS**: open **System Settings** → **Privacy & Security**, scroll to Security, then click
         **Open Anyway** next to the "patari was blocked" message.
 4. On first launch, PATARI downloads its remaining dependencies — make sure your computer is connected to the
-   internet. This can take a few minutes.
+   internet. **This can take a few minutes**.
 5. Once set up, PATARI launches automatically. On later runs, just open the same `patari-v` file again.
 
 !!! note

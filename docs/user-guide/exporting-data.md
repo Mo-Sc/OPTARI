@@ -6,8 +6,7 @@ Depending on the type of data that should be exported (scan data, tabular measur
 ## Full Scan Export (HDF5)
 
 Exports the loaded scan together with any drawn ROIs and derived layers (new reconstructions, unmixed chromophore maps, SO₂/THb)
-into an HDF5 file that uses a custom, PATATO-inspired format carrying IPASC-conform metadata (see
-[why a custom format?](../developer-guide/data-and-integrations.md#why-not-the-raw-ipasc-format)). This way, you can also convert proprietary vendor data (e.g. iThera `.msot`) into an open, shareable format by importing the scan into PATARI and exporting it again. PATARI cannot write back into the proprietary vendor format.
+into an HDF5 file that uses a custom, PATATO-inspired format carrying IPASC-conform metadata. This way, you can also convert proprietary vendor data (e.g. iThera `.msot`) into an open, shareable format by importing the scan into PATARI and exporting it again. PATARI cannot write back into the proprietary vendor format.
 
 From the **Scan Browser** dock, click **Export HDF5** and choose a destination.
 

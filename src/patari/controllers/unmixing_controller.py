@@ -53,6 +53,31 @@ def resolve_unmixing_wavelengths(preset: dict, available: list[int]) -> list[int
     return []
 
 
+def validate_unmixing_spectra(
+    wavelengths: list[int], chromophores: list[str]
+) -> None:
+    """Raise a user-facing error when a spectrum has no values at a wavelength."""
+    wavelength_array = np.asarray(wavelengths, dtype=float)
+    missing = {
+        chromophore: [
+            wavelength
+            for wavelength, value in zip(
+                wavelengths,
+                SPECTRA_NAMES[chromophore].get_spectrum(wavelength_array),
+            )
+            if not np.isfinite(value)
+        ]
+        for chromophore in chromophores
+    }
+    missing = {chromophore: values for chromophore, values in missing.items() if values}
+    if missing:
+        details = "; ".join(
+            f"{chromophore}: {', '.join(f'{wavelength} nm' for wavelength in wavelengths)}"
+            for chromophore, wavelengths in missing.items()
+        )
+        raise ValueError(f"No spectrum data is available for {details}.")
+
+
 @dataclass
 class UnmixParams:
     """Everything one unmixing run needs, resolved against a loaded scan."""
@@ -124,6 +149,7 @@ class UnmixParams:
             raise ValueError("Select at least one wavelength.")
         if not chromophores:
             raise ValueError("Select at least one chromophore.")
+        validate_unmixing_spectra(wavelengths, chromophores)
 
         frame_numbers = list(
             active_layer.metadata.get("frames") or range(recon.shape[0])
