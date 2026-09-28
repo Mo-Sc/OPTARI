@@ -71,7 +71,7 @@
         "histogram_bins": 50
     },
     "segmentation":{
-        "default_model": "unet_msot_2_ta"
+        "default_model": "c_unet_gastrocnemius-transverse"
     },
     "export": {
         "font_size": 12,

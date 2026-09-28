@@ -1,5 +1,5 @@
 {
-  "model_id": "unet_msot_2_ta",
+  "model_id": "c_unet_gastrocnemius-transverse",
   "selected_class_ids": [
     3
   ],
