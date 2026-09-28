@@ -1,7 +1,7 @@
-"""Measure real per-step runtimes of the PATARI pipeline on a real scan.
+"""Measure real per-step runtimes of the OPTARI pipeline on a real scan.
 
-Unlike ``make_workflow_figure.py`` this script imports PATARI/PATATO and needs a scan on
-disk. It calls the same PATATO/PATARI entry points the app's controllers call
+Unlike ``make_workflow_figure.py`` this script imports OPTARI/PATATO and needs a scan on
+disk. It calls the same PATATO/OPTARI entry points the app's controllers call
 (``patato.read_reconstruction_preset``, ``SpectralUnmixer``, the segmentation adapters,
 ``ROIShape.to_napari_verts_world``, ``compute_roi_stats``) directly, without going through
 napari/Qt -- the docks only wire these calls to buttons and threads, they do no work
@@ -37,20 +37,20 @@ import patato as pat
 from patato.io.attribute_tags import HDF5Tags, IPASCTags, ReconAttributeTags, UnmixingAttributeTags
 from patato.io.ithera.read_ithera import iTheraMSOT
 
-from patari import __version__ as patari_version
-from patari.config import settings as patari_settings
-from patari.patato_bridge import display_data_from_patato_obj, scale_from_patato_obj
-from patari.roi import Ellipse, Polygon, ROIPlacementConfig, Rectangle
-from patari.roi.roi_records import ROIRecord
-from patari.roi.roi_utils import compute_roi_stats
-from patari.segmentation.segmenter import create_segmenter, load_model_registry
-from patari.utils.setup import get_user_models_dir
+from optari import __version__ as optari_version
+from optari.config import settings as optari_settings
+from optari.patato_bridge import display_data_from_patato_obj, scale_from_patato_obj
+from optari.roi import Ellipse, Polygon, ROIPlacementConfig, Rectangle
+from optari.roi.roi_records import ROIRecord
+from optari.roi.roi_utils import compute_roi_stats
+from optari.segmentation.segmenter import create_segmenter, load_model_registry
+from optari.utils.setup import get_user_models_dir
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger("benchmark_pipeline")
 
 HERE = Path(__file__).parent
-DEFAULT_CONFIGS = HERE.parent / "src" / "patari" / "config" / "default_configs"
+DEFAULT_CONFIGS = HERE.parent / "src" / "optari" / "config" / "default_configs"
 _ROI_SHAPES = {"ellipse": Ellipse, "rectangle": Rectangle, "polygon": Polygon}
 # must match ReconstructionController.DEEPMB_ALGORITHM (reconstruction_controller.py) --
 # duplicated as a literal rather than imported so this script never needs Qt/napari.
@@ -66,10 +66,10 @@ class Config:
     frame_idx: int = 0
     channel_idx: int = 0  # unmixed/chromophore channel used for feature extraction
 
-    reconstruction_preset: Path = DEFAULT_CONFIGS / "presets/reconstruction/backproject_clinical.json"
+    reconstruction_preset: Path = DEFAULT_CONFIGS / "presets/reconstruction/backproject_ithera.json"
     unmixing_preset: Path = DEFAULT_CONFIGS / "presets/unmixing/haemoglobin.json"
 
-    segmentation_model_id: str | None = None  # None -> patari_settings.segmentation.default_model
+    segmentation_model_id: str | None = None  # None -> optari_settings.segmentation.default_model
     roi_shape: str = "ellipse"
     roi_width_mm: float = 10.0
     roi_height_mm: float = 2.0
@@ -188,9 +188,9 @@ def bench_data_loading(cfg: Config, kind: str) -> tuple[list[float], object]:
 
 def _resolve_deepmb_params(preset: dict) -> None:
     """Mirror ReconstructionController._resolve_deepmb_model in place: expand the ONNX
-    weights path and drop the patari-only 'model_url' key before PATATO sees it.
+    weights path and drop the optari-only 'model_url' key before PATATO sees it.
 
-    Never downloads the weights itself -- unlike PATARI's UI, which offers a progress
+    Never downloads the weights itself -- unlike OPTARI's UI, which offers a progress
     dialog, a headless benchmark silently fetching ~100s of MB would be a surprise.
     """
     if preset.get(ReconAttributeTags.RECONSTRUCTION_ALGORITHM) != _DEEPMB_ALGORITHM:
@@ -199,7 +199,7 @@ def _resolve_deepmb_params(preset: dict) -> None:
     model_path = Path(params["model_path"]).expanduser()
     if not model_path.is_file():
         raise FileNotFoundError(
-            f"DeepMB ONNX weights not downloaded: {model_path}. Launch PATARI once so it "
+            f"DeepMB ONNX weights not downloaded: {model_path}. Launch OPTARI once so it "
             f"can fetch them, or download from {params.get('model_url')}."
         )
     params["model_path"] = str(model_path)
@@ -293,7 +293,7 @@ def bench_unmixing(cfg: Config, pa_data, reconstruction) -> tuple[list[float], o
 
 def bench_segmentation(cfg: Config, pa_data):
     registry = load_model_registry()
-    model_id = cfg.segmentation_model_id or patari_settings.segmentation.default_model
+    model_id = cfg.segmentation_model_id or optari_settings.segmentation.default_model
     if model_id not in registry:
         raise ValueError(f"segmentation model '{model_id}' not in registry: {list(registry)}")
     model_config = registry[model_id]
@@ -301,7 +301,7 @@ def bench_segmentation(cfg: Config, pa_data):
     model_path = get_user_models_dir() / model_config.filename
     if not model_path.is_file():
         raise FileNotFoundError(
-            f"segmentation model not downloaded: {model_path}. Launch PATARI once so it "
+            f"segmentation model not downloaded: {model_path}. Launch OPTARI once so it "
             f"can fetch it, or download it from {model_config.url}."
         )
 
@@ -356,7 +356,7 @@ def bench_roi_and_features(
 
     # ROI placement happens on the US/segmentation grid, exactly like
     # SegmentationController.on_generate_roi_from_mask_clicked.
-    us_scale = scale_from_patato_obj(us_obj, tuple(patari_settings.general.US_FALLBACK_SCALE))
+    us_scale = scale_from_patato_obj(us_obj, tuple(optari_settings.general.US_FALLBACK_SCALE))
     sy, sx = us_scale[-2], us_scale[-1]
     ty, tx = 0.0, 0.0  # the US layer carries no translate in the normal pipeline
 
@@ -376,7 +376,7 @@ def bench_roi_and_features(
     # pipeline -- segmentation runs on ultrasound, ROI stats are read off the optoacoustic
     # data. compute_roi_stats only needs a napari-Image-shaped duck type
     # (.data/.scale/.translate/.metadata/.name), so no napari/Qt is spun up here.
-    unmixed_scale = scale_from_patato_obj(unmixed, tuple(patari_settings.general.PA_FALLBACK_SCALE))
+    unmixed_scale = scale_from_patato_obj(unmixed, tuple(optari_settings.general.PA_FALLBACK_SCALE))
     unmixed_display = display_data_from_patato_obj(unmixed)  # (n_frames, n_channels, H, W)
     layer_stub = SimpleNamespace(
         data=unmixed_display,
@@ -486,7 +486,7 @@ def package_versions() -> dict[str, str | None]:
             versions[name] = version(name)
         except PackageNotFoundError:
             versions[name] = None
-    versions["patari"] = patari_version
+    versions["optari"] = optari_version
     return versions
 
 

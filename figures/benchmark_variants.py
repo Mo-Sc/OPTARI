@@ -39,13 +39,13 @@ import patato as pat
 from patato.io.attribute_tags import ReconAttributeTags
 from patato.unmixing.spectra import SPECTRA_NAMES
 
-from patari.config import settings as patari_settings
-from patari.patato_bridge import display_data_from_patato_obj, scale_from_patato_obj
-from patari.roi import Ellipse, Polygon, ROIPlacementConfig, Rectangle
-from patari.roi.roi_records import ROIRecord
-from patari.roi.roi_utils import compute_roi_stats
-from patari.segmentation.segmenter import create_segmenter, load_model_registry
-from patari.utils.setup import get_user_models_dir
+from optari.config import settings as optari_settings
+from optari.patato_bridge import display_data_from_patato_obj, scale_from_patato_obj
+from optari.roi import Ellipse, Polygon, ROIPlacementConfig, Rectangle
+from optari.roi.roi_records import ROIRecord
+from optari.roi.roi_utils import compute_roi_stats
+from optari.segmentation.segmenter import create_segmenter, load_model_registry
+from optari.utils.setup import get_user_models_dir
 
 from benchmark_pipeline import (
     DEFAULT_CONFIGS,
@@ -74,14 +74,14 @@ class Config:
     frame_idx: int = 0
     channel_idx: int = 0
 
-    reconstruction_preset_bp: Path = DEFAULT_CONFIGS / "presets/reconstruction/backproject_clinical.json"
+    reconstruction_preset_bp: Path = DEFAULT_CONFIGS / "presets/reconstruction/backproject_ithera.json"
     reconstruction_preset_deepmb: Path = DEFAULT_CONFIGS / "presets/reconstruction/deepmb_ithera.json"
 
     unmixing_wavelengths_partial: tuple[int, ...] = (760, 850)
     unmixing_chromophores_partial: tuple[str, ...] = ("Hb", "HbO2")
     unmixing_chromophores_full: tuple[str, ...] = ("Hb", "HbO2", "Lipid", "Melanin")
 
-    segmentation_model_id: str | None = None       # None -> patari_settings.segmentation.default_model
+    segmentation_model_id: str | None = None       # None -> optari_settings.segmentation.default_model
     segmentation_single_class: str | None = None   # None -> segmentation model's default_class
 
     roi_shape: str = "ellipse"
@@ -416,14 +416,14 @@ def main() -> None:
 
         # --- segmentation: single class vs all classes, same model/session, same US frame ---
         registry = load_model_registry()
-        model_id = cfg.segmentation_model_id or patari_settings.segmentation.default_model
+        model_id = cfg.segmentation_model_id or optari_settings.segmentation.default_model
         if model_id not in registry:
             raise ValueError(f"segmentation model '{model_id}' not in registry: {list(registry)}")
         model_config = registry[model_id]
         model_path = get_user_models_dir() / model_config.filename
         if not model_path.is_file():
             raise FileNotFoundError(
-                f"segmentation model not downloaded: {model_path}. Launch PATARI once so it "
+                f"segmentation model not downloaded: {model_path}. Launch OPTARI once so it "
                 f"can fetch it, or download it from {model_config.url}."
             )
 
@@ -468,7 +468,7 @@ def main() -> None:
         if not np.any(class_mask):
             raise ValueError(f"class '{roi_tissue_class}' not present in frame {cfg.frame_idx}.")
 
-        us_scale = scale_from_patato_obj(us_obj, tuple(patari_settings.general.US_FALLBACK_SCALE))
+        us_scale = scale_from_patato_obj(us_obj, tuple(optari_settings.general.US_FALLBACK_SCALE))
         sy, sx = us_scale[-2], us_scale[-1]
         shape = _ROI_SHAPES[cfg.roi_shape](ROIPlacementConfig(
             width_mm=cfg.roi_width_mm, height_mm=cfg.roi_height_mm, depth_mm=cfg.roi_top_margin_mm
@@ -478,7 +478,7 @@ def main() -> None:
             roi_id=0, track_id=0, frame_id=0, verts=verts, kind=shape.shape_type, tissue_class=roi_tissue_class
         )
 
-        unmixed_full_scale = scale_from_patato_obj(unmixed_full, tuple(patari_settings.general.PA_FALLBACK_SCALE))
+        unmixed_full_scale = scale_from_patato_obj(unmixed_full, tuple(optari_settings.general.PA_FALLBACK_SCALE))
         layer_stub_single = SimpleNamespace(
             data=display_data_from_patato_obj(unmixed_full),
             scale=unmixed_full_scale,
@@ -497,7 +497,7 @@ def main() -> None:
         recon_all = reconstruct_all_frames(cfg.reconstruction_preset_bp, pa_data)
         unmixed_all = unmix_all_frames(pa_data, recon_all, full_wavelengths, cfg.unmixing_chromophores_full)
         n_frames = int(pa_data.shape[0])
-        unmixed_all_scale = scale_from_patato_obj(unmixed_all, tuple(patari_settings.general.PA_FALLBACK_SCALE))
+        unmixed_all_scale = scale_from_patato_obj(unmixed_all, tuple(optari_settings.general.PA_FALLBACK_SCALE))
         layer_stub_all = SimpleNamespace(
             data=display_data_from_patato_obj(unmixed_all),
             scale=unmixed_all_scale,
