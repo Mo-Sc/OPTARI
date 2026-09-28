@@ -33,7 +33,8 @@ logger = logging.getLogger(__name__)
 def visible_feature_columns() -> list[str]:
     """Feature columns the user has enabled in settings, determines the live table's columns."""
     return [
-        c for c in ALL_FEATURE_COLUMNS
+        c
+        for c in ALL_FEATURE_COLUMNS
         if int(settings.annotation.roi_features.get(c, 0)) == 1
     ]
 
@@ -71,6 +72,7 @@ class MeasureScope:
     # track instead of reusing the selected outline everywhere.
     follow_track: bool = False
 
+
 def _scale_sy_sx(active_recon_layer) -> tuple[float, float]:
     scale = getattr(active_recon_layer, "scale", (1.0, 1.0, 1.0))
     return float(scale[-2]), float(scale[-1])
@@ -97,9 +99,9 @@ def _channel_value(active_recon_layer, channel_idx: int) -> object:
         channel_value = axis1_labels[channel_idx]
     else:
         wavelengths = active_recon_layer.metadata.get("wavelengths", None)
-        if isinstance(
-            wavelengths, (list, tuple)
-        ) and 0 <= channel_idx < len(wavelengths):
+        if isinstance(wavelengths, (list, tuple)) and 0 <= channel_idx < len(
+            wavelengths
+        ):
             channel_value = wavelengths[channel_idx]
         else:
             channel_value = channel_idx
@@ -118,7 +120,9 @@ def _channel_value(active_recon_layer, channel_idx: int) -> object:
     return channel_value
 
 
-def _timestamp_str(active_recon_layer, frame_idx: int, channel_idx: int) -> str:
+def _timestamp_str(
+    active_recon_layer, frame_idx: int, channel_idx: int
+) -> str:
     timestamps = getattr(active_recon_layer, "metadata", {}).get("timestamps")
     try:
         from datetime import datetime, timedelta
@@ -144,20 +148,27 @@ def _iter_rois(records: list[ROIRecord]) -> list[ROIRecord]:
 # Rasterizing is most expensive when calculating ROI statistics. the live table
 # recomputes every ROI on every drag while only one of them has actually moved.
 # The key covers everything a mask depends on, so a moved or resized ROI misses
-# and every untouched one hits. 
+# and every untouched one hits.
 @lru_cache(maxsize=64)
 def _rasterize(
-    verts_bytes: bytes, n_verts: int, kind: str, sy: float, sx: float, image_shape: tuple
+    verts_bytes: bytes,
+    n_verts: int,
+    kind: str,
+    sy: float,
+    sx: float,
+    image_shape: tuple,
 ) -> np.ndarray:
-    verts_pixels = np.frombuffer(verts_bytes, dtype=float).reshape(n_verts, 2) / np.array(
-        [sy, sx]
-    )
+    verts_pixels = np.frombuffer(verts_bytes, dtype=float).reshape(
+        n_verts, 2
+    ) / np.array([sy, sx])
     mask = (
         ellipse_mask(verts_pixels, image_shape)
         if kind == "ellipse"
         else polygon_mask(verts_pixels, image_shape)
     )
-    mask.flags.writeable = False  # shared between callers; must never be mutated
+    mask.flags.writeable = (
+        False  # shared between callers; must never be mutated
+    )
     return mask
 
 
@@ -167,7 +178,13 @@ def clear_mask_cache() -> None:
 
 
 def _roi_mask(
-    roi: ROIRecord, *, sy: float, sx: float, ty: float = 0.0, tx: float = 0.0, image_shape
+    roi: ROIRecord,
+    *,
+    sy: float,
+    sx: float,
+    ty: float = 0.0,
+    tx: float = 0.0,
+    image_shape,
 ) -> np.ndarray | None:
     """Rasterize *roi* onto a layer with the given scale and world-space translate.
 
@@ -178,7 +195,12 @@ def _roi_mask(
     verts = np.ascontiguousarray(roi.verts, dtype=float) - (ty, tx)
     try:
         return _rasterize(
-            verts.tobytes(), len(verts), roi.kind, float(sy), float(sx), tuple(image_shape)
+            verts.tobytes(),
+            len(verts),
+            roi.kind,
+            float(sy),
+            float(sx),
+            tuple(image_shape),
         )
     except Exception:
         return None
@@ -206,8 +228,7 @@ def _layer_translate(active_recon_layer) -> tuple[float, float]:
 def records_by_track_and_frame(
     records: Iterable[ROIRecord], track_id: int
 ) -> dict[int, ROIRecord]:
-    """One track's records, indexed by the frame each was measured on.
-    """
+    """One track's records, indexed by the frame each was measured on."""
     return {r.frame_id: r for r in records if r.track_id == track_id}
 
 
@@ -224,7 +245,9 @@ def iter_roi_masks(
     ty, tx = _layer_translate(active_recon_layer)
 
     for roi in _iter_rois(records):
-        mask = _roi_mask(roi, sy=sy, sx=sx, ty=ty, tx=tx, image_shape=image_shape)
+        mask = _roi_mask(
+            roi, sy=sy, sx=sx, ty=ty, tx=tx, image_shape=image_shape
+        )
         if mask is not None:
             yield roi, mask
 
@@ -313,7 +336,11 @@ def _roi_centroid_mm(roi: ROIRecord) -> tuple[float, float]:
 def _resolve_feature_ids(feature_ids: list[str] | None) -> list[str]:
     if feature_ids is None:
         return list(ALL_FEATURE_COLUMNS)
-    return [feature_id for feature_id in feature_ids if feature_id in FEATURE_REGISTRY]
+    return [
+        feature_id
+        for feature_id in feature_ids
+        if feature_id in FEATURE_REGISTRY
+    ]
 
 
 @dataclass(frozen=True)
@@ -365,8 +392,14 @@ def ellipse_mask(verts_px, image_shape):
     """Rasterize napari's 4-corner ellipse box (may be rotated) to a boolean mask."""
     p0, p1, p2 = verts_px[:3]
     cy, cx = verts_px.mean(axis=0)
-    rr, cc = ellipse(cy, cx, np.linalg.norm(p2 - p1) / 2, np.linalg.norm(p1 - p0) / 2,
-                     shape=image_shape, rotation=-np.arctan2(*(p1 - p0)))
+    rr, cc = ellipse(
+        cy,
+        cx,
+        np.linalg.norm(p2 - p1) / 2,
+        np.linalg.norm(p1 - p0) / 2,
+        shape=image_shape,
+        rotation=-np.arctan2(*(p1 - p0)),
+    )
     mask = np.zeros(image_shape, dtype=bool)
     mask[rr, cc] = True
     return mask
@@ -398,7 +431,9 @@ def compute_roi_stats(
 
     channel_idx = _clamp_channel_idx(active_recon_layer, channel_idx)
     img2d = np.asarray(active_recon_layer.data)[frame_idx, channel_idx]
-    layer_info = _LayerInfo.resolve(active_recon_layer, channel_idx, img2d.shape)
+    layer_info = _LayerInfo.resolve(
+        active_recon_layer, channel_idx, img2d.shape
+    )
     scan_ts = _timestamp_str(active_recon_layer, frame_idx, channel_idx)
 
     rows = []
@@ -429,14 +464,19 @@ def compute_roi_stats(
     return pd.DataFrame(rows, columns=selected_feature_ids)
 
 
-def _time_axis(active_recon_layer, channel_idx: int) -> tuple[np.ndarray, np.ndarray]:
-    """Resolve the frame indices to plot and the x-axis value for each.
-    """
+def _time_axis(
+    active_recon_layer, channel_idx: int
+) -> tuple[np.ndarray, np.ndarray]:
+    """Resolve the frame indices to plot and the x-axis value for each."""
     data = np.asarray(active_recon_layer.data)
     n_frames = data.shape[0]
 
     frames_meta = getattr(active_recon_layer, "metadata", {}).get("frames")
-    frames = np.asarray(frames_meta, dtype=int) if frames_meta else np.arange(n_frames, dtype=int)
+    frames = (
+        np.asarray(frames_meta, dtype=int)
+        if frames_meta
+        else np.arange(n_frames, dtype=int)
+    )
 
     ts = getattr(active_recon_layer, "metadata", {}).get("timestamps")
     if ts is not None:
@@ -524,7 +564,7 @@ def compute_roi_time_series(
 ):
     """Compute per-ROI feature over time for a fixed channel.
 
-    Each of *records* is measured with **the same fixed shape on every frame**. 
+    Each of *records* is measured with **the same fixed shape on every frame**.
     Used for the "Selected ROI" scope: whatever a shape looks like right now is used
     for the whole sequence.
     """
@@ -538,8 +578,14 @@ def compute_roi_time_series(
     # pixel values underneath it change.
     for roi, mask in iter_roi_masks(records, active_recon_layer, img_shape):
         series[roi.roi_id] = _measure_series(
-            active_recon_layer, data, channel_idx, frames, layer_info, feature_id,
-            clamp, lambda frame_idx, roi=roi, mask=mask: (roi, mask),
+            active_recon_layer,
+            data,
+            channel_idx,
+            frames,
+            layer_info,
+            feature_id,
+            clamp,
+            lambda frame_idx, roi=roi, mask=mask: (roi, mask),
         )
 
     return np.asarray(x, dtype=float), series
@@ -561,7 +607,7 @@ def compute_roi_track_time_series(
     follow anatomy. A frame the track has no record on is left as a gap (``NaN``)
 
     Returns the same ``(x, {key: y})`` shape as ``compute_roi_time_series``, here
-    with a single entry, keyed by *track_id* 
+    with a single entry, keyed by *track_id*
     """
     setup = _time_series_setup(active_recon_layer, channel_idx)
     if setup is None:
@@ -574,17 +620,27 @@ def compute_roi_track_time_series(
     if not records_by_frame:
         return np.asarray(x, dtype=float), {}
 
-    def record_and_mask_at(frame_idx: int) -> tuple[ROIRecord, np.ndarray] | None:
+    def record_and_mask_at(
+        frame_idx: int,
+    ) -> tuple[ROIRecord, np.ndarray] | None:
         """Track ID's resolver: *frame_idx*'s own tracked record and mask, or None if the track has none there."""
         record = records_by_frame.get(frame_idx)
         if record is None:
             return None
-        mask = _roi_mask(record, sy=sy, sx=sx, ty=ty, tx=tx, image_shape=img_shape)
+        mask = _roi_mask(
+            record, sy=sy, sx=sx, ty=ty, tx=tx, image_shape=img_shape
+        )
         return None if mask is None else (record, mask)
 
     y = _measure_series(
-        active_recon_layer, data, channel_idx, frames, layer_info, feature_id,
-        clamp, record_and_mask_at,
+        active_recon_layer,
+        data,
+        channel_idx,
+        frames,
+        layer_info,
+        feature_id,
+        clamp,
+        record_and_mask_at,
     )
     return np.asarray(x, dtype=float), {track_id: y}
 
@@ -611,7 +667,9 @@ def extract_roi_pixels_for_slice(
 
     return {
         roi.roi_id: clamp.apply(img2d[mask])
-        for roi, mask in iter_roi_masks(records, active_recon_layer, img2d.shape)
+        for roi, mask in iter_roi_masks(
+            records, active_recon_layer, img2d.shape
+        )
     }
 
 

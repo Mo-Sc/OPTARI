@@ -31,13 +31,14 @@ from optari.roi.roi_geometry import RoiGeometry
 from optari.roi.roi_utils import saved_export_columns
 from patato.io.attribute_tags import HDF5Tags
 
-
 logger = logging.getLogger(__name__)
 
 OPTARI_FILE_FORMAT_VERSION = 2  # increment if the HDF5 file format changes in a way that breaks backward compatibility
 OPTARI_SOURCE_URL = "https://github.com/Mo-Sc/OPTARI"
 OPTARI_DOCS_URL = "https://mo-sc.github.io/OPTARI/"
-OPTARI_PUBLICATION_DOI = "DOI pending publication"  # TODO: fill in once published
+OPTARI_PUBLICATION_DOI = (
+    "DOI pending publication"  # TODO: fill in once published
+)
 
 # Bump only when the meaning of saved-table columns changes (units, semantics).
 # Columns being added or removed can be handled without a schema version bump.
@@ -106,7 +107,9 @@ def import_roi_table_from_xlsx(path=None) -> tuple[pd.DataFrame, str] | None:
         meta_df = pd.read_excel(path, sheet_name=ROI_TABLE_META_SHEET)
         meta = dict(zip(meta_df["key"], meta_df["value"]))
     except (ValueError, KeyError) as exc:
-        raise ValueError(f"'{Path(path).name}' is not a OPTARI ROI table.") from exc
+        raise ValueError(
+            f"'{Path(path).name}' is not a OPTARI ROI table."
+        ) from exc
 
     file_version = str(meta.get("roi_table_schema_version", ""))
     if file_version != str(ROI_TABLE_SCHEMA_VERSION):
@@ -117,7 +120,9 @@ def import_roi_table_from_xlsx(path=None) -> tuple[pd.DataFrame, str] | None:
 
     df = pd.read_excel(path, sheet_name=ROI_TABLE_SHEET)
 
-    missing_required = [c for c in SAVED_FIXED_SOURCE_COLUMNS if c not in df.columns]
+    missing_required = [
+        c for c in SAVED_FIXED_SOURCE_COLUMNS if c not in df.columns
+    ]
     if missing_required:
         raise ValueError(
             f"ROI table is missing required column(s): {', '.join(missing_required)}."
@@ -134,9 +139,13 @@ def import_roi_table_from_xlsx(path=None) -> tuple[pd.DataFrame, str] | None:
     dropped = [c for c in df.columns if c not in expected]
     added = [c for c in expected if c not in df.columns]
     if dropped:
-        logger.warning("ignoring unknown column(s) in %s: %s", path, ", ".join(dropped))
+        logger.warning(
+            "ignoring unknown column(s) in %s: %s", path, ", ".join(dropped)
+        )
     if added:
-        logger.warning("filling absent column(s) in %s: %s", path, ", ".join(added))
+        logger.warning(
+            "filling absent column(s) in %s: %s", path, ", ".join(added)
+        )
 
     return df.reindex(columns=expected).reset_index(drop=True), filename
 
@@ -166,7 +175,10 @@ def export_scan_to_hdf5(controller, destination: Path) -> bool:
         logger.info("exported scan to %s", destination)
         return True
     except Exception:
-        logger.exception("Exported scan to %s, but failed to write ROIs and derived images", destination.name)
+        logger.exception(
+            "Exported scan to %s, but failed to write ROIs and derived images",
+            destination.name,
+        )
         return False
     finally:
         if destination_pa_data is not None:
@@ -177,8 +189,7 @@ def export_scan_to_hdf5(controller, destination: Path) -> bool:
 
 
 def export_scan_to_ipasc(controller, destination: Path) -> bool:
-    """Export the raw time series of the loaded scan as a native IPASC file.
-    """
+    """Export the raw time series of the loaded scan as a native IPASC file."""
     if controller.pa_data is None:
         logger.warning("No scan loaded, nothing to export")
         return False
@@ -190,7 +201,9 @@ def export_scan_to_ipasc(controller, destination: Path) -> bool:
     try:
         pat.write_ipasc(controller.pa_data.scan_reader, str(destination))
     except Exception:
-        logger.exception("Failed to export raw time series to %s", destination.name)
+        logger.exception(
+            "Failed to export raw time series to %s", destination.name
+        )
         return False
 
     logger.info("exported raw time series to %s", destination)
@@ -316,24 +329,40 @@ def _write_derived_data(controller, destination_pa_data) -> None:
     for image in controller._derived_patato_objects.values():
         destination_pa_data.scan_writer.add_image(image)
     if controller._derived_patato_objects:
-        logger.info("saved %s derived image dataset(s)", len(controller._derived_patato_objects))
+        logger.info(
+            "saved %s derived image dataset(s)",
+            len(controller._derived_patato_objects),
+        )
 
     seg_layer = controller.segmentation_ctrl.seg_layer
     if seg_layer is not None:
         writer = destination_pa_data.scan_writer
         if HDF5Tags.SEGMENTATION in writer.file:
             del writer.file[HDF5Tags.SEGMENTATION]
-        writer.set_segmentation(np.asarray(seg_layer.data)[:, 0].astype(np.int32))
+        writer.set_segmentation(
+            np.asarray(seg_layer.data)[:, 0].astype(np.int32)
+        )
         meta = {
             "source_model_id": seg_layer.metadata.get("source_model_id", ""),
             "frame_mode": seg_layer.metadata.get("frame_mode", "all"),
             "frames": [int(f) for f in seg_layer.metadata.get("frames", [])],
-            "class_names": {str(k): v for k, v in seg_layer.metadata.get("class_names", {}).items()},
+            "class_names": {
+                str(k): v
+                for k, v in seg_layer.metadata.get("class_names", {}).items()
+            },
         }
-        writer.file[HDF5Tags.SEGMENTATION].attrs["optari_meta"] = json.dumps(meta)
-        logger.info("saved segmentation mask (model '%s')", meta["source_model_id"])
+        writer.file[HDF5Tags.SEGMENTATION].attrs["optari_meta"] = json.dumps(
+            meta
+        )
+        logger.info(
+            "saved segmentation mask (model '%s')", meta["source_model_id"]
+        )
 
     if controller.clinical_metadata_edits is not None:
-        destination_pa_data.scan_writer.set_clinical_metadata(controller.clinical_metadata_edits)
-        logger.info("saved clinical metadata (%s field(s))", len(controller.clinical_metadata_edits))
-
+        destination_pa_data.scan_writer.set_clinical_metadata(
+            controller.clinical_metadata_edits
+        )
+        logger.info(
+            "saved clinical metadata (%s field(s))",
+            len(controller.clinical_metadata_edits),
+        )

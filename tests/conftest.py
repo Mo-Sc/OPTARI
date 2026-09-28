@@ -11,7 +11,10 @@ import pytest
 # Segmentation weights are large downloads and are linked in from the real one.
 _user_dir = tempfile.TemporaryDirectory(prefix="optari-test-")
 os.environ["OPTARI_USER_DIR"] = _user_dir.name
-from optari.utils.setup import get_user_models_dir, get_user_roi_presets_dir  # noqa: E402
+from optari.utils.setup import (
+    get_user_models_dir,
+    get_user_roi_presets_dir,
+)  # noqa: E402
 
 for weights in (Path.home() / ".optari" / "models").glob("*.onnx"):
     (get_user_models_dir() / weights.name).symlink_to(weights)
@@ -27,7 +30,9 @@ STUDY_DIR = Path(__file__).parent / "testdata" / "Study_19"
 ITHERA_SCAN = STUDY_DIR / "Scan_2"
 HDF5_SCAN = STUDY_DIR / "Scan_3.hdf5"
 
-needs_study = pytest.mark.skipif(not STUDY_DIR.exists(), reason="Study_19 test data not present")
+needs_study = pytest.mark.skipif(
+    not STUDY_DIR.exists(), reason="Study_19 test data not present"
+)
 
 
 def run_to_end(generator):
@@ -78,8 +83,18 @@ def image_layer():
     def make(data, scale_mm=0.1, name="Recon: test", **metadata):
         data = np.asarray(data)
         wavelengths = list(range(700, 700 + 10 * data.shape[1], 10))
-        metadata = {"type": "pa", "wavelengths": wavelengths, "axis1_labels": wavelengths,
-                    "frames": list(range(data.shape[0])), **metadata}
-        return Image(data, name=name, scale=(1, 1, scale_mm, scale_mm), metadata=metadata)
+        metadata = {
+            "type": "pa",
+            "wavelengths": wavelengths,
+            "axis1_labels": wavelengths,
+            "frames": list(range(data.shape[0])),
+            **metadata,
+        }
+        return Image(
+            data,
+            name=name,
+            scale=(1, 1, scale_mm, scale_mm),
+            metadata=metadata,
+        )
 
     return make

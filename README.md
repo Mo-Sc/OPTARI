@@ -49,7 +49,7 @@ To try OPTARI, download and unzip the [test scans](https://mo-sc.github.io/OPTAR
 ```bash
 git clone git@github.com:Mo-Sc/OPTARI.git
 cd OPTARI
-pip install -e ".[test,docs]"
+pip install -e ".[test,docs,dev]"
 pytest                     # run tests
 ```
 

@@ -15,11 +15,11 @@ So we have 3 coordinate systems in OPTARI:
     Scan-loaded layers sit at translate 0, which makes world mm *identical* to the
     scan frame.
 ``PATATO metres``
-    What this module stores. Scan-anchored, like PATATO. origin at the image centre, 
+    What this module stores. Scan-anchored, like PATATO. origin at the image centre,
     derived from world mm and the scan's field of view.
 ``layer pixels``
     Indices into a layer's array. A runtime-derived layer may sit at a nonzero
-    ``translate`` (like deepmb) to register it against the others, 
+    ``translate`` (like deepmb) to register it against the others,
     so converting world mm to *that* layer's pixels means subtracting its
     translate first.
 """
@@ -96,8 +96,7 @@ class RoiGeometry:
     def from_record(
         cls, record: ROIRecord, fov_x_m: float, fov_y_m: float
     ) -> "RoiGeometry":
-        """Build from a record's world-space vertices.
-        """
+        """Build from a record's world-space vertices."""
         return cls(
             verts_m=napari_to_patato(
                 np.asarray(record.verts, dtype=float)[:, -2:], fov_x_m, fov_y_m
@@ -136,9 +135,10 @@ class RoiGeometry:
     def repositioned(
         self, source_fov: tuple[float, float], target_fov: tuple[float, float]
     ) -> "RoiGeometry":
-        """Move the ROI to the same relative spot in a different FOV, keeping its size.
-        """
-        scale = np.asarray(target_fov, dtype=float) / np.asarray(source_fov, dtype=float)
+        """Move the ROI to the same relative spot in a different FOV, keeping its size."""
+        scale = np.asarray(target_fov, dtype=float) / np.asarray(
+            source_fov, dtype=float
+        )
         centre = self.verts_m.mean(axis=0)
         return RoiGeometry(
             verts_m=self.verts_m + (centre * scale - centre),

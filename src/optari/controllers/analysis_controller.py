@@ -28,16 +28,19 @@ class AnalysisController(TaskControllerBase):
         super().__init__(parent_controller)
 
     def refresh_ui(self) -> None:
-        """Refresh gating for the histogram/spectrum/time-analysis buttons.
-        """
+        """Refresh gating for the histogram/spectrum/time-analysis buttons."""
         has_data = (
             self.optari_controller.shapes_layer is not None
             and self.optari_controller.active_recon_layer is not None
         )
         if self.optari_controller.time_analysis is not None:
-            self.optari_controller.time_analysis.generate_button.setEnabled(has_data)
+            self.optari_controller.time_analysis.generate_button.setEnabled(
+                has_data
+            )
         if self.optari_controller.histograms is not None:
-            self.optari_controller.histograms.refresh_button.setEnabled(has_data)
+            self.optari_controller.histograms.refresh_button.setEnabled(
+                has_data
+            )
         if self.optari_controller.spectrum is not None:
             self.optari_controller.spectrum.refresh_button.setEnabled(has_data)
 
@@ -122,7 +125,9 @@ class AnalysisController(TaskControllerBase):
 
         return combo.currentData()
 
-    def _time_series_for_current_scope(self, channel_idx: int, feature_id: str):
+    def _time_series_for_current_scope(
+        self, channel_idx: int, feature_id: str
+    ):
         """(x, series) for whichever Time Analysis scope is selected. "Selected
         ROI" measures each shape's own record on every frame. "Track ID" follows
         one tracked ROI, measuring each frame on that frame's own record."""
@@ -169,11 +174,17 @@ class AnalysisController(TaskControllerBase):
             error_msg = "No ROIs layer"
         elif self.optari_controller.active_recon_layer is None:
             error_msg = "Select a PA image layer"
-        elif not track_scope and len(self.optari_controller.shapes_layer.data) == 0:
+        elif (
+            not track_scope
+            and len(self.optari_controller.shapes_layer.data) == 0
+        ):
             error_msg = "No ROIs defined"
         elif track_scope and not self.optari_controller.roi_ctrl.roi_records:
             error_msg = "No tracked ROIs available"
-        elif len(self.optari_controller.active_recon_layer.metadata["frames"]) < 2:
+        elif (
+            len(self.optari_controller.active_recon_layer.metadata["frames"])
+            < 2
+        ):
             error_msg = "PA image layer has less than 2 frames"
 
         if error_msg:
@@ -199,12 +210,16 @@ class AnalysisController(TaskControllerBase):
         assert plot is not None
 
         _, channel_idx = self._current_frame_channel()
-        feature_id = self.optari_controller.annotation.time_analysis_feature_combo.currentData()
+        feature_id = (
+            self.optari_controller.annotation.time_analysis_feature_combo.currentData()
+        )
 
         self.optari_controller.time_analysis.status_label.setText(
             "Computing time series…"
         )
-        x, series = self._time_series_for_current_scope(channel_idx, feature_id)
+        x, series = self._time_series_for_current_scope(
+            channel_idx, feature_id
+        )
         key_label = "Track" if track_scope else "ROI"
 
         if not series:
@@ -243,9 +258,9 @@ class AnalysisController(TaskControllerBase):
         )
 
         axis1_value = str(
-            self.optari_controller.active_recon_layer.metadata.get("axis1_labels")[
-                channel_idx
-            ]
+            self.optari_controller.active_recon_layer.metadata.get(
+                "axis1_labels"
+            )[channel_idx]
         )
 
         plot.setLabel("bottom", xlabel)
@@ -304,7 +319,9 @@ class AnalysisController(TaskControllerBase):
             if vals.size == 0:
                 continue
 
-            counts, edges = np.histogram(vals, bins=settings.analysis.histogram_bins)
+            counts, edges = np.histogram(
+                vals, bins=settings.analysis.histogram_bins
+            )
 
             if counts.size == 0 or edges.size < 2:
                 continue

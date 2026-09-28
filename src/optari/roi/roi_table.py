@@ -121,7 +121,6 @@ class SavedRoiTable:
         skipped = int(duplicates.sum())
         return len(rows) - skipped, skipped
 
-
     def _autosave(self) -> None:
         """
         Write the table to disk, overwrite on every change. If the table is empty, delete the file

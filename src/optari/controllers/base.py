@@ -125,9 +125,13 @@ class TaskControllerBase:
         if translate is None:
             source_layer = self.optari_controller.active_recon_layer
             translate = (
-                tuple(source_layer.translate) if source_layer is not None else None
+                tuple(source_layer.translate)
+                if source_layer is not None
+                else None
             )
-        if name in self.viewer.layers and isinstance(self.viewer.layers[name], Image):
+        if name in self.viewer.layers and isinstance(
+            self.viewer.layers[name], Image
+        ):
             # layer already exists, update its data and metadata
             layer = self.viewer.layers[name]
             layer.data = data
@@ -145,7 +149,7 @@ class TaskControllerBase:
                 "colormap": colormap,
                 "metadata": metadata,
                 "opacity": 1.0,
-                "blending": "multiplicative", # blending always multiplicative for better overlay
+                "blending": "multiplicative",  # blending always multiplicative for better overlay
                 "auto_contrast": True,
                 "units": self.image_units,
             }

@@ -1,5 +1,4 @@
-"""patato_bridge: functions to convert between PATATO and napari data structures
-"""
+"""patato_bridge: functions to convert between PATATO and napari data structures"""
 
 from __future__ import annotations
 
@@ -8,7 +7,7 @@ import logging
 
 import numpy as np
 
-from patato.io.attribute_tags import HDF5Tags # type: ignore[import]
+from patato.io.attribute_tags import HDF5Tags  # type: ignore[import]
 import patato as pat  # type: ignore[import]
 
 from optari.utils.motion import k_motion_scores_optimized
@@ -44,9 +43,12 @@ def scale_from_patato_obj(obj, fallback: tuple) -> tuple:
         return fallback
     fov_x_m, fov_y_m = _fov_size(fov[0]), _fov_size(fov[1])
     if not (ny and nx and fov_x_m and fov_y_m):
-        logger.warning("no usable FOV on %s, using fallback scale %s", obj, fallback)
+        logger.warning(
+            "no usable FOV on %s, using fallback scale %s", obj, fallback
+        )
         return fallback
     return (fallback[0], fov_y_m / ny * 1000, fov_x_m / nx * 1000)
+
 
 # ---------------------------------------------------------------------------
 # Coordinate conversion
@@ -69,7 +71,9 @@ def expand_to_acquisition_frames(
     if data.shape[0] == n_acq_frames:
         return data
     # A frame list that does not match the data would put images on the wrong frames.
-    if len(frames) != data.shape[0] or not all(0 <= f < n_acq_frames for f in frames):
+    if len(frames) != data.shape[0] or not all(
+        0 <= f < n_acq_frames for f in frames
+    ):
         raise ValueError(
             f"frame indices {frames} do not match {data.shape[0]} image frame(s) "
             f"within {n_acq_frames} acquisition frame(s)"
@@ -102,13 +106,12 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
     _user_cmaps = settings.general.LAYER_COLOR_MAPS
     # fallback to hardcoded defaults if any of the configured cmaps are missing
     _default_cmaps = {
-            HDF5Tags.ULTRASOUND: "gray",
-            HDF5Tags.RECONSTRUCTION: "viridis",
-            HDF5Tags.UNMIXED: "magma",
-            HDF5Tags.SO2: "twilight_shifted",
-            HDF5Tags.THB: "inferno",
-        }  
-
+        HDF5Tags.ULTRASOUND: "gray",
+        HDF5Tags.RECONSTRUCTION: "viridis",
+        HDF5Tags.UNMIXED: "magma",
+        HDF5Tags.SO2: "twilight_shifted",
+        HDF5Tags.THB: "inferno",
+    }
 
     patato_objects: dict = {}
     layers: list = []
@@ -135,11 +138,18 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
             (
                 us_img,
                 {
-                    "colormap": _user_cmaps.get(HDF5Tags.ULTRASOUND, _default_cmaps[HDF5Tags.ULTRASOUND]),
+                    "colormap": _user_cmaps.get(
+                        HDF5Tags.ULTRASOUND,
+                        _default_cmaps[HDF5Tags.ULTRASOUND],
+                    ),
                     "name": "US",
                     "scale": scale_from_patato_obj(us_obj, _us_fallback),
                     "opacity": 1.0,
-                    "metadata": {"type": "us", "timestamps": timestamps, "motion_scores": motion_scores},
+                    "metadata": {
+                        "type": "us",
+                        "timestamps": timestamps,
+                        "motion_scores": motion_scores,
+                    },
                 },
             )
         )
@@ -160,7 +170,9 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
     for (recon_name, idx), recon in pa_data.get_scan_reconstructions().items():
         recon_raw = display_data_from_patato_obj(recon)
         recon_frame_list = _frame_list(recon, recon_raw.shape[0])
-        recon_img = expand_to_acquisition_frames(recon_raw, recon_frame_list, n_acq_frames)
+        recon_img = expand_to_acquisition_frames(
+            recon_raw, recon_frame_list, n_acq_frames
+        )
 
         layer_name = f"Recon: {recon_name}_{idx}"
         patato_objects[layer_name] = recon
@@ -168,7 +180,10 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
             (
                 recon_img,
                 {
-                    "colormap": _user_cmaps.get(HDF5Tags.RECONSTRUCTION, _default_cmaps[HDF5Tags.RECONSTRUCTION]),
+                    "colormap": _user_cmaps.get(
+                        HDF5Tags.RECONSTRUCTION,
+                        _default_cmaps[HDF5Tags.RECONSTRUCTION],
+                    ),
                     "name": layer_name,
                     "scale": scale_from_patato_obj(recon, _pa_fallback),
                     "opacity": 1.0,
@@ -225,7 +240,10 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
                 (
                     data,
                     {
-                        "colormap": _user_cmaps.get(group_name, _default_cmaps.get(group_name, "viridis")),
+                        "colormap": _user_cmaps.get(
+                            group_name,
+                            _default_cmaps.get(group_name, "viridis"),
+                        ),
                         "name": f"{prefix}: {dataset_name}_{idx}",
                         "scale": scale_from_patato_obj(image, _pa_fallback),
                         "opacity": 1.0,
@@ -274,7 +292,9 @@ def segmentation_from_scan(pa_data: "pat.PAData") -> dict | None:
         return None
     dataset = pa_data.scan_reader.file[HDF5Tags.SEGMENTATION]
     if "optari_meta" not in dataset.attrs:
-        logger.info("scan has a segmentation dataset OPTARI did not write, ignoring it")
+        logger.info(
+            "scan has a segmentation dataset OPTARI did not write, ignoring it"
+        )
         return None
     meta = json.loads(dataset.attrs["optari_meta"])
     meta["mask"] = np.asarray(seg, dtype=np.int32)  # (n_frames, H, W)
@@ -309,7 +329,9 @@ def roi_records_from_scan_rois(
             source=getattr(roi, "roi_class", "PATATO"),
             tissue_class=getattr(roi, "position", "undefined"),
         )
-        frames = np.asarray(getattr(roi, "ax0_index", []), dtype=int).reshape(-1)
+        frames = np.asarray(getattr(roi, "ax0_index", []), dtype=int).reshape(
+            -1
+        )
         frames = np.unique(frames[(frames >= 0) & (frames < n_frames)])
         if not frames.size:
             frames = np.arange(n_frames, dtype=int)
@@ -319,7 +341,9 @@ def roi_records_from_scan_rois(
             persisted_track = int(getattr(roi, "roi_group_id", None))
         except (TypeError, ValueError):
             persisted_track = None
-        track_id = persisted_track if persisted_track is not None else next_track
+        track_id = (
+            persisted_track if persisted_track is not None else next_track
+        )
         next_track = max(next_track, track_id + 1)
 
         try:
@@ -329,7 +353,9 @@ def roi_records_from_scan_rois(
 
         # Every frame copy of one ROI shares the group's identity. a scan written
         # before uids existed gets a fresh one for the whole group, not per frame.
-        group_uid = str(getattr(roi, "roi_group_uid", "") or "") or new_roi_group_uid()
+        group_uid = (
+            str(getattr(roi, "roi_group_uid", "") or "") or new_roi_group_uid()
+        )
         for frame_id in frames:
             roi_id = persisted_id if len(frames) == 1 else None
             if roi_id is None or roi_id in used_ids:

@@ -97,8 +97,12 @@ FEATURE_REGISTRY: dict[str, FeatureSpec] = {
     "mean": FeatureSpec(float, lambda c: _nan_stat(c.vals, np.nanmean)),
     "median": FeatureSpec(float, lambda c: _nan_stat(c.vals, np.nanmedian)),
     "std": FeatureSpec(float, lambda c: _nan_stat(c.vals, np.nanstd)),
-    "p10": FeatureSpec(float, lambda c: _nan_stat(c.vals, lambda v: np.nanpercentile(v, 10))),
-    "p90": FeatureSpec(float, lambda c: _nan_stat(c.vals, lambda v: np.nanpercentile(v, 90))),
+    "p10": FeatureSpec(
+        float, lambda c: _nan_stat(c.vals, lambda v: np.nanpercentile(v, 10))
+    ),
+    "p90": FeatureSpec(
+        float, lambda c: _nan_stat(c.vals, lambda v: np.nanpercentile(v, 90))
+    ),
     "iqr": FeatureSpec(float, lambda c: _nan_stat(c.vals, _iqr)),
     "min": FeatureSpec(float, lambda c: _nan_stat(c.vals, np.nanmin)),
     "max": FeatureSpec(float, lambda c: _nan_stat(c.vals, np.nanmax)),
@@ -106,7 +110,7 @@ FEATURE_REGISTRY: dict[str, FeatureSpec] = {
     "n_pixels": FeatureSpec(int, lambda c: int(c.vals.size)),
     "size_mm": FeatureSpec(float, _size_mm),
     "src_layer": FeatureSpec(str, lambda c: str(c.src_layer)),
-    "kind": FeatureSpec(str, lambda c: str(c.kind)), # "shape_type" in napari
+    "kind": FeatureSpec(str, lambda c: str(c.kind)),  # "shape_type" in napari
     "study_folder": FeatureSpec(str, lambda c: str(c.study_folder)),
     "scan_folder": FeatureSpec(str, lambda c: str(c.scan_folder)),
     "scan_name": FeatureSpec(str, lambda c: str(c.scan_name)),
@@ -116,7 +120,9 @@ FEATURE_REGISTRY: dict[str, FeatureSpec] = {
     "roi_ts": FeatureSpec(str, lambda c: ""),
     "scan_ts": FeatureSpec(str, lambda c: str(c.scan_ts)),
     "roi_centroid": FeatureSpec(tuple, lambda c: c.roi_centroid),
-    "roi_geometry": FeatureSpec(str, lambda c: c.roi_geometry), # JSON blob of vertices in PATATO coordinates, kind, tissue_class and source
+    "roi_geometry": FeatureSpec(
+        str, lambda c: c.roi_geometry
+    ),  # JSON blob of vertices in PATATO coordinates, kind, tissue_class and source
     "filepath": FeatureSpec(str, lambda c: str(c.filepath)),
 }
 
@@ -125,7 +131,12 @@ ALL_FEATURE_COLUMNS: list[str] = list(FEATURE_REGISTRY.keys())
 
 def numeric_feature_ids() -> list[str]:
     """IDs of the features whose dtype is ``int`` or ``float``."""
-    return [fid for fid in ALL_FEATURE_COLUMNS if FEATURE_REGISTRY[fid].dtype in (int, float)]
+    return [
+        fid
+        for fid in ALL_FEATURE_COLUMNS
+        if FEATURE_REGISTRY[fid].dtype in (int, float)
+    ]
+
 
 # Fixed set of columns that are always included in the saved table, regardless of user settings to identify the origin of the ROI
 SAVED_FIXED_SOURCE_COLUMNS: list[str] = [

@@ -7,7 +7,7 @@ Issues and pull requests are welcome on [GitHub](https://github.com/Mo-Sc/OPTARI
 ```bash
 git clone git@github.com:Mo-Sc/OPTARI.git
 cd OPTARI
-pip install -e ".[test,docs]"
+pip install -e ".[test,docs,dev]"
 ```
 
 

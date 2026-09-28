@@ -79,7 +79,9 @@ class _Entry:
 class BatchReport:
     """What happened to every scan in a run, mirrored to *destination* as it goes."""
 
-    def __init__(self, destination: Path | None = None, plan_source: dict | None = None):
+    def __init__(
+        self, destination: Path | None = None, plan_source: dict | None = None
+    ):
         """Track scan outcomes, mirroring the report to *destination* after each update.
 
         Args:
@@ -98,8 +100,10 @@ class BatchReport:
     def rows(self) -> pd.DataFrame:
         """All recorded scans as a DataFrame, in REPORT_COLUMNS order."""
         frame = pd.DataFrame([e.as_row() for e in self._entries.values()])
-        return frame.reindex(columns=REPORT_COLUMNS) if not frame.empty else pd.DataFrame(
-            columns=REPORT_COLUMNS
+        return (
+            frame.reindex(columns=REPORT_COLUMNS)
+            if not frame.empty
+            else pd.DataFrame(columns=REPORT_COLUMNS)
         )
 
     def counts(self) -> dict[str, int]:
@@ -153,7 +157,9 @@ class BatchReport:
         """Mark *job* as cancelled by the user."""
         self._finish(job, "cancelled")
 
-    def _finish(self, job, status: str, *, message: str = "", failed_step: str = "") -> None:
+    def _finish(
+        self, job, status: str, *, message: str = "", failed_step: str = ""
+    ) -> None:
         entry = self._entries.get(job.key)
         if entry is None:
             self.start(job)
@@ -174,12 +180,19 @@ class BatchReport:
         temporary_path = path.with_name(f".{path.stem}.tmp{path.suffix}")
         meta = _file_origin(batch_plan=self._plan_source)
         meta_df = pd.DataFrame(
-            {"key": list(meta.keys()), "value": [str(v) for v in meta.values()]}
+            {
+                "key": list(meta.keys()),
+                "value": [str(v) for v in meta.values()],
+            }
         )
         try:
             with pd.ExcelWriter(temporary_path) as writer:
-                self.rows.to_excel(writer, sheet_name=REPORT_SHEET, index=False)
-                meta_df.to_excel(writer, sheet_name=ROI_TABLE_META_SHEET, index=False)
+                self.rows.to_excel(
+                    writer, sheet_name=REPORT_SHEET, index=False
+                )
+                meta_df.to_excel(
+                    writer, sheet_name=ROI_TABLE_META_SHEET, index=False
+                )
             os.replace(temporary_path, path)
         except OSError:
             temporary_path.unlink(missing_ok=True)
@@ -188,5 +201,11 @@ class BatchReport:
     def summary(self) -> str:
         """One line for the batch window once the run ends."""
         counts = self.counts()
-        parts = [f"{count} {status}" for status, count in sorted(counts.items())]
-        return f"{len(self)} scan(s): {', '.join(parts)}" if parts else "nothing to do"
+        parts = [
+            f"{count} {status}" for status, count in sorted(counts.items())
+        ]
+        return (
+            f"{len(self)} scan(s): {', '.join(parts)}"
+            if parts
+            else "nothing to do"
+        )

@@ -42,10 +42,12 @@ class UiManager:
         if controller.info is None:
             # info dock is not tabified, but floating by default
             controller.info = create_info_dock()
-            controller._info_dock_widget = controller.viewer.window.add_dock_widget(
-                controller.info.widget,
-                name="Active Slice Info",
-                area="left",
+            controller._info_dock_widget = (
+                controller.viewer.window.add_dock_widget(
+                    controller.info.widget,
+                    name="Active Slice Info",
+                    area="left",
+                )
             )
             controller._info_dock_widget.setFloating(True)
 
@@ -137,7 +139,9 @@ class UiManager:
             )
 
         # Select default docks after the event loop has started
-        QTimer.singleShot(0, lambda: UiManager._select_default_docks(controller))
+        QTimer.singleShot(
+            0, lambda: UiManager._select_default_docks(controller)
+        )
 
         logger.info("Dock widgets created and added to the viewer window.")
 
@@ -150,11 +154,9 @@ class UiManager:
         if controller._scan_browser_dock_widget is not None:
             controller._scan_browser_dock_widget.raise_()
 
-
     @staticmethod
     def _install_shutdown_hook(controller: "OptariController") -> None:
-        """Run controller teardown from the main window's close event.
-        """
+        """Run controller teardown from the main window's close event."""
         window = controller.viewer.window._qt_window
         napari_close_event = window.closeEvent
 
@@ -182,7 +184,9 @@ class UiManager:
         # TODO: should reordering / adding layers trigger anything?
         # controller.viewer.layers.events.reordered.connect(controller.on_layers_changed)
         # controller.viewer.layers.events.inserted.connect(controller.on_layers_changed)
-        controller.viewer.layers.events.removed.connect(controller.on_layer_removed)
+        controller.viewer.layers.events.removed.connect(
+            controller.on_layer_removed
+        )
 
         # -------- dock signal wiring in controllers --------
         controller.scan_ctrl.bind_events()

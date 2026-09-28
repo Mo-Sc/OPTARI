@@ -49,7 +49,9 @@ class DockShell:
     scroll_area: QScrollArea | None
 
 
-def create_frame_scope_controls() -> tuple[QWidget, QRadioButton, QRadioButton]:
+def create_frame_scope_controls() -> (
+    tuple[QWidget, QRadioButton, QRadioButton]
+):
     """Create the shared current/all frames radio-button control."""
     container = QWidget()
     layout = QHBoxLayout(container)
@@ -71,7 +73,9 @@ def create_frame_scope_controls() -> tuple[QWidget, QRadioButton, QRadioButton]:
 
 
 # helpers for preset management
-def create_preset_controls() -> tuple[QComboBox, QPushButton, QPushButton, QWidget]:
+def create_preset_controls() -> (
+    tuple[QComboBox, QPushButton, QPushButton, QWidget]
+):
     """Create the shared preset selector and save/remove action row."""
     preset_combo = QComboBox()
     save_preset_button = QPushButton("Save Preset")
@@ -98,7 +102,9 @@ def populate_preset_combo(combo: QComboBox, store: PresetStore) -> None:
         combo.blockSignals(False)
 
 
-def prompt_preset_name(parent: QWidget, combo: QComboBox, fallback: str) -> str | None:
+def prompt_preset_name(
+    parent: QWidget, combo: QComboBox, fallback: str
+) -> str | None:
     """Ask for a new preset name, returning ``None`` when cancelled."""
     name, accepted = QInputDialog.getText(
         parent,

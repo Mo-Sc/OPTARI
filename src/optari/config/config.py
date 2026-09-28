@@ -1,5 +1,4 @@
-"""OptariConfig: dataclass schema for the user's ~/.optari/config/config.json.
-"""
+"""OptariConfig: dataclass schema for the user's ~/.optari/config/config.json."""
 
 from dataclasses import dataclass, field
 import json
@@ -9,7 +8,8 @@ import tempfile
 
 from optari.utils.setup import archive_config_dir, get_user_config_file
 
-CONFIG_SCHEMA_VERSION = 5 # adapt in default config.json as well
+CONFIG_SCHEMA_VERSION = 5  # adapt in default config.json as well
+
 
 @dataclass(frozen=True)
 class GeneralConfig:
@@ -19,15 +19,20 @@ class GeneralConfig:
     GUI_LOG_LEVEL: str
     DEFAULT_PA_LAYER: str
     PA_FALLBACK_SCALE: tuple[float, float, float]
-    DEFAULT_US_LAYER: str # not implemented yet
+    DEFAULT_US_LAYER: str  # not implemented yet
     US_FALLBACK_SCALE: tuple[float, float, float]
-    DEFAULT_FRAME_INDEX: int | str # frame index or "motion" for motion-based selection
+    DEFAULT_FRAME_INDEX: (
+        int | str
+    )  # frame index or "motion" for motion-based selection
     DEFAULT_CHANNEL_INDEX: int
     DEFAULT_PLAYBACK_FPS: int
     OPERATOR: str
     ANALYSIS_ID: str
     LAYER_COLOR_MAPS: dict = field(default_factory=dict)
-    DEFAULT_VISIBLE_DOCKS: dict = field(default_factory=dict)  # dock label -> 0/1, missing = visible
+    DEFAULT_VISIBLE_DOCKS: dict = field(
+        default_factory=dict
+    )  # dock label -> 0/1, missing = visible
+
 
 @dataclass(frozen=True)
 class AnnotationConfig:
@@ -35,8 +40,11 @@ class AnnotationConfig:
 
     roi_colors: list = field(default_factory=list)
     roi_features: dict[str, int] = field(default_factory=dict)
-    show_track_id: bool = True  # label shapes "roi_id/track_id" instead of just "roi_id"
+    show_track_id: bool = (
+        True  # label shapes "roi_id/track_id" instead of just "roi_id"
+    )
     roi_label_size: int = 8
+
 
 @dataclass(frozen=True)
 class AnalysisConfig:
@@ -44,11 +52,13 @@ class AnalysisConfig:
 
     histogram_bins: int
 
+
 @dataclass(frozen=True)
 class SegmentationConfig:
     """Default segmentation model to preselect in the Segmentation dock."""
 
     default_model: str
+
 
 @dataclass(frozen=True)
 class ExportConfig:
@@ -57,6 +67,7 @@ class ExportConfig:
     font_size: int
     cbar_width: int
     padding: int
+
 
 @dataclass(frozen=True)
 class OptariConfig:
@@ -84,7 +95,7 @@ class OptariConfig:
             archive_config_dir(config_path.parent)
             config_path = get_user_config_file()
             data = json.loads(config_path.read_text())
-        
+
         return _config_from_dict(data)
 
 
@@ -105,8 +116,7 @@ def read_user_config_dict() -> dict:
 
 
 def write_user_config_dict(data: dict) -> Path:
-    """Validate *data* against the config dataclasses and write it atomically.
-    """
+    """Validate *data* against the config dataclasses and write it atomically."""
     if data.get("schema_version") != CONFIG_SCHEMA_VERSION:
         # A mismatch makes the loader archive the whole user directory on next launch.
         raise ValueError(

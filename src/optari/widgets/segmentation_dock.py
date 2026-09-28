@@ -47,7 +47,9 @@ class SegmentationDock:
     status_label: QLabel
 
 
-def create_segmentation_dock(*, enable_scroll: bool = True) -> SegmentationDock:
+def create_segmentation_dock(
+    *, enable_scroll: bool = True
+) -> SegmentationDock:
     """Create the segmentation dock with model/class and ROI-from-mask controls.
 
     Model combo is initially empty; populate via controller.initialize_ui().
@@ -112,9 +114,7 @@ def create_segmentation_dock(*, enable_scroll: bool = True) -> SegmentationDock:
         "(requires an existing segmentation mask for this frame)"
     )
 
-    generate_tissue_segmentation_button = QPushButton(
-        "Run Segmentation"
-    )
+    generate_tissue_segmentation_button = QPushButton("Run Segmentation")
     generate_tissue_segmentation_button.setToolTip(
         "Generate a tissue mask for the checked classes on an active US layer "
         "(Shift+Ctrl+T / Shift+Cmd+T)"
@@ -133,7 +133,7 @@ def create_segmentation_dock(*, enable_scroll: bool = True) -> SegmentationDock:
     seg_layout.addWidget(QLabel("Classes"))
     seg_layout.addWidget(segmentation_classes_list)
     seg_layout.addWidget(classes_button_row)
-    
+
     seg_layout.addWidget(frame_scope_row)
     seg_layout.addWidget(generate_tissue_segmentation_button)
     seg_layout.addWidget(status_label)

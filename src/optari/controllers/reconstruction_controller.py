@@ -15,7 +15,10 @@ from patato import PAT_MAXIMUM_BATCH_SIZE
 from patato.io.attribute_tags import ReconAttributeTags
 from qtpy.QtCore import Qt
 from optari.controllers.base import TaskControllerBase
-from optari.patato_bridge import display_data_from_patato_obj, expand_to_acquisition_frames
+from optari.patato_bridge import (
+    display_data_from_patato_obj,
+    expand_to_acquisition_frames,
+)
 from optari.utils.presets import PresetStore
 from optari.utils.setup import get_user_reconstruction_presets_dir
 from optari.utils.tasks import BackgroundStep
@@ -70,7 +73,9 @@ class ReconParams:
         """Output layer name, encoding the algorithm, suffix and frame."""
         suffix_part = f"_{self.suffix}" if self.suffix else ""
         frame_part = (
-            f"_F{self.current_frame_id}" if self.current_frame_id is not None else ""
+            f"_F{self.current_frame_id}"
+            if self.current_frame_id is not None
+            else ""
         )
         return f"Recon: {self.algorithm_name}{suffix_part}{frame_part}"
 
@@ -99,7 +104,9 @@ class ReconParams:
         settings_dict = dict(settings_dict)
         if speed_of_sound is None:
             if ReconAttributeTags.SPEED_OF_SOUND not in settings_dict:
-                raise ValueError("Reconstruction preset has no speed of sound.")
+                raise ValueError(
+                    "Reconstruction preset has no speed of sound."
+                )
             speed_of_sound = settings_dict[ReconAttributeTags.SPEED_OF_SOUND]
         offset_x_mm = float(settings_dict.pop("OFFSET_X", 0.0))
         offset_z_mm = float(settings_dict.pop("OFFSET_Z", 0.0))
@@ -136,7 +143,7 @@ class ReconParams:
 def _resolve_deepmb_model(settings_dict: dict, model_path: Path) -> None:
     """Rewrite the DeepMB params in place so PATATO sees a local path.
 
-    `model_url` is optari-only and must be removed before the dict reaches PATATO. 
+    `model_url` is optari-only and must be removed before the dict reaches PATATO.
     """
     params = dict(settings_dict[ReconAttributeTags.ADDITIONAL_PARAMETERS])
     params["model_path"] = str(model_path)
@@ -195,7 +202,9 @@ class ReconstructionController(TaskControllerBase):
         dock.settings_edit.textChanged.connect(self.on_settings_text_changed)
         dock.apply_preset_button.clicked.connect(self.on_apply_preset_clicked)
         dock.save_preset_button.clicked.connect(self.on_save_preset_clicked)
-        dock.remove_preset_button.clicked.connect(self.on_remove_preset_clicked)
+        dock.remove_preset_button.clicked.connect(
+            self.on_remove_preset_clicked
+        )
         dock.speed_of_sound_slider.valueChanged.connect(
             self.on_speed_of_sound_changed
         )
@@ -204,12 +213,22 @@ class ReconstructionController(TaskControllerBase):
     def unbind_events(self) -> None:
         """Disconnect reconstruction dock signals."""
         dock = self.optari_controller.reconstruction
-        dock.preset_combo.currentIndexChanged.disconnect(self.on_preset_changed)
-        dock.all_settings_button.toggled.disconnect(self.on_all_settings_toggled)
-        dock.settings_edit.textChanged.disconnect(self.on_settings_text_changed)
-        dock.apply_preset_button.clicked.disconnect(self.on_apply_preset_clicked)
+        dock.preset_combo.currentIndexChanged.disconnect(
+            self.on_preset_changed
+        )
+        dock.all_settings_button.toggled.disconnect(
+            self.on_all_settings_toggled
+        )
+        dock.settings_edit.textChanged.disconnect(
+            self.on_settings_text_changed
+        )
+        dock.apply_preset_button.clicked.disconnect(
+            self.on_apply_preset_clicked
+        )
         dock.save_preset_button.clicked.disconnect(self.on_save_preset_clicked)
-        dock.remove_preset_button.clicked.disconnect(self.on_remove_preset_clicked)
+        dock.remove_preset_button.clicked.disconnect(
+            self.on_remove_preset_clicked
+        )
         dock.speed_of_sound_slider.valueChanged.disconnect(
             self.on_speed_of_sound_changed
         )
@@ -373,13 +392,17 @@ class ReconstructionController(TaskControllerBase):
         dock = self.optari_controller.reconstruction
         self._updating_settings = True
         try:
-            dock.settings_edit.setPlainText(json.dumps(settings_dict, indent=2))
+            dock.settings_edit.setPlainText(
+                json.dumps(settings_dict, indent=2)
+            )
         finally:
             self._updating_settings = False
 
     def _set_speed_of_sound_slider(self, speed_of_sound) -> None:
         dock = self.optari_controller.reconstruction
-        clamped = max(SPEED_OF_SOUND_MIN, min(SPEED_OF_SOUND_MAX, int(speed_of_sound)))
+        clamped = max(
+            SPEED_OF_SOUND_MIN, min(SPEED_OF_SOUND_MAX, int(speed_of_sound))
+        )
         self._updating_settings = True
         try:
             dock.speed_of_sound_slider.setValue(clamped)
@@ -416,7 +439,9 @@ class ReconstructionController(TaskControllerBase):
             frame_id=frame_id,
         )
 
-    def weights_to_fetch(self, params: ReconParams) -> tuple[Path, str | None] | None:
+    def weights_to_fetch(
+        self, params: ReconParams
+    ) -> tuple[Path, str | None] | None:
         """DeepMB needs its ONNX weights on disk before the preset can be built."""
         if params.algorithm_name != DEEPMB_ALGORITHM:
             return None
@@ -433,7 +458,9 @@ class ReconstructionController(TaskControllerBase):
         if weights is not None:
             model_path, _ = weights
             if not model_path.is_file():
-                raise ValueError(f"DeepMB model weights not found: {model_path}")
+                raise ValueError(
+                    f"DeepMB model weights not found: {model_path}"
+                )
             _resolve_deepmb_model(params.settings, model_path)
 
         n_chunks = ceil(len(params.output_frames) / params.chunk_frames)
@@ -471,7 +498,9 @@ class ReconstructionController(TaskControllerBase):
                 ReconAttributeTags.SPEED_OF_SOUND: params.speed_of_sound,
                 "OFFSET_X": params.offset_x_mm,
                 "OFFSET_Z": params.offset_z_mm,
-                "frame_mode": "current" if params.current_frame_id is not None else "all",
+                "frame_mode": (
+                    "current" if params.current_frame_id is not None else "all"
+                ),
                 "frames": params.output_frames,
                 "suffix": params.suffix,
             }
@@ -497,7 +526,10 @@ class ReconstructionController(TaskControllerBase):
 
         # absolute placement: a recon comes from the raw time series, so it must not
         # inherit (and re-apply) the offset of whichever layer is currently active
-        translate = (0.0,) * (data.ndim - 2) + (params.offset_z_mm, params.offset_x_mm)
+        translate = (0.0,) * (data.ndim - 2) + (
+            params.offset_z_mm,
+            params.offset_x_mm,
+        )
 
         layer_name = params.layer_name
         self._add_or_update_image_layer(
@@ -509,7 +541,9 @@ class ReconstructionController(TaskControllerBase):
             translate=translate,
         )
         self.optari_controller._patato_objects[layer_name] = reconstruction
-        self.optari_controller._derived_patato_objects[layer_name] = reconstruction
+        self.optari_controller._derived_patato_objects[layer_name] = (
+            reconstruction
+        )
         self.optari_controller._ensure_shapes_layer_on_top()
 
         logger.info("reconstruction complete: %s", layer_name)

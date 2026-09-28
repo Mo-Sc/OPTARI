@@ -40,7 +40,10 @@ class RoiPreset:
 
     def __post_init__(self) -> None:
         """Coerce *source_fov_m* to floats and reject a non-positive FOV or unknown *placement*."""
-        self.source_fov_m = (float(self.source_fov_m[0]), float(self.source_fov_m[1]))
+        self.source_fov_m = (
+            float(self.source_fov_m[0]),
+            float(self.source_fov_m[1]),
+        )
         if min(self.source_fov_m) <= 0:
             raise ValueError("ROI preset source FOV must be positive")
         if self.placement not in PLACEMENT_MODES:

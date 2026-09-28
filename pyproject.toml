@@ -47,6 +47,9 @@ docs = [
     "mkdocs-material>=9.5",
     "mkdocstrings[python]>=0.25",
 ]
+dev = [
+    "black>=26.5",
+]
 
 [project.gui-scripts]
 optari = "optari.launcher:main"

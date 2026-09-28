@@ -164,14 +164,16 @@ def download_then(
         then()
 
     def on_done() -> None:
-        # then() has already registered the follow-up task on success. 
+        # then() has already registered the follow-up task on success.
         # only release the gate here when there is no follow-up, i.e. after a cancel or an error.
         if not succeeded:
             optari_controller.set_active_task(None)
 
     status_label.setText("Preparing…")
     logger.info(
-        "downloading model '%s' (%s bytes)", model_path.name, total_size or "unknown"
+        "downloading model '%s' (%s bytes)",
+        model_path.name,
+        total_size or "unknown",
     )
     worker = run_background_task(
         optari_controller.viewer,

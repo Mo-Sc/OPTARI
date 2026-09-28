@@ -220,7 +220,9 @@ class BatchRunner:
             raise BatchStepError("could not open scan")
         controller.study_path = job.study_path
 
-        frame_idx = _guard("frame", controller.scan_ctrl.go_to_frame, self.plan.frame)
+        frame_idx = _guard(
+            "frame", controller.scan_ctrl.go_to_frame, self.plan.frame
+        )
         self.report.note(job, analysis_frame=frame_idx)
         # Measuring across frames needs every frame reconstructed and segmented, not
         # just the one the overlay is taken on.
@@ -236,9 +238,13 @@ class BatchRunner:
                 frame_id=run_frame,
             )
             result = yield _guard(
-                "reconstruction", controller.reconstruction_ctrl.prepare, params
+                "reconstruction",
+                controller.reconstruction_ctrl.prepare,
+                params,
             )
-            produced_recon = controller.reconstruction_ctrl.publish(result, params)
+            produced_recon = controller.reconstruction_ctrl.publish(
+                result, params
+            )
 
         # One run works on exactly one reconstruction: everything downstream (unmixing,
         # measurement, overlay) hangs off this layer, so a scan that already contains
@@ -252,7 +258,12 @@ class BatchRunner:
                 SegmentParams.build,
                 controller,
                 str(self.plan.segmentation.get("model_id", "")),
-                {int(c) for c in self.plan.segmentation.get("selected_class_ids", [])},
+                {
+                    int(c)
+                    for c in self.plan.segmentation.get(
+                        "selected_class_ids", []
+                    )
+                },
                 frame_id=run_frame,
             )
             result = yield _guard(
@@ -268,7 +279,9 @@ class BatchRunner:
                 controller,
                 frame_id=run_frame,
             )
-            result = yield _guard("unmixing", controller.unmixing_ctrl.prepare, params)
+            result = yield _guard(
+                "unmixing", controller.unmixing_ctrl.prepare, params
+            )
             controller.unmixing_ctrl.publish(result, params)
 
         if self.plan.roi is not None:
@@ -303,7 +316,9 @@ class BatchRunner:
         wanted = self.plan.source or produced_recon
         pa_layers = self._pa_layers()
         if wanted:
-            layer = next((l for l in pa_layers if l.name.startswith(wanted)), None)
+            layer = next(
+                (l for l in pa_layers if l.name.startswith(wanted)), None
+            )
             if layer is None:
                 available = ", ".join(l.name for l in pa_layers) or "none"
                 raise BatchStepError(
@@ -314,7 +329,9 @@ class BatchRunner:
             # scan selected, which follows the DEFAULT_PA_LAYER setting.
             layer = self.controller.active_recon_layer
             if layer is None:
-                raise BatchStepError("scan contains no reconstruction to analyse")
+                raise BatchStepError(
+                    "scan contains no reconstruction to analyse"
+                )
 
         self.viewer.layers.selection.select_only(layer)
         self.controller._resolve_active_recon_layer()
@@ -332,11 +349,15 @@ class BatchRunner:
         roi_ctrl = self.controller.roi_ctrl
         selected_ids = roi_ctrl._selected_roi_ids()
         if not selected_ids:
-            raise BatchStepError("ROI was placed but could not be selected for measuring")
+            raise BatchStepError(
+                "ROI was placed but could not be selected for measuring"
+            )
         # "all_pa" lets the scope pick up every PA layer in the scan; otherwise
         # measure only this run's own chain.
         layers = (
-            None if self.plan.measure.all_layers else self._analysis_layers(source_layer)
+            None
+            if self.plan.measure.all_layers
+            else self._analysis_layers(source_layer)
         )
         rows = roi_ctrl._measure_selected_rois(
             selected_ids, scope=self.plan.measure, layers=layers
@@ -345,37 +366,56 @@ class BatchRunner:
             raise BatchStepError("ROI measured no rows on this scan")
         return rows
 
-    def _write_outputs(self, job: BatchJob, frame_idx: int, source_layer) -> None:
+    def _write_outputs(
+        self, job: BatchJob, frame_idx: int, source_layer
+    ) -> None:
         # Exports mirror the input layout, so a converted dataset can be reopened
         # exactly like the original: <out>/<format>/Study_X/Scan_Y.hdf5
         if self.plan.outputs.hdf5:
-            destination = self._export_path(job, "hdf5", f"{job.scan_stem}.hdf5")
+            destination = self._export_path(
+                job, "hdf5", f"{job.scan_stem}.hdf5"
+            )
             if not export_scan_to_hdf5(self.controller, destination):
-                raise BatchStepError(f"HDF5 export failed (see log): {destination.name}")
+                raise BatchStepError(
+                    f"HDF5 export failed (see log): {destination.name}"
+                )
             self.report.note(job, hdf5_path=str(destination))
 
         if self.plan.outputs.ipasc:
             # Same suffix the Scan Browser's IPASC export uses.
-            destination = self._export_path(job, "ipasc", f"{job.scan_stem}_ipasc.hdf5")
+            destination = self._export_path(
+                job, "ipasc", f"{job.scan_stem}_ipasc.hdf5"
+            )
             if not export_scan_to_ipasc(self.controller, destination):
-                raise BatchStepError(f"IPASC export failed (see log): {destination.name}")
+                raise BatchStepError(
+                    f"IPASC export failed (see log): {destination.name}"
+                )
             self.report.note(job, ipasc_path=str(destination))
 
         if self.plan.outputs.overlay_png:
             self.report.note(
-                job, overlay_path=str(self._write_overlay(job, frame_idx, source_layer))
+                job,
+                overlay_path=str(
+                    self._write_overlay(job, frame_idx, source_layer)
+                ),
             )
 
     def _export_path(self, job: BatchJob, kind: str, filename: str) -> Path:
-        destination = self.plan.output_dir / kind / job.study_path.name / filename
+        destination = (
+            self.plan.output_dir / kind / job.study_path.name / filename
+        )
         destination.parent.mkdir(parents=True, exist_ok=True)
         return destination
 
-    def _write_overlay(self, job: BatchJob, frame_idx: int, source_layer) -> Path:
+    def _write_overlay(
+        self, job: BatchJob, frame_idx: int, source_layer
+    ) -> Path:
         overlay_layer = self._overlay_layer(source_layer)
 
         channel_idx = (
-            int(self.viewer.dims.current_step[1]) if self.viewer.dims.ndim > 1 else 0
+            int(self.viewer.dims.current_step[1])
+            if self.viewer.dims.ndim > 1
+            else 0
         )
         destination = (
             self.plan.output_dir
@@ -405,10 +445,14 @@ class BatchRunner:
         wanted = self.plan.outputs.overlay_layer
         if not wanted:
             return candidates[-1]
-        match = next((l for l in candidates if l.name.startswith(wanted)), None)
+        match = next(
+            (l for l in candidates if l.name.startswith(wanted)), None
+        )
         if match is None:
             names = ", ".join(l.name for l in candidates)
-            raise BatchStepError(f"no layer starting with '{wanted}' for the overlay (have: {names})")
+            raise BatchStepError(
+                f"no layer starting with '{wanted}' for the overlay (have: {names})"
+            )
         return match
 
 
@@ -418,4 +462,3 @@ def _guard(step: str, func, *args, **kwargs):
         return func(*args, **kwargs)
     except ValueError as exc:
         raise BatchStepError(f"{step}: {exc}") from exc
-

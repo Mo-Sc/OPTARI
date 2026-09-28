@@ -51,7 +51,9 @@ def layer_metadata_rows(layer) -> list[tuple[str, str, str]]:
     layer infos
     """
     if layer is None:
-        return [("Status", "No image layer selected", "No image layer selected")]
+        return [
+            ("Status", "No image layer selected", "No image layer selected")
+        ]
 
     rows = [
         ("Name", layer.name),
@@ -100,7 +102,10 @@ def scan_metadata_rows(
         ("Sampling frequency", pa_data.get_sampling_frequency()),
         ("Time samples", pa_data.get_n_samples()),
         ("Speed of sound US (m/s)", pa_data.get_speed_of_sound()),
-        ("Overall correction factor", np.asarray(pa_data.get_overall_correction_factor())),
+        (
+            "Overall correction factor",
+            np.asarray(pa_data.get_overall_correction_factor()),
+        ),
         ("Impulse response", np.asarray(pa_data.get_impulse_response())),
         ("Scan geometry (m)", np.asarray(pa_data.get_scan_geometry())),
         ("Z positions (m)", np.asarray(pa_data.get_z_positions())),
@@ -136,12 +141,20 @@ def ipasc_metadata_rows(pa_data) -> list[tuple[str, str, str]]:
         (
             "IPASC completeness",
             status,
-            status if not missing else status + "\nMissing: " + ", ".join(missing),
+            (
+                status
+                if not missing
+                else status + "\nMissing: " + ", ".join(missing)
+            ),
         )
     ]
     for entry in entries:
         label = entry["tag"] + (" *" if entry["minimal"] else "")
         unit = "" if entry["unit"] in ("N/A", None) else f" [{entry['unit']}]"
-        summary = "absent" if not entry["present"] else _format(entry["value"]) + unit
+        summary = (
+            "absent"
+            if not entry["present"]
+            else _format(entry["value"]) + unit
+        )
         rows.append((label, summary, _format(entry["value"], details=True)))
     return rows

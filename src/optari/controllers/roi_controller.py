@@ -41,7 +41,11 @@ from optari.roi.roi_utils import (
     visible_feature_columns,
 )
 from optari.utils.misc import parse_float_input, roi_color_for_index
-from optari.utils.setup import get_user_autosave_dir, get_user_roi_presets_dir, new_session_file
+from optari.utils.setup import (
+    get_user_autosave_dir,
+    get_user_roi_presets_dir,
+    new_session_file,
+)
 from optari.utils.viewer import selected_frame_and_channel, selected_frame_idx
 
 if TYPE_CHECKING:
@@ -68,7 +72,7 @@ def _roi_name_popup() -> tuple[str, str, str] | None:
     tissue_class_edit = QLineEdit()
     tissue_class_edit.setPlaceholderText("undefined")
     tissue_class_edit.setToolTip(
-        "Segmentation class name to auto-place this preset in, e.g. \"muscle\""
+        'Segmentation class name to auto-place this preset in, e.g. "muscle"'
     )
     form.addRow("ROI Name:", roi_id_edit)
     form.addRow("Description (optional):", description_edit)
@@ -147,10 +151,12 @@ class RoiController(TaskControllerBase):
         Also projects the current frame, so the Shapes layer reflects the new records.
         """
         self._roi_records = {record.roi_id: record for record in records}
-        self._next_roi_id = max((record.roi_id for record in records), default=-1) + 1
-        self._next_track_id = max(
-            (record.track_id for record in records), default=-1
-        ) + 1
+        self._next_roi_id = (
+            max((record.roi_id for record in records), default=-1) + 1
+        )
+        self._next_track_id = (
+            max((record.track_id for record in records), default=-1) + 1
+        )
         self.project_current_frame()
 
     def clear_roi_records(self) -> None:
@@ -165,13 +171,15 @@ class RoiController(TaskControllerBase):
 
     def expand_current_projection_to_all_frames(
         self,
-        verts_for_frame: Callable[[int, np.ndarray], np.ndarray | None] | None = None,
+        verts_for_frame: (
+            Callable[[int, np.ndarray], np.ndarray | None] | None
+        ) = None,
     ) -> None:
         """Duplicate the last-placed ROI onto every other frame, as one group.
 
         `verts_for_frame(frame_id, source_verts)` lets a caller resolve each
         frame's own geometry instead of reusing `source_verts` unchanged e.g.
-        auto-placement re-anchoring to that frame's own segmentation mask. 
+        auto-placement re-anchoring to that frame's own segmentation mask.
         Returning None skips that frame entirely
         """
         self.sync_records_from_shapes()
@@ -227,7 +235,9 @@ class RoiController(TaskControllerBase):
             self._projecting = False
         self._refresh_shape_display()
 
-    def _match_ids_after_removal(self, data, kinds: list[str]) -> list[int | None]:
+    def _match_ids_after_removal(
+        self, data, kinds: list[str]
+    ) -> list[int | None]:
         """Match surviving shapes to their prior ids. Removal preserves relative order."""
         old_records = self.current_records()
         matched: list[int | None] = []
@@ -239,7 +249,9 @@ class RoiController(TaskControllerBase):
                 and np.array_equal(old_records[j].verts, verts)
             ):
                 j += 1
-            matched.append(old_records[j].roi_id if j < len(old_records) else None)
+            matched.append(
+                old_records[j].roi_id if j < len(old_records) else None
+            )
             j += 1
         return matched
 
@@ -251,7 +263,7 @@ class RoiController(TaskControllerBase):
         Smaller shape count: removal preserves the relative order of remaining shapes,
         so ids are recovered by matching remaining geometry to the old records.
 
-        Returns whether anything actually changed, so callers can skip the 
+        Returns whether anything actually changed, so callers can skip the
         refresh when the layer already agrees with the records.
         """
         shapes = self.optari_controller.shapes_layer
@@ -277,8 +289,10 @@ class RoiController(TaskControllerBase):
             else:
                 record = self._roi_records[new_ids[i]]
                 verts = np.asarray(verts, dtype=float)
-                changed = changed or record.kind != kind or not np.array_equal(
-                    record.verts, verts
+                changed = (
+                    changed
+                    or record.kind != kind
+                    or not np.array_equal(record.verts, verts)
                 )
                 record.verts = verts.copy()
                 record.kind = kind
@@ -299,7 +313,9 @@ class RoiController(TaskControllerBase):
         """Push the saved rows into the widget and gate the actions that need rows."""
         if self.optari_controller.roi is None:
             return
-        self.optari_controller.roi.saved_table.value = self.saved_table.visible_rows()
+        self.optari_controller.roi.saved_table.value = (
+            self.saved_table.visible_rows()
+        )
         has_rows = not self.saved_table.is_empty
         self.optari_controller.roi.delete_button.setEnabled(has_rows)
         self.optari_controller.roi.xlsx_button.setEnabled(has_rows)
@@ -322,7 +338,11 @@ class RoiController(TaskControllerBase):
     def on_shapes_selection_changed(self, event=None) -> None:
         """Sync shapes selection -> live table selection on selection changes only."""
         shapes = self.optari_controller.shapes_layer
-        if self._syncing or shapes is None or self.optari_controller.roi is None:
+        if (
+            self._syncing
+            or shapes is None
+            or self.optari_controller.roi is None
+        ):
             return
         selected = list(shapes.selected_data)
         self._syncing = True
@@ -330,18 +350,27 @@ class RoiController(TaskControllerBase):
             self._set_live_table_selection(selected)
         finally:
             self._syncing = False
-        
+
         self._update_save_button_state()
 
     def on_live_table_selection_changed(self) -> None:
         """Sync live table row selection → shapes layer selection."""
         shapes = self.optari_controller.shapes_layer
-        if self._syncing or shapes is None or self.optari_controller.roi is None:
+        if (
+            self._syncing
+            or shapes is None
+            or self.optari_controller.roi is None
+        ):
             return
         # Never write selection back into napari during shape drag/select interactions.
-        if getattr(shapes, "_is_moving", False) or getattr(shapes, "_is_selecting", False):
+        if getattr(shapes, "_is_moving", False) or getattr(
+            shapes, "_is_selecting", False
+        ):
             return
-        rows = {idx.row() for idx in self.optari_controller.roi.live_table.native.selectedIndexes()}
+        rows = {
+            idx.row()
+            for idx in self.optari_controller.roi.live_table.native.selectedIndexes()
+        }
         self._syncing = True
         try:
             if rows and self.viewer.layers.selection.active is not shapes:
@@ -372,9 +401,13 @@ class RoiController(TaskControllerBase):
             return
 
         if annotation.roi_exclusion_box.isChecked():
-            self.intensity_clamp =  IntensityClamp(
-                minimum=parse_float_input(annotation.roi_exclude_min_edit.text()),
-                maximum=parse_float_input(annotation.roi_exclude_max_edit.text()),
+            self.intensity_clamp = IntensityClamp(
+                minimum=parse_float_input(
+                    annotation.roi_exclude_min_edit.text()
+                ),
+                maximum=parse_float_input(
+                    annotation.roi_exclude_max_edit.text()
+                ),
                 mode="exclude",
             )
         if annotation.roi_clipping_box.isChecked():
@@ -405,23 +438,49 @@ class RoiController(TaskControllerBase):
             (roi.delete_button.clicked, self.on_delete_saved_clicked),
             (roi.xlsx_button.clicked, self.on_xlsx_export_clicked),
             (roi.import_button.clicked, self.on_import_clicked),
-            (roi.saved_table.native.cellDoubleClicked, self.on_saved_row_double_clicked),
-            (roi.saved_table_restore_shortcut.activated, self.on_restore_selected_rows),
-            (roi.live_table_delete_shortcut.activated, self.on_live_table_delete_key),
+            (
+                roi.saved_table.native.cellDoubleClicked,
+                self.on_saved_row_double_clicked,
+            ),
+            (
+                roi.saved_table_restore_shortcut.activated,
+                self.on_restore_selected_rows,
+            ),
+            (
+                roi.live_table_delete_shortcut.activated,
+                self.on_live_table_delete_key,
+            ),
             # Annotation dock: ROI intensity settings
             *(
                 (edit.editingFinished, self.on_intensity_settings_changed)
                 for edit in intensity_edits
             ),
             (ann.roi_clipping_box.toggled, self.on_intensity_settings_changed),
-            (ann.roi_exclusion_box.toggled, self.on_intensity_settings_changed),
+            (
+                ann.roi_exclusion_box.toggled,
+                self.on_intensity_settings_changed,
+            ),
             # ROI presets
-            (ann.roi_presets_list.itemClicked, self.on_roi_preset_item_selected),
-            (ann.roi_presets_list.itemDoubleClicked, self.on_roi_preset_item_clicked),
-            (ann.roi_presets_list.itemSelectionChanged,
-             self._update_remove_roi_preset_button_state),
-            (ann.save_roi_preset_button.clicked, self.on_save_roi_preset_clicked),
-            (ann.remove_roi_preset_button.clicked, self.on_remove_roi_preset_clicked),
+            (
+                ann.roi_presets_list.itemClicked,
+                self.on_roi_preset_item_selected,
+            ),
+            (
+                ann.roi_presets_list.itemDoubleClicked,
+                self.on_roi_preset_item_clicked,
+            ),
+            (
+                ann.roi_presets_list.itemSelectionChanged,
+                self._update_remove_roi_preset_button_state,
+            ),
+            (
+                ann.save_roi_preset_button.clicked,
+                self.on_save_roi_preset_clicked,
+            ),
+            (
+                ann.remove_roi_preset_button.clicked,
+                self.on_remove_roi_preset_clicked,
+            ),
             (ann.place_roi_button.clicked, self.on_place_roi_clicked),
         ]
 
@@ -443,7 +502,9 @@ class RoiController(TaskControllerBase):
         """Recolor and relabel ROI shapes from their records."""
         shapes = self.optari_controller.shapes_layer
         records = self.current_records()
-        shapes.edge_color = [roi_color_for_index(i) for i in range(len(records))]
+        shapes.edge_color = [
+            roi_color_for_index(i) for i in range(len(records))
+        ]
         shapes.properties = {
             "roi_id": [r.roi_id for r in records],
             "track_id": [r.track_id for r in records],
@@ -452,8 +513,15 @@ class RoiController(TaskControllerBase):
             "roi_tissue_class": [r.tissue_class for r in records],
         }
         # napari text supports formatting from properties.
-        label = "{roi_id}/{track_id}" if settings.annotation.show_track_id else "{roi_id}"
-        shapes.text = {"string": label, "size": settings.annotation.roi_label_size}
+        label = (
+            "{roi_id}/{track_id}"
+            if settings.annotation.show_track_id
+            else "{roi_id}"
+        )
+        shapes.text = {
+            "string": label,
+            "size": settings.annotation.roi_label_size,
+        }
 
     def on_shapes_data_changed(self, event=None) -> None:
         """Sync ROI records after a completed Shapes-layer edit, then refresh the display and live table.
@@ -488,7 +556,7 @@ class RoiController(TaskControllerBase):
         """Catch shape additions that never emit ``events.data``.
 
         copy/pasting shapes (e.g. from one frame to another) appends to the layer and emits
-        only ``set_data``, so a pasted ROI would stay invisible. ``set_data`` also fires on every redraw, 
+        only ``set_data``, so a pasted ROI would stay invisible. ``set_data`` also fires on every redraw,
         hence the count check before doing any real work.
         """
         shapes = self.optari_controller.shapes_layer
@@ -514,7 +582,9 @@ class RoiController(TaskControllerBase):
 
         if self.optari_controller.active_recon_layer is None:
             cols = visible_feature_columns()
-            self.optari_controller.roi.live_table.value = pd.DataFrame(columns=cols)
+            self.optari_controller.roi.live_table.value = pd.DataFrame(
+                columns=cols
+            )
             return
 
         frame_channel = selected_frame_and_channel(self.viewer)
@@ -538,7 +608,9 @@ class RoiController(TaskControllerBase):
 
         selected_rows = []
         if self.optari_controller.shapes_layer is not None:
-            selected_rows = list(self.optari_controller.shapes_layer.selected_data)
+            selected_rows = list(
+                self.optari_controller.shapes_layer.selected_data
+            )
 
         self._syncing = True
         try:
@@ -624,7 +696,9 @@ class RoiController(TaskControllerBase):
         return {
             track_id: (
                 fallback,
-                records_by_track_and_frame(self._roi_records.values(), track_id),
+                records_by_track_and_frame(
+                    self._roi_records.values(), track_id
+                ),
             )
             for track_id, fallback in fallbacks.items()
         }
@@ -639,13 +713,17 @@ class RoiController(TaskControllerBase):
         """One record per selected track, as it exists on *frame_idx*.
 
         `follow_track=False`: the record the user selected, reused unchanged
-        on every frame. 
+        on every frame.
         `follow_track=True`: that track's own record on this
         frame. a track with none here is left out.
         """
         if not follow_track:
             return [fallback for fallback, _ in tracks.values()]
-        return [track[frame_idx] for _, track in tracks.values() if frame_idx in track]
+        return [
+            track[frame_idx]
+            for _, track in tracks.values()
+            if frame_idx in track
+        ]
 
     def _measure_selected_rois(
         self,
@@ -679,7 +757,8 @@ class RoiController(TaskControllerBase):
             target_layers = [
                 layer
                 for layer in self.viewer.layers
-                if isinstance(layer, Image) and layer.metadata.get("type") == "pa"
+                if isinstance(layer, Image)
+                and layer.metadata.get("type") == "pa"
             ]
         else:
             target_layers = [active_layer]
@@ -705,7 +784,9 @@ class RoiController(TaskControllerBase):
             )
 
             for f_idx in frame_indices:
-                records_here = self._records_at_frame(tracks, f_idx, follow_track=follow_track)
+                records_here = self._records_at_frame(
+                    tracks, f_idx, follow_track=follow_track
+                )
                 for c_idx in channel_indices:
                     measured = compute_roi_stats(
                         records_here,
@@ -718,7 +799,9 @@ class RoiController(TaskControllerBase):
                         collected.append(measured)
 
         return (
-            pd.concat(collected, ignore_index=True) if collected else pd.DataFrame()
+            pd.concat(collected, ignore_index=True)
+            if collected
+            else pd.DataFrame()
         )
 
     def _append_saved_rows(self, rows: pd.DataFrame, *, n_rois: int) -> None:
@@ -766,8 +849,7 @@ class RoiController(TaskControllerBase):
         logger.info("Saved ROI table to %s", filename)
 
     def on_import_clicked(self, event=None) -> None:
-        """Append a previously exported table to the saved table.
-        """
+        """Append a previously exported table to the saved table."""
         if self.optari_controller.roi is None:
             return
 
@@ -784,8 +866,12 @@ class RoiController(TaskControllerBase):
         self._set_saved_table_view()
 
         already = f", {skipped} already present" if skipped else ""
-        show_info(f"Imported {added} row(s) from {Path(filename).name}{already}")
-        logger.info("Imported %s of %s row(s) from %s", added, len(rows), filename)
+        show_info(
+            f"Imported {added} row(s) from {Path(filename).name}{already}"
+        )
+        logger.info(
+            "Imported %s of %s row(s) from %s", added, len(rows), filename
+        )
 
     def on_saved_row_double_clicked(self, row: int, _column: int = 0) -> None:
         """Restore the ROI of the double-clicked row onto that row's frame."""
@@ -797,7 +883,9 @@ class RoiController(TaskControllerBase):
         """Put the selected saved rows back into the viewer, one ROI per row.
         Restoring is per row, not per ROI group
         """
-        selection = self.optari_controller.roi.saved_table.native.selectionModel()
+        selection = (
+            self.optari_controller.roi.saved_table.native.selectionModel()
+        )
         positions = [index.row() for index in selection.selectedRows()]
         if not positions and default_row is not None:
             positions = [default_row]
@@ -834,9 +922,10 @@ class RoiController(TaskControllerBase):
         }
         show_info(f"Restored {len(records)} ROI(s)")
 
-    def _saved_rows_match_current_context(self, rows: pd.DataFrame) -> str | None:
-        """Refuse restoring a ROI row unless the exact scan, layer and frames the rows were measured on are loaded.
-        """
+    def _saved_rows_match_current_context(
+        self, rows: pd.DataFrame
+    ) -> str | None:
+        """Refuse restoring a ROI row unless the exact scan, layer and frames the rows were measured on are loaded."""
         layer = self.optari_controller.active_recon_layer
         if layer is None:
             return "Select an image layer before restoring an ROI."
@@ -897,7 +986,9 @@ class RoiController(TaskControllerBase):
             for frame, frame_rows in group.groupby("frame"):
                 if (roi_group_uid, int(frame)) in present:
                     continue
-                geometry = RoiGeometry.from_json(str(frame_rows.iloc[0]["roi_geometry"]))
+                geometry = RoiGeometry.from_json(
+                    str(frame_rows.iloc[0]["roi_geometry"])
+                )
                 records.append(
                     geometry.to_record(
                         roi_id=self._next_roi_id,
@@ -919,7 +1010,9 @@ class RoiController(TaskControllerBase):
         if self.optari_controller.annotation is None:
             return
         try:
-            names = [preset.name for preset in self._roi_preset_store.list_presets()]
+            names = [
+                preset.name for preset in self._roi_preset_store.list_presets()
+            ]
         except (TypeError, ValueError, OSError) as exc:
             self.optari_controller.annotation.set_roi_preset_names([])
             self.optari_controller.annotation.roi_presets_description_label.setText(
@@ -927,7 +1020,9 @@ class RoiController(TaskControllerBase):
             )
             return
         self.optari_controller.annotation.set_roi_preset_names(names)
-        self.optari_controller.annotation.roi_presets_description_label.setText("")
+        self.optari_controller.annotation.roi_presets_description_label.setText(
+            ""
+        )
         self._update_remove_roi_preset_button_state()
 
     def _update_remove_roi_preset_button_state(self) -> None:
@@ -935,7 +1030,9 @@ class RoiController(TaskControllerBase):
         if self.optari_controller.annotation is None:
             return
         ann = self.optari_controller.annotation
-        ann.remove_roi_preset_button.setEnabled(ann.roi_presets_list.currentItem() is not None)
+        ann.remove_roi_preset_button.setEnabled(
+            ann.roi_presets_list.currentItem() is not None
+        )
 
     def on_save_roi_preset_clicked(self, event=None) -> None:
         """Save the first selected ROI as a named preset.
@@ -1053,7 +1150,8 @@ class RoiController(TaskControllerBase):
         seg, seg_layer = result
         class_names = (seg_layer.metadata or {}).get("class_names", {})
         class_name_to_id = {
-            str(name).strip(): int(class_id) for class_id, name in class_names.items()
+            str(name).strip(): int(class_id)
+            for class_id, name in class_names.items()
         }
 
         if tissue_class not in class_name_to_id:
@@ -1069,7 +1167,9 @@ class RoiController(TaskControllerBase):
         if target_fov is None:
             raise ValueError("Current scan has no valid FOV.")
 
-        geometry = preset.geometry.repositioned(preset.source_fov_m, target_fov)
+        geometry = preset.geometry.repositioned(
+            preset.source_fov_m, target_fov
+        )
         verts = geometry.verts_mm(*target_fov)
         if (
             np.any(verts[:, 0] < 0)
@@ -1099,7 +1199,9 @@ class RoiController(TaskControllerBase):
         """
         result = controller.segmentation_ctrl.active_seg_mask_2d()
         if result is None:
-            raise ValueError("No segmentation mask found. Generate segmentation first.")
+            raise ValueError(
+                "No segmentation mask found. Generate segmentation first."
+            )
 
         seg, seg_layer = result
         class_names = (seg_layer.metadata or {}).get("class_names", {})
@@ -1126,7 +1228,9 @@ class RoiController(TaskControllerBase):
         except ValueError as exc:
             raise ValueError(f"Class '{target_class_name}': {exc}") from exc
 
-        controller.shapes_layer.add(verts_shifted, shape_type=preset.geometry.kind)
+        controller.shapes_layer.add(
+            verts_shifted, shape_type=preset.geometry.kind
+        )
         # Auto-select the newly placed ROI so the Save button activates immediately.
         new_idx = len(controller.shapes_layer.data) - 1
         controller.shapes_layer.selected_data = {new_idx}
@@ -1170,7 +1274,9 @@ class RoiController(TaskControllerBase):
         """
         seg_data = np.asarray(seg_layer.data)
 
-        def resolve(frame_id: int, source_verts: np.ndarray) -> np.ndarray | None:
+        def resolve(
+            frame_id: int, source_verts: np.ndarray
+        ) -> np.ndarray | None:
             """Re-anchor *source_verts* onto *frame_id*'s own mask, or None if out of range or the class isn't present there."""
             if frame_id >= seg_data.shape[0]:
                 return None
@@ -1201,7 +1307,9 @@ class RoiController(TaskControllerBase):
         try:
             self.place_preset(
                 preset,
-                placement=str(annotation.roi_placement_mode_combo.currentData()),
+                placement=str(
+                    annotation.roi_placement_mode_combo.currentData()
+                ),
                 all_frames=annotation.all_frames_radio.isChecked(),
             )
         except ValueError as exc:
@@ -1209,7 +1317,9 @@ class RoiController(TaskControllerBase):
                 f"Could not place ROI preset: {exc}"
             )
 
-    def place_preset(self, preset, *, placement: str, all_frames: bool) -> None:
+    def place_preset(
+        self, preset, *, placement: str, all_frames: bool
+    ) -> None:
         """Place *preset* on the current frame, and across every frame if asked.
 
         Auto placement re-anchors onto each frame's own segmentation when expanding,

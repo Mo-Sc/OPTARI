@@ -17,7 +17,10 @@ from patato.io.attribute_tags import UnmixingAttributeTags
 from patato.unmixing.spectra import SPECTRA_NAMES
 from optari.controllers.base import TaskControllerBase
 from optari.utils.tasks import BackgroundStep
-from optari.patato_bridge import display_data_from_patato_obj, expand_to_acquisition_frames
+from optari.patato_bridge import (
+    display_data_from_patato_obj,
+    expand_to_acquisition_frames,
+)
 from optari.utils.presets import PresetStore
 from optari.utils.setup import get_user_unmixing_presets_dir
 from optari.widgets.dock_helpers import (
@@ -27,7 +30,6 @@ from optari.widgets.dock_helpers import (
     remove_selected_preset,
 )
 
-
 logger = logging.getLogger(__name__)
 
 # Unlike PATATO's reconstruction/preprocessing, SpectralUnmixer.run has no internal batch
@@ -35,7 +37,9 @@ logger = logging.getLogger(__name__)
 UNMIXING_CHUNK_FRAMES = 4
 
 
-def resolve_unmixing_wavelengths(preset: dict, available: list[int]) -> list[int]:
+def resolve_unmixing_wavelengths(
+    preset: dict, available: list[int]
+) -> list[int]:
     """Which of a scan's *available* wavelengths a preset selects.
 
     Presets name either an explicit list or an inclusive range, and both are resolved
@@ -71,7 +75,11 @@ def validate_unmixing_spectra(
         ]
         for chromophore in chromophores
     }
-    missing = {chromophore: values for chromophore, values in missing.items() if values}
+    missing = {
+        chromophore: values
+        for chromophore, values in missing.items()
+        if values
+    }
     if missing:
         details = "; ".join(
             f"{chromophore}: {', '.join(f'{wavelength} nm' for wavelength in wavelengths)}"
@@ -109,7 +117,9 @@ class UnmixParams:
         suffix_part = f"_{self.suffix}" if self.suffix else ""
         # Encode the acquisition-frame index when only a single frame is unmixed.
         frame_part = (
-            f"_F{self.current_frame_id}" if self.current_frame_id is not None else ""
+            f"_F{self.current_frame_id}"
+            if self.current_frame_id is not None
+            else ""
         )
         return f"{source_name}{suffix_part}{frame_part}"
 
@@ -185,12 +195,16 @@ class UnmixParams:
         )
 
     @classmethod
-    def from_preset(cls, preset: dict, controller, *, frame_id: int | None = None):
+    def from_preset(
+        cls, preset: dict, controller, *, frame_id: int | None = None
+    ):
         """Resolve an unmixing preset against the loaded scan's own wavelengths."""
         active_layer = controller.active_recon_layer
         if active_layer is None:
             raise ValueError("Select a PA reconstruction layer.")
-        available = [int(w) for w in active_layer.metadata.get("wavelengths") or []]
+        available = [
+            int(w) for w in active_layer.metadata.get("wavelengths") or []
+        ]
         wavelengths = resolve_unmixing_wavelengths(preset, available)
         if not wavelengths:
             raise ValueError(
@@ -204,7 +218,9 @@ class UnmixParams:
             controller,
             wavelengths=wavelengths,
             chromophores=chromophores,
-            reduce_factor=int(preset.get(UnmixingAttributeTags.RESOLUTION_REDUCE, 1)),
+            reduce_factor=int(
+                preset.get(UnmixingAttributeTags.RESOLUTION_REDUCE, 1)
+            ),
             suffix=str(preset.get(UnmixingAttributeTags.SUFFIX, "")),
             generate_thb=hb_pair
             and bool(preset.get(UnmixingAttributeTags.COMPUTE_THB, True)),
@@ -237,7 +253,11 @@ def _unmix_frames(
         algorithm_id=suffix,
     )
     thb_calc = pat.THbCalculator(algorithm_id=suffix) if generate_thb else None
-    so2_calc = pat.SO2Calculator(algorithm_id=suffix, nan_invalid=True) if generate_so2 else None
+    so2_calc = (
+        pat.SO2Calculator(algorithm_id=suffix, nan_invalid=True)
+        if generate_so2
+        else None
+    )
 
     unmixed_chunks, thb_chunks, so2_chunks = [], [], []
     for start in range(0, int(recon_for_run.shape[0]), chunk_frames):
@@ -293,8 +313,12 @@ class UnmixingController(TaskControllerBase):
     def unbind_events(self) -> None:
         """Disconnect unmixing dock signals."""
         dock = self.optari_controller.unmixing
-        dock.preset_combo.currentIndexChanged.disconnect(self.on_preset_changed)
-        dock.chromophores_list.itemChanged.disconnect(self.on_chromophores_changed)
+        dock.preset_combo.currentIndexChanged.disconnect(
+            self.on_preset_changed
+        )
+        dock.chromophores_list.itemChanged.disconnect(
+            self.on_chromophores_changed
+        )
         dock.select_all_wavelengths_button.clicked.disconnect(
             self.on_select_all_wavelengths_clicked
         )
@@ -303,7 +327,9 @@ class UnmixingController(TaskControllerBase):
         )
         dock.run_button.clicked.disconnect(self.on_run_unmixing_clicked)
         dock.save_preset_button.clicked.disconnect(self.on_save_preset_clicked)
-        dock.remove_preset_button.clicked.disconnect(self.on_remove_preset_clicked)
+        dock.remove_preset_button.clicked.disconnect(
+            self.on_remove_preset_clicked
+        )
 
     @staticmethod
     def _set_checked_by_text(list_widget, selected: set[str]) -> None:
@@ -413,7 +439,10 @@ class UnmixingController(TaskControllerBase):
         dock = self.optari_controller.unmixing
         active_recon_layer = self.optari_controller.active_recon_layer
 
-        if active_recon_layer is None or active_recon_layer.metadata["pa_kind"] != "recon":
+        if (
+            active_recon_layer is None
+            or active_recon_layer.metadata["pa_kind"] != "recon"
+        ):
             dock.source_layer_label.setText("Select a PA reconstruction layer")
             dock.wavelengths_list.clear()
             # disable unmixing button when no valid source is active
@@ -484,7 +513,9 @@ class UnmixingController(TaskControllerBase):
             )
             spectra = set(settings.get(UnmixingAttributeTags.SPECTRA, []))
             selected_wavelengths = set()
-            wavelength_range = settings.get(UnmixingAttributeTags.WAVELENGTH_RANGE)
+            wavelength_range = settings.get(
+                UnmixingAttributeTags.WAVELENGTH_RANGE
+            )
             if wavelength_range is not None and len(wavelength_range) == 2:
                 start, end = int(wavelength_range[0]), int(wavelength_range[1])
                 selected_wavelengths = {
@@ -511,7 +542,9 @@ class UnmixingController(TaskControllerBase):
         dock.resolution_reduction_factor.setValue(max(1, reduce_factor))
         dock.suffix_edit.setText(suffix)
         self._set_checked_by_text(dock.chromophores_list, spectra)
-        self._set_checked_wavelengths(dock.wavelengths_list, selected_wavelengths)
+        self._set_checked_wavelengths(
+            dock.wavelengths_list, selected_wavelengths
+        )
         dock.generate_so2_checkbox.setChecked(bool(compute_so2))
         dock.generate_thb_checkbox.setChecked(bool(compute_thb))
         self.on_chromophores_changed()
@@ -519,7 +552,7 @@ class UnmixingController(TaskControllerBase):
     def on_chromophores_changed(self) -> None:
         """
         Enable THb and sO2 options only when Hb and HbO2 are selected.
-        so2 is activated by default 
+        so2 is activated by default
         """
         if self.optari_controller.unmixing is None:
             return
@@ -594,7 +627,6 @@ class UnmixingController(TaskControllerBase):
 
         return layer_metadata, export_attrs
 
-
     # ============ run: params -> prepare -> publish ============
     def _params_from_ui(self) -> UnmixParams:
         """Build run parameters from the dock. Raises ValueError with a user-facing message."""
@@ -655,8 +687,18 @@ class UnmixingController(TaskControllerBase):
             desc="Unmixing",
         )
 
-    def _publish_one(self, image, params: UnmixParams, *, prefix, axis1_labels,
-                     pa_kind, colormap, parameter=None, include_chromophores=False) -> str:
+    def _publish_one(
+        self,
+        image,
+        params: UnmixParams,
+        *,
+        prefix,
+        axis1_labels,
+        pa_kind,
+        colormap,
+        parameter=None,
+        include_chromophores=False,
+    ) -> str:
         """Add one unmixing output as a layer and register it for export."""
         metadata, export_attrs = self._build_output_metadata(
             source_layer_name=params.source_layer_name,
@@ -693,7 +735,8 @@ class UnmixingController(TaskControllerBase):
 
         names = [
             self._publish_one(
-                unmixed, params,
+                unmixed,
+                params,
                 prefix="Unmixed",
                 # Channel labels are used by downstream spectrum displays.
                 axis1_labels=list(map(str, unmixed.ax_1_labels)),
@@ -703,15 +746,29 @@ class UnmixingController(TaskControllerBase):
             )
         ]
         if thb is not None:
-            names.append(self._publish_one(
-                thb, params, prefix="THb", axis1_labels=["thb"],
-                pa_kind="unmixed_param", colormap="inferno", parameter="thb",
-            ))
+            names.append(
+                self._publish_one(
+                    thb,
+                    params,
+                    prefix="THb",
+                    axis1_labels=["thb"],
+                    pa_kind="unmixed_param",
+                    colormap="inferno",
+                    parameter="thb",
+                )
+            )
         if so2 is not None:
-            names.append(self._publish_one(
-                so2, params, prefix="sO2", axis1_labels=["so2"],
-                pa_kind="unmixed_param", colormap="twilight_shifted", parameter="so2",
-            ))
+            names.append(
+                self._publish_one(
+                    so2,
+                    params,
+                    prefix="sO2",
+                    axis1_labels=["so2"],
+                    pa_kind="unmixed_param",
+                    colormap="twilight_shifted",
+                    parameter="so2",
+                )
+            )
 
         # Reassert ROI visibility priority after adding multiple result layers.
         self.optari_controller._ensure_shapes_layer_on_top()
