@@ -33,13 +33,22 @@ from typing import Callable
 
 import numpy as np
 import onnxruntime as ort
+import optari
 import patato as pat
-from patato.io.attribute_tags import HDF5Tags, IPASCTags, ReconAttributeTags, UnmixingAttributeTags
+from patato.io.attribute_tags import (
+    HDF5Tags,
+    IPASCTags,
+    ReconAttributeTags,
+    UnmixingAttributeTags,
+)
 from patato.io.ithera.read_ithera import iTheraMSOT
 
 from optari import __version__ as optari_version
 from optari.config import settings as optari_settings
-from optari.patato_bridge import display_data_from_patato_obj, scale_from_patato_obj
+from optari.patato_bridge import (
+    display_data_from_patato_obj,
+    scale_from_patato_obj,
+)
 from optari.roi import Ellipse, Polygon, ROIPlacementConfig, Rectangle
 from optari.roi.roi_records import ROIRecord
 from optari.roi.roi_utils import compute_roi_stats
@@ -50,7 +59,8 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger("benchmark_pipeline")
 
 HERE = Path(__file__).parent
-DEFAULT_CONFIGS = HERE.parent / "src" / "optari" / "config" / "default_configs"
+
+DEFAULT_CONFIGS = Path(optari.__file__).parent / "config" / "default_configs"
 _ROI_SHAPES = {"ellipse": Ellipse, "rectangle": Rectangle, "polygon": Polygon}
 # must match ReconstructionController.DEEPMB_ALGORITHM (reconstruction_controller.py) --
 # duplicated as a literal rather than imported so this script never needs Qt/napari.
@@ -64,17 +74,27 @@ class Config:
     repeats: int = 10
     warmup: int = 3
     frame_idx: int = 0
-    channel_idx: int = 0  # unmixed/chromophore channel used for feature extraction
+    channel_idx: int = (
+        0  # unmixed/chromophore channel used for feature extraction
+    )
 
-    reconstruction_preset: Path = DEFAULT_CONFIGS / "presets/reconstruction/backproject_ithera.json"
-    unmixing_preset: Path = DEFAULT_CONFIGS / "presets/unmixing/haemoglobin.json"
+    reconstruction_preset: Path = (
+        DEFAULT_CONFIGS / "presets/reconstruction/backproject_ithera.json"
+    )
+    unmixing_preset: Path = (
+        DEFAULT_CONFIGS / "presets/unmixing/haemoglobin.json"
+    )
 
-    segmentation_model_id: str | None = None  # None -> optari_settings.segmentation.default_model
+    segmentation_model_id: str | None = (
+        None  # None -> optari_settings.segmentation.default_model
+    )
     roi_shape: str = "ellipse"
     roi_width_mm: float = 10.0
     roi_height_mm: float = 2.0
     roi_top_margin_mm: float = 0.0
-    roi_tissue_class: str | None = None  # None -> segmentation model's default_class
+    roi_tissue_class: str | None = (
+        None  # None -> segmentation model's default_class
+    )
     feature_ids: list[str] | None = None  # None -> every registered feature
 
     output_json: Path = HERE / "timings.json"
@@ -85,7 +105,9 @@ class Config:
 # ---------------------------------------------------------------------------
 
 
-def timed_repeats(fn: Callable[[], object], warmup: int, repeats: int, desc: str) -> tuple[list[float], object]:
+def timed_repeats(
+    fn: Callable[[], object], warmup: int, repeats: int, desc: str
+) -> tuple[list[float], object]:
     """Run *fn* ``warmup`` times (discarded) then ``repeats`` times, timed.
 
     Warm-up is mandatory, not optional: JAX traces and compiles reconstruction
@@ -113,13 +135,24 @@ def timed_repeats(fn: Callable[[], object], warmup: int, repeats: int, desc: str
 def summarize(durations: list[float]) -> dict:
     mean = float(np.mean(durations))
     sd = float(np.std(durations, ddof=1)) if len(durations) > 1 else 0.0
-    return {"durations_s": durations, "mean_s": mean, "sd_s": sd, "n": len(durations)}
+    return {
+        "durations_s": durations,
+        "mean_s": mean,
+        "sd_s": sd,
+        "n": len(durations),
+    }
 
 
 # distinct steps that make up one full pass through the pipeline. "roi_and_features"
 # stands in for its two components (roi_placement + feature_extraction) so they aren't
 # double-counted.
-TOTAL_STEPS = ("data_loading", "reconstruction", "unmixing", "segmentation", "roi_and_features")
+TOTAL_STEPS = (
+    "data_loading",
+    "reconstruction",
+    "unmixing",
+    "segmentation",
+    "roi_and_features",
+)
 
 
 def total_summary(steps: dict[str, dict]) -> dict:
@@ -147,14 +180,18 @@ def detect_scan_kind(path: Path) -> str:
             return "ithera"
         raise ValueError(f"'{path}' is a directory but contains no .msot file")
     if path.suffix.lower() != ".hdf5":
-        raise ValueError(f"unrecognised scan path: {path} (expected a folder with a "
-                          f".msot file, or a .hdf5 file)")
+        raise ValueError(
+            f"unrecognised scan path: {path} (expected a folder with a "
+            f".msot file, or a .hdf5 file)"
+        )
     with h5py.File(path, "r") as f:
         if IPASCTags.BINARY_DATA in f:
             return "ipasc"
         if HDF5Tags.RAW_DATA in f:
             return "hdf5"
-    raise ValueError(f"'{path}' is an HDF5 file but not a recognised PATATO/IPASC scan")
+    raise ValueError(
+        f"'{path}' is an HDF5 file but not a recognised PATATO/IPASC scan"
+    )
 
 
 def open_scan(scan_path: Path, kind: str):
@@ -193,7 +230,10 @@ def _resolve_deepmb_params(preset: dict) -> None:
     Never downloads the weights itself -- unlike OPTARI's UI, which offers a progress
     dialog, a headless benchmark silently fetching ~100s of MB would be a surprise.
     """
-    if preset.get(ReconAttributeTags.RECONSTRUCTION_ALGORITHM) != _DEEPMB_ALGORITHM:
+    if (
+        preset.get(ReconAttributeTags.RECONSTRUCTION_ALGORITHM)
+        != _DEEPMB_ALGORITHM
+    ):
         return
     params = dict(preset[ReconAttributeTags.ADDITIONAL_PARAMETERS])
     model_path = Path(params["model_path"]).expanduser()
@@ -207,7 +247,9 @@ def _resolve_deepmb_params(preset: dict) -> None:
     preset[ReconAttributeTags.ADDITIONAL_PARAMETERS] = params
 
 
-def bench_reconstruction(cfg: Config, pa_data) -> tuple[list[float], object, float]:
+def bench_reconstruction(
+    cfg: Config, pa_data
+) -> tuple[list[float], object, float]:
     preset = json.loads(cfg.reconstruction_preset.read_text())
     speed_of_sound = float(preset.get(ReconAttributeTags.SPEED_OF_SOUND, 1500))
     preset = dict(preset)
@@ -218,19 +260,28 @@ def bench_reconstruction(cfg: Config, pa_data) -> tuple[list[float], object, flo
     build_t0 = time.perf_counter()
     preprocessor = pat.read_reconstruction_preset(preset)
     reconstruction_algorithm = preprocessor.children[0]
-    build_time = time.perf_counter() - build_t0  # one-time cost: builds the DeepMB ONNX
+    build_time = (
+        time.perf_counter() - build_t0
+    )  # one-time cost: builds the DeepMB ONNX
     # session if applicable. Excluded from the per-frame timing below.
 
     frame = pa_data[cfg.frame_idx : cfg.frame_idx + 1]
 
     def run_once():
-        filtered_time_series, new_settings, _ = preprocessor.run(frame.get_time_series(), frame)
+        filtered_time_series, new_settings, _ = preprocessor.run(
+            frame.get_time_series(), frame
+        )
         reconstruction, _, _ = reconstruction_algorithm.run(
-            filtered_time_series, frame, speed_of_sound=speed_of_sound, **new_settings
+            filtered_time_series,
+            frame,
+            speed_of_sound=speed_of_sound,
+            **new_settings,
         )
         return reconstruction
 
-    durations, reconstruction = timed_repeats(run_once, cfg.warmup, cfg.repeats, "reconstruction")
+    durations, reconstruction = timed_repeats(
+        run_once, cfg.warmup, cfg.repeats, "reconstruction"
+    )
     return durations, reconstruction, build_time
 
 
@@ -239,10 +290,14 @@ def bench_reconstruction(cfg: Config, pa_data) -> tuple[list[float], object, flo
 # ---------------------------------------------------------------------------
 
 
-def bench_unmixing(cfg: Config, pa_data, reconstruction) -> tuple[list[float], object]:
+def bench_unmixing(
+    cfg: Config, pa_data, reconstruction
+) -> tuple[list[float], object]:
     preset = json.loads(cfg.unmixing_preset.read_text())
 
-    explicit_wavelengths = preset.get(UnmixingAttributeTags.UNMIXING_WAVELENGTHS)
+    explicit_wavelengths = preset.get(
+        UnmixingAttributeTags.UNMIXING_WAVELENGTHS
+    )
     if explicit_wavelengths is not None:
         wavelengths = [int(w) for w in explicit_wavelengths]
     else:
@@ -273,7 +328,11 @@ def bench_unmixing(cfg: Config, pa_data, reconstruction) -> tuple[list[float], o
         algorithm_id=suffix,
     )
     thb_calc = pat.THbCalculator(algorithm_id=suffix) if generate_thb else None
-    so2_calc = pat.SO2Calculator(algorithm_id=suffix, nan_invalid=True) if generate_so2 else None
+    so2_calc = (
+        pat.SO2Calculator(algorithm_id=suffix, nan_invalid=True)
+        if generate_so2
+        else None
+    )
 
     def run_once():
         unmixed, _, _ = unmixer.run(reconstruction, pa_data)
@@ -293,9 +352,13 @@ def bench_unmixing(cfg: Config, pa_data, reconstruction) -> tuple[list[float], o
 
 def bench_segmentation(cfg: Config, pa_data):
     registry = load_model_registry()
-    model_id = cfg.segmentation_model_id or optari_settings.segmentation.default_model
+    model_id = (
+        cfg.segmentation_model_id or optari_settings.segmentation.default_model
+    )
     if model_id not in registry:
-        raise ValueError(f"segmentation model '{model_id}' not in registry: {list(registry)}")
+        raise ValueError(
+            f"segmentation model '{model_id}' not in registry: {list(registry)}"
+        )
     model_config = registry[model_id]
 
     model_path = get_user_models_dir() / model_config.filename
@@ -307,7 +370,9 @@ def bench_segmentation(cfg: Config, pa_data):
 
     build_t0 = time.perf_counter()
     segmenter = create_segmenter(model_config)
-    build_time = time.perf_counter() - build_t0  # one-time cost: ONNX session creation.
+    build_time = (
+        time.perf_counter() - build_t0
+    )  # one-time cost: ONNX session creation.
     # Excluded from the per-frame timing below.
 
     us_obj = pa_data.get_ultrasound()
@@ -316,20 +381,32 @@ def bench_segmentation(cfg: Config, pa_data):
             "this scan has no ultrasound data (IPASC scans have none) -- segmentation "
             "cannot be benchmarked from it."
         )
-    us_img = display_data_from_patato_obj(us_obj)  # (n_frames, n_channels, H, W)
+    us_img = display_data_from_patato_obj(
+        us_obj
+    )  # (n_frames, n_channels, H, W)
     frame_2d = us_img[cfg.frame_idx, 0]
 
     def run_once():
         return segmenter.predict(frame_2d[np.newaxis])[0]
 
-    durations, seg_result = timed_repeats(run_once, cfg.warmup, cfg.repeats, "segmentation")
+    durations, seg_result = timed_repeats(
+        run_once, cfg.warmup, cfg.repeats, "segmentation"
+    )
 
     # Query the execution provider actually bound to the session rather than assuming
     # GPU/CPU -- ONNX Runtime falls back to CPU silently when a requested provider isn't
     # available.
     session_providers = list(segmenter.session.get_providers())
 
-    return durations, seg_result, build_time, model_id, model_config, us_obj, session_providers
+    return (
+        durations,
+        seg_result,
+        build_time,
+        model_id,
+        model_config,
+        us_obj,
+        session_providers,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -340,7 +417,9 @@ def bench_segmentation(cfg: Config, pa_data):
 def bench_roi_and_features(
     cfg: Config, us_obj, unmixed, seg_result, model_config
 ) -> tuple[list[float], list[float], object]:
-    class_name_to_id = {name: class_id for class_id, name in model_config.class_names.items()}
+    class_name_to_id = {
+        name: class_id for class_id, name in model_config.class_names.items()
+    }
     tissue_class = cfg.roi_tissue_class or model_config.default_class
     if tissue_class not in class_name_to_id:
         raise ValueError(
@@ -356,19 +435,32 @@ def bench_roi_and_features(
 
     # ROI placement happens on the US/segmentation grid, exactly like
     # SegmentationController.on_generate_roi_from_mask_clicked.
-    us_scale = scale_from_patato_obj(us_obj, tuple(optari_settings.general.US_FALLBACK_SCALE))
+    us_scale = scale_from_patato_obj(
+        us_obj, tuple(optari_settings.general.US_FALLBACK_SCALE)
+    )
     sy, sx = us_scale[-2], us_scale[-1]
-    ty, tx = 0.0, 0.0  # the US layer carries no translate in the normal pipeline
+    ty, tx = (
+        0.0,
+        0.0,
+    )  # the US layer carries no translate in the normal pipeline
 
     shape_cls = _ROI_SHAPES[cfg.roi_shape]
-    shape = shape_cls(ROIPlacementConfig(
-        width_mm=cfg.roi_width_mm, height_mm=cfg.roi_height_mm, depth_mm=cfg.roi_top_margin_mm
-    ))
+    shape = shape_cls(
+        ROIPlacementConfig(
+            width_mm=cfg.roi_width_mm,
+            height_mm=cfg.roi_height_mm,
+            depth_mm=cfg.roi_top_margin_mm,
+        )
+    )
 
     def place_once():
-        return shape.to_napari_verts_world(class_mask=class_mask, sy=sy, sx=sx, ty=ty, tx=tx)
+        return shape.to_napari_verts_world(
+            class_mask=class_mask, sy=sy, sx=sx, ty=ty, tx=tx
+        )
 
-    place_durations, verts = timed_repeats(place_once, cfg.warmup, cfg.repeats, "roi placement")
+    place_durations, verts = timed_repeats(
+        place_once, cfg.warmup, cfg.repeats, "roi placement"
+    )
 
     # Feature extraction measures the *unmixed* image (panel f is "Unmixed + ROI"): the
     # ROI is placed from US-space segmentation but the world-mm verts are rasterized onto
@@ -376,25 +468,43 @@ def bench_roi_and_features(
     # pipeline -- segmentation runs on ultrasound, ROI stats are read off the optoacoustic
     # data. compute_roi_stats only needs a napari-Image-shaped duck type
     # (.data/.scale/.translate/.metadata/.name), so no napari/Qt is spun up here.
-    unmixed_scale = scale_from_patato_obj(unmixed, tuple(optari_settings.general.PA_FALLBACK_SCALE))
-    unmixed_display = display_data_from_patato_obj(unmixed)  # (n_frames, n_channels, H, W)
+    unmixed_scale = scale_from_patato_obj(
+        unmixed, tuple(optari_settings.general.PA_FALLBACK_SCALE)
+    )
+    unmixed_display = display_data_from_patato_obj(
+        unmixed
+    )  # (n_frames, n_channels, H, W)
     layer_stub = SimpleNamespace(
         data=unmixed_display,
         scale=unmixed_scale,
         translate=(0.0,) * len(unmixed_scale),
-        metadata={"filepath": str(cfg.scan_path), "scan_name": cfg.scan_path.name},
+        metadata={
+            "filepath": str(cfg.scan_path),
+            "scan_name": cfg.scan_path.name,
+        },
         name="Unmixed (benchmark)",
     )
     record = ROIRecord(
-        roi_id=0, track_id=0, frame_id=0, verts=verts, kind=shape.shape_type, tissue_class=tissue_class
+        roi_id=0,
+        track_id=0,
+        frame_id=0,
+        verts=verts,
+        kind=shape.shape_type,
+        tissue_class=tissue_class,
     )
 
     def extract_once():
         return compute_roi_stats(
-            [record], layer_stub, frame_idx=0, channel_idx=cfg.channel_idx, feature_ids=cfg.feature_ids
+            [record],
+            layer_stub,
+            frame_idx=0,
+            channel_idx=cfg.channel_idx,
+            feature_ids=cfg.feature_ids,
         )
 
-    extract_durations, stats_df = timed_repeats(extract_once, cfg.warmup, cfg.repeats, "feature extraction")
+    extract_durations, stats_df = timed_repeats(
+        extract_once, cfg.warmup, cfg.repeats, "feature extraction"
+    )
 
     return place_durations, extract_durations, stats_df
 
@@ -417,7 +527,9 @@ def cpu_model() -> str:
                     if line.startswith("model name"):
                         return line.split(":", 1)[1].strip()
         if system == "Windows":
-            out = subprocess.check_output(["wmic", "cpu", "get", "name"], text=True)
+            out = subprocess.check_output(
+                ["wmic", "cpu", "get", "name"], text=True
+            )
             return out.splitlines()[1].strip()
     except (OSError, subprocess.CalledProcessError, IndexError):
         pass
@@ -428,7 +540,9 @@ def total_ram_gib() -> float | None:
     system = platform.system()
     try:
         if system == "Darwin":
-            raw = subprocess.check_output(["sysctl", "-n", "hw.memsize"], text=True).strip()
+            raw = subprocess.check_output(
+                ["sysctl", "-n", "hw.memsize"], text=True
+            ).strip()
             return round(int(raw) / 2**30, 1)
         if system == "Linux":
             page_size = os.sysconf("SC_PAGE_SIZE")
@@ -439,10 +553,14 @@ def total_ram_gib() -> float | None:
 
             class MemoryStatusEx(ctypes.Structure):
                 _fields_ = [
-                    ("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong),
-                    ("ullTotalPhys", ctypes.c_ulonglong), ("ullAvailPhys", ctypes.c_ulonglong),
-                    ("ullTotalPageFile", ctypes.c_ulonglong), ("ullAvailPageFile", ctypes.c_ulonglong),
-                    ("ullTotalVirtual", ctypes.c_ulonglong), ("ullAvailVirtual", ctypes.c_ulonglong),
+                    ("dwLength", ctypes.c_ulong),
+                    ("dwMemoryLoad", ctypes.c_ulong),
+                    ("ullTotalPhys", ctypes.c_ulonglong),
+                    ("ullAvailPhys", ctypes.c_ulonglong),
+                    ("ullTotalPageFile", ctypes.c_ulonglong),
+                    ("ullAvailPageFile", ctypes.c_ulonglong),
+                    ("ullTotalVirtual", ctypes.c_ulonglong),
+                    ("ullAvailVirtual", ctypes.c_ulonglong),
                     ("sullAvailExtendedVirtual", ctypes.c_ulonglong),
                 ]
 
@@ -459,20 +577,30 @@ def gpu_model() -> str | None:
     system = platform.system()
     try:
         if system == "Darwin":
-            out = subprocess.check_output(["system_profiler", "SPDisplaysDataType"], text=True)
+            out = subprocess.check_output(
+                ["system_profiler", "SPDisplaysDataType"], text=True
+            )
             for line in out.splitlines():
                 line = line.strip()
                 if line.startswith("Chipset Model:"):
                     return line.split(":", 1)[1].strip()
         elif system == "Linux":
             out = subprocess.check_output(
-                ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"], text=True
+                ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+                text=True,
             )
             lines = out.strip().splitlines()
             return lines[0] if lines else None
         elif system == "Windows":
-            out = subprocess.check_output(["wmic", "path", "win32_VideoController", "get", "name"], text=True)
-            lines = [l.strip() for l in out.splitlines() if l.strip() and l.strip() != "Name"]
+            out = subprocess.check_output(
+                ["wmic", "path", "win32_VideoController", "get", "name"],
+                text=True,
+            )
+            lines = [
+                l.strip()
+                for l in out.splitlines()
+                if l.strip() and l.strip() != "Name"
+            ]
             return lines[0] if lines else None
     except (OSError, subprocess.CalledProcessError, IndexError):
         return None
@@ -502,14 +630,20 @@ def gather_environment() -> dict:
 
 
 def scan_dimensions(pa_data, reconstruction, unmixed) -> dict:
-    dims: dict = {"raw_time_series_shape": tuple(int(x) for x in pa_data.shape)}
+    dims: dict = {
+        "raw_time_series_shape": tuple(int(x) for x in pa_data.shape)
+    }
     try:
         dims["wavelengths_nm"] = [int(w) for w in pa_data.get_wavelengths()]
     except Exception:
         logger.warning("could not read wavelengths from scan", exc_info=True)
         dims["wavelengths_nm"] = None
-    dims["reconstruction_image_shape"] = tuple(int(x) for x in np.asarray(reconstruction.da).shape)
-    dims["unmixed_image_shape"] = tuple(int(x) for x in np.asarray(unmixed.da).shape)
+    dims["reconstruction_image_shape"] = tuple(
+        int(x) for x in np.asarray(reconstruction.da).shape
+    )
+    dims["unmixed_image_shape"] = tuple(
+        int(x) for x in np.asarray(unmixed.da).shape
+    )
     return dims
 
 
@@ -523,7 +657,9 @@ def print_summary_table(steps: dict[str, dict]) -> None:
     print(f"\n{'step':<{name_w}}{'mean_s':>10}{'sd_s':>10}{'n':>5}")
     print("-" * (name_w + 25))
     for name, s in steps.items():
-        print(f"{name:<{name_w}}{s['mean_s']:>10.4f}{s['sd_s']:>10.4f}{s['n']:>5}")
+        print(
+            f"{name:<{name_w}}{s['mean_s']:>10.4f}{s['sd_s']:>10.4f}{s['n']:>5}"
+        )
     print()
 
 
@@ -534,16 +670,35 @@ def print_summary_table(steps: dict[str, dict]) -> None:
 
 def parse_args() -> Config:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--scan", required=True, type=Path, help="path to a scan (iThera folder or .hdf5 file)")
-    parser.add_argument("--label", default=None, help="tag appended to the output filename, e.g. 'laptop'")
+    parser.add_argument(
+        "--scan",
+        required=True,
+        type=Path,
+        help="path to a scan (iThera folder or .hdf5 file)",
+    )
+    parser.add_argument(
+        "--label",
+        default=None,
+        help="tag appended to the output filename, e.g. 'laptop'",
+    )
     parser.add_argument("--repeats", type=int, default=10)
     parser.add_argument("--warmup", type=int, default=3)
     parser.add_argument("--frame", type=int, default=0, dest="frame_idx")
     parser.add_argument("--channel", type=int, default=0, dest="channel_idx")
-    parser.add_argument("--reconstruction-preset", type=Path, default=Config.reconstruction_preset)
-    parser.add_argument("--unmixing-preset", type=Path, default=Config.unmixing_preset)
-    parser.add_argument("--segmentation-model", default=None, dest="segmentation_model_id")
-    parser.add_argument("--roi-shape", choices=list(_ROI_SHAPES), default="ellipse")
+    parser.add_argument(
+        "--reconstruction-preset",
+        type=Path,
+        default=Config.reconstruction_preset,
+    )
+    parser.add_argument(
+        "--unmixing-preset", type=Path, default=Config.unmixing_preset
+    )
+    parser.add_argument(
+        "--segmentation-model", default=None, dest="segmentation_model_id"
+    )
+    parser.add_argument(
+        "--roi-shape", choices=list(_ROI_SHAPES), default="ellipse"
+    )
     parser.add_argument("--roi-width-mm", type=float, default=10.0)
     parser.add_argument("--roi-height-mm", type=float, default=2.0)
     parser.add_argument("--roi-top-margin-mm", type=float, default=0.0)
@@ -578,17 +733,27 @@ def parse_args() -> Config:
 def main() -> None:
     cfg = parse_args()
     if cfg.warmup < 1:
-        raise ValueError("--warmup must be >= 1: JAX/ONNX first-call costs must be discarded")
+        raise ValueError(
+            "--warmup must be >= 1: JAX/ONNX first-call costs must be discarded"
+        )
 
     scan_kind = detect_scan_kind(cfg.scan_path)
     logger.info("scan kind: %s", scan_kind)
 
     load_durations, pa_data = bench_data_loading(cfg, scan_kind)
     try:
-        recon_durations, reconstruction, recon_build_s = bench_reconstruction(cfg, pa_data)
+        recon_durations, reconstruction, recon_build_s = bench_reconstruction(
+            cfg, pa_data
+        )
         unmix_durations, unmixed = bench_unmixing(cfg, pa_data, reconstruction)
         (
-            seg_durations, seg_result, seg_build_s, model_id, model_config, us_obj, ort_providers,
+            seg_durations,
+            seg_result,
+            seg_build_s,
+            model_id,
+            model_config,
+            us_obj,
+            ort_providers,
         ) = bench_segmentation(cfg, pa_data)
         place_durations, extract_durations, stats_df = bench_roi_and_features(
             cfg, us_obj, unmixed, seg_result, model_config
@@ -597,7 +762,9 @@ def main() -> None:
     finally:
         pa_data.close()
 
-    combined_roi_durations = [p + e for p, e in zip(place_durations, extract_durations)]
+    combined_roi_durations = [
+        p + e for p, e in zip(place_durations, extract_durations)
+    ]
 
     steps = {
         "data_loading": summarize(load_durations),
@@ -626,14 +793,15 @@ def main() -> None:
             "roi_width_mm": cfg.roi_width_mm,
             "roi_height_mm": cfg.roi_height_mm,
             "roi_top_margin_mm": cfg.roi_top_margin_mm,
-            "roi_tissue_class": cfg.roi_tissue_class or model_config.default_class,
+            "roi_tissue_class": cfg.roi_tissue_class
+            or model_config.default_class,
         },
         "model_loading": {
             "included_in_per_step_timings": False,
             "note": "Reconstruction-algorithm build and segmentation ONNX-session creation "
-                    "are one-time costs (weight/model load, DeepMB ONNX session if used) "
-                    "and are reported here separately, not folded into the per-step means "
-                    "above.",
+            "are one-time costs (weight/model load, DeepMB ONNX session if used) "
+            "and are reported here separately, not folded into the per-step means "
+            "above.",
             "reconstruction_algorithm_build_s": recon_build_s,
             "segmentation_session_build_s": seg_build_s,
         },
@@ -655,7 +823,9 @@ def main() -> None:
     print_summary_table(steps)
     total = output["total"]
     print(f"total (per scan): {total['mean_s']:.4f} +/- {total['sd_s']:.4f} s")
-    print(f"ONNX Runtime execution provider used for segmentation: {ort_providers}")
+    print(
+        f"ONNX Runtime execution provider used for segmentation: {ort_providers}"
+    )
     print(f"Reconstruction algorithm build (one-time): {recon_build_s:.3f} s")
     print(f"Segmentation session build (one-time): {seg_build_s:.3f} s")
 
