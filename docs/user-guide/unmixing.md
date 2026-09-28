@@ -1,10 +1,8 @@
 # Unmixing
 
-<!-- TODO screenshot: unmixing-dock.png — Unmixing dock with chromophores and derived SO2/THb layers -->
-
 OPTARI can unmix PA scans recorded at different wavelengths into chromophore concentration maps, using linear spectral unmixing. At each pixel, OPTARI (via PATATO) multiplies the multi-wavelength signal by the Moore-Penrose pseudoinverse of the selected chromophores' reference spectra and solves the mixing model by least squares.
 
-![Unmixing 1](../assets/screenshots/placeholders/ss_unmixing.png)
+![Unmixing 1](../assets/screenshots/ss_unmixing.png)
 
 **(1)** In the **Unmixing** dock, choose a **preset**, or select a wavelength range and chromophore set manually. Make sure a **PA reconstruction is selected** as the active layer in the **Layer List**.
 
@@ -24,7 +22,7 @@ OPTARI can unmix PA scans recorded at different wavelengths into chromophore con
 
 **(6)** Run unmixing. The resulting chromophore concentration maps (and SO₂/THb, if enabled) are added to the viewer as interactive PA layers, and can be used for analysis as well as exported.
 
-![Unmixing 2](../assets/screenshots/placeholders/ss_unmixing2.png)
+![Unmixing 2](../assets/screenshots/ss_unmixing2.png)
 
 Presets can be saved and reloaded so the same processing configuration is reproducible across scans and shareable
 with collaborators (see [Presets](../configuration/presets.md)). To save the current configuration as a preset, click the `Save Preset` button.

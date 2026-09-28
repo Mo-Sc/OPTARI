@@ -1,5 +1,8 @@
 # User Guide Overview
 
+!!! note "Screenshots"
+    The screenshots in this documentation are taken on OPTARI v0.7.3. The UI might differ for newer versions
+
 OPTARI's window is built from napari's dock system around a central image viewer. **Docks can be added or removed** by clicking `OPTARI` in the menu bar and selecting `Docks`.
 
 | Position | Docks |
@@ -13,10 +16,10 @@ In addition, there is an **Info** dock (showing metadata for the current scan/sl
 
 You can drag dock tabs to rearrange them, and napari remembers your layout between sessions.
 
-![UI Overview](../assets/screenshots/placeholders/ss_overview.png)
+![UI Overview](../assets/screenshots/ss_overview.png)
 
 
-Most buttons, checkboxes, and other controls have a tooltip. Hover over one for a quick explanation of what it does before clicking.
+Most buttons, checkboxes, and other controls have a **tooltip**. Hover over one for a quick explanation of what it does before clicking.
 
 ## Pages in this guide
 

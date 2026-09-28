@@ -43,7 +43,6 @@ The **Analysis Plots** (histograms, spectra, time analysis) can be exported into
 !!! tip
     To set the size and aspect ratio of the exported image, **undock the panel** using the button on the top left of the plot, left of the Refresh button. This allows you to freely resize the plot before exporting it. 
 
-<!-- TODO screenshot: undocked analysis plot, with right click menu open -->
 
 ## Viewer Export (PNG/TIFF/MP4)
 
@@ -60,4 +59,3 @@ Alternatively, the entire sequence of frames can be **exported into a `.mp4` vid
     To set a specific, **fixed contrast limit for the exported video** instead of auto-scaling, see
     [FAQ](faq.md#how-do-i-set-a-fixed-contrast-limit-instead-of-auto-scaling).
 
-<!-- TODO screenshot: export-viewer-dialog.png — viewer export dialog with contrast-limit and colorbar options -->

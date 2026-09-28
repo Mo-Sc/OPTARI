@@ -1,7 +1,5 @@
 # ROI Annotation
 
-<!-- TODO screenshot: roi-annotation-overview.png — ROI drawn on a PA/US overlay, with the Live Analysis table showing its statistics -->
-
 ## Drawing and editing ROIs
 
 ROIs are drawn on the ROIs layer, directly on top of the image, using napari's built-in shape tools. To interact with ROIs, **make sure the ROIs layer is selected**. ROIs can be placed either by using the buttons in the layer controls panel (hovering will show their functions), or by using keyboard shortcuts:
@@ -26,20 +24,17 @@ Each ROI shape is labelled with its `roi_id`, and optionally its track ID (`roi_
 
 OPTARI uses a dual-table system so you can get live information to place the ROI, but choose only selected ROIs for analysis:
 
+![ROI Annotation](../assets/screenshots/ss_roi.png)
+
 ### Live Analysis
 
 The entries in the Live Analysis table recompute automatically whenever you draw, move, resize, an ROI, or scroll to a different wavelength or chromophore. A ROI always belongs to a single frame (the one selected at ROI creation). To duplicate a ROI across multiple frames, you can either use copy paste on the selected ROI, or save the selected ROI to the [ROI Library](#roi-presets) and place it again on the next scan.
-
-![Live Analysis](../assets/screenshots/placeholders/ss_livetable.png)
 
 ### Saved Analysis
 
 The Saved Analysis table is used to collect ROI data for subsequent analysis. Press `Shift+Ctrl+S` (`Shift+Cmd+S`) or use the **Save ROI Data** button to add the current ROI measurements to the Saved Analysis table. The entries in this table are frozen, and persist for the entire runtime of the application. To delete an entry from the Saved Analysis table, select the row and press the **Delete ROI Data** button.
 
 Clicking the **Export XLSX** button will export the entries in the Saved Analysis table to a Microsoft Excel file that can be used for further analysis.
-
-![Saved Analysis](../assets/screenshots/placeholders/ss_savedtable.png)
-
 
 Sometimes it can be helpful to use the same ROI across multiple layers (i.e. reconstructions and unmixed), channels (i.e. multiple wavelengths or chromophores), or frames (if motion is low). This can be achieved by checking the **Include all layers/frames/channels** checkboxes in the **Annotation** tab in the right dock. If checked, instead of a single entry, the **Save ROI Data** button will add an entry for every layer/frame/channel in the selected scan to the Saved Table.
 
@@ -48,7 +43,6 @@ With **Include all frames** checked, a second choice appears below it, controlli
 - **Selected ROI** (default) — the ROI you selected, applied on every frame.
 - **Track ID** — if the selected ROI belongs to a tracked group (e.g. placed with a preset's `All Frames` scope), each frame is measured on that frame's own ROI record instead. A frame the track has no record on is skipped.
 
-<!-- TODO screenshot: roi-live-saved-tables.png — Live Analysis and Saved Analysis tables side by side -->
 
 ### Restoring a saved ROI to the Live view
 
@@ -80,8 +74,6 @@ computed:
 
 Setting values here automatically updates the entries in the Live Analysis table.
 
-![ROI Settings](../assets/screenshots/placeholders/ss_roisettings.png)
-
 ## ROI Presets
 
 To place the same ROI consistently across multiple frames, scans, or clinical studies, a ROI can be saved to the **ROI Presets** library. 
@@ -91,9 +83,6 @@ To place the same ROI consistently across multiple frames, scans, or clinical st
 - **Create a Preset:** Select a ROI shape in the viewer and click the **Save Preset** button. A popup will ask you for a ROI name, and optional description and tissue class attributes.
 
 The ROI Presets library is constantly synced with [`.json` files](../configuration/presets.md#roi-presets-presetsroi). This file can be used to share ROI shapes across computers or institutions.
-
-![ROI Library](../assets/screenshots/placeholders/ss_roilib.png)
-
 
 !!! note
     When a ROI preset is applied across multiple frames using the Scope `All Frames` setting, these ROIs belong to the same track. When adding one of these ROIs to the Saved Analysis table with `Include all frames` checked and `Track ID` selected, they will all be saved on the record they actually have on each frame, **even if they were moved or modified**. That same track can then be plotted in [Time Analysis](temporal-and-spectral-analysis.md#time-analysis) with Scope set to `Track ID`, measuring each frame on its own record instead of a single fixed one.
@@ -107,4 +96,3 @@ However, if it is set to `automatic`, OPTARI will try to automatically place the
 With Scope set to `All Frames`, `automatic` placement re-anchors independently on **each frame's own segmentation mask** rather than copying the first frame's position everywhere: a frame the tissue class isn't present on is skipped.
 
 
-<!-- TODO screenshot: roi-library.png — ROI Library / presets panel -->

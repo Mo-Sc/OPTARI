@@ -3,7 +3,13 @@
 Most OPTARI settings can be changed from inside the app. Open **OPTARI → Settings…** in the menu bar.
 Any dock can be shown or hidden from **OPTARI → Docks**.
 
-<!-- TODO screenshot: settings-dialog.png — Settings dialog with the General tab active -->
+<div class="grid" markdown>
+
+![Settings – ROI Table](../assets/screenshots/ss_settings_roi.png)
+
+![Settings – Viewer](../assets/screenshots/ss_settings_viewer.png)
+
+</div>
 
 | Tab | Available Settings |
 |---|---|

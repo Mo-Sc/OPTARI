@@ -28,8 +28,7 @@ class _NapariNotificationHandler(logging.Handler):
         self.log_file = log_file
 
     def emit(self, record: logging.LogRecord) -> None:
-        # notifications create Qt widgets, which only the main thread may do; worker records
-        # still reach the console and the log file
+        # notifications create Qt widgets, which only the main thread may do
         if threading.current_thread() is not threading.main_thread():
             return
         try:

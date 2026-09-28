@@ -14,7 +14,7 @@ clinical studies without scripting. Scans are read from iThera `.msot`, PATATO H
 
 **Full documentation, inlcuding instructions, sample workflows, and API references: [mo-sc.github.io/OPTARI](https://mo-sc.github.io/OPTARI/)**.
 
-![Demo Layers](docs/assets/screenshots/placeholders/ss_home.png)
+![Demo Layers](docs/assets/optari_startup.png)
 
 
 ## Key features

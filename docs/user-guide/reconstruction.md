@@ -1,6 +1,6 @@
 # Reconstruction
 
-<!-- TODO screenshot: reconstruction-dock.png — Reconstruction dock with a preset selected -->
+![Reconstruction](../assets/screenshots/ss_reconstruction.png)
 
 OPTARI includes a number of algorithms to reconstruct raw PA time series into 2D images:
 

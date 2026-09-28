@@ -1,15 +1,9 @@
 # OPTARI
 
-!!! note "Updated screenshots coming soon"
-    The screenshots in this documentation are preliminary figures
-    from previous versions and dont show the most recent version of OPTARIs UI or features.
-    Updated screenshots will be added soon.
-
-
 **OPT**oacoustic imaging toolkit based on nap**ARI**: an open-source desktop application for analyzing
 clinical photoacoustic/optoacoustic (OA) and ultrasound (US) studies.
 
-![Demo Layers](assets/screenshots/placeholders/ss_home.png)
+![Demo Layers](assets/optari_startup.png)
 
 OPTARI is an attempt to close the gap between engineering frameworks and clinical research in PA imaging. It combines a custom version of [PATATO](https://github.com/BohndiekLab/patato)
 for data I/O and processing with [napari](https://napari.org) for multi-layer image

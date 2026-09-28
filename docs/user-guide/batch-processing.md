@@ -5,7 +5,7 @@ Batch mode applies one saved analysis to a whole dataset without supervision. Th
 Open it from the menu bar: **OPTARI → Batch Processing…**
 
 
-![Batch Mode](../assets/screenshots/placeholders/ss_batchmode.png)
+![Batch Mode](../assets/screenshots/ss_batchmode.png)
 
 
 ## Before you start
