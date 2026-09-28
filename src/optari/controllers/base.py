@@ -1,6 +1,9 @@
 """Base class for task-specific controllers."""
 
+from __future__ import annotations
+
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -9,6 +12,9 @@ from napari.layers import Image
 from optari.config import settings
 from optari.patato_bridge import scale_from_patato_obj
 from optari.utils.tasks import download_then, start_task
+
+if TYPE_CHECKING:
+    from optari.controllers.optari_controller import OptariController
 
 
 class TaskControllerBase:
@@ -32,7 +38,7 @@ class TaskControllerBase:
 
     image_units = ("dimensionless", "dimensionless", "mm", "mm")
 
-    def __init__(self, parent_controller):
+    def __init__(self, parent_controller: OptariController):
         """Initialize with reference to parent controller.
 
         Args:

@@ -84,6 +84,7 @@ class RoiGeometry:
     source: str = OPTARI_SOURCE_TAG
 
     def __post_init__(self) -> None:
+        """Coerce *verts_m* to an (N, 2) array and the other fields to their types. Rejects an empty geometry."""
         self.verts_m = np.asarray(self.verts_m, dtype=float).reshape(-1, 2)
         if self.verts_m.size == 0:
             raise ValueError("ROI geometry must contain vertices")
@@ -120,7 +121,7 @@ class RoiGeometry:
         fov_y_m: float,
         roi_group_uid: str = "",
     ) -> ROIRecord:
-        """Rebuild a record; an empty *roi_group_uid* mints a new group identity."""
+        """Rebuild a record. An empty *roi_group_uid* mints a new group identity."""
         return ROIRecord(
             roi_id=roi_id,
             track_id=track_id,
@@ -147,6 +148,7 @@ class RoiGeometry:
         )
 
     def to_dict(self) -> dict:
+        """Serialize to a plain dict of JSON-safe values."""
         return {
             "verts_m": self.verts_m.round(9).tolist(),
             "kind": self.kind,
@@ -156,6 +158,7 @@ class RoiGeometry:
 
     @classmethod
     def from_dict(cls, data: dict) -> "RoiGeometry":
+        """Rebuild from :meth:`to_dict`'s output, defaulting any missing key."""
         return cls(
             verts_m=data.get("verts_m", []),
             kind=data.get("kind", "polygon"),
@@ -164,8 +167,10 @@ class RoiGeometry:
         )
 
     def to_json(self) -> str:
+        """Serialize to the JSON blob stored in the ``roi_geometry`` table column."""
         return json.dumps(self.to_dict())
 
     @classmethod
     def from_json(cls, text: str) -> "RoiGeometry":
+        """Inverse of :meth:`to_json`."""
         return cls.from_dict(json.loads(text))

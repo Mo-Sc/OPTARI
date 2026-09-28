@@ -1,3 +1,6 @@
+"""Segmentation controller: the ONNX model registry, running inference, the segmentation
+Labels layer, and automatic ROI-from-mask placement."""
+
 from __future__ import annotations
 
 import logging
@@ -92,10 +95,12 @@ class SegmentParams:
 
     @property
     def frame_mode(self) -> str:
+        """Whether the run covers the current frame or all frames."""
         return "current" if self.current_frame_id is not None else "all"
 
     @property
     def n_channels(self) -> int:
+        """Number of channels in the source US layer."""
         return int(self.us_shape[1])
 
     @classmethod
@@ -142,6 +147,7 @@ class SegmentationController(TaskControllerBase):
     """
 
     def __init__(self, parent_controller):
+        """Load the model registry and initialize segmentation state."""
         super().__init__(parent_controller)
         self._segmentation_model_registry = load_model_registry()
         default_model_id = settings.segmentation.default_model
@@ -272,9 +278,11 @@ class SegmentationController(TaskControllerBase):
 
     @property
     def active_segmentation_model_id(self) -> str:
+        """ID of the currently selected segmentation model."""
         return self._active_segmentation_model_id
 
     def set_active_segmentation_model(self, model_id: str) -> None:
+        """Set the active model. Raises ValueError if *model_id* is not in the registry."""
         if model_id not in self._segmentation_model_registry:
             raise ValueError(f"Unknown segmentation model: {model_id}")
         self._active_segmentation_model_id = model_id
@@ -292,6 +300,7 @@ class SegmentationController(TaskControllerBase):
         )
 
     def selected_segmentation_class_ids(self) -> set[int]:
+        """Return the class IDs checked in the segmentation classes list."""
         seg_dock = self.optari_controller.segmentation
         if seg_dock is None:
             return set()
@@ -365,6 +374,7 @@ class SegmentationController(TaskControllerBase):
         self._populate_roi_class_combo(mask, class_names)
 
     def on_segmentation_model_changed(self) -> None:
+        """Apply the model picked in the combo and repopulate the class list."""
         if self.optari_controller.segmentation is None:
             return
 
@@ -383,6 +393,11 @@ class SegmentationController(TaskControllerBase):
     def populate_segmentation_controls(
         self, selected_class_ids: set[int] | None = None
     ) -> None:
+        """Rebuild the classes list for the active model.
+
+        Checks *selected_class_ids* if given, otherwise falls back to the model's
+        own default class.
+        """
         seg_dock = self.optari_controller.segmentation
         default_class = self._active_segmentation_model_config().default_class
         seg_dock.segmentation_classes_list.clear()
@@ -471,6 +486,7 @@ class SegmentationController(TaskControllerBase):
             raise ValueError(f"{label} must be a number.") from exc
 
     def on_save_preset_clicked(self) -> None:
+        """Save the current segmentation and ROI settings as a new user preset."""
         dock = self.optari_controller.segmentation
         selected_class_ids = sorted(self.selected_segmentation_class_ids())
         if not selected_class_ids:
@@ -515,6 +531,7 @@ class SegmentationController(TaskControllerBase):
         dock.status_label.setText(f"Saved preset: {preset_path.name}")
 
     def on_remove_preset_clicked(self) -> None:
+        """Remove the selected segmentation preset."""
         dock = self.optari_controller.segmentation
         preset_path = dock.preset_combo.currentData()
         if preset_path is None:
@@ -542,6 +559,7 @@ class SegmentationController(TaskControllerBase):
 
 
     def set_all_segmentation_classes_checked(self, checked: bool) -> None:
+        """Check or uncheck every entry in the segmentation classes list."""
         seg_dock = self.optari_controller.segmentation
         if seg_dock is None:
             return
@@ -555,9 +573,11 @@ class SegmentationController(TaskControllerBase):
                 item.setCheckState(check_state)
 
     def on_segmentation_select_all_classes_clicked(self) -> None:
+        """Check all segmentation classes."""
         self.set_all_segmentation_classes_checked(checked=True)
 
     def on_segmentation_clear_classes_clicked(self) -> None:
+        """Uncheck all segmentation classes."""
         self.set_all_segmentation_classes_checked(checked=False)
 
     def on_generate_roi_from_mask_clicked(self) -> None:
@@ -647,6 +667,7 @@ class SegmentationController(TaskControllerBase):
         return get_user_models_dir() / self._segmentation_model_registry[model_id].filename
 
     def weights_to_fetch(self, params: SegmentParams) -> tuple[Path, str | None]:
+        """Local path and download URL for the model *params* requires."""
         return (
             self.model_weights_path(params.model_id),
             self._segmentation_model_registry[params.model_id].url,
@@ -740,5 +761,6 @@ class SegmentationController(TaskControllerBase):
         self._pending_roi_class_id = None
 
     def on_generate_tissue_segmentation_clicked(self) -> None:
+        """Run segmentation from the dock's Run button."""
         if self.optari_controller.segmentation is not None:
             self.run_from_ui(self.optari_controller.segmentation)

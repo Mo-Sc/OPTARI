@@ -19,7 +19,7 @@ clinical studies without scripting. Scans are read from iThera `.msot`, PATATO H
 
 ## Key features
 
-- Visualize co-registered US + PA scans from different optoacoustic scanners
+- Visualize co-registered US + OA scans from different optoacoustic scanners
 - Browse multi-subject, multi-scan studies with fast switching and scrolling through frames/wavelengths.
 - Draw, edit, and save ROIs, reuse them via a shareable ROI Library.
 - Extract ROI intensities, plot ROI intensities over time and wavelength.

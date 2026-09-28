@@ -1,9 +1,12 @@
+"""Scan and study discovery, and loading a scan into the viewer."""
+
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
 from pathlib import Path
 import re
+from typing import TYPE_CHECKING
 
 import numpy as np
 import patato as pat
@@ -31,6 +34,9 @@ from optari.controllers.viewer_export_controller import ViewerExportController
 
 from optari.config import settings
 
+if TYPE_CHECKING:
+    from optari.controllers.optari_controller import OptariController
+
 logger = logging.getLogger(__name__)
 
 
@@ -44,7 +50,12 @@ class ScanInfo:
 class ScanController(TaskControllerBase):
     """Scan/session lifecycle and data-loading helpers for OPTARI."""
 
-    def __init__(self, parent_controller):
+    def __init__(self, parent_controller: OptariController):
+        """Initialize with reference to parent controller.
+
+        Args:
+            parent_controller: OptariController instance with viewer and session state.
+        """
         super().__init__(parent_controller)
 
     def bind_events(self) -> None:
@@ -152,6 +163,7 @@ class ScanController(TaskControllerBase):
             load_startup_logo(self.viewer)
 
     def init_path(self, path: Path) -> None:
+        """Initialize the scan browser from a startup path, whether it's a folder or a scan file."""
         if path.is_dir():
             self.set_scan_folder(path)
             return
@@ -165,6 +177,7 @@ class ScanController(TaskControllerBase):
             self.optari_controller.scan_browser.set_folder(path)
 
     def on_browse_folder_clicked(self) -> None:
+        """Prompt for a folder or scan file via a native dialog, and load the selection."""
         # start_path = str(
         #     self.optari_controller.path
         #     if self.optari_controller.path.exists()
@@ -203,12 +216,14 @@ class ScanController(TaskControllerBase):
                 self.load_scan(target)
 
     def on_scan_selected(self, row: int) -> None:
+        """Load the scan at *row* in the scan list, ignoring an out-of-range selection."""
         scan_paths = list(self.optari_controller._scans.keys())
         if row < 0 or row >= len(scan_paths):
             return
         self.load_scan(scan_paths[row])
 
     def set_scan_folder(self, folder: Path) -> None:
+        """Discover scans in *folder*, populate the scan browser, and load the first scan if any."""
         folder = Path(folder)
         self.optari_controller.study_path = folder
 
@@ -235,7 +250,7 @@ class ScanController(TaskControllerBase):
         """Open *scan_path* and build its layers. False if the scan could not be loaded.
 
         Failures fall back to the startup logo rather than raising, which is what the
-        GUI wants; the return value is what lets an unattended caller (batch mode) tell
+        GUI wants. The return value is what lets an unattended caller (batch mode) tell
         a loaded scan from an empty viewer.
         """
         logger.info("loading scan: %s", scan_path)
@@ -379,12 +394,14 @@ class ScanController(TaskControllerBase):
 
     @staticmethod
     def scan_key(scan_path: Path) -> str:
+        """Return the ``Scan_<n>`` prefix of *scan_path*'s name, or the full name if it doesn't match."""
         name = scan_path.stem if scan_path.is_file() else scan_path.name
         m = re.match(r"^(Scan_\d+)", name)
         return m.group(1) if m else name
 
     @staticmethod
     def scan_sort_key(scan_path: Path):
+        """Sort key that orders ``Scan_<n>`` names numerically, ahead of any other name sorted alphabetically."""
         key = ScanController.scan_key(scan_path)
         m = re.match(r"^Scan_(\d+)$", key)
         if m:
@@ -462,6 +479,7 @@ class ScanController(TaskControllerBase):
         studies: dict[Path, dict[Path, ScanInfo]] = {}
 
         def walk(folder: Path, depth: int) -> None:
+            """Recurse into *folder* up to *max_depth*, stopping at the first folder that holds a scan."""
             scans = ScanController.discover_scans(folder)
             if scans:
                 studies[folder] = scans
@@ -487,6 +505,11 @@ class ScanController(TaskControllerBase):
 
     @staticmethod
     def discover_scans(folder: Path) -> dict[Path, ScanInfo]:
+        """Find every scan directly under *folder*, keyed by path and deduplicated by ``scan_key``.
+
+        When both an HDF5 file and an iThera folder resolve to the same key, the HDF5
+        one wins.
+        """
         # One entry per scan key; if both exist, prefer HDF5 over iThera folder.
         by_key: dict[str, tuple[Path, str, str | None]] = {}
 
@@ -589,6 +612,7 @@ class ScanController(TaskControllerBase):
         return export_scan_to_hdf5(self.optari_controller, destination)
 
     def on_hdf5_export_clicked(self, event=None) -> None:
+        """Prompt for a destination and export the current scan to HDF5."""
         destination = self._choose_export_path()
         if destination is None:
             return
@@ -597,6 +621,7 @@ class ScanController(TaskControllerBase):
             show_info(f"Exported scan to {destination.name}")
 
     def on_ipasc_export_clicked(self, event=None) -> None:
+        """Prompt for a destination and export the current scan's raw time series as IPASC."""
         destination = self._choose_export_path(
             title="Export raw time series as IPASC", suffix="_ipasc"
         )

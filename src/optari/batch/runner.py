@@ -17,9 +17,11 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+from collections.abc import Callable
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from napari.layers import Image
 from qtpy.QtCore import QTimer
@@ -34,6 +36,9 @@ from optari.io.utils import save_viewer_screenshot
 from optari.roi.roi_table import SavedRoiTable
 from optari.utils.logging import run_log_file
 from optari.utils.tasks import BackgroundStep, run_background_task
+
+if TYPE_CHECKING:
+    from optari.controllers.optari_controller import OptariController
 
 logger = logging.getLogger(__name__)
 
@@ -74,12 +79,20 @@ class BatchRunner:
 
     def __init__(
         self,
-        controller,
+        controller: OptariController,
         plan: BatchPlan,
         *,
-        on_progress=None,
-        on_finished=None,
+        on_progress: Callable[[BatchJob, str], None] | None = None,
+        on_finished: Callable[[], None] | None = None,
     ) -> None:
+        """Set up the report, ROI table writer, and progress callbacks for *plan*.
+
+        Args:
+            controller: OptariController driving the viewer this run operates on.
+            plan: Resolved plan to execute.
+            on_progress: optional callback(job, status), called as each scan starts and ends.
+            on_finished: optional callback(), called once the whole run has finished.
+        """
         self.controller = controller
         self.viewer = controller.viewer
         self.plan = plan
@@ -96,6 +109,7 @@ class BatchRunner:
 
     # ============ driving ============
     def start(self) -> None:
+        """Open the run's log file, seed the controller's scan map, and begin the plan."""
         stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         log_path = self.plan.output_dir / f"batch_{stamp}.log"
         self._resources.enter_context(run_log_file(log_path))
@@ -113,6 +127,7 @@ class BatchRunner:
         self._advance(("ok", None))
 
     def cancel(self) -> None:
+        """Stop the run after the current step, and ask a running background worker to quit early."""
         self._cancel_requested = True
         if self._worker is not None:
             self._worker.quit()

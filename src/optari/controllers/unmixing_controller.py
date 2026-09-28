@@ -1,3 +1,5 @@
+"""Unmixing controller: presets and running PATATO's spectral unmixing (+ THb/sO2)."""
+
 from __future__ import annotations
 
 import logging
@@ -97,10 +99,12 @@ class UnmixParams:
 
     @property
     def frame_mode(self) -> str:
+        """Whether the run covers the current frame or all frames."""
         return "current" if self.current_frame_id is not None else "all"
 
     @property
     def name_stem(self) -> str:
+        """Base name for output layers, derived from the source recon layer, suffix and frame."""
         source_name = self.source_layer_name.replace("Recon: ", "")
         suffix_part = f"_{self.suffix}" if self.suffix else ""
         # Encode the acquisition-frame index when only a single frame is unmixed.
@@ -111,6 +115,7 @@ class UnmixParams:
 
     @property
     def settings(self) -> dict:
+        """Settings dict stored as metadata on output layers, e.g. for presets and export."""
         return {
             "wavelengths": self.wavelengths,
             "chromophores": self.chromophores,
@@ -257,6 +262,7 @@ class UnmixingController(TaskControllerBase):
     """Run spectral unmixing and add as layers."""
 
     def __init__(self, parent_controller):
+        """Initialize the unmixing preset store."""
         super().__init__(parent_controller)
         self.preset_store = PresetStore(get_user_unmixing_presets_dir())
 
@@ -376,6 +382,7 @@ class UnmixingController(TaskControllerBase):
         self.on_preset_changed()
 
     def on_remove_preset_clicked(self) -> None:
+        """Remove the selected unmixing preset."""
         if self.optari_controller.unmixing is None:
             return
 
@@ -712,5 +719,6 @@ class UnmixingController(TaskControllerBase):
         return ", ".join(names)
 
     def on_run_unmixing_clicked(self) -> None:
+        """Run unmixing from the dock's Run button."""
         if self.optari_controller.unmixing is not None:
             self.run_from_ui(self.optari_controller.unmixing)

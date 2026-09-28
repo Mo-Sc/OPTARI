@@ -146,7 +146,7 @@ A layer-name **prefix** picking the one reconstruction the run analyses. One bat
 | Value | Meaning |
 | --- | --- |
 | `null` with a `reconstruction` step | The reconstruction this plan just produced. |
-| `null` with no `reconstruction` step | The scan's default PA layer (see `DEFAULT_PA_LAYER`). Flagged as a warning, since it is implicit. |
+| `null` with no `reconstruction` step | The scan's default OA layer (see `DEFAULT_PA_LAYER`). Flagged as a warning, since it is implicit. |
 | `"Recon: iThera"` | The layer whose name starts with this. A scan without one fails and the run continues. |
 
 ### `frame`
@@ -164,7 +164,7 @@ How wide the measurement reaches. Mirrors the **Include all …** boxes in the A
 
 | Key | Values | Meaning |
 | --- | --- | --- |
-| `layers` | `"analysis"` (default), `"all_pa"` | `analysis` measures the `source` reconstruction plus what this run unmixed from it. `all_pa` measures every PA layer in the scan, including reconstructions the plan did not make. |
+| `layers` | `"analysis"` (default), `"all_pa"` | `analysis` measures the `source` reconstruction plus what this run unmixed from it. `all_pa` measures every OA layer in the scan, including reconstructions the plan did not make. |
 | `all_channels` | `true` (default), `false` | Every channel, or just the default one. |
 | `all_frames` | `false` (default), `true` | Every frame, overriding `frame` above. Reconstruction, segmentation and measurement all run over every frame instead of just the anchor frame. The ROI is placed on each frame (re-anchored per frame for `auto` placement) and measured there. `frame` still picks the overlay/report anchor. |
 

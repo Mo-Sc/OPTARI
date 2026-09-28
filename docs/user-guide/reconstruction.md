@@ -2,7 +2,7 @@
 
 ![Reconstruction](../assets/screenshots/ss_reconstruction.png)
 
-OPTARI includes a number of algorithms to reconstruct raw PA time series into 2D images:
+OPTARI includes a number of algorithms to reconstruct raw OA time series into 2D images:
 
 A simple, but fast **backprojection algorithm** (delay and sum) is provided via the PATATO framework, as well as an experimental **model-based** reconstruction. We also implemented an adapter for the **DeepMB** reconstruction algorithm, a deep-learning model trained on clinical iThera Acuity data that reaches near-identical quality to iterative model-based reconstruction, at a fraction of the runtime.
 DeepMB requires a pretrained model, which does not come with OPTARI by default, but might be provided by the authors upon reasonable request.
@@ -18,7 +18,7 @@ To create a new reconstruction, raw time series data must be available — eithe
 **(2)** Adjust the **speed of sound** if needed.
 
 !!! warning
-      This will only change the speed of sound for the new PA reconstruction, not for the other layers in the scan. A wrong speed of sound can misalign the new layer with respect to the other images in the scan, like the US layer.
+      This will only change the speed of sound for the new OA reconstruction, not for the other layers in the scan. A wrong speed of sound can misalign the new layer with respect to the other images in the scan, like the US layer.
 
 **(3)** Optional: add a **Layer Suffix**. This adds a custom string at the end of the default name that is given to the newly created reconstruction layer.
 
@@ -27,7 +27,7 @@ To create a new reconstruction, raw time series data must be available — eithe
 !!! warning
       Reconstructing all frames can take some time, depending on the algorithm, image size, and number of frames and wavelengths.
 
-**(5)** Run reconstruction. The resulting reconstructed images are added to the viewer as interactive PA layers, and can be used for analysis as well as exported.
+**(5)** Run reconstruction. The resulting reconstructed images are added to the viewer as interactive OA layers, and can be used for analysis as well as exported.
 
 !!! note
       Reconstruction runs in the background and can be interrupted via the Cancel button. The viewer stays fully interactive while it runs, but only one reconstruction, unmixing, or segmentation task can run at a time.

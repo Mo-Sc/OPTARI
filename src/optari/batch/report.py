@@ -43,6 +43,8 @@ REPORT_COLUMNS = [
 
 @dataclass
 class _Entry:
+    """One scan's row in the report: identity, outcome, output paths, and timings."""
+
     study: str
     scan: str
     scan_name: str
@@ -78,15 +80,23 @@ class BatchReport:
     """What happened to every scan in a run, mirrored to *destination* as it goes."""
 
     def __init__(self, destination: Path | None = None, plan_source: dict | None = None):
+        """Track scan outcomes, mirroring the report to *destination* after each update.
+
+        Args:
+            destination: Path to write batch_report.xlsx to, or None to keep the report in memory only.
+            plan_source: The batch preset this run came from, recorded in the report's provenance sheet.
+        """
         self._entries: dict[str, _Entry] = {}
         self._destination = destination
         self._plan_source = plan_source or {}
 
     def __len__(self) -> int:
+        """Number of scans recorded so far, regardless of outcome."""
         return len(self._entries)
 
     @property
     def rows(self) -> pd.DataFrame:
+        """All recorded scans as a DataFrame, in REPORT_COLUMNS order."""
         frame = pd.DataFrame([e.as_row() for e in self._entries.values()])
         return frame.reindex(columns=REPORT_COLUMNS) if not frame.empty else pd.DataFrame(
             columns=REPORT_COLUMNS
@@ -101,10 +111,12 @@ class BatchReport:
 
     @property
     def failures(self) -> list[_Entry]:
+        """Entries for scans that ended with status "failed"."""
         return [e for e in self._entries.values() if e.status == "failed"]
 
     # ============ recording ============
     def start(self, job) -> None:
+        """Begin tracking *job*, recording its start time, and mirror the report to disk."""
         self._entries[job.key] = _Entry(
             study=job.study_path.name,
             scan=job.scan_path.name,
@@ -126,15 +138,19 @@ class BatchReport:
             setattr(entry, key, value)
 
     def succeed(self, job) -> None:
+        """Mark *job* as completed successfully."""
         self._finish(job, "ok")
 
     def fail(self, job, message: str, step: str = "") -> None:
+        """Mark *job* as failed, recording the reason and which step it failed on."""
         self._finish(job, "failed", message=message, failed_step=step)
 
     def skip(self, job, message: str = "") -> None:
+        """Mark *job* as skipped without being attempted."""
         self._finish(job, "skipped", message=message)
 
     def cancel(self, job) -> None:
+        """Mark *job* as cancelled by the user."""
         self._finish(job, "cancelled")
 
     def _finish(self, job, status: str, *, message: str = "", failed_step: str = "") -> None:

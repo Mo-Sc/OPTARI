@@ -1,3 +1,10 @@
+"""Segmentation model adapters.
+
+ModelAdapterBase is the extension point for a new segmentation model: a subclass
+implements preprocess(), infer() and postprocess() for its own model format, and the
+model registry references it by class name in adapter_class.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -79,6 +86,7 @@ class ModelAdapterBase(ABC):
     """
 
     def __init__(self, model_config: SegmentationModelConfig) -> None:
+        """Store the model config and its class id -> name mapping."""
         self.model_config = model_config
         self.class_names = model_config.class_names
 
@@ -86,15 +94,26 @@ class ModelAdapterBase(ABC):
     def preprocess(
         self, frame_2d: np.ndarray
     ) -> tuple[np.ndarray, tuple[int, int]]:
+        """Prepare a single 2D grayscale frame for infer().
+
+        Implementations resize and normalize the frame to the model's expected
+        input shape.
+        """
         raise NotImplementedError
 
     @abstractmethod
     def infer(self, frame_2d: np.ndarray) -> np.ndarray:
+        """Run the model on a preprocessed frame and return the raw predicted mask."""
         raise NotImplementedError
 
     @abstractmethod
     def postprocess(
         self, mask_2d: np.ndarray)-> np.ndarray:
+        """Turn the raw predicted mask into the final class id map for the original frame.
+
+        Implementations resize the mask back to the original frame shape and clean
+        up the class predictions.
+        """
         raise NotImplementedError
 
     def predict(
@@ -103,8 +122,10 @@ class ModelAdapterBase(ABC):
         on_frame_complete: Callable[[int], None] | None = None,
     ) -> list[SegmentationResult]:
         """Segment a batch of frames.
-        on_frame_complete: optional callback to report progress
-        us_data: (nframes, H, W) — use us_data[np.newaxis] for a single frame.
+
+        Args:
+            frames: (nframes, H, W), use frames[np.newaxis] for a single frame.
+            on_frame_complete: optional callback to report progress.
         """
         results = []
         for frame_2d in frames:
@@ -135,6 +156,11 @@ class UKErUSSegAdapter(ModelAdapterBase):
     """
 
     def __init__(self, model_config: SegmentationModelConfig) -> None:
+        """Load the ONNX model weights and open an inference session.
+
+        Raises:
+            FileNotFoundError: The model weights have not been downloaded yet.
+        """
         super().__init__(model_config)
 
 
@@ -161,7 +187,7 @@ class UKErUSSegAdapter(ModelAdapterBase):
     def preprocess(
         self, frame_2d: np.ndarray
     ) -> tuple[np.ndarray, tuple[int, int]]:
-        
+        """Resize the frame to the model's input shape and apply z-score normalization."""
         self.frame_orig_shape = frame_2d.shape
 
         # resize to model input shape
@@ -175,6 +201,7 @@ class UKErUSSegAdapter(ModelAdapterBase):
         return frame_2d
 
     def infer(self, frame_2d: np.ndarray) -> np.ndarray:
+        """Run the ONNX session on the frame and return the per-pixel class id map."""
         # add leading dim and run inference
         frame_tensor = np.expand_dims(frame_2d, axis=(0, 1))
         outputs = self.session.run(

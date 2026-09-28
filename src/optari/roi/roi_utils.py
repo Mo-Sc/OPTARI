@@ -1,3 +1,11 @@
+"""Functions that measure ROIs against reconstructed image data.
+
+``iter_roi_masks`` turns world-space ROIs into pixel indices, ``IntensityClamp``
+filters outlier values before a statistic is computed, and ``compute_roi_stats``
+builds an ``ROIContext`` per ROI and evaluates the requested ``FEATURE_REGISTRY``
+entries.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -238,6 +246,7 @@ class _LayerInfo:
 
     @classmethod
     def resolve(cls, layer, channel_idx: int, image_shape) -> "_LayerInfo":
+        """Resolve *layer*'s per-call constants once, from its metadata and scale."""
         filepath = str(layer.metadata.get("filepath", "") or "")
         sy, sx = _scale_sy_sx(layer)
         fov_x_m, fov_y_m = layer_fov_m(layer, image_shape)
@@ -321,6 +330,7 @@ class IntensityClamp:
     mode: str = "clip"
 
     def apply(self, values: np.ndarray) -> np.ndarray:
+        """Apply the clip or exclude policy to *values*."""
         if values.size == 0 or (self.minimum is None and self.maximum is None):
             return values
 
@@ -565,6 +575,7 @@ def compute_roi_track_time_series(
         return np.asarray(x, dtype=float), {}
 
     def record_and_mask_at(frame_idx: int) -> tuple[ROIRecord, np.ndarray] | None:
+        """Track ID's resolver: *frame_idx*'s own tracked record and mask, or None if the track has none there."""
         record = records_by_frame.get(frame_idx)
         if record is None:
             return None

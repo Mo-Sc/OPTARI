@@ -1,10 +1,10 @@
 # Unmixing
 
-OPTARI can unmix PA scans recorded at different wavelengths into chromophore concentration maps, using linear spectral unmixing. At each pixel, OPTARI (via PATATO) multiplies the multi-wavelength signal by the Moore-Penrose pseudoinverse of the selected chromophores' reference spectra and solves the mixing model by least squares.
+OPTARI can unmix OA scans recorded at different wavelengths into chromophore concentration maps, using linear spectral unmixing. At each pixel, OPTARI (via PATATO) multiplies the multi-wavelength signal by the Moore-Penrose pseudoinverse of the selected chromophores' reference spectra and solves the mixing model by least squares.
 
 ![Unmixing 1](../assets/screenshots/ss_unmixing.png)
 
-**(1)** In the **Unmixing** dock, choose a **preset**, or select a wavelength range and chromophore set manually. Make sure a **PA reconstruction is selected** as the active layer in the **Layer List**.
+**(1)** In the **Unmixing** dock, choose a **preset**, or select a wavelength range and chromophore set manually. Make sure an **OA reconstruction is selected** as the active layer in the **Layer List**.
 
 !!! note
       Reference spectra are available for water, oxygenated (HbO2) and deoxygenated hemoglobin (Hb), indocyanine green (ICG), lipid, and melanin.
@@ -20,7 +20,7 @@ OPTARI can unmix PA scans recorded at different wavelengths into chromophore con
 
 **(5)** Choose the **frame scope**. `Selected Frame` will only unmix the frame currently displayed in the viewer, `All Frames` will unmix all the available frames in the underlying reconstruction.
 
-**(6)** Run unmixing. The resulting chromophore concentration maps (and SO₂/THb, if enabled) are added to the viewer as interactive PA layers, and can be used for analysis as well as exported.
+**(6)** Run unmixing. The resulting chromophore concentration maps (and SO₂/THb, if enabled) are added to the viewer as interactive OA layers, and can be used for analysis as well as exported.
 
 ![Unmixing 2](../assets/screenshots/ss_unmixing2.png)
 

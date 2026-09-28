@@ -102,7 +102,10 @@ nav:
       - The ROI System: developer-guide/roi-system.md
       - Contributing: developer-guide/contributing.md
       - API Reference:
-          - PATATO Bridge: developer-guide/api-reference/patato-bridge.md
-          - Controllers: developer-guide/api-reference/controllers.md
           - Config: developer-guide/api-reference/config.md
+          - Controllers: developer-guide/api-reference/controllers.md
+          - ROI System: developer-guide/api-reference/roi-system.md
+          - Segmentation: developer-guide/api-reference/segmentation.md
+          - PATATO Bridge & Export: developer-guide/api-reference/patato-bridge.md
+          - Batch: developer-guide/api-reference/batch.md
   - Credits: credits.md

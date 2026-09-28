@@ -52,9 +52,9 @@ The `source` key picks it, as a layer-name prefix:
 
 - Leave it `null` alongside a `reconstruction` step to analyse the reconstruction the plan just produced.
 - Set it to something like `"Recon: iThera"` and drop the `reconstruction` step to analyse a reconstruction already stored in each file. That is what the shipped `existing_recon_roi` preset does.
-- Leaving it `null` with no `reconstruction` step falls back to the scan's default PA layer, and the window says so, since that is implicit rather than chosen.
+- Leaving it `null` with no `reconstruction` step falls back to the scan's default OA layer, and the window says so, since that is implicit rather than chosen.
 
-With `measure.layers` at its default `"analysis"`, the table holds that reconstruction and what this run unmixed from it. Set it to `"all_pa"` to measure every PA layer in the scan instead, including reconstructions the plan did not make.
+With `measure.layers` at its default `"analysis"`, the table holds that reconstruction and what this run unmixed from it. Set it to `"all_pa"` to measure every OA layer in the scan instead, including reconstructions the plan did not make.
 
 ## Running
 

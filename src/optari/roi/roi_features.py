@@ -1,3 +1,9 @@
+"""Feature registry: computes every saved and live ROI statistic from a shared context.
+
+``FEATURE_REGISTRY`` maps a column name to a ``FeatureSpec``, so adding a measurement
+is a one-line registry entry rather than a change to the measurement loop itself.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -8,6 +14,14 @@ import numpy as np
 
 @dataclass(frozen=True)
 class ROIContext:
+    """Everything one measurement needs: identifiers, provenance, the geometry blob
+    and the pixel values a ``FeatureSpec`` reads.
+
+    Provenance covers ``scan_name``, ``frame``, ``channel``, ``src_layer`` and
+    timestamps. Pixel values are ``vals_raw`` and the clamped ``vals``, alongside the
+    pixel scale and the ROI's vertices.
+    """
+
     roi_id: int
     track_id: int
     roi_group_uid: str
@@ -31,10 +45,13 @@ class ROIContext:
 
 @dataclass(frozen=True)
 class FeatureSpec:
+    """Pairs a dtype with a function from an :class:`ROIContext` to the column's value."""
+
     dtype: type
     fn: Callable[[ROIContext], object]
 
     def compute(self, ctx: ROIContext) -> object:
+        """Evaluate this spec's function against *ctx*."""
         return self.fn(ctx)
 
 
@@ -107,6 +124,7 @@ ALL_FEATURE_COLUMNS: list[str] = list(FEATURE_REGISTRY.keys())
 
 
 def numeric_feature_ids() -> list[str]:
+    """IDs of the features whose dtype is ``int`` or ``float``."""
     return [fid for fid in ALL_FEATURE_COLUMNS if FEATURE_REGISTRY[fid].dtype in (int, float)]
 
 # Fixed set of columns that are always included in the saved table, regardless of user settings to identify the origin of the ROI

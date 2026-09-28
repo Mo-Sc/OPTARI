@@ -1,3 +1,12 @@
+"""HDF5 and IPASC scan export, and the ROI table XLSX round-trip.
+
+export_scan_to_hdf5() writes the scan through PATATO's own save_hdf5(), then reopens
+the file to rewrite the ROI and derived-data datasets (segmentation mask, derived PA
+images, clinical metadata) so in-session OPTARI edits are captured, not just what was
+already in the source file. No controller reads a PATATO array or writes an HDF5
+attribute directly outside this module and patato_bridge.py.
+"""
+
 from __future__ import annotations
 
 import datetime as dt

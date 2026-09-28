@@ -1,3 +1,9 @@
+"""``ROIRecord``: one ROI shape on one frame, the source-of-truth unit ``RoiController`` persists.
+
+Records are frame-owned, not shape-owned: a region followed across frames is several
+records sharing one ``roi_group_uid``, not one record holding a list of frames.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -47,6 +53,7 @@ class ROIRecord:
     roi_group_uid: str = field(default_factory=new_roi_group_uid)
 
     def __post_init__(self) -> None:
+        """Coerce fields to their declared types. An empty *roi_group_uid* mints a fresh one."""
         self.roi_id = int(self.roi_id)
         self.track_id = int(self.track_id)
         self.roi_group_uid = str(self.roi_group_uid or "") or new_roi_group_uid()

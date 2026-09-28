@@ -1,3 +1,9 @@
+"""ROI presets: reusable templates stored as JSON under ``presets/roi/``.
+
+A preset pairs a named ``RoiGeometry`` with the ``source_fov_m`` it was drawn at and
+a description. It carries no identifier, so placing it creates a fresh ROI each time.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -33,6 +39,7 @@ class RoiPreset:
     placement: str = "static"
 
     def __post_init__(self) -> None:
+        """Coerce *source_fov_m* to floats and reject a non-positive FOV or unknown *placement*."""
         self.source_fov_m = (float(self.source_fov_m[0]), float(self.source_fov_m[1]))
         if min(self.source_fov_m) <= 0:
             raise ValueError("ROI preset source FOV must be positive")
@@ -43,6 +50,7 @@ class RoiPreset:
 
     @classmethod
     def from_dict(cls, name: str, data: dict) -> "RoiPreset":
+        """Rebuild from a preset file's dict. Raises if ``source_fov_m`` is missing."""
         if "source_fov_m" not in data:
             raise ValueError(f"ROI preset must record its source FOV: {name}")
         return cls(
@@ -55,6 +63,7 @@ class RoiPreset:
         )
 
     def to_dict(self) -> dict:
+        """Serialize to the dict written to the preset's JSON file."""
         return {
             "description": self.description,
             "created": self.created,
@@ -68,12 +77,14 @@ class RoiPresetStore(PresetStore):
     """Load and save named ROI presets in the user preset directory."""
 
     def list_presets(self) -> list[RoiPreset]:
+        """Load every saved preset."""
         return [
             RoiPreset.from_dict(path.stem, self.load(path))
             for path in self.list_paths()
         ]
 
     def get(self, name: str) -> RoiPreset:
+        """Load the preset named *name*."""
         return RoiPreset.from_dict(name, self.load(name))
 
     def save_preset(
@@ -85,6 +96,7 @@ class RoiPresetStore(PresetStore):
         source_fov_m: tuple[float, float],
         placement: str = "static",
     ) -> Path:
+        """Build a preset from the given fields, stamp it with the current time, and save it to disk."""
         preset = RoiPreset(
             name=name,
             description=description,

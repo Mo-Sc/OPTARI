@@ -24,6 +24,7 @@ class ViewerExportController(TaskControllerBase):
 
     @staticmethod
     def on_export_clicked(controller) -> None:
+        """Open the export dialog and write the chosen image or video to disk."""
         viewer = controller.viewer
         parent_widget = viewer.window._qt_window
         active_layer = viewer.layers.selection.active

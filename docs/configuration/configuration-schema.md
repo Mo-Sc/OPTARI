@@ -8,8 +8,8 @@ Full reference for `~/.optari/config/config.json`. All fields are required unles
 |---|---|---|---|
 | `LOG_LEVEL` | string | Settings ▸ General | Terminal log verbosity (e.g. `"INFO"` / `"WARNING"`). |
 | `GUI_LOG_LEVEL` | string | Settings ▸ General | Verbosity of messages surfaced as in-app napari notifications (e.g. `"INFO"` / `"WARNING"`). |
-| `DEFAULT_PA_LAYER` | string | Settings ▸ Viewer | Name of the PA reconstruction layer selected by default when a scan loads. |
-| `PA_FALLBACK_SCALE` | `[frame, z, x]` | Settings ▸ Viewer | Fallback mm/pixel scale for PA layers when FOV metadata is missing. |
+| `DEFAULT_PA_LAYER` | string | Settings ▸ Viewer | Name of the OA reconstruction layer selected by default when a scan loads. |
+| `PA_FALLBACK_SCALE` | `[frame, z, x]` | Settings ▸ Viewer | Fallback mm/pixel scale for OA layers when FOV metadata is missing. |
 | `DEFAULT_US_LAYER` | string | *hidden* | Name of the default US layer (not implemented, no effect). |
 | `US_FALLBACK_SCALE` | `[frame, z, x]` | Settings ▸ Viewer | Fallback mm/pixel scale for US layers. |
 | `DEFAULT_FRAME_INDEX` | int or `"motion"` | Settings ▸ Viewer | Fixed starting frame index, or `"motion"` for automatic motion-based frame selection (see [Automatic Frame Selection](../user-guide/viewer-and-navigation.md#automatic-frame-selection)). |

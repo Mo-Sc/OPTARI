@@ -1,3 +1,5 @@
+"""Analysis controller: time-series, histogram and spectral plots (pyqtgraph) over selected ROIs."""
+
 from __future__ import annotations
 
 import logging
@@ -22,6 +24,7 @@ class AnalysisController(TaskControllerBase):
     """Time analysis, histograms, and spectral plotting helpers."""
 
     def __init__(self, parent_controller):
+        """Initialize the analysis controller."""
         super().__init__(parent_controller)
 
     def refresh_ui(self) -> None:
@@ -80,7 +83,7 @@ class AnalysisController(TaskControllerBase):
             self._refresh_time_analysis_track_combo()
 
     def _current_frame_channel(self) -> tuple[int, int]:
-        """Current (frame, channel) from viewer dims; plots fall back to the first."""
+        """Current (frame, channel) from viewer dims. Plots fall back to the first."""
         return selected_frame_and_channel(self.viewer) or (0, 0)
 
     def _clear_plot_layout(self, container) -> object | None:
@@ -120,8 +123,8 @@ class AnalysisController(TaskControllerBase):
         return combo.currentData()
 
     def _time_series_for_current_scope(self, channel_idx: int, feature_id: str):
-        """(x, series) for whichever Time Analysis scope is selected: "Selected
-        ROI" measures each shape's own record on every frame; "Track ID" follows
+        """(x, series) for whichever Time Analysis scope is selected. "Selected
+        ROI" measures each shape's own record on every frame. "Track ID" follows
         one tracked ROI, measuring each frame on that frame's own record."""
         roi_ctrl = self.optari_controller.roi_ctrl
         annotation = self.optari_controller.annotation
@@ -148,6 +151,12 @@ class AnalysisController(TaskControllerBase):
         )
 
     def on_generate_time_analysis_clicked(self, event=None) -> None:
+        """Compute and plot the time series for the current Time Analysis scope.
+
+        Validates that ROIs and a multi-frame PA layer are selected, lazily creates the
+        plot widget on first use, then redraws all series for either the selected ROIs
+        or a single tracked ID.
+        """
         if self.optari_controller.time_analysis is None:
             return
 
@@ -247,6 +256,7 @@ class AnalysisController(TaskControllerBase):
         )
 
     def on_refresh_histograms_clicked(self, event=None) -> None:
+        """Recompute and redraw per-ROI intensity histograms for the current frame and channel."""
         if self.optari_controller.histograms is None:
             return
         if self.optari_controller.shapes_layer is None:
@@ -327,6 +337,7 @@ class AnalysisController(TaskControllerBase):
         )
 
     def on_refresh_spectrum_clicked(self, event=None) -> None:
+        """Recompute and redraw per-ROI spectra across channels for the current frame."""
         if self.optari_controller.spectrum is None:
             return
         if self.optari_controller.shapes_layer is None:

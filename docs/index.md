@@ -5,9 +5,9 @@ clinical photoacoustic/optoacoustic (OA) and ultrasound (US) studies.
 
 ![Demo Layers](assets/optari_startup.png)
 
-OPTARI is an attempt to close the gap between engineering frameworks and clinical research in PA imaging. It combines a custom version of [PATATO](https://github.com/BohndiekLab/patato)
+OPTARI is an attempt to close the gap between engineering frameworks and clinical research in OA imaging. It combines a custom version of [PATATO](https://github.com/BohndiekLab/patato)
 for data I/O and processing with [napari](https://napari.org) for multi-layer image
-visualization, then adds a multi-patient study workflow, ROI annotation, automated tissue segmentation, and analysis tools required for clinical PA studies.
+visualization, then adds a multi-patient study workflow, ROI annotation, automated tissue segmentation, and analysis tools required for clinical OA studies.
 
 **Supported scan formats:**
 
@@ -35,13 +35,13 @@ visualization, then adds a multi-patient study workflow, ROI annotation, automat
 
 ## Scope of OPTARI
 
-Most existing tools for PA-US analysis are either hardware-locked vendor software, or script-based engineering
+Most existing tools for OA-US analysis are either hardware-locked vendor software, or script-based engineering
 frameworks aimed at algorithmic research. They are not intended for fast, multi-patient workflows in clinical
 studies. OPTARI is built specifically as a graphical, non-programming interface that is intuitive to use and assists clinicians with automatic parameter selection and shareable configurations.
 
 ## Key Features
 
-- Visualize US + PA scans from different clinical scanners.
+- Visualize US + OA scans from different clinical scanners.
 - Browse multi-subject, multi-scan studies with fast switching and scrolling through frames/wavelengths.
 - Draw, edit, and save ROIs, reuse them via a shareable ROI Library.
 - Extract ROI intensities, plot ROI intensities over time and wavelength.

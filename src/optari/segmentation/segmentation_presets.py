@@ -1,3 +1,6 @@
+"""Validation and normalization for segmentation preset settings.
+"""
+
 from __future__ import annotations
 
 import math

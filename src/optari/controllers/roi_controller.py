@@ -1,8 +1,11 @@
+"""Owns the ROI shapes layer, the Live and Saved Analysis tables, and ROI presets and placement."""
+
 from __future__ import annotations
 
 import logging
 from collections.abc import Callable
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -40,6 +43,9 @@ from optari.roi.roi_utils import (
 from optari.utils.misc import parse_float_input, roi_color_for_index
 from optari.utils.setup import get_user_autosave_dir, get_user_roi_presets_dir, new_session_file
 from optari.utils.viewer import selected_frame_and_channel, selected_frame_idx
+
+if TYPE_CHECKING:
+    from optari.controllers.optari_controller import OptariController
 
 from napari.layers import Image
 from napari.utils.notifications import show_error, show_info
@@ -88,7 +94,15 @@ def _roi_name_popup() -> tuple[str, str, str] | None:
 class RoiController(TaskControllerBase):
     """ROI visualization, table management, and ROI export helpers."""
 
-    def __init__(self, parent_controller):
+    def __init__(self, parent_controller: OptariController):
+        """Initialize with reference to parent controller.
+
+        Sets up the ROI record store, the session's autosaved Saved Analysis table,
+        and the ROI preset store.
+
+        Args:
+            parent_controller: OptariController instance with viewer and session state.
+        """
         super().__init__(parent_controller)
         self.saved_table = SavedRoiTable(
             new_session_file(get_user_autosave_dir(), "roi_table", ".xlsx")
@@ -104,6 +118,7 @@ class RoiController(TaskControllerBase):
 
     @property
     def roi_records(self) -> list[ROIRecord]:
+        """All ROI records currently held, across every frame."""
         return list(self._roi_records.values())
 
     def _n_frames(self) -> int:
@@ -127,6 +142,10 @@ class RoiController(TaskControllerBase):
         return record
 
     def set_roi_records(self, records: list[ROIRecord]) -> None:
+        """Replace all ROI records with *records*, resuming the id counters above their highest values.
+
+        Also projects the current frame, so the Shapes layer reflects the new records.
+        """
         self._roi_records = {record.roi_id: record for record in records}
         self._next_roi_id = max((record.roi_id for record in records), default=-1) + 1
         self._next_track_id = max(
@@ -135,6 +154,7 @@ class RoiController(TaskControllerBase):
         self.project_current_frame()
 
     def clear_roi_records(self) -> None:
+        """Discard all ROI records and the rasterized-mask cache, e.g. when switching scans."""
         self._roi_records.clear()
         self._projection_ids = []
         clear_mask_cache()
@@ -180,6 +200,13 @@ class RoiController(TaskControllerBase):
         self.project_current_frame()
 
     def project_current_frame(self) -> None:
+        """Write the current frame's ROI records into the Shapes layer.
+
+        ``self._roi_records`` is the source of truth. This is the only place that
+        should assign ``shapes.data`` directly. Guarded by ``self._projecting`` so the
+        resulting data-change event doesn't sync back into the records it was
+        generated from.
+        """
         shapes = self.optari_controller.shapes_layer
         if shapes is None or self._projecting:
             return
@@ -201,7 +228,7 @@ class RoiController(TaskControllerBase):
         self._refresh_shape_display()
 
     def _match_ids_after_removal(self, data, kinds: list[str]) -> list[int | None]:
-        """Match surviving shapes to their prior ids; removal preserves relative order."""
+        """Match surviving shapes to their prior ids. Removal preserves relative order."""
         old_records = self.current_records()
         matched: list[int | None] = []
         j = 0
@@ -429,8 +456,14 @@ class RoiController(TaskControllerBase):
         shapes.text = {"string": label, "size": settings.annotation.roi_label_size}
 
     def on_shapes_data_changed(self, event=None) -> None:
+        """Sync ROI records after a completed Shapes-layer edit, then refresh the display and live table.
+
+        Runs on every mouse-move of a drag. Ignores the intent event napari fires
+        before a mutation (only the completion event is acted on), and skips the
+        shape-display refresh unless the set of projected ids actually changed.
+        """
         # napari emits events.data in pairs: an intent event before the layer is
-        # mutated (adding/changing/removing) and a completion event after. 
+        # mutated (adding/changing/removing) and a completion event after.
         # We only want to refresh the ROI table on the completion event, so ignore the intent event.
         action = getattr(event, "action", None)
         if action is not None and str(action) not in _COMPLETED_DATA_ACTIONS:
@@ -465,6 +498,11 @@ class RoiController(TaskControllerBase):
             self.on_shapes_data_changed()
 
     def update_live_table(self, event=None) -> None:
+        """Recompute the Live Analysis table for the ROIs on the current frame, active layer and channel.
+
+        Falls back to an empty table when there is no shapes layer or no active
+        reconstruction layer to measure against.
+        """
         if self.optari_controller.roi is None:
             return
 
@@ -576,7 +614,7 @@ class RoiController(TaskControllerBase):
         many tracks are selected, not with how many frames/layers are being saved,
         which matters once "include all frames" is combined with a large sequence.
         Uses the same ``records_by_track_and_frame`` that Time Analysis's Track ID
-        scope does; ``_records_at_frame`` decides what a missing frame does with
+        scope does. ``_records_at_frame`` decides what a missing frame does with
         this, mirroring Time Analysis's own scope choice.
         """
         fallbacks = {
@@ -698,6 +736,7 @@ class RoiController(TaskControllerBase):
         logger.info("Saved %s ROI(s) (%s total row(s))", n_rois, len(rows))
 
     def on_delete_saved_clicked(self, event=None) -> None:
+        """Delete the selected rows from the Saved Analysis table."""
         if self.optari_controller.roi is None:
             return
 
@@ -715,6 +754,7 @@ class RoiController(TaskControllerBase):
         logger.info("Deleted %s saved rows", deleted)
 
     def on_xlsx_export_clicked(self, event=None) -> None:
+        """Prompt for a destination and export the Saved Analysis table to XLSX."""
         if self.optari_controller.roi is None:
             return
 
@@ -898,6 +938,12 @@ class RoiController(TaskControllerBase):
         ann.remove_roi_preset_button.setEnabled(ann.roi_presets_list.currentItem() is not None)
 
     def on_save_roi_preset_clicked(self, event=None) -> None:
+        """Save the first selected ROI as a named preset.
+
+        Prompts for a name, description and tissue class, and records the current
+        placement-mode combo value with it so reusing the preset reproduces how it
+        was placed here.
+        """
         if self.optari_controller.shapes_layer is None:
             return
 
@@ -957,6 +1003,7 @@ class RoiController(TaskControllerBase):
         logger.info("Saved ROI preset '%s' to %s", roi_id, preset_path)
 
     def on_remove_roi_preset_clicked(self, event=None) -> None:
+        """Delete the preset currently selected in the presets list."""
         if self.optari_controller.annotation is None:
             return
         item = self.optari_controller.annotation.roi_presets_list.currentItem()
@@ -1124,6 +1171,7 @@ class RoiController(TaskControllerBase):
         seg_data = np.asarray(seg_layer.data)
 
         def resolve(frame_id: int, source_verts: np.ndarray) -> np.ndarray | None:
+            """Re-anchor *source_verts* onto *frame_id*'s own mask, or None if out of range or the class isn't present there."""
             if frame_id >= seg_data.shape[0]:
                 return None
             try:
@@ -1183,12 +1231,15 @@ class RoiController(TaskControllerBase):
             self.expand_current_projection_to_all_frames(resolver)
 
     def on_place_roi_clicked(self, event=None) -> None:
+        """Place the preset currently selected in the presets list, using the dock's placement mode and scope."""
         self._place_selected_roi_preset()
 
     def on_roi_preset_item_clicked(self, item) -> None:
+        """Place the double-clicked preset."""
         self._place_selected_roi_preset()
 
     def on_roi_preset_item_selected(self, item) -> None:
+        """Preselect the placement mode for *item*'s preset, and show its description and tissue class."""
         if self.optari_controller.annotation is None:
             return
         try:

@@ -1,3 +1,11 @@
+"""ROI shape generators used by the segmentation dock.
+
+``ROIShape``/``Rectangle``/``Ellipse``/``Polygon`` derive a new shape's geometry from
+a segmentation class mask (largest-component isolation, centre-column anchoring,
+depth offset, contour extraction). They do not participate in persistence, unlike
+``RoiGeometry``.
+"""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -60,11 +68,14 @@ class ROIShape(ABC):
     """
 
     def __init__(self, config: ROIPlacementConfig):
+        """Store *config*, shared by every concrete shape."""
         self.config = config
 
     @property
     @abstractmethod
-    def shape_type(self) -> str: ...
+    def shape_type(self) -> str:
+        """Napari shape type name this generator builds (``shapes_layer.add(shape_type=...)``)."""
+        ...
 
     @abstractmethod
     def to_napari_verts_world(
@@ -145,6 +156,10 @@ class BoxShape(ROIShape):
         ty: float = 0.0,
         tx: float = 0.0,
     ) -> np.ndarray:
+        """Rectangle/ellipse corners anchored to the class's top at the centre column.
+
+        Raises if the requested height exceeds the class's depth at that column.
+        """
         # Get standardized bounds
         x0, x1, y0, y1, largest_mask = self._get_pixel_bounds(class_mask, sy, sx, use_center_anchor=True)
 
@@ -173,6 +188,7 @@ class Rectangle(BoxShape):
     """Rectangular ROI shape."""
     @property
     def shape_type(self) -> str:
+        """Napari shape type name: "rectangle"."""
         return "rectangle"
 
 
@@ -180,6 +196,7 @@ class Ellipse(BoxShape):
     """Elliptical ROI shape."""
     @property
     def shape_type(self) -> str:
+        """Napari shape type name: "ellipse"."""
         return "ellipse"
 
 
@@ -195,6 +212,7 @@ class Polygon(ROIShape):
 
     @property
     def shape_type(self) -> str:
+        """Napari shape type name: "polygon"."""
         return "polygon"
 
     def to_napari_verts_world(
@@ -206,6 +224,9 @@ class Polygon(ROIShape):
         ty: float = 0.0,
         tx: float = 0.0,
     ) -> np.ndarray:
+        """Polygon verts from the class mask's contour, trimmed to the configured
+        bounds and anchored to the component's absolute top.
+        """
         # Use absolute-top anchor
         x0, x1, y0, y1, largest_mask = self._get_pixel_bounds(class_mask, sy, sx, use_center_anchor=False)
 

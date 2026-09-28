@@ -1,3 +1,5 @@
+"""Reconstruction controller: presets and running PATATO's backprojection/DeepMB pipelines."""
+
 from __future__ import annotations
 
 import json
@@ -59,10 +61,13 @@ class ReconParams:
 
     @property
     def chunk_frames(self) -> int:
+        """Frames per reconstruction chunk, capped so frames x wavelengths stays within
+        PATATO's batch size limit."""
         return max(1, PAT_MAXIMUM_BATCH_SIZE // max(1, self.n_wavelengths))
 
     @property
     def layer_name(self) -> str:
+        """Output layer name, encoding the algorithm, suffix and frame."""
         suffix_part = f"_{self.suffix}" if self.suffix else ""
         frame_part = (
             f"_F{self.current_frame_id}" if self.current_frame_id is not None else ""
@@ -81,7 +86,7 @@ class ReconParams:
     ) -> "ReconParams":
         """Resolve a reconstruction preset against the currently loaded scan.
 
-        *speed_of_sound* defaults to the preset's own value; the dock passes its
+        *speed_of_sound* defaults to the preset's own value. The dock passes its
         slider instead, which is what lets the slider override the preset.
 
         Raises ValueError, message safe to show the user, when the preset cannot be
@@ -175,6 +180,7 @@ class ReconstructionController(TaskControllerBase):
     """Run PATATO reconstruction presets on the loaded scan and add as layers."""
 
     def __init__(self, parent_controller):
+        """Initialize preset state and the reconstruction preset store."""
         super().__init__(parent_controller)
         self._updating_settings = False
         self._settings_dirty = False
@@ -310,6 +316,7 @@ class ReconstructionController(TaskControllerBase):
         dock.status_label.setText("Preset applied.")
 
     def on_remove_preset_clicked(self) -> None:
+        """Remove the selected reconstruction preset."""
         if self.optari_controller.reconstruction is None:
             return
 
@@ -509,5 +516,6 @@ class ReconstructionController(TaskControllerBase):
         return layer_name
 
     def on_run_reconstruction_clicked(self) -> None:
+        """Run reconstruction from the dock's Run button."""
         if self.optari_controller.reconstruction is not None:
             self.run_from_ui(self.optari_controller.reconstruction)

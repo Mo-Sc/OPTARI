@@ -5,7 +5,7 @@ OPTARI includes a deep-learning-based segmentation module to generate tissue map
 
 ## Running segmentation
 
-1. In the **Segmentation** dock, choose a **model** from the registry. OPTARI comes with a pretrained model for three clinical examination sites that are common in PA imaging (see [Segmentation Models](../configuration/segmentation-models.md)).
+1. In the **Segmentation** dock, choose a **model** from the registry. OPTARI comes with a pretrained model for three clinical examination sites that are common in OA imaging (see [Segmentation Models](../configuration/segmentation-models.md)).
 2. The **Classes** list shows the available tissue classes for the selected model. Pick which classes to segment.
 3. **Scope** chooses whether the segmentation map will be generated only for the currently selected frame or for all the frames in the scan.
 4. Click **Generate Tissue Segmentation** (or press `Shift+Ctrl+T` / `Shift+Cmd+T`).

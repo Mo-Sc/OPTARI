@@ -1,3 +1,6 @@
+"""OptariConfig: dataclass schema for the user's ~/.optari/config/config.json.
+"""
+
 from dataclasses import dataclass, field
 import json
 import os
@@ -10,6 +13,8 @@ CONFIG_SCHEMA_VERSION = 5 # adapt in default config.json as well
 
 @dataclass(frozen=True)
 class GeneralConfig:
+    """App-wide defaults: logging, default layers/scales/frame/channel, operator identity, layer colors, dock visibility."""
+
     LOG_LEVEL: str
     GUI_LOG_LEVEL: str
     DEFAULT_PA_LAYER: str
@@ -26,6 +31,8 @@ class GeneralConfig:
 
 @dataclass(frozen=True)
 class AnnotationConfig:
+    """ROI annotation display settings: colors, measured features, and shape labels."""
+
     roi_colors: list = field(default_factory=list)
     roi_features: dict[str, int] = field(default_factory=dict)
     show_track_id: bool = True  # label shapes "roi_id/track_id" instead of just "roi_id"
@@ -33,20 +40,31 @@ class AnnotationConfig:
 
 @dataclass(frozen=True)
 class AnalysisConfig:
+    """Settings for the analysis dock."""
+
     histogram_bins: int
 
 @dataclass(frozen=True)
 class SegmentationConfig:
+    """Default segmentation model to preselect in the Segmentation dock."""
+
     default_model: str
 
 @dataclass(frozen=True)
 class ExportConfig:
+    """Layout settings for exported figures: font size, colorbar width, and padding."""
+
     font_size: int
     cbar_width: int
     padding: int
 
 @dataclass(frozen=True)
 class OptariConfig:
+    """Top-level config, loaded once at startup into the module-level ``settings``.
+
+    Mirrors ``~/.optari/config/config.json``: one section per settings category.
+    """
+
     schema_version: int
     general: GeneralConfig
     annotation: AnnotationConfig

@@ -54,11 +54,14 @@ class BatchJob:
 
     @property
     def scan_name(self) -> str:
+        """The scan's internal name from its acquisition metadata, or empty if it has none."""
         return self.scan_info.internal_name or ""
 
 
 @dataclass(frozen=True)
 class OutputSpec:
+    """Which outputs a batch run writes per scan: ROI table, HDF5/IPASC export, and overlay PNG."""
+
     xlsx: bool = True
     hdf5: bool = False
     ipasc: bool = False
@@ -88,10 +91,12 @@ class BatchPlan:
 
     @property
     def table_path(self) -> Path:
+        """Where the run's ROI measurements are written (batch_roi_table.xlsx)."""
         return self.output_dir / BATCH_TABLE_NAME
 
     @property
     def report_path(self) -> Path:
+        """Where the run's per-scan status report is written (batch_report.xlsx)."""
         return self.output_dir / BATCH_REPORT_NAME
 
     @property
