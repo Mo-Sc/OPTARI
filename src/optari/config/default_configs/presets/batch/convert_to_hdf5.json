@@ -1,0 +1,11 @@
+{
+  "description": "No analysis: just read each vendor scan and write it out as OPTARI HDF5.",
+  "steps": {},
+  "frame": 0,
+  "measure": {},
+  "outputs": {
+    "xlsx": false,
+    "hdf5": true,
+    "overlay_png": false
+  }
+}

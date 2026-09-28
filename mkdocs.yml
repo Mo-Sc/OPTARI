@@ -1,10 +1,10 @@
-site_name: PATARI
+site_name: OPTARI
 site_description: >-
-  Documentation for PATARI, an open-source napari-based toolkit for
-  clinical photoacoustic imaging analysis.
-site_url: https://mo-sc.github.io/PATARI/
-repo_url: https://github.com/Mo-Sc/PATARI
-repo_name: Mo-Sc/PATARI
+  Documentation for OPTARI, an open-source napari-based toolkit for
+  clinical photoacoustic/optoacoustic imaging analysis.
+site_url: https://mo-sc.github.io/OPTARI/
+repo_url: https://github.com/Mo-Sc/OPTARI
+repo_name: Mo-Sc/OPTARI
 edit_uri: edit/main/docs/
 docs_dir: docs
 copyright: Copyright &copy; 2026 Moritz Schillinger
@@ -71,9 +71,7 @@ plugins:
 
 nav:
   - Home: index.md
-  - Installation:
-      - Overview: installation/index.md
-      - Troubleshooting: installation/troubleshooting.md
+  - Installation: installation/index.md
   - User Guide:
       - Overview: user-guide/index.md
       - Viewer & Navigation: user-guide/viewer-and-navigation.md
@@ -90,7 +88,8 @@ nav:
   - Sample Workflow:
       - Manual ROI Workflow: clinical-workflows/manual-roi-workflow.md
       - Segmentation + Unmixing Workflow: clinical-workflows/segmentation-unmixing-workflow.md
-      - Pixel Counting: clinical-workflows/pixel-counting.md
+      - Tracking Intensity over Time: clinical-workflows/time-tracking-workflow.md
+      - Batch Mode Workflow: clinical-workflows/batch-mode-workflow.md
   - Configuration:
       - Overview: configuration/index.md
       - Configuration Schema: configuration/configuration-schema.md
@@ -103,7 +102,10 @@ nav:
       - The ROI System: developer-guide/roi-system.md
       - Contributing: developer-guide/contributing.md
       - API Reference:
-          - PATATO Bridge: developer-guide/api-reference/patato-bridge.md
-          - Controllers: developer-guide/api-reference/controllers.md
           - Config: developer-guide/api-reference/config.md
+          - Controllers: developer-guide/api-reference/controllers.md
+          - ROI System: developer-guide/api-reference/roi-system.md
+          - Segmentation: developer-guide/api-reference/segmentation.md
+          - PATATO Bridge & Export: developer-guide/api-reference/patato-bridge.md
+          - Batch: developer-guide/api-reference/batch.md
   - Credits: credits.md

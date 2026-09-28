@@ -1,0 +1,177 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from qtpy.QtGui import QDoubleValidator
+from qtpy.QtWidgets import (
+    QHBoxLayout,
+    QComboBox,
+    QGroupBox,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QPushButton,
+    QRadioButton,
+    QVBoxLayout,
+    QWidget,
+)
+
+from .dock_helpers import (
+    create_frame_scope_controls,
+    create_preset_controls,
+    create_right_dock_shell,
+)
+
+
+@dataclass
+class SegmentationDock:
+    """Widget references used by segmentation-related controller callbacks."""
+
+    widget: QWidget
+    preset_combo: QComboBox
+    save_preset_button: QPushButton
+    remove_preset_button: QPushButton
+    segmentation_model_combo: QComboBox
+    segmentation_classes_list: QListWidget
+    select_all_classes_button: QPushButton
+    clear_classes_button: QPushButton
+    roi_class_id_combo: QComboBox
+    roi_shape_combo: QComboBox
+    roi_width_edit: QLineEdit
+    roi_height_edit: QLineEdit
+    roi_top_margin_edit: QLineEdit
+    generate_roi_button: QPushButton
+    generate_tissue_segmentation_button: QPushButton
+    current_frames_radio: QRadioButton
+    all_frames_radio: QRadioButton
+    status_label: QLabel
+
+
+def create_segmentation_dock(
+    *, enable_scroll: bool = True
+) -> SegmentationDock:
+    """Create the segmentation dock with model/class and ROI-from-mask controls.
+
+    Model combo is initially empty; populate via controller.initialize_ui().
+    """
+    shell = create_right_dock_shell(enable_scroll=enable_scroll)
+    widget = shell.widget
+    outer = shell.content_layout
+
+    seg_box = QGroupBox("Segmentation")
+    seg_layout = QVBoxLayout(seg_box)
+
+    (
+        preset_combo,
+        save_preset_button,
+        remove_preset_button,
+        preset_actions,
+    ) = create_preset_controls()
+    preset_combo.setToolTip("Selecting a preset applies it immediately")
+    save_preset_button.setToolTip(
+        "Save the selected model, classes, and ROI-from-mask settings as a preset "
+        "(requires at least one checked class)"
+    )
+
+    segmentation_model_combo = QComboBox()
+    segmentation_model_combo.setToolTip(
+        "Changing the model resets the class list and clears the selected ROI class"
+    )
+
+    segmentation_classes_list = QListWidget()
+    segmentation_classes_list.setSelectionMode(QListWidget.NoSelection)
+    segmentation_classes_list.setMinimumHeight(140)
+
+    classes_button_row = QWidget()
+    classes_button_layout = QHBoxLayout(classes_button_row)
+    classes_button_layout.setContentsMargins(0, 0, 0, 0)
+    select_all_classes_button = QPushButton("Select All")
+    clear_classes_button = QPushButton("Clear")
+    classes_button_layout.addWidget(select_all_classes_button)
+    classes_button_layout.addWidget(clear_classes_button)
+
+    roi_class_id_combo = QComboBox()
+    roi_shape_combo = QComboBox()
+    roi_shape_combo.addItem("Ellipse", userData="ellipse")
+    roi_shape_combo.addItem("Rectangle", userData="rectangle")
+    roi_shape_combo.addItem("Polygon", userData="polygon")
+    roi_shape_combo.setCurrentIndex(0)
+    roi_width_edit = QLineEdit()
+    roi_height_edit = QLineEdit()
+    roi_top_margin_edit = QLineEdit()
+
+    for edit in (roi_width_edit, roi_height_edit, roi_top_margin_edit):
+        edit.setValidator(QDoubleValidator(0.0, 9999.0, 2))
+        edit.setClearButtonEnabled(True)
+        edit.setPlaceholderText("mm")
+    roi_top_margin_edit.setToolTip(
+        "Offset from the top of the detected tissue region (not a size)"
+    )
+
+    generate_roi_button = QPushButton("Generate ROI from Mask")
+    generate_roi_button.setToolTip(
+        "Place an ROI in the selected class's region "
+        "(requires an existing segmentation mask for this frame)"
+    )
+
+    generate_tissue_segmentation_button = QPushButton("Run Segmentation")
+    generate_tissue_segmentation_button.setToolTip(
+        "Generate a tissue mask for the checked classes on an active US layer "
+        "(Shift+Ctrl+T / Shift+Cmd+T)"
+    )
+    frame_scope_row, current_frames_radio, all_frames_radio = (
+        create_frame_scope_controls()
+    )
+    status_label = QLabel("Select a model and run segmentation.")
+    status_label.setWordWrap(True)
+
+    seg_layout.addWidget(QLabel("Preset"))
+    seg_layout.addWidget(preset_combo)
+    seg_layout.addWidget(preset_actions)
+    seg_layout.addWidget(QLabel("Model"))
+    seg_layout.addWidget(segmentation_model_combo)
+    seg_layout.addWidget(QLabel("Classes"))
+    seg_layout.addWidget(segmentation_classes_list)
+    seg_layout.addWidget(classes_button_row)
+
+    seg_layout.addWidget(frame_scope_row)
+    seg_layout.addWidget(generate_tissue_segmentation_button)
+    seg_layout.addWidget(status_label)
+
+    outer.addWidget(seg_box)
+    roi_settings_box = QGroupBox("ROI from Mask")
+    roi_settings_layout = QVBoxLayout(roi_settings_box)
+    roi_settings_layout.addWidget(QLabel("Class ID"))
+    roi_settings_layout.addWidget(roi_class_id_combo)
+    roi_settings_layout.addWidget(QLabel("Shape"))
+    roi_settings_layout.addWidget(roi_shape_combo)
+    roi_settings_layout.addWidget(QLabel("Width"))
+    roi_settings_layout.addWidget(roi_width_edit)
+    roi_settings_layout.addWidget(QLabel("Height"))
+    roi_settings_layout.addWidget(roi_height_edit)
+    roi_settings_layout.addWidget(QLabel("Top Margin"))
+    roi_settings_layout.addWidget(roi_top_margin_edit)
+    roi_settings_layout.addWidget(generate_roi_button)
+    outer.addWidget(roi_settings_box)
+    outer.addStretch()
+
+    return SegmentationDock(
+        widget=widget,
+        preset_combo=preset_combo,
+        save_preset_button=save_preset_button,
+        remove_preset_button=remove_preset_button,
+        segmentation_model_combo=segmentation_model_combo,
+        segmentation_classes_list=segmentation_classes_list,
+        select_all_classes_button=select_all_classes_button,
+        clear_classes_button=clear_classes_button,
+        roi_class_id_combo=roi_class_id_combo,
+        roi_shape_combo=roi_shape_combo,
+        roi_width_edit=roi_width_edit,
+        roi_height_edit=roi_height_edit,
+        roi_top_margin_edit=roi_top_margin_edit,
+        generate_roi_button=generate_roi_button,
+        generate_tissue_segmentation_button=generate_tissue_segmentation_button,
+        current_frames_radio=current_frames_radio,
+        all_frames_radio=all_frames_radio,
+        status_label=status_label,
+    )

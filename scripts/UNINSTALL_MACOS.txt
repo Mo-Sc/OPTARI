@@ -1,6 +1,6 @@
-To uninstall PATARI on macos:
+To uninstall OPTARI on macos:
 - open your Terminal (Cmd - SPACE - Terminal)
-- drag and drop the PATARI file into the Terminal
+- drag and drop the OPTARI file into the Terminal
 - type " self remove" (dont forget the space)
 - press Enter
-You successfully removed PATARI from your system
+You successfully removed OPTARI from your system

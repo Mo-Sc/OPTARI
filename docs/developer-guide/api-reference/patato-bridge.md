@@ -1,5 +1,5 @@
-# PATATO Bridge
+# PATATO Bridge & Export
 
-!!! warning "Coming soon"
-    Generated API reference isn't wired up yet. In the meantime, see `src/patari/patato_bridge.py` in the
-    [source repository](https://github.com/Mo-Sc/PATARI).
+::: optari.patato_bridge
+
+::: optari.io.export_pipeline

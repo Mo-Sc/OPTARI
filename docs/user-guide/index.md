@@ -1,22 +1,25 @@
 # User Guide Overview
 
-PATARI's window is built from napari's dock system around a central image viewer. **Docks can be added or removed** by clicking `PATARI` in the menu bar and selecting `Docks`.
+!!! note "Screenshots"
+    The screenshots in this documentation are taken on OPTARI v0.7.3. The UI might differ for newer versions
+
+OPTARI's window is built from napari's dock system around a central image viewer. **Docks can be added or removed** by clicking `OPTARI` in the menu bar and selecting `Docks`.
 
 | Position | Docks |
 |---|---|
-| Left | **Layer List** and **Layer Controls** — napari's built-in docks for the loaded US, PA, and annotation layers |
+| Left | **Layer List** and **Layer Controls** — napari's built-in docks for the loaded US, OA, and annotation layers |
 | Right (tabbed) | **Scan Browser**, **Annotation**, **Segmentation**, **Unmixing**, **Reconstruction** |
 | Bottom (tabbed) | **ROI Tables**, **Time Analysis**, **Histogram**, **Spectrum** |
-| Center | The napari viewer — displays US, PA, and annotation layers |
+| Center | The napari viewer — displays US, OA, and annotation layers |
 
 In addition, there is an **Info** dock (showing metadata for the current scan/slice) that floats as its own window rather than docking to a fixed position.
 
 You can drag dock tabs to rearrange them, and napari remembers your layout between sessions.
 
-![UI Overview](../assets/screenshots/placeholders/ss_overview.png)
+![UI Overview](../assets/screenshots/ss_overview.png)
 
 
-Most buttons, checkboxes, and other controls have a tooltip. Hover over one for a quick explanation of what it does before clicking.
+Most buttons, checkboxes, and other controls have a **tooltip**. Hover over one for a quick explanation of what it does before clicking.
 
 ## Pages in this guide
 
@@ -33,4 +36,4 @@ Most buttons, checkboxes, and other controls have a tooltip. Hover over one for 
 9. [Keyboard Shortcuts](keyboard-shortcuts.md) — the full shortcut reference.
 10. [FAQ](faq.md) — common questions about everyday usage.
 
-For examples of how we used PATARI in clinical PA studies, see [Sample Workflow](../clinical-workflows/manual-roi-workflow.md).
+For examples of how we used OPTARI in clinical OA studies, see [Sample Workflow](../clinical-workflows/manual-roi-workflow.md).

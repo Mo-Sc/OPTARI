@@ -1,5 +1,17 @@
 # Controllers
 
-!!! warning "Coming soon"
-    Generated API reference isn't wired up yet. In the meantime, see `src/patari/controllers/base.py` in the
-    [source repository](https://github.com/Mo-Sc/PATARI).
+::: optari.controllers.base
+
+::: optari.controllers.scan_controller
+
+::: optari.controllers.roi_controller
+
+::: optari.controllers.segmentation_controller
+
+::: optari.controllers.reconstruction_controller
+
+::: optari.controllers.unmixing_controller
+
+::: optari.controllers.analysis_controller
+
+::: optari.controllers.viewer_export_controller

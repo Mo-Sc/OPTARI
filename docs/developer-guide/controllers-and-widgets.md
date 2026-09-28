@@ -28,7 +28,7 @@ Batch mode builds `params` from a preset instead of the dock and calls the same 
 | `AnalysisController` | Time-series, histogram and spectral plots (pyqtgraph) over selected ROIs. |
 | `ViewerExportController` | Rendering a layer or the current view to PNG/TIFF/video. |
 
-A controller reaches another only through `self.patari_controller.<name>_ctrl`, never by
+A controller reaches another only through `self.optari_controller.<name>_ctrl`, never by
 holding a direct reference to it.
 
 ## `patato_bridge.py`
@@ -42,4 +42,4 @@ reads a PATATO array or writes an HDF5 attribute directly outside `patato_bridge
     Therefore the export has to have a different filename or location.
 
 !!! note "Export always overwrites"
-    `pa_data.save_hdf5()` already copies whatever the *source* file had (ROIs, segmentation, clinical metadata) into the export, but a live patari edit this session (a new/edited ROI shape, a run segmentation, an edited clinical metadata field) is never part of `pa_data`'s reader, so it can't be part of that automatic copy. `_write_rois` and `_write_derived_data` (`io/export_pipeline.py`) run *after* `save_hdf5()` and explicitly delete+rewrite those datasets from the current state. In the common case (nothing changed since load) this rewrites identical data.
+    `pa_data.save_hdf5()` already copies whatever the *source* file had (ROIs, segmentation, clinical metadata) into the export, but a live optari edit this session (a new/edited ROI shape, a run segmentation, an edited clinical metadata field) is never part of `pa_data`'s reader, so it can't be part of that automatic copy. `_write_rois` and `_write_derived_data` (`io/export_pipeline.py`) run *after* `save_hdf5()` and explicitly delete+rewrite those datasets from the current state. In the common case (nothing changed since load) this rewrites identical data.

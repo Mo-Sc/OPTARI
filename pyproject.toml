@@ -1,7 +1,7 @@
 [project]
-name = "patari"
+name = "optari"
 dynamic = ["version"]
-description = "Analysis tool for clinical PA studies based on PATATO and NAPARI"
+description = "Analysis tool for clinical photoacoustic/optoacoustic studies based on PATATO and NAPARI"
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [
@@ -14,6 +14,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Operating System :: MacOS :: MacOS X",
     "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
 ]
 # the PATATO wheels below are built for CPython 3.12 only
 requires-python = ">=3.12,<3.13"
@@ -28,12 +29,14 @@ dependencies = [
     "pyqtgraph==0.14.0",
     "scikit-image==0.26.0",
     "opencv-python-headless==5.0.0.93",
-    "onnxruntime==1.28.0",
-    "jax[cpu]>=0.4.13",
+    "onnxruntime==1.28.0 ; sys_platform != 'linux'",
+    "onnxruntime-gpu==1.28.0 ; sys_platform == 'linux'",
+    "jax[cpu]==0.11.2",
+    "pacfish==0.4.4",
     "openpyxl==3.1.5",
-    "patato @ https://github.com/Mo-Sc/patato/releases/download/patari-v0.8.0/patato-0.7.1.dev1+g9f83bb7a6-cp312-cp312-win_amd64.whl ; sys_platform == 'win32'",
-    "patato @ https://github.com/Mo-Sc/patato/releases/download/patari-v0.8.0/patato-0.7.1.dev1+g9f83bb7a6-cp312-cp312-macosx_11_0_arm64.whl ; sys_platform == 'darwin' and platform_machine == 'arm64'",
-    "patato @ https://github.com/Mo-Sc/patato/releases/download/patari-v0.8.0/patato-0.7.1.dev1+g9f83bb7a6-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl ; sys_platform == 'linux'",
+    "patato @ https://github.com/Mo-Sc/patato/releases/download/patari-v0.8.0/patato-0.7.1.dev1+g51db1f57c-cp312-cp312-win_amd64.whl ; sys_platform == 'win32'",
+    "patato @ https://github.com/Mo-Sc/patato/releases/download/patari-v0.8.0/patato-0.7.1.dev1+g51db1f57c-cp312-cp312-macosx_11_0_arm64.whl ; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "patato @ https://github.com/Mo-Sc/patato/releases/download/patari-v0.8.0/patato-0.7.1.dev1+g51db1f57c-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl ; sys_platform == 'linux'",
 ]
 
 [project.optional-dependencies]
@@ -44,9 +47,12 @@ docs = [
     "mkdocs-material>=9.5",
     "mkdocstrings[python]>=0.25",
 ]
+dev = [
+    "black>=26.5",
+]
 
 [project.gui-scripts]
-patari = "patari.launcher:main"
+optari = "optari.launcher:main"
 
 [build-system]
 requires = ["setuptools>=68", "setuptools-scm>=8"]
@@ -61,10 +67,10 @@ include-package-data = true
 where = ["src"]
 
 [tool.setuptools.package-data]
-"patari" = ["config/default_configs/*.json", "config/default_configs/**/*.json", "config/startup.png", "config/logo.png"]
+"optari" = ["config/default_configs/*.json", "config/default_configs/**/*.json", "config/startup.png", "config/logo.png"]
 
 [tool.setuptools_scm]
-write_to = "src/patari/_version.py"
+write_to = "src/optari/_version.py"
 fallback_version = "0.0.1+nogit"
 
 [tool.pytest.ini_options]

@@ -1,6 +1,6 @@
 # The ROI System
 
-Regions of interest are the main measurement tool in PATARI: everything in the
+Regions of interest are the main measurement tool in OPTARI: everything in the
 Saved Analysis table, the time and spectral plots, and the ROI parts of the HDF5 export 
 comes from one. This page describes how an ROI is represented.
 
@@ -90,7 +90,7 @@ class ROIRecord:
     frame_id: int
     verts: np.ndarray          # napari (y_mm, x_mm)
     kind: str                  # "polygon" | "ellipse" | "line" | ...
-    source: str = PATARI_SOURCE_TAG
+    source: str = OPTARI_SOURCE_TAG
     tissue_class: str = "undefined"
     roi_group_uid: str = field(default_factory=new_roi_group_uid)
 ```
@@ -105,13 +105,13 @@ projection of it:
 - `sync_records_from_shapes()` reads user edits back. Ids are matched positionally, since
   napari appends new shapes at the end and in-place edits keep their position.
 
-`source` is the provenance tag, `PATARI_v<version>` for anything PATARI drew, or the
+`source` is the provenance tag, `OPTARI_v<version>` for anything OPTARI drew, or the
 originating `roi_class` for ROIs loaded from a scan. 
 
 
 ## `RoiGeometry`
 
-Everything PATARI writes to disk uses `RoiGeometry` (`roi_geometry.py`): vertices in
+Everything OPTARI writes to disk uses `RoiGeometry` (`roi_geometry.py`): vertices in
 **PATATO coordinates**, metres, origin at the image centre.
 
 ### Why not napari mm?
@@ -253,10 +253,10 @@ fabricate" choice Time Analysis's Track ID scope makes for a gap in the plot.
 
 ### Schema version
 
-`ROI_TABLE_SCHEMA_VERSION` lives in `export_pipeline.py` beside `PATARI_FILE_FORMAT_VERSION`. `CONFIG_SCHEMA_VERSION` versions the user's config file and a
-mismatch archives `~/.patari`.
+`ROI_TABLE_SCHEMA_VERSION` lives in `export_pipeline.py` beside `OPTARI_FILE_FORMAT_VERSION`. `CONFIG_SCHEMA_VERSION` versions the user's config file and a
+mismatch archives `~/.optari`.
 
-`import_roi_table_from_xlsx()` rejects a file with no `patari_meta`
+`import_roi_table_from_xlsx()` rejects a file with no `optari_meta`
 sheet, a version mismatch, a missing fixed column, or a row with a blank `roi_group_uid`.
 Everything else is reconciled **by name**: unknown columns are dropped and absent ones filled
 with NaN.

@@ -1,13 +1,13 @@
 # Presets
 
-Reusable processing configuration, stored as one JSON file per preset under `~/.patari/config/presets/<category>/`.
+Reusable processing configuration, stored as one JSON file per preset under `~/.optari/config/presets/<category>/`.
 
 Presets aren't part of the Settings dialog. Instead, each category is managed from its own dock's
 **Save Preset** / **Remove Preset** controls.
 
 ## ROI presets (`presets/roi/`)
 
-A saved ROI template. The `geometry` block is the same representation PATARI uses for the saved analysis table and for HDF5 export: vertices in PATATO coordinates, metres, origin at the image centre, so the shape does not depend on the field of view it was drawn on. `tissue_class` can be used for automatic placement, by setting it to the respective class in an available segmentation map.
+A saved ROI template. The `geometry` block is the same representation OPTARI uses for the saved analysis table and for HDF5 export: vertices in PATATO coordinates, metres, origin at the image centre, so the shape does not depend on the field of view it was drawn on. `tissue_class` can be used for automatic placement, by setting it to the respective class in an available segmentation map.
 
 `source_fov_m` records the field of view the template was drawn on, in metres. It is needed to re-place the template proportionally when it is applied to a scan with a different field of view,
 
@@ -99,7 +99,7 @@ Which model/class to run, and how to place an ROI from the resulting mask (see
 
 An entire analysis applied to a whole dataset. Unlike the other categories a batch preset holds no processing settings of its own, and isntead it **references** the presets above. See the [Batch Processing](../user-guide/batch-processing.md).
 
-Batch presets are edited in their own window (**PATARI → Batch Processing…**), which shows the JSON, an **Apply** button to re-check it, and **Save Preset** / **Remove Preset**.
+Batch presets are edited in their own window (**OPTARI → Batch Processing…**), which shows the JSON, an **Apply** button to re-check it, and **Save Preset** / **Remove Preset**.
 
 ```json title="clinical_muscle_roi.json"
 {
@@ -137,7 +137,7 @@ Each entry is a **preset name only**. Omit a step to skip it.
 | `unmixing` | `presets/unmixing/` | Wavelengths resolve per scan, so a scan missing them fails on its own. |
 | `roi` | `presets/roi/` | The ROI placed and measured. Its `placement` decides static or auto. |
 
-An empty `"steps": {}` with `outputs.hdf5` on is a pure vendor-to-PATARI-HDF5 converter.
+An empty `"steps": {}` with `outputs.hdf5` on is a pure vendor-to-OPTARI-HDF5 converter.
 
 ### `source`
 
@@ -146,12 +146,12 @@ A layer-name **prefix** picking the one reconstruction the run analyses. One bat
 | Value | Meaning |
 | --- | --- |
 | `null` with a `reconstruction` step | The reconstruction this plan just produced. |
-| `null` with no `reconstruction` step | The scan's default PA layer (see `DEFAULT_PA_LAYER`). Flagged as a warning, since it is implicit. |
+| `null` with no `reconstruction` step | The scan's default OA layer (see `DEFAULT_PA_LAYER`). Flagged as a warning, since it is implicit. |
 | `"Recon: iThera"` | The layer whose name starts with this. A scan without one fails and the run continues. |
 
 ### `frame`
 
-Which frame each scan is analysed on.
+The anchor frame: where a `static` ROI's shape is drawn, and which frame the overlay PNG and the report's `analysis_frame` column come from. It does **not** decide how many frames get analysed, which is selected by `measure.all_frames` below.
 
 | Value | Meaning |
 | --- | --- |
@@ -164,9 +164,9 @@ How wide the measurement reaches. Mirrors the **Include all …** boxes in the A
 
 | Key | Values | Meaning |
 | --- | --- | --- |
-| `layers` | `"analysis"` (default), `"all_pa"` | `analysis` measures the `source` reconstruction plus what this run unmixed from it. `all_pa` measures every PA layer in the scan, including reconstructions the plan did not make. |
+| `layers` | `"analysis"` (default), `"all_pa"` | `analysis` measures the `source` reconstruction plus what this run unmixed from it. `all_pa` measures every OA layer in the scan, including reconstructions the plan did not make. |
 | `all_channels` | `true` (default), `false` | Every channel, or just the default one. |
-| `all_frames` | `false` (default), `true` | Every frame. The ROI is placed on each frame (re-anchored per frame for `auto` placement) and measured there, and reconstruction and segmentation run over all frames too, which is much slower. |
+| `all_frames` | `false` (default), `true` | Every frame, overriding `frame` above. Reconstruction, segmentation and measurement all run over every frame instead of just the anchor frame. The ROI is placed on each frame (re-anchored per frame for `auto` placement) and measured there. `frame` still picks the overlay/report anchor. |
 
 ### `outputs`
 
@@ -182,4 +182,4 @@ How wide the measurement reaches. Mirrors the **Include all …** boxes in the A
 
 ## Sharing presets
 
-Any preset is just a JSON file that can be copied into another machines `~/.patari/config/presets/<category>/` to reuse the same configuration across workstations.
+Any preset is just a JSON file that can be copied into another machines `~/.optari/config/presets/<category>/` to reuse the same configuration across workstations.
