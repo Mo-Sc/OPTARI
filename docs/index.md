@@ -37,7 +37,11 @@ visualization, then adds a multi-patient study workflow, ROI annotation, automat
 
 Most existing tools for OA-US analysis are either hardware-locked vendor software, or script-based engineering
 frameworks aimed at algorithmic research. They are not intended for fast, multi-patient workflows in clinical
-studies. OPTARI is built specifically as a graphical, non-programming interface that is intuitive to use and assists clinicians with automatic parameter selection and shareable configurations.
+studies. OPTARI is built specifically as a graphical, non-programming interface that is intuitive to use and assists clinicians with automatic parameter selection and shareable configurations. 
+
+!!! note
+    OPTARI is research software intended for the analysis of data from clinical studies and has not undergone  assessment as a medical device. It is not intended for diagnosis or treatment decisions. 
+
 
 ## Key Features
 

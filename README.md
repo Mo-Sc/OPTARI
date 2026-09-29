@@ -84,3 +84,4 @@ If OPTARI is useful in your research, please cite the accompanying paper:
 }
 ```
 
+OPTARI is research software intended for the analysis of data from clinical studies and has not undergone  assessment as a medical device. It is not intended for diagnosis or treatment decisions. 
