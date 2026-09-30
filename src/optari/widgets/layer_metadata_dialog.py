@@ -56,7 +56,9 @@ class LayerMetadataDialog(QDialog):
         tabs.addTab(self._create_table(ipasc_metadata_rows(pa_data)), "IPASC")
         tabs.addTab(self._build_clinical_tab(pa_data, controller), "Clinical")
 
-        buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Close)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Save | QDialogButtonBox.Close
+        )
         buttons.rejected.connect(self.reject)
         buttons.accepted.connect(self._on_save)
 
@@ -66,10 +68,14 @@ class LayerMetadataDialog(QDialog):
 
     def _build_clinical_tab(self, pa_data, controller) -> QWidget:
         if pa_data is None:
-            return self._create_table([("Status", "No scan loaded", "No scan loaded")])
+            return self._create_table(
+                [("Status", "No scan loaded", "No scan loaded")]
+            )
 
-        current = controller.clinical_metadata_edits if controller.clinical_metadata_edits is not None else (
-            pa_data.get_clinical_metadata() or {}
+        current = (
+            controller.clinical_metadata_edits
+            if controller.clinical_metadata_edits is not None
+            else (pa_data.get_clinical_metadata() or {})
         )
         rows = [(str(key), str(value), "") for key, value in current.items()]
         self._clinical_table = self._create_table(rows, editable=True)
@@ -114,7 +120,9 @@ class LayerMetadataDialog(QDialog):
         self.accept()
 
     @staticmethod
-    def _create_table(rows: list[tuple[str, str, str]], editable: bool = False) -> QTableWidget:
+    def _create_table(
+        rows: list[tuple[str, str, str]], editable: bool = False
+    ) -> QTableWidget:
         table = QTableWidget(len(rows), 2)
         table.setHorizontalHeaderLabels(["Property", "Value"])
         table.verticalHeader().setVisible(False)

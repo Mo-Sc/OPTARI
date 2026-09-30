@@ -35,7 +35,11 @@ class ScanBrowserDock:
     def set_scans(self, scan_items: list[tuple[Path, ScanInfo]]) -> None:
         self.scans_list.clear()
         for path, info in scan_items:
-            display = f"{path.name} ({info.internal_name})" if info.internal_name else path.name
+            display = (
+                f"{path.name} ({info.internal_name})"
+                if info.internal_name
+                else path.name
+            )
             item = QListWidgetItem(display)
             item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
             item.setCheckState(Qt.Unchecked)
@@ -56,7 +60,7 @@ def create_scan_browser_dock() -> ScanBrowserDock:
     folder_lineedit = QLineEdit()
     folder_lineedit.setReadOnly(True)
     browse_button = QPushButton("Open Study")
-    browse_button.setToolTip("Select a folder containing scans to load (iThera or HDF5)")
+    browse_button.setToolTip("Select a study folder or one HDF5 scan to load")
 
     row_layout.addWidget(folder_lineedit, stretch=1)
     row_layout.addWidget(browse_button)
@@ -73,9 +77,7 @@ def create_scan_browser_dock() -> ScanBrowserDock:
         "Export the loaded scan, ROIs, and derived layers as HDF5 (requires a loaded scan)"
     )
     ipasc_button = QPushButton("Export IPASC")
-    ipasc_button.setToolTip(
-        "Export the raw time series as a IPASC HDF5 file."
-    )
+    ipasc_button.setToolTip("Export the raw time series as a IPASC HDF5 file.")
     export_layer_button = QPushButton("Export View")
     export_layer_button.setToolTip(
         "Export the current viewer display as an image or video"

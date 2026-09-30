@@ -54,11 +54,14 @@ class BatchJob:
 
     @property
     def scan_name(self) -> str:
+        """The scan's internal name from its acquisition metadata, or empty if it has none."""
         return self.scan_info.internal_name or ""
 
 
 @dataclass(frozen=True)
 class OutputSpec:
+    """Which outputs a batch run writes per scan: ROI table, HDF5/IPASC export, and overlay PNG."""
+
     xlsx: bool = True
     hdf5: bool = False
     ipasc: bool = False
@@ -88,10 +91,12 @@ class BatchPlan:
 
     @property
     def table_path(self) -> Path:
+        """Where the run's ROI measurements are written (batch_roi_table.xlsx)."""
         return self.output_dir / BATCH_TABLE_NAME
 
     @property
     def report_path(self) -> Path:
+        """Where the run's per-scan status report is written (batch_report.xlsx)."""
         return self.output_dir / BATCH_REPORT_NAME
 
     @property
@@ -135,7 +140,9 @@ def _load_named(store: PresetStore, name: str, label: str) -> dict:
     try:
         return store.load(name)
     except (FileNotFoundError, ValueError, OSError) as exc:
-        raise ValueError(f"Could not load {label} preset '{name}': {exc}") from exc
+        raise ValueError(
+            f"Could not load {label} preset '{name}': {exc}"
+        ) from exc
 
 
 def _measure_scope(spec: dict) -> MeasureScope:
@@ -161,10 +168,14 @@ def _frame_selector(value) -> int | str:
         return value
     if value in (None, "motion"):
         return "motion"
-    raise ValueError(f"Invalid frame selector {value!r}. Use 'motion' or a frame number.")
+    raise ValueError(
+        f"Invalid frame selector {value!r}. Use 'motion' or a frame number."
+    )
 
 
-def build_plan(*, root: Path, batch_preset: dict, output_dir: Path) -> BatchPlan:
+def build_plan(
+    *, root: Path, batch_preset: dict, output_dir: Path
+) -> BatchPlan:
     """Resolve *batch_preset* against the dataset at *root*.
 
     Raises ValueError, message safe to show the user, when the preset cannot be
@@ -186,7 +197,9 @@ def build_plan(*, root: Path, batch_preset: dict, output_dir: Path) -> BatchPlan
     name = _step_preset_name(steps, "reconstruction")
     if name is not None:
         reconstruction = _load_named(
-            PresetStore(get_user_reconstruction_presets_dir()), name, "reconstruction"
+            PresetStore(get_user_reconstruction_presets_dir()),
+            name,
+            "reconstruction",
         )
     name = _step_preset_name(steps, "unmixing")
     if name is not None:
@@ -196,7 +209,9 @@ def build_plan(*, root: Path, batch_preset: dict, output_dir: Path) -> BatchPlan
     name = _step_preset_name(steps, "segmentation")
     if name is not None:
         segmentation = _load_named(
-            PresetStore(get_user_segmentation_presets_dir()), name, "segmentation"
+            PresetStore(get_user_segmentation_presets_dir()),
+            name,
+            "segmentation",
         )
 
     roi = None
@@ -205,7 +220,9 @@ def build_plan(*, root: Path, batch_preset: dict, output_dir: Path) -> BatchPlan
         try:
             roi = RoiPresetStore(get_user_roi_presets_dir()).get(name)
         except (FileNotFoundError, TypeError, ValueError, OSError) as exc:
-            raise ValueError(f"Could not load ROI preset '{name}': {exc}") from exc
+            raise ValueError(
+                f"Could not load ROI preset '{name}': {exc}"
+            ) from exc
 
     outputs_spec = batch_preset.get("outputs") or {}
     return BatchPlan(
@@ -239,9 +256,13 @@ def validate_plan(plan: BatchPlan) -> list[str]:
     problems: list[str] = []
 
     if not plan.jobs:
-        problems.append("No scans found. Pick a folder holding Study_*/Scan_* data.")
+        problems.append(
+            "No scans found. Pick a folder holding Study_*/Scan_* data."
+        )
     if not plan.step_names and not (plan.outputs.hdf5 or plan.outputs.ipasc):
-        problems.append("The plan has no analysis steps and no file export, so it would do nothing.")
+        problems.append(
+            "The plan has no analysis steps and no file export, so it would do nothing."
+        )
 
     problems += _validate_segmentation(plan)
     problems += _validate_unmixing(plan)
@@ -265,7 +286,9 @@ def _validate_segmentation(plan: BatchPlan) -> list[str]:
     needs_classes = plan.roi is not None and plan.roi_placement == "auto"
     if plan.segmentation is None:
         if needs_classes:
-            return ["Auto ROI placement needs a segmentation step, but the plan has none."]
+            return [
+                "Auto ROI placement needs a segmentation step, but the plan has none."
+            ]
         return []
 
     try:
@@ -287,7 +310,9 @@ def _validate_segmentation(plan: BatchPlan) -> list[str]:
 
     known_ids = set(config.class_names)
     unknown = sorted(
-        int(c) for c in plan.segmentation.get("selected_class_ids", []) if int(c) not in known_ids
+        int(c)
+        for c in plan.segmentation.get("selected_class_ids", [])
+        if int(c) not in known_ids
     )
     if unknown:
         problems.append(f"Model '{model_id}' has no class id(s) {unknown}.")
@@ -354,7 +379,9 @@ def describe_plan(plan: BatchPlan) -> str:
             f"{plan.reconstruction.get('RECONSTRUCTION_SPEED_OF_SOUND', '?')} m/s"
         )
     if plan.unmixing is not None:
-        lines.append(f"Unmixing:   {', '.join(plan.unmixing.get('SPECTRA', []))}")
+        lines.append(
+            f"Unmixing:   {', '.join(plan.unmixing.get('SPECTRA', []))}"
+        )
     if plan.segmentation is not None:
         lines.append(f"Model:      {plan.segmentation.get('model_id', '?')}")
     if plan.roi is not None:
@@ -385,9 +412,16 @@ def describe_plan(plan: BatchPlan) -> str:
             f"{'all frames' if scope.all_frames else 'analysis frame'}, "
             f"{'all channels' if scope.all_channels else 'current channel'}"
         )
-    wanted = [name for name, on in
-              (("xlsx", plan.outputs.xlsx), ("hdf5", plan.outputs.hdf5),
-               ("ipasc", plan.outputs.ipasc), ("overlay png", plan.outputs.overlay_png)) if on]
+    wanted = [
+        name
+        for name, on in (
+            ("xlsx", plan.outputs.xlsx),
+            ("hdf5", plan.outputs.hdf5),
+            ("ipasc", plan.outputs.ipasc),
+            ("overlay png", plan.outputs.overlay_png),
+        )
+        if on
+    ]
     lines.append(f"Outputs:    {', '.join(wanted) or 'none'}")
     lines.append(f"Folder:     {plan.output_dir}")
     return "\n".join(lines)

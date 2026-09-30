@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
-import patato as pat # type: ignore
+import patato as pat  # type: ignore
 from napari.layers import Image, Shapes
 from napari.viewer import Viewer
 
@@ -19,6 +19,7 @@ from optari.widgets.scan_browser_dock import ScanBrowserDock
 from optari.controllers.scan_controller import ScanInfo
 from optari.widgets.annotation_dock import AnnotationDock
 from optari.widgets.reconstruction_dock import ReconstructionDock
+from optari.widgets.segmentation_dock import SegmentationDock
 from optari.widgets.time_analysis_dock import TimeAnalysisDock
 from optari.widgets.unmixing_dock import UnmixingDock
 from optari.widgets.histogram_dock import HistogramDock
@@ -32,7 +33,9 @@ from optari.controllers.roi_controller import RoiController
 from optari.controllers.segmentation_controller import SegmentationController
 from optari.controllers.analysis_controller import AnalysisController
 from optari.controllers.unmixing_controller import UnmixingController
-from optari.controllers.reconstruction_controller import ReconstructionController
+from optari.controllers.reconstruction_controller import (
+    ReconstructionController,
+)
 
 from optari.config import settings
 
@@ -65,7 +68,7 @@ class OptariController:
         # --- right elements ---
         self.scan_browser: ScanBrowserDock | None = None
         self.annotation: AnnotationDock | None = None
-        self.segmentation = None
+        self.segmentation: SegmentationDock | None = None
         self.unmixing: UnmixingDock | None = None
         self.reconstruction: ReconstructionDock | None = None
         self._scan_browser_dock_widget = None
@@ -73,7 +76,6 @@ class OptariController:
         self._segmentation_dock_widget = None
         self._unmixing_dock_widget = None
         self._reconstruction_dock_widget = None
-
 
         self.scan_ctrl = ScanController(self)
         self.roi_ctrl = RoiController(self)
@@ -111,10 +113,6 @@ class OptariController:
         self._connect_events()
         self.register_shortcuts()
 
-        # If a path is provided, populate scan browser / load scan.
-        # Otherwise, the Scan Browser dock drives loading.
-        # if path is not None:
-        #     self._init_path(self.path)
         if self.scan_browser is not None:
             # Show an empty folder field instead of defaulting to '.'
             self.scan_browser.folder_lineedit.setText("")
@@ -138,7 +136,9 @@ class OptariController:
             try:
                 self.active_task.await_workers(msecs=5000)
             except RuntimeError:
-                logger.warning("background task did not stop within 5 s of shutdown")
+                logger.warning(
+                    "background task did not stop within 5 s of shutdown"
+                )
             self.active_task = None
 
         for controller in (
@@ -153,7 +153,9 @@ class OptariController:
                 controller.unbind_events()
                 controller.teardown()
             except Exception:
-                logger.exception("Error shutting down %s", type(controller).__name__)
+                logger.exception(
+                    "Error shutting down %s", type(controller).__name__
+                )
 
         # Disconnect events
         try:
@@ -196,7 +198,9 @@ class OptariController:
 
     # ============ viewer setup ============
     def _setup_viewer(self) -> None:
-        self.viewer.scene.overlays.axes.visible = False # dont show axes by default
+        self.viewer.scene.overlays.axes.visible = (
+            False  # dont show axes by default
+        )
         self.viewer.scene.overlays.axes.labels = True
         self.viewer.canvas.grid.enabled = False
         self.viewer.canvas.overlays.scale_bar.visible = True
@@ -229,10 +233,7 @@ class OptariController:
 
         self._shapes_layer_bindings = [
             # Shapes layer data changes drive ROI table refresh, label updates, and formatting.
-            (
-                self.shapes_layer.events.data,
-                self._on_shapes_data_changed
-            ),
+            (self.shapes_layer.events.data, self._on_shapes_data_changed),
             # Shape copy/paste appends shapes without emitting events.data, so watch set_data too.
             (
                 self.shapes_layer.events.set_data,
@@ -566,8 +567,14 @@ class OptariController:
         ts, ts_delta = self.timestamp_for_slice(frame_idx, channel_idx)
         scan_folder = self.path.stem if self.path else "N/A"
         scan_info = self._scans.get(self.path)
-        scan_name = scan_info.internal_name if scan_info and scan_info.internal_name else ""
-        scan_display = f"{scan_folder} ({scan_name})" if scan_name else scan_folder
+        scan_name = (
+            scan_info.internal_name
+            if scan_info and scan_info.internal_name
+            else ""
+        )
+        scan_display = (
+            f"{scan_folder} ({scan_name})" if scan_name else scan_folder
+        )
         study_str = self.study_path.stem if self.study_path else "N/A"
         self.info.set_rows(
             [
@@ -583,7 +590,11 @@ class OptariController:
         """Open the metadata window. Scan metadata are shown even without an image layer."""
         selected_layers = list(self.viewer.layers.selection)
         layer = next(
-            (candidate for candidate in reversed(selected_layers) if isinstance(candidate, Image)),
+            (
+                candidate
+                for candidate in reversed(selected_layers)
+                if isinstance(candidate, Image)
+            ),
             self.active_recon_layer,
         )
 

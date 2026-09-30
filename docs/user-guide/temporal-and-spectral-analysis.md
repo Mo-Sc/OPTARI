@@ -13,7 +13,7 @@ The ROI feature for the y-axis can be selected in the Annotation dock on the rig
 
 - **Selected ROI** (default): every ROI currently shown on the viewed frame is **reused on every frame**. This works if the movement within a sequence is low.
 - **Track ID**: pick one tracked ROI from the dropdown (populated from ROIs currently in the viewer), and instead of a fixed position, all the ROIs that **have the same `track_id`** are measured on their respective frame and used for the plot. This can be used to account for movement, for example by placing a ROI preset across all scans and then adjust its position on each scan (see [Tracking Intensity over Time](../clinical-workflows/time-tracking-workflow.md)). A frame the track has no ROI on is left as a gap in the plot.
-![Time Analysis](../assets/screenshots/placeholders/ss_timeanalysis.png)
+![Time Analysis](../assets/screenshots/ss_timeanalysis.png)
 
 !!! note
     Features like `size_mm` or `n_pixels` are constant by default, but become informative when combined with the **Exclude** intensity mode (see [ROI Annotation](roi-annotation.md#intensity-handling)) — for example, plotting the number of pixels above a threshold over time.
@@ -22,13 +22,13 @@ The ROI feature for the y-axis can be selected in the Annotation dock on the rig
 
 Plots separate pixel-intensity distributions for each active ROI, for the currently selected layer, frame and channel, using the bin count configured in [`config.json`](../configuration/configuration-schema.md) (`analysis.histogram_bins`).
 
-![Histogram Analysis](../assets/screenshots/placeholders/ss_histo.png)
+![Histogram Analysis](../assets/screenshots/ss_histo.png)
 
 ## Spectrum
 
 Plots per-ROI mean intensity across channels (i.e. wavelengths), showing the spectral signature of the tissue inside the selected ROI.
 
-![Spectra Analysis](../assets/screenshots/placeholders/ss_spectraanalysis.png)
+![Spectra Analysis](../assets/screenshots/ss_spectraanalysis.png)
 
 All three plots respect the intensity clip/exclude filtering defined in the **Annotation** dock.
 

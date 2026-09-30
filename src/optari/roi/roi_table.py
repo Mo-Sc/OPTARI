@@ -32,15 +32,18 @@ class SavedRoiTable:
     """
 
     def __init__(self, autosave_path: Path | None = None):
+        """Create an empty table that autosaves to *autosave_path*, if given."""
         self._rows = pd.DataFrame(columns=saved_export_columns())
         self._autosave_path = autosave_path
 
     # ============ reading ============
     def __len__(self) -> int:
+        """Number of saved rows."""
         return len(self._rows)
 
     @property
     def is_empty(self) -> bool:
+        """True if the table has no rows."""
         return self._rows.empty
 
     @property
@@ -92,7 +95,7 @@ class SavedRoiTable:
         return remeasured
 
     def delete_at(self, positions: list[int]) -> int:
-        """Drop rows by view position; returns how many went."""
+        """Drop rows by view position. Returns how many went."""
         if not positions:
             return 0
         # Map positions to index labels first, so the drop stays correct even if the
@@ -117,7 +120,6 @@ class SavedRoiTable:
 
         skipped = int(duplicates.sum())
         return len(rows) - skipped, skipped
-
 
     def _autosave(self) -> None:
         """

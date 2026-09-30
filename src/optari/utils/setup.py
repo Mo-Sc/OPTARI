@@ -8,7 +8,9 @@ from imageio.v3 import imread
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_CONFIGS_DIR = Path(__file__).resolve().parent.parent / "config" / "default_configs"
+DEFAULT_CONFIGS_DIR = (
+    Path(__file__).resolve().parent.parent / "config" / "default_configs"
+)
 
 # Names this session's log and ROI table backup. Start time plus process id, so OPTARI instances
 # running side by side never write to the same file, and a session's log and backup match.
@@ -16,14 +18,18 @@ SESSION_ID = f"{datetime.now():%Y%m%dT%H%M%S}_{os.getpid()}"
 KEPT_SESSION_FILES = 20
 
 
-def _copy_default_presets(default_configs_dir: Path, user_config_dir: Path) -> None:
+def _copy_default_presets(
+    default_configs_dir: Path, user_config_dir: Path
+) -> None:
     default_presets_dir = default_configs_dir / "presets"
     if not default_presets_dir.exists():
         return
 
     user_presets_dir = user_config_dir / "presets"
     for preset_file in default_presets_dir.rglob("*.json"):
-        target = user_presets_dir / preset_file.relative_to(default_presets_dir)
+        target = user_presets_dir / preset_file.relative_to(
+            default_presets_dir
+        )
         # Never overwrite a preset that the user has edited.
         if target.exists():
             continue
@@ -38,7 +44,9 @@ def get_user_dir() -> Path:
 
     config_dir = user_dir / "config"
     if not DEFAULT_CONFIGS_DIR.exists():
-        raise FileNotFoundError(f"Default configs directory not found at {DEFAULT_CONFIGS_DIR}")
+        raise FileNotFoundError(
+            f"Default configs directory not found at {DEFAULT_CONFIGS_DIR}"
+        )
 
     # First-run:
     if not (config_dir / "config.json").exists():
@@ -97,21 +105,26 @@ def get_user_config_file() -> Path:
     """Returns the path to the configuration file."""
     return get_user_dir() / "config" / "config.json"
 
+
 def get_user_autosave_dir() -> Path:
     """Returns the directory holding one Saved Analysis table backup per session."""
     return get_user_dir() / "autosave"
+
 
 def get_user_logs_dir() -> Path:
     """Returns the directory holding one log file per session."""
     return get_user_dir() / "logs"
 
+
 def get_user_models_dir() -> Path:
     """Returns the path to the models directory."""
     return get_user_dir() / "models"
 
+
 def get_user_seg_models_config_file() -> Path:
     """Returns the path to the segmentation models configuration file."""
     return get_user_dir() / "config" / "segmentation_models.json"
+
 
 def new_session_file(directory: Path, prefix: str, suffix: str) -> Path:
     """This session's file in *directory*, after deleting all but the newest older ones.
@@ -120,13 +133,17 @@ def new_session_file(directory: Path, prefix: str, suffix: str) -> Path:
     holds at most ``KEPT_SESSION_FILES`` files with this prefix.
     """
     directory.mkdir(parents=True, exist_ok=True)
-    for old_file in sorted(directory.glob(f"{prefix}_*{suffix}"))[: -(KEPT_SESSION_FILES - 1)]:
+    for old_file in sorted(directory.glob(f"{prefix}_*{suffix}"))[
+        : -(KEPT_SESSION_FILES - 1)
+    ]:
         old_file.unlink()
     return directory / f"{prefix}_{SESSION_ID}{suffix}"
+
 
 def get_default_config_file() -> Path:
     """Returns the path to the packaged default configuration file."""
     return DEFAULT_CONFIGS_DIR / "config.json"
+
 
 def configure_napari(viewer) -> None:
     """
@@ -138,7 +155,9 @@ def configure_napari(viewer) -> None:
     from optari.config import settings
 
     napari_settings = get_settings()
-    napari_settings.application.playback_fps = settings.general.DEFAULT_PLAYBACK_FPS
+    napari_settings.application.playback_fps = (
+        settings.general.DEFAULT_PLAYBACK_FPS
+    )
     napari_settings.application.save_window_state = True
     # one layer per grid cell, in layer list order.
     napari_settings.application.grid_stride = -1

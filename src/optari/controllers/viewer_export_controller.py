@@ -24,30 +24,46 @@ class ViewerExportController(TaskControllerBase):
 
     @staticmethod
     def on_export_clicked(controller) -> None:
+        """Open the export dialog and write the chosen image or video to disk."""
         viewer = controller.viewer
         parent_widget = viewer.window._qt_window
         active_layer = viewer.layers.selection.active
         n_frames = viewer.dims.nsteps[0] if viewer.dims.ndim > 0 else 1
-        dialog = ViewerExportDialog(parent_widget, video_available=n_frames > 1)
+        dialog = ViewerExportDialog(
+            parent_widget, video_available=n_frames > 1
+        )
         if dialog.exec() != ViewerExportDialog.Accepted:
             return
 
         dialog_settings = dialog.get_dialog_export_settings()
-        default_name = f"OPTARIVIEW_{active_layer.name if active_layer else 'viewer'}"
+        default_name = (
+            f"OPTARIVIEW_{active_layer.name if active_layer else 'viewer'}"
+        )
         if not dialog_settings["video"]:
-            frame_id = viewer.dims.current_step[0] if viewer.dims.ndim > 0 else 0
+            frame_id = (
+                viewer.dims.current_step[0] if viewer.dims.ndim > 0 else 0
+            )
             default_name += f"_F{frame_id}"
         channel_id = viewer.dims.current_step[1] if viewer.dims.ndim > 1 else 0
         default_name += f"_C{channel_id}"
 
         if dialog_settings["video"]:
-            ViewerExportController._export_video(viewer, parent_widget, default_name, n_frames, dialog_settings)
+            ViewerExportController._export_video(
+                viewer, parent_widget, default_name, n_frames, dialog_settings
+            )
             return
 
-        ViewerExportController._export_image(viewer, parent_widget, default_name, dialog_settings["include_colorbars"])
+        ViewerExportController._export_image(
+            viewer,
+            parent_widget,
+            default_name,
+            dialog_settings["include_colorbars"],
+        )
 
     @staticmethod
-    def _export_image(viewer, parent_widget, default_name: str, include_colorbars: bool) -> None:
+    def _export_image(
+        viewer, parent_widget, default_name: str, include_colorbars: bool
+    ) -> None:
         filename, file_filter = QFileDialog.getSaveFileName(
             parent_widget,
             "Export Image",
@@ -57,17 +73,27 @@ class ViewerExportController(TaskControllerBase):
         if not filename:
             return
 
-        filename = Path(filename).with_suffix(".tiff" if "TIFF" in file_filter else ".png")
+        filename = Path(filename).with_suffix(
+            ".tiff" if "TIFF" in file_filter else ".png"
+        )
 
-        save_viewer_screenshot(viewer, filename, include_colorbars=include_colorbars)
+        save_viewer_screenshot(
+            viewer, filename, include_colorbars=include_colorbars
+        )
         logger.info("Exported image to %s", filename)
 
     @staticmethod
-    def _export_video(viewer, parent_widget, default_name: str, n_frames: int, dialog_settings) -> None:
+    def _export_video(
+        viewer,
+        parent_widget,
+        default_name: str,
+        n_frames: int,
+        dialog_settings,
+    ) -> None:
         """Capture the viewer canvas frame by frame and mux it into an MP4.
 
         Unlike the reconstruction/unmixing/segmentation tasks, this cannot run in a worker
-        thread. `camera.mouse_pan`/`mouse_zoom` are blocked to prevent the camera drifting mid-capture 
+        thread. `camera.mouse_pan`/`mouse_zoom` are blocked to prevent the camera drifting mid-capture
         since that would corrupt the recording
         """
         filename, _ = QFileDialog.getSaveFileName(
@@ -82,7 +108,9 @@ class ViewerExportController(TaskControllerBase):
         filename = Path(filename).with_suffix(".mp4")
         # Write to a scratch file and rename only once every frame is captured, so a
         # cancelled or failed export can never leave a corrupt file at the real destination.
-        fd, tmp_name = tempfile.mkstemp(dir=filename.parent, prefix=f".{filename.stem}-", suffix=".mp4")
+        fd, tmp_name = tempfile.mkstemp(
+            dir=filename.parent, prefix=f".{filename.stem}-", suffix=".mp4"
+        )
         os.close(fd)
         tmp_path = Path(tmp_name)
         tmp_path.unlink()
@@ -90,7 +118,10 @@ class ViewerExportController(TaskControllerBase):
         fps = dialog_settings["fps"]
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         original_step = viewer.dims.current_step
-        mouse_pan, mouse_zoom = viewer.scene.camera.mouse_pan, viewer.scene.camera.mouse_zoom
+        mouse_pan, mouse_zoom = (
+            viewer.scene.camera.mouse_pan,
+            viewer.scene.camera.mouse_zoom,
+        )
         writer = None
         frames_written = 0
 
@@ -99,13 +130,22 @@ class ViewerExportController(TaskControllerBase):
             show_activity_dock(viewer, True)
             viewer.scene.camera.mouse_pan = False
             viewer.scene.camera.mouse_zoom = False
-            with colorbars_visible(viewer, dialog_settings["include_colorbars"]):
-                for frame_id in cancelable_progress(range(n_frames), desc="Exporting video"):
-                    viewer.dims.current_step = (frame_id, *viewer.dims.current_step[1:])
+            with colorbars_visible(
+                viewer, dialog_settings["include_colorbars"]
+            ):
+                for frame_id in cancelable_progress(
+                    range(n_frames), desc="Exporting video"
+                ):
+                    viewer.dims.current_step = (
+                        frame_id,
+                        *viewer.dims.current_step[1:],
+                    )
                     frame = viewer.screenshot(canvas_only=True)[..., :3]
                     if writer is None:
                         height, width = frame.shape[:2]
-                        writer = cv2.VideoWriter(str(tmp_path), fourcc, fps, (width, height))
+                        writer = cv2.VideoWriter(
+                            str(tmp_path), fourcc, fps, (width, height)
+                        )
                     writer.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
                     frames_written += 1
         finally:

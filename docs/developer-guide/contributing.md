@@ -7,13 +7,15 @@ Issues and pull requests are welcome on [GitHub](https://github.com/Mo-Sc/OPTARI
 ```bash
 git clone git@github.com:Mo-Sc/OPTARI.git
 cd OPTARI
-pip install -e ".[test,docs]"
+pip install -e ".[test,docs,dev]"
 ```
+
+**Note:** this pulls in a [custom PATATO fork](https://github.com/Mo-Sc/patato/releases/tag/patari-v0.8.0), not upstream [BohndiekLab/patato](https://github.com/BohndiekLab/patato).
 
 
 ### Test data
 
-The tests use two scans, recorded by the iThera MSOT Acuity Scanner, taken from [doi.org/10.5281/zenodo.22044239](https://doi.org/10.5281/zenodo.22044239). They can be downloaded [here](https://faubox.rrze.uni-erlangen.de/dl/fiQB2F1YwFh3axKna8TSAC/Study_19.zip).
+The tests use two scans, recorded by the iThera MSOT Acuity Scanner, taken from [doi.org/10.5281/zenodo.22044239](https://doi.org/10.5281/zenodo.22044239). They can be downloaded [here](https://faubox.rrze.uni-erlangen.de/dl/fi3spvKzSi48ZeCS8d2Yom/Study_19.zip).
 
 
 ```
@@ -30,7 +32,7 @@ Unzip the archive, put the test folder under tests/testdata/ and run:
 python -m pytest
 ```
 
-Segmentation tests additionally need the ONNX weights of `unet_msot_2_ta` and skip when they are not in `~/.optari/models`. Run segmentation once from the GUI to download them.
+Segmentation tests additionally need the ONNX weights of `c_unet_gastrocnemius-transverse` and skip when they are not in `~/.optari/models`. Run segmentation once from the GUI to download them.
 
 
 ### Tests overview

@@ -1,3 +1,11 @@
+"""ROI shape generators used by the segmentation dock.
+
+``ROIShape``/``Rectangle``/``Ellipse``/``Polygon`` derive a new shape's geometry from
+a segmentation class mask (largest-component isolation, centre-column anchoring,
+depth offset, contour extraction). They do not participate in persistence, unlike
+``RoiGeometry``.
+"""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -17,8 +25,7 @@ class ROIPlacementConfig:
 
 
 def largest_component(mask: np.ndarray) -> np.ndarray:
-    """Boolean mask of *mask*'s largest connected component.
-    """
+    """Boolean mask of *mask*'s largest connected component."""
     mask_u8 = mask.astype(np.uint8)
     if mask_u8.max() == 1:
         mask_u8 *= 255  # cv2's connectivity analysis expects a 0/255 image
@@ -60,11 +67,14 @@ class ROIShape(ABC):
     """
 
     def __init__(self, config: ROIPlacementConfig):
+        """Store *config*, shared by every concrete shape."""
         self.config = config
 
     @property
     @abstractmethod
-    def shape_type(self) -> str: ...
+    def shape_type(self) -> str:
+        """Napari shape type name this generator builds (``shapes_layer.add(shape_type=...)``)."""
+        ...
 
     @abstractmethod
     def to_napari_verts_world(
@@ -79,16 +89,20 @@ class ROIShape(ABC):
         """Convert the shape into Napari world coordinate vertices."""
 
     def _get_pixel_bounds(
-        self, mask: np.ndarray, sy: float, sx: float, use_center_anchor: bool = False
+        self,
+        mask: np.ndarray,
+        sy: float,
+        sx: float,
+        use_center_anchor: bool = False,
     ) -> tuple[int, int, int, int, np.ndarray]:
         """
         Shared geometry logic to calculate the pixel bounding box for any ROI.
-        
+
         sy, sx: Scale factors for Y and X dimensions.
-        use_center_anchor: 
+        use_center_anchor:
             If True (Box shapes), anchors Y to the top of the class at the image center.
             If False (Polygon), anchors Y to the absolute highest point of the component.
-        
+
         Returns: (x0, x1, y0, y1, largest_component_mask)
         """
         if sy <= 0 or sx <= 0:
@@ -108,12 +122,16 @@ class ROIShape(ABC):
             # Anchor Y to the absolute highest point of the component
             top_y = int(np.where(largest_mask.any(axis=1))[0][0])
 
-        largest_mask = largest_mask.astype(np.uint8)  # cv2.findContours needs this downstream
+        largest_mask = largest_mask.astype(
+            np.uint8
+        )  # cv2.findContours needs this downstream
 
         # 3. Calculate Trim Boundaries
         # Width: Symmetric around the scan center
         if self.config.width_mm is not None:
-            width_px = max(1, int(round(float(self.config.width_mm) / float(sx))))
+            width_px = max(
+                1, int(round(float(self.config.width_mm) / float(sx)))
+            )
             half_w = width_px // 2
             x0 = max(0, center_x - half_w)
             x1 = min(w, center_x + half_w)
@@ -124,14 +142,17 @@ class ROIShape(ABC):
         depth_mm = float(self.config.depth_mm or 0.0)
         depth_px = max(0, int(round(depth_mm / float(sy))))
         y0 = min(h, top_y + depth_px)
-        
+
         if self.config.height_mm is not None:
-            height_px = max(1, int(round(float(self.config.height_mm) / float(sy))))
+            height_px = max(
+                1, int(round(float(self.config.height_mm) / float(sy)))
+            )
             y1 = min(h, y0 + height_px)
         else:
             y1 = h
 
         return x0, x1, y0, y1, largest_mask
+
 
 class BoxShape(ROIShape):
     """Intermediate base class for shapes using the center-column reference."""
@@ -145,8 +166,14 @@ class BoxShape(ROIShape):
         ty: float = 0.0,
         tx: float = 0.0,
     ) -> np.ndarray:
+        """Rectangle/ellipse corners anchored to the class's top at the centre column.
+
+        Raises if the requested height exceeds the class's depth at that column.
+        """
         # Get standardized bounds
-        x0, x1, y0, y1, largest_mask = self._get_pixel_bounds(class_mask, sy, sx, use_center_anchor=True)
+        x0, x1, y0, y1, largest_mask = self._get_pixel_bounds(
+            class_mask, sy, sx, use_center_anchor=True
+        )
 
         # The box must not reach below the class at the centre column (non-empty: the
         # anchor above was found there).
@@ -171,15 +198,19 @@ class BoxShape(ROIShape):
 
 class Rectangle(BoxShape):
     """Rectangular ROI shape."""
+
     @property
     def shape_type(self) -> str:
+        """Napari shape type name: "rectangle"."""
         return "rectangle"
 
 
 class Ellipse(BoxShape):
     """Elliptical ROI shape."""
+
     @property
     def shape_type(self) -> str:
+        """Napari shape type name: "ellipse"."""
         return "ellipse"
 
 
@@ -195,6 +226,7 @@ class Polygon(ROIShape):
 
     @property
     def shape_type(self) -> str:
+        """Napari shape type name: "polygon"."""
         return "polygon"
 
     def to_napari_verts_world(
@@ -206,8 +238,13 @@ class Polygon(ROIShape):
         ty: float = 0.0,
         tx: float = 0.0,
     ) -> np.ndarray:
+        """Polygon verts from the class mask's contour, trimmed to the configured
+        bounds and anchored to the component's absolute top.
+        """
         # Use absolute-top anchor
-        x0, x1, y0, y1, largest_mask = self._get_pixel_bounds(class_mask, sy, sx, use_center_anchor=False)
+        x0, x1, y0, y1, largest_mask = self._get_pixel_bounds(
+            class_mask, sy, sx, use_center_anchor=False
+        )
 
         # Trim the mask down to the calculated boundaries
         trimmed_mask = np.zeros_like(largest_mask)
@@ -218,11 +255,13 @@ class Polygon(ROIShape):
             trimmed_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
         )
         if not contours:
-            raise ValueError("No polygon found after trimming. Check sizes and depth.")
+            raise ValueError(
+                "No polygon found after trimming. Check sizes and depth."
+            )
 
         largest_contour = max(contours, key=cv2.contourArea).squeeze()
         if largest_contour.ndim == 1:
-            largest_contour = largest_contour[np.newaxis, :]  
+            largest_contour = largest_contour[np.newaxis, :]
 
         # Convert to Napari world coordinates
         y_world = float(ty) + largest_contour[:, 1] * float(sy)

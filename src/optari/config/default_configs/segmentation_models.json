@@ -2,9 +2,9 @@
   "models": [
     {
       "adapter_class": "UKErUSSegAdapter",
-      "id": "unet_msot_2_ta",
-      "filename": "unet_msot_2_ta_sl0_20260430-172821.onnx",
-      "description": "trained on all MSOT2 samples, structural loss weight: 0.0",
+      "id": "c_unet_gastrocnemius-transverse",
+      "filename": "c_unet_ta_20260928_gastrocnemius.onnx",
+      "description": "trained on all annotated samples from https://doi.org/10.5281/zenodo.22044239. Structural loss weight: 0.0",
       "input_height": 224,
       "input_width": 224,
       "class_names": {
@@ -24,7 +24,59 @@
         "combine_class_groups": [[2,6]],
         "remove_small_objects_config": [[1, 50], [3,50], [4,50], [7,50], [8,50], [9,50], [2,25]]
       },
-      "url": "https://faubox.rrze.uni-erlangen.de/dl/fiBeMY3cbpRAqUS86Z64hg/unet_msot_2_ta_sl0_20260430-172821.onnx"
+      "url": "https://faubox.rrze.uni-erlangen.de/dl/fiGZkvzajyJASwFhfZt3DQ/c_unet_ta_20260928_gastrocnemius.onnx"
+    },
+    {
+      "adapter_class": "UKErUSSegAdapter",
+      "id": "c_unet_tibialis-anterior-longitudinal",
+      "filename": "c_unet_ta_20260928_tibialis-anterior-long.onnx",
+      "description": "trained on all annotated samples from https://doi.org/10.5281/zenodo.22044239. Finetuned for tibialis anterior. Structural loss weight: 0.0",
+      "input_height": 224,
+      "input_width": 224,
+      "class_names": {
+        "0": "background",
+        "1": "Haut",
+        "2": "Faszie1",
+        "3": "Muskel1",
+        "4": "Muskel2",
+        "5": "Membran",
+        "7": "Vorlaufstrecke",
+        "8": "SAT",
+        "9": "Gel"
+      },
+      "default_class": "Muskel1",
+      "postprocessing_config": {
+        "keep_largest_per_class": [1,3,7,8],
+        "combine_class_groups": [[2,6]],
+        "remove_small_objects_config": [[1, 50], [3,50], [4,50], [7,50], [8,50], [9,50], [2,25]]
+      },
+      "url": "https://faubox.rrze.uni-erlangen.de/dl/fi6CWMbgydi2MRmik3Bkd5/c_unet_ta_20260928_tibialis-anterior-long.onnx"
+    },
+    {
+      "adapter_class": "UKErUSSegAdapter",
+      "id": "c_unet_vastus-lateralis-transverse",
+      "filename": "c_unet_ta_20260928_vastus-lateralis.onnx",
+      "description": "trained on all annotated samples from https://doi.org/10.5281/zenodo.22044239. Finetuned for vastus lateralis. Structural loss weight: 0.0",
+      "input_height": 224,
+      "input_width": 224,
+      "class_names": {
+        "0": "background",
+        "1": "Haut",
+        "2": "Faszie1",
+        "3": "Muskel1",
+        "4": "Muskel2",
+        "5": "Membran",
+        "7": "Vorlaufstrecke",
+        "8": "SAT",
+        "9": "Gel"
+      },
+      "default_class": "Muskel1",
+      "postprocessing_config": {
+        "keep_largest_per_class": [1,3,7,8],
+        "combine_class_groups": [[2,6]],
+        "remove_small_objects_config": [[1, 50], [3,50], [4,50], [7,50], [8,50], [9,50], [2,25]]
+      },
+      "url": "https://faubox.rrze.uni-erlangen.de/dl/fiJp2FeiSfj3pHEJa8iwh5/c_unet_ta_20260928_vastus-lateralis.onnx"
     }
   ]
 }

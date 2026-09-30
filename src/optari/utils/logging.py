@@ -28,8 +28,7 @@ class _NapariNotificationHandler(logging.Handler):
         self.log_file = log_file
 
     def emit(self, record: logging.LogRecord) -> None:
-        # notifications create Qt widgets, which only the main thread may do; worker records
-        # still reach the console and the log file
+        # notifications create Qt widgets, which only the main thread may do
         if threading.current_thread() is not threading.main_thread():
             return
         try:
@@ -51,7 +50,8 @@ def _log_napari_error(notification) -> None:
     if isinstance(notification, ErrorNotification):
         exception = notification.exception
         logging.getLogger("napari").error(
-            "uncaught exception", exc_info=(type(exception), exception, exception.__traceback__)
+            "uncaught exception",
+            exc_info=(type(exception), exception, exception.__traceback__),
         )
 
 
@@ -66,7 +66,9 @@ def configure_logging() -> Path:
     log_file = new_session_file(get_user_logs_dir(), "optari", ".log")
 
     console = logging.StreamHandler()
-    console.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
+    console.setFormatter(
+        logging.Formatter("%(levelname)s:%(name)s:%(message)s")
+    )
     session_file = logging.FileHandler(log_file, encoding="utf-8")
     session_file.setFormatter(logging.Formatter(FILE_FORMAT))
 
@@ -75,10 +77,19 @@ def configure_logging() -> Path:
     root.addHandler(console)
     root.addHandler(session_file)
 
+    # hide a harmless vispy warning about QThreadStorage during shutdown on windows binaries
+    logging.getLogger("vispy").addFilter(
+        lambda r: "QThreadStorage" not in r.getMessage()
+    )
+
     # setLevel raises on an unknown level name, which catches typos in config.json
     optari_logger = logging.getLogger("optari")
-    optari_logger.setLevel(os.getenv("OPTARI_LOG_LEVEL", settings.general.LOG_LEVEL).upper())
-    gui_level = os.getenv("OPTARI_GUI_LOG_LEVEL", settings.general.GUI_LOG_LEVEL).upper()
+    optari_logger.setLevel(
+        os.getenv("OPTARI_LOG_LEVEL", settings.general.LOG_LEVEL).upper()
+    )
+    gui_level = os.getenv(
+        "OPTARI_GUI_LOG_LEVEL", settings.general.GUI_LOG_LEVEL
+    ).upper()
     optari_logger.addHandler(_NapariNotificationHandler(gui_level, log_file))
 
     notification_manager.notification_ready.connect(_log_napari_error)

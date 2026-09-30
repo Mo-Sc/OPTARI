@@ -22,7 +22,12 @@ DOCS_URL = "https://mo-sc.github.io/OPTARI/"
 
 # most napari menu items are useless in OPTARI, and some can even break it. Hide them to avoid confusion.
 # can be overridden by setting the OPTARI_FULL_MENUS=1 env var.
-HIDDEN_NAPARI_MENUS = ("plugins_menu", "layers_menu", "help_menu", "window_menu")
+HIDDEN_NAPARI_MENUS = (
+    "plugins_menu",
+    "layers_menu",
+    "help_menu",
+    "window_menu",
+)
 HIDDEN_FILE_ENTRIES = (
     "napari.window.file.open_files_dialog",
     "napari.window.file._image_from_clipboard",
@@ -46,9 +51,9 @@ _DOCK_RESOLVERS: dict[str, Callable[["OptariController"], object]] = {
     "Scan Browser": lambda c: c._scan_browser_dock_widget,
     "Active Slice Info": lambda c: c._info_dock_widget,
     "Tabular": lambda c: c._roi_dock_widget,
-    "Time Analysis": lambda c: c._time_analysis_dock_widget,
+    "Temporal": lambda c: c._time_analysis_dock_widget,
     "Histogram": lambda c: c._histograms_dock_widget,
-    "Spectrum": lambda c: c._spectrum_dock_widget,
+    "Spectral": lambda c: c._spectrum_dock_widget,
     "Annotation": lambda c: c._annotation_dock_widget,
     "Segmentation": lambda c: c._segmentation_dock_widget,
     "Unmixing": lambda c: c._unmixing_dock_widget,
@@ -85,7 +90,9 @@ class MenuManager:
         MenuManager._add_optari_menu(controller, window)
 
         if os.getenv("OPTARI_FULL_MENUS") == "1":
-            logger.info("OPTARI_FULL_MENUS=1: leaving the napari menus untouched.")
+            logger.info(
+                "OPTARI_FULL_MENUS=1: leaving the napari menus untouched."
+            )
             return
 
         MenuManager._prune_napari_menus(window)
@@ -106,7 +113,9 @@ class MenuManager:
 
         batch_action = QAction("Batch Mode", menu)
         batch_action.setMenuRole(QAction.NoRole)
-        batch_action.triggered.connect(lambda: MenuManager._show_batch(controller))
+        batch_action.triggered.connect(
+            lambda: MenuManager._show_batch(controller)
+        )
         menu.addAction(batch_action)
 
         menu.addSeparator()
@@ -187,7 +196,9 @@ class MenuManager:
             submenu = action.menu()
             # Command actions carry the id on the action, submenus carry it on the QMenu.
             identifier = (
-                submenu.objectName() if submenu is not None else action.objectName()
+                submenu.objectName()
+                if submenu is not None
+                else action.objectName()
             )
             if identifier in hidden_ids:
                 action.setVisible(False)

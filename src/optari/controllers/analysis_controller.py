@@ -1,3 +1,5 @@
+"""Analysis controller: time-series, histogram and spectral plots (pyqtgraph) over selected ROIs."""
+
 from __future__ import annotations
 
 import logging
@@ -19,22 +21,26 @@ logger = logging.getLogger(__name__)
 
 
 class AnalysisController(TaskControllerBase):
-    """Time analysis, histograms, and spectral plotting helpers."""
+    """Temporal analysis, histograms, and spectral plotting helpers."""
 
     def __init__(self, parent_controller):
+        """Initialize the analysis controller."""
         super().__init__(parent_controller)
 
     def refresh_ui(self) -> None:
-        """Refresh gating for the histogram/spectrum/time-analysis buttons.
-        """
+        """Refresh gating for the histogram/spectrum/time-analysis buttons."""
         has_data = (
             self.optari_controller.shapes_layer is not None
             and self.optari_controller.active_recon_layer is not None
         )
         if self.optari_controller.time_analysis is not None:
-            self.optari_controller.time_analysis.generate_button.setEnabled(has_data)
+            self.optari_controller.time_analysis.generate_button.setEnabled(
+                has_data
+            )
         if self.optari_controller.histograms is not None:
-            self.optari_controller.histograms.refresh_button.setEnabled(has_data)
+            self.optari_controller.histograms.refresh_button.setEnabled(
+                has_data
+            )
         if self.optari_controller.spectrum is not None:
             self.optari_controller.spectrum.refresh_button.setEnabled(has_data)
 
@@ -80,7 +86,7 @@ class AnalysisController(TaskControllerBase):
             self._refresh_time_analysis_track_combo()
 
     def _current_frame_channel(self) -> tuple[int, int]:
-        """Current (frame, channel) from viewer dims; plots fall back to the first."""
+        """Current (frame, channel) from viewer dims. Plots fall back to the first."""
         return selected_frame_and_channel(self.viewer) or (0, 0)
 
     def _clear_plot_layout(self, container) -> object | None:
@@ -119,9 +125,11 @@ class AnalysisController(TaskControllerBase):
 
         return combo.currentData()
 
-    def _time_series_for_current_scope(self, channel_idx: int, feature_id: str):
-        """(x, series) for whichever Time Analysis scope is selected: "Selected
-        ROI" measures each shape's own record on every frame; "Track ID" follows
+    def _time_series_for_current_scope(
+        self, channel_idx: int, feature_id: str
+    ):
+        """(x, series) for whichever Time Analysis scope is selected. "Selected
+        ROI" measures each shape's own record on every frame. "Track ID" follows
         one tracked ROI, measuring each frame on that frame's own record."""
         roi_ctrl = self.optari_controller.roi_ctrl
         annotation = self.optari_controller.annotation
@@ -148,6 +156,12 @@ class AnalysisController(TaskControllerBase):
         )
 
     def on_generate_time_analysis_clicked(self, event=None) -> None:
+        """Compute and plot the time series for the current Time Analysis scope.
+
+        Validates that ROIs and a multi-frame PA layer are selected, lazily creates the
+        plot widget on first use, then redraws all series for either the selected ROIs
+        or a single tracked ID.
+        """
         if self.optari_controller.time_analysis is None:
             return
 
@@ -160,11 +174,17 @@ class AnalysisController(TaskControllerBase):
             error_msg = "No ROIs layer"
         elif self.optari_controller.active_recon_layer is None:
             error_msg = "Select a PA image layer"
-        elif not track_scope and len(self.optari_controller.shapes_layer.data) == 0:
+        elif (
+            not track_scope
+            and len(self.optari_controller.shapes_layer.data) == 0
+        ):
             error_msg = "No ROIs defined"
         elif track_scope and not self.optari_controller.roi_ctrl.roi_records:
             error_msg = "No tracked ROIs available"
-        elif len(self.optari_controller.active_recon_layer.metadata["frames"]) < 2:
+        elif (
+            len(self.optari_controller.active_recon_layer.metadata["frames"])
+            < 2
+        ):
             error_msg = "PA image layer has less than 2 frames"
 
         if error_msg:
@@ -190,12 +210,16 @@ class AnalysisController(TaskControllerBase):
         assert plot is not None
 
         _, channel_idx = self._current_frame_channel()
-        feature_id = self.optari_controller.annotation.time_analysis_feature_combo.currentData()
+        feature_id = (
+            self.optari_controller.annotation.time_analysis_feature_combo.currentData()
+        )
 
         self.optari_controller.time_analysis.status_label.setText(
             "Computing time series…"
         )
-        x, series = self._time_series_for_current_scope(channel_idx, feature_id)
+        x, series = self._time_series_for_current_scope(
+            channel_idx, feature_id
+        )
         key_label = "Track" if track_scope else "ROI"
 
         if not series:
@@ -234,9 +258,9 @@ class AnalysisController(TaskControllerBase):
         )
 
         axis1_value = str(
-            self.optari_controller.active_recon_layer.metadata.get("axis1_labels")[
-                channel_idx
-            ]
+            self.optari_controller.active_recon_layer.metadata.get(
+                "axis1_labels"
+            )[channel_idx]
         )
 
         plot.setLabel("bottom", xlabel)
@@ -247,6 +271,7 @@ class AnalysisController(TaskControllerBase):
         )
 
     def on_refresh_histograms_clicked(self, event=None) -> None:
+        """Recompute and redraw per-ROI intensity histograms for the current frame and channel."""
         if self.optari_controller.histograms is None:
             return
         if self.optari_controller.shapes_layer is None:
@@ -294,7 +319,9 @@ class AnalysisController(TaskControllerBase):
             if vals.size == 0:
                 continue
 
-            counts, edges = np.histogram(vals, bins=settings.analysis.histogram_bins)
+            counts, edges = np.histogram(
+                vals, bins=settings.analysis.histogram_bins
+            )
 
             if counts.size == 0 or edges.size < 2:
                 continue
@@ -327,6 +354,7 @@ class AnalysisController(TaskControllerBase):
         )
 
     def on_refresh_spectrum_clicked(self, event=None) -> None:
+        """Recompute and redraw per-ROI spectra across channels for the current frame."""
         if self.optari_controller.spectrum is None:
             return
         if self.optari_controller.shapes_layer is None:

@@ -18,19 +18,40 @@ from optari.roi.roi_utils import compute_roi_stats, saved_export_columns
 @pytest.fixture
 def measured_rows(image_layer):
     """Two ROIs measured on both channels of one frame, i.e. what a save produces."""
-    layer = image_layer(np.random.default_rng(1).normal(size=(1, 2, 50, 50)), filepath="/data/Study_1/Scan_1.hdf5")
-    rois = [ROIRecord(roi_id=i, track_id=i, frame_id=0, kind="rectangle", verts=np.array([[1, 1], [1, 3], [3, 3], [3, 1]]) + i)
-            for i in range(2)]
-    return pd.concat([compute_roi_stats(rois, layer, 0, c) for c in range(2)], ignore_index=True)
+    layer = image_layer(
+        np.random.default_rng(1).normal(size=(1, 2, 50, 50)),
+        filepath="/data/Study_1/Scan_1.hdf5",
+    )
+    rois = [
+        ROIRecord(
+            roi_id=i,
+            track_id=i,
+            frame_id=0,
+            kind="rectangle",
+            verts=np.array([[1, 1], [1, 3], [3, 3], [3, 1]]) + i,
+        )
+        for i in range(2)
+    ]
+    return pd.concat(
+        [compute_roi_stats(rois, layer, 0, c) for c in range(2)],
+        ignore_index=True,
+    )
 
 
-def test_add_measurements_stamps_and_reports_remeasured(measured_rows, tmp_path):
+def test_add_measurements_stamps_and_reports_remeasured(
+    measured_rows, tmp_path
+):
     path = tmp_path / "autosave.xlsx"
     table = SavedRoiTable(path)
 
     assert table.add_measurements(measured_rows) == set()
-    assert table.add_measurements(measured_rows) == set(measured_rows["roi_group_uid"])
-    assert len(table) == 2 * len(measured_rows) and list(table.rows.columns) == saved_export_columns()
+    assert table.add_measurements(measured_rows) == set(
+        measured_rows["roi_group_uid"]
+    )
+    assert (
+        len(table) == 2 * len(measured_rows)
+        and list(table.rows.columns) == saved_export_columns()
+    )
     assert table.rows["roi_ts"].nunique() == 2 and path.exists()
 
     table.delete_at(list(range(len(table))))
@@ -46,7 +67,11 @@ def test_xlsx_export_import_round_trip_and_dedupe(measured_rows, tmp_path):
     assert list(imported.columns) == saved_export_columns()
     np.testing.assert_allclose(imported["mean"], table.rows["mean"])
     meta = dict(pd.read_excel(path, sheet_name=ROI_TABLE_META_SHEET).values)
-    assert meta["tool"] == "OPTARI" and {"operator", "analysis_id", "creation_time"} <= set(meta)
+    assert meta["tool"] == "OPTARI" and {
+        "operator",
+        "analysis_id",
+        "creation_time",
+    } <= set(meta)
 
     # Rows already in the table are skipped: the session's own export and a second import.
     assert table.merge_imported(imported) == (0, len(imported))
@@ -62,6 +87,8 @@ def test_import_rejects_foreign_or_outdated_tables(measured_rows, tmp_path):
 
     with pd.ExcelWriter(tmp_path / "outdated.xlsx") as writer:
         measured_rows.to_excel(writer, sheet_name=ROI_TABLE_SHEET, index=False)
-        pd.DataFrame({"key": ["roi_table_schema_version"], "value": ["0"]}).to_excel(writer, sheet_name=ROI_TABLE_META_SHEET, index=False)
+        pd.DataFrame(
+            {"key": ["roi_table_schema_version"], "value": ["0"]}
+        ).to_excel(writer, sheet_name=ROI_TABLE_META_SHEET, index=False)
     with pytest.raises(ValueError, match="schema version 0"):
         import_roi_table_from_xlsx(tmp_path / "outdated.xlsx")

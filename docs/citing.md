@@ -1,4 +1,4 @@
-# Credits
+# Citing
 
 ## License
 
@@ -8,10 +8,22 @@ OPTARI is distributed under the [BSD-3-Clause license](https://github.com/Mo-Sc/
 
 If OPTARI is useful in your research, please cite the paper:
 
-!!! quote "Citation (placeholder)"
+!!! quote "Citation (unpublished)"
     Schillinger, M., Bader, M., Buehler, A., Wachter, F., Knieling, F., Ntziachristos, V., Breininger, K. *OPTARI: An open-source software
     framework for clinical translation of optoacoustic imaging.* — citation details to be added once
     published.
+
+## Third-Party Citations
+
+OPTARI is built on [PATATO](https://github.com/Mo-Sc/patato) (a custom fork of [BohndiekLab/patato](https://github.com/BohndiekLab/patato)) for data I/O, reconstruction and unmixing, and on [napari](https://napari.org) for visualization:
+
+!!! quote "PATATO"
+    Else, T. R., Gröhl, J., Hacker, L., & Bohndiek, S. E. (2024). PATATO: a Python photoacoustic tomography
+    analysis toolkit. *Journal of Open Source Software*, 9(93), 5686. [doi:10.21105/joss.05686](https://doi.org/10.21105/joss.05686)
+
+!!! quote "napari"
+    napari contributors (2019). napari: a multi-dimensional image viewer for Python.
+    [doi:10.5281/zenodo.3555620](https://doi.org/10.5281/zenodo.3555620)
 
 ## Acknowledgments
 

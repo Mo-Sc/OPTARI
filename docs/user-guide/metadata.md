@@ -13,4 +13,4 @@ Double-clicking a cell in the Layer, Scan, or IPASC tabs shows its full content.
 editable: use **Add Row**/**Remove Row** and click **Save** to update it. Saved clinical metadata carries
 over the next time you export the scan to HDF5 (see [Exporting Data](exporting-data.md)).
 
-![Metadata Viewer](../assets/screenshots/placeholders/ss_metadata.png)
+![Metadata Viewer](../assets/screenshots/ss_metadata.png)

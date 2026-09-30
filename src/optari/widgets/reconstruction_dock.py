@@ -24,7 +24,6 @@ from .dock_helpers import (
     create_right_dock_shell,
 )
 
-
 # speed of sound slider bounds
 SPEED_OF_SOUND_MIN = 1400
 SPEED_OF_SOUND_MAX = 1600
@@ -49,7 +48,9 @@ class ReconstructionDock:
     status_label: QLabel
 
 
-def create_reconstruction_dock(*, enable_scroll: bool = True) -> ReconstructionDock:
+def create_reconstruction_dock(
+    *, enable_scroll: bool = True
+) -> ReconstructionDock:
     shell = create_right_dock_shell(enable_scroll=enable_scroll)
     widget = shell.widget
     outer = shell.content_layout
@@ -63,8 +64,12 @@ def create_reconstruction_dock(*, enable_scroll: bool = True) -> ReconstructionD
         remove_preset_button,
         preset_actions,
     ) = create_preset_controls()
-    preset_combo.setToolTip("Selecting a preset loads its settings into the editor below")
-    remove_preset_button.setToolTip("Permanently delete the selected preset file")
+    preset_combo.setToolTip(
+        "Selecting a preset loads its settings into the editor below"
+    )
+    remove_preset_button.setToolTip(
+        "Permanently delete the selected preset file"
+    )
 
     all_settings_button = QToolButton()
     all_settings_button.setText("Show all settings")
@@ -126,7 +131,9 @@ def create_reconstruction_dock(*, enable_scroll: bool = True) -> ReconstructionD
         create_frame_scope_controls()
     )
     run_button = QPushButton("Run Reconstruction")
-    run_button.setToolTip("Requires a loaded scan and a selected, non-edited preset")
+    run_button.setToolTip(
+        "Requires a loaded scan and a selected, non-edited preset"
+    )
     status_label = QLabel("No scan loaded.")
     status_label.setWordWrap(True)
     action_layout.addWidget(frame_scope_row)

@@ -12,14 +12,14 @@ clinical studies without scripting. Scans are read from iThera `.msot`, PATATO H
 [IPASC](https://www.ipasc.science) HDF5 files.
 
 
-**Full documentation, inlcuding instructions, sample workflows, and API references: [mo-sc.github.io/OPTARI](https://mo-sc.github.io/OPTARI/)**.
+**Full documentation, including instructions, sample workflows, and API references: [mo-sc.github.io/OPTARI](https://mo-sc.github.io/OPTARI/)**.
 
-![Demo Layers](docs/assets/screenshots/placeholders/ss_home.png)
+![Demo Layers](docs/assets/optari_startup.png)
 
 
 ## Key features
 
-- Visualize co-registered US + PA scans from different optoacoustic scanners
+- Visualize co-registered US + OA scans from different optoacoustic scanners
 - Browse multi-subject, multi-scan studies with fast switching and scrolling through frames/wavelengths.
 - Draw, edit, and save ROIs, reuse them via a shareable ROI Library.
 - Extract ROI intensities, plot ROI intensities over time and wavelength.
@@ -31,7 +31,7 @@ clinical studies without scripting. Scans are read from iThera `.msot`, PATATO H
 
 ## Quickstart
 
-The easiest way to use OPTARI is by using one of the standalone executables: (todo: link to doc about quick installation)
+The easiest way to use OPTARI is one of the [standalone executables](https://mo-sc.github.io/OPTARI/installation/).
 
 Alternatively, install from source into a Python 3.12 environment (the PATATO binaries OPTARI depends on are only available for 3.12):
 
@@ -49,7 +49,7 @@ To try OPTARI, download and unzip the [test scans](https://mo-sc.github.io/OPTAR
 ```bash
 git clone git@github.com:Mo-Sc/OPTARI.git
 cd OPTARI
-pip install -e ".[test,docs]"
+pip install -e ".[test,docs,dev]"
 pytest                     # run tests
 ```
 
@@ -58,7 +58,7 @@ To build the docs locally:
 mkdocs build --no-directory-urls --site-dir optari-docs
 ```
 
-**Note:** OPTARI currently depends on a custom PATATO fork for compatibility fixes and legacy HDF5 support (see `pyproject.toml`). 
+**Note:** OPTARI currently depends on a [custom PATATO fork](https://github.com/Mo-Sc/patato/releases/tag/patari-v0.8.0) (see `pyproject.toml`). 
  
 To contribute to OPTARI, follow [Contributing](https://mo-sc.github.io/OPTARI/developer-guide/contributing/).
 
@@ -84,3 +84,4 @@ If OPTARI is useful in your research, please cite the accompanying paper:
 }
 ```
 
+OPTARI is research software intended for the analysis of data from clinical studies and has not undergone conformity assessment as a medical device. It is not intended for diagnosis or treatment decisions. 

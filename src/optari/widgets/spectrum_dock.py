@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from qtpy.QtWidgets import QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget
+from qtpy.QtWidgets import (
+    QLabel,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
+)
 
 from .dock_helpers import (
     create_bottom_dock_header,

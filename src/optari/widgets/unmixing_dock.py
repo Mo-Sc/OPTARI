@@ -69,12 +69,16 @@ def create_unmixing_dock(*, enable_scroll: bool = True) -> UnmixingDock:
     preset_combo.setToolTip(
         "Selecting a preset loads its wavelength, chromophore, and layer settings"
     )
-    remove_preset_button.setToolTip("Permanently delete the selected preset file")
+    remove_preset_button.setToolTip(
+        "Permanently delete the selected preset file"
+    )
 
     wavelengths_list = QListWidget()
     wavelengths_list.setSelectionMode(QListWidget.NoSelection)
     wavelengths_list.setMinimumHeight(140)
-    wavelengths_list.setToolTip("Available wavelengths are determined by the source layer")
+    wavelengths_list.setToolTip(
+        "Available wavelengths are determined by the source layer"
+    )
 
     wavelength_button_row = QWidget()
     wavelength_button_layout = QHBoxLayout(wavelength_button_row)

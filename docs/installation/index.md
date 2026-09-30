@@ -8,10 +8,9 @@ No Python, no terminal, no admin rights required.
 
 1. Download the executable for your operating system:
 
-    <!-- TODO: replace with the release download links -->
-    [:fontawesome-brands-apple: macOS (Apple Silicon)](#){ .md-button }
-    [:fontawesome-brands-windows: Windows](#){ .md-button }
-    [:fontawesome-brands-linux: Linux](#){ .md-button }
+    [:fontawesome-brands-apple: macOS (Apple Silicon)](https://github.com/Mo-Sc/OPTARI/releases/latest){ .md-button }
+    [:fontawesome-brands-windows: Windows](https://github.com/Mo-Sc/OPTARI/releases/latest){ .md-button }
+    [:fontawesome-brands-linux: Linux](https://github.com/Mo-Sc/OPTARI/releases/latest){ .md-button }
 
     Older versions are listed on the [releases page](https://github.com/Mo-Sc/OPTARI/releases).
 

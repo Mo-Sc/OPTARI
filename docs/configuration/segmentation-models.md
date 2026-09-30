@@ -10,8 +10,8 @@ independent of the segmentation preset. See [Segmentation](../user-guide/segment
   "models": [
     {
       "adapter_class": "UKErUSSegAdapter",
-      "id": "unet_msot_2_ta",
-      "filename": "modelfile.onnx",
+      "id": "c_unet_gastrocnemius-transverse",
+      "filename": "c_unet_ta_20260928_gastrocnemius.onnx",
       "description": "trained on all MSOT2 samples, structural loss weight: 0.0",
       "input_height": 224,
       "input_width": 224,

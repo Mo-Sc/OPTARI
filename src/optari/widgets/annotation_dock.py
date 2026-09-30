@@ -71,7 +71,9 @@ def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
 
     roi_presets_list = QListWidget()
     roi_presets_list.setSelectionMode(QAbstractItemView.SingleSelection)
-    roi_presets_list.setToolTip("Click to preview a preset; double-click to place it immediately")
+    roi_presets_list.setToolTip(
+        "Click to preview a preset; double-click to place it immediately"
+    )
 
     button_row = QWidget()
     button_layout = QHBoxLayout(button_row)
@@ -120,7 +122,7 @@ def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
 
     roi_presets_layout.addWidget(button_row)
 
-    # ROI clipping and exclusion section                                                 
+    # ROI clipping and exclusion section
     roi_box = QGroupBox("ROI Intensity")
     roi_layout = QVBoxLayout(roi_box)
 
@@ -161,7 +163,7 @@ def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
 
     roi_layout.addWidget(roi_clipping_box)
     roi_layout.addWidget(roi_exclusion_box)
-    
+
     # ROI data saving options
     save_roi_box = QGroupBox("Save ROI Data")
     save_roi_layout = QVBoxLayout(save_roi_box)
@@ -175,7 +177,9 @@ def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
     include_all_layers_checkbox.setToolTip(
         "Save this ROI's data for every layer in the scan; also enables Include all channels"
     )
-    include_all_frames_checkbox.setToolTip("Save this ROI's data for every frame in the scan")
+    include_all_frames_checkbox.setToolTip(
+        "Save this ROI's data for every frame in the scan"
+    )
     include_all_channels_checkbox.setToolTip(
         "Save this ROI's data for every channel (wavelength/chromophore); "
         "auto-enabled by Include all layers"
@@ -183,9 +187,9 @@ def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
 
     # When include all layers, always include all channels
     include_all_layers_checkbox.toggled.connect(
-        lambda checked: include_all_channels_checkbox.setChecked(True)
-        if checked
-        else None
+        lambda checked: (
+            include_all_channels_checkbox.setChecked(True) if checked else None
+        )
     )
 
     save_scope_selected_radio = QRadioButton("Selected ROI")
@@ -217,12 +221,14 @@ def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
     save_roi_layout.addWidget(save_scope_row)
 
     # Time analysis feature selection (default is mean)
-    time_analysis_box = QGroupBox("Time Analysis")
+    time_analysis_box = QGroupBox("Temporal Analysis")
     time_analysis_layout = QFormLayout(time_analysis_box)
     time_analysis_feature_combo = QComboBox()
     for feature_id in numeric_feature_ids():
         time_analysis_feature_combo.addItem(feature_id, userData=feature_id)
-    time_analysis_feature_combo.setCurrentIndex(time_analysis_feature_combo.findData("mean"))
+    time_analysis_feature_combo.setCurrentIndex(
+        time_analysis_feature_combo.findData("mean")
+    )
     time_analysis_layout.addRow("Feature", time_analysis_feature_combo)
 
     # Scope: "Selected ROI" measures each visible shape's own record on every frame
@@ -255,9 +261,10 @@ def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
     time_analysis_track_id_combo.setToolTip(
         "Which tracked ROI to plot. Refreshed each time you generate the plot."
     )
-    time_analysis_track_radio.toggled.connect(time_analysis_track_id_combo.setEnabled)
+    time_analysis_track_radio.toggled.connect(
+        time_analysis_track_id_combo.setEnabled
+    )
     time_analysis_layout.addRow("Track", time_analysis_track_id_combo)
-
 
     outer.addWidget(roi_presets_box)
     outer.addWidget(roi_box)

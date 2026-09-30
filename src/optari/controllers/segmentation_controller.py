@@ -1,3 +1,6 @@
+"""Segmentation controller: the ONNX model registry, running inference, the segmentation
+Labels layer, and automatic ROI-from-mask placement."""
+
 from __future__ import annotations
 
 import logging
@@ -17,21 +20,25 @@ from optari.segmentation.segmenter import (
     load_model_registry,
     SegmentationModelConfig,
 )
-from optari.segmentation.segmentation_presets import validate_segmentation_settings
+from optari.segmentation.segmentation_presets import (
+    validate_segmentation_settings,
+)
 from optari.utils.viewer import selected_frame_idx
 from optari.utils.tasks import BackgroundStep
 from optari.controllers.base import TaskControllerBase
 from optari.roi import Ellipse, Rectangle, Polygon, ROIPlacementConfig
 from optari.config import settings
 from optari.utils.presets import PresetStore
-from optari.utils.setup import get_user_models_dir, get_user_segmentation_presets_dir
+from optari.utils.setup import (
+    get_user_models_dir,
+    get_user_segmentation_presets_dir,
+)
 from optari.widgets.dock_helpers import (
     add_preset_to_combo,
     populate_preset_combo,
     prompt_preset_name,
     remove_selected_preset,
 )
-
 
 logger = logging.getLogger(__name__)
 
@@ -82,8 +89,10 @@ class SegmentParams:
     """Everything one segmentation run needs, resolved against a loaded scan."""
 
     model_id: str
-    us_data: np.ndarray          # (n_frames, H, W), already sliced to the frames to run
-    us_shape: tuple              # full (n_frames, n_channels, H, W) of the source layer
+    us_data: (
+        np.ndarray
+    )  # (n_frames, H, W), already sliced to the frames to run
+    us_shape: tuple  # full (n_frames, n_channels, H, W) of the source layer
     class_ids: set[int]
     output_frames: list[int]
     us_scale: tuple
@@ -92,15 +101,23 @@ class SegmentParams:
 
     @property
     def frame_mode(self) -> str:
+        """Whether the run covers the current frame or all frames."""
         return "current" if self.current_frame_id is not None else "all"
 
     @property
     def n_channels(self) -> int:
+        """Number of channels in the source US layer."""
         return int(self.us_shape[1])
 
     @classmethod
-    def build(cls, controller, model_id: str, class_ids: set[int],
-              *, frame_id: int | None) -> "SegmentParams":
+    def build(
+        cls,
+        controller,
+        model_id: str,
+        class_ids: set[int],
+        *,
+        frame_id: int | None,
+    ) -> "SegmentParams":
         """Resolve a segmentation setup against the loaded scan's US layer.
 
         Raises ValueError, message safe to show the user, when it cannot run here.
@@ -142,6 +159,7 @@ class SegmentationController(TaskControllerBase):
     """
 
     def __init__(self, parent_controller):
+        """Load the model registry and initialize segmentation state."""
         super().__init__(parent_controller)
         self._segmentation_model_registry = load_model_registry()
         default_model_id = settings.segmentation.default_model
@@ -263,7 +281,8 @@ class SegmentationController(TaskControllerBase):
             has_us_layer and not self.optari_controller.task_running
         )
         dock.generate_roi_button.setEnabled(
-            self.active_seg_mask_2d() is not None and not self.optari_controller.task_running
+            self.active_seg_mask_2d() is not None
+            and not self.optari_controller.task_running
         )
 
     def segmentation_model_options(self) -> list[str]:
@@ -272,9 +291,11 @@ class SegmentationController(TaskControllerBase):
 
     @property
     def active_segmentation_model_id(self) -> str:
+        """ID of the currently selected segmentation model."""
         return self._active_segmentation_model_id
 
     def set_active_segmentation_model(self, model_id: str) -> None:
+        """Set the active model. Raises ValueError if *model_id* is not in the registry."""
         if model_id not in self._segmentation_model_registry:
             raise ValueError(f"Unknown segmentation model: {model_id}")
         self._active_segmentation_model_id = model_id
@@ -292,6 +313,7 @@ class SegmentationController(TaskControllerBase):
         )
 
     def selected_segmentation_class_ids(self) -> set[int]:
+        """Return the class IDs checked in the segmentation classes list."""
         seg_dock = self.optari_controller.segmentation
         if seg_dock is None:
             return set()
@@ -317,11 +339,13 @@ class SegmentationController(TaskControllerBase):
             self._segmenter_model_id = model_id
         return self._segmenter
 
-
     @property
     def seg_layer(self) -> "Labels | None":
         """The current segmentation layer, generated or restored, or None."""
-        if self._seg_layer is not None and self._seg_layer not in self.viewer.layers:
+        if (
+            self._seg_layer is not None
+            and self._seg_layer not in self.viewer.layers
+        ):
             self._seg_layer = None
         return self._seg_layer
 
@@ -335,8 +359,7 @@ class SegmentationController(TaskControllerBase):
         return seg[frame_idx, 0], seg_layer
 
     def restore_from_scan(self, pa_data) -> None:
-        """Rebuild the segmentation layer from scan data.
-        """
+        """Rebuild the segmentation layer from scan data."""
         us_layer = self.optari_controller.active_us_layer
         if us_layer is None:
             return
@@ -365,6 +388,7 @@ class SegmentationController(TaskControllerBase):
         self._populate_roi_class_combo(mask, class_names)
 
     def on_segmentation_model_changed(self) -> None:
+        """Apply the model picked in the combo and repopulate the class list."""
         if self.optari_controller.segmentation is None:
             return
 
@@ -383,6 +407,11 @@ class SegmentationController(TaskControllerBase):
     def populate_segmentation_controls(
         self, selected_class_ids: set[int] | None = None
     ) -> None:
+        """Rebuild the classes list for the active model.
+
+        Checks *selected_class_ids* if given, otherwise falls back to the model's
+        own default class.
+        """
         seg_dock = self.optari_controller.segmentation
         default_class = self._active_segmentation_model_config().default_class
         seg_dock.segmentation_classes_list.clear()
@@ -421,18 +450,22 @@ class SegmentationController(TaskControllerBase):
                 raise ValueError(
                     f"Unknown segmentation model: {settings['model_id']}"
                 )
-            settings = validate_segmentation_settings(settings, model_config.class_names)
+            settings = validate_segmentation_settings(
+                settings, model_config.class_names
+            )
             self._apply_preset(settings)
         except (ValueError, OSError) as exc:
-            dock.status_label.setText(
-                f"Could not apply preset: {exc}"
-            )
+            dock.status_label.setText(f"Could not apply preset: {exc}")
 
     def _apply_preset(self, settings: dict) -> None:
         dock = self.optari_controller.segmentation
-        model_index = dock.segmentation_model_combo.findData(settings["model_id"])
+        model_index = dock.segmentation_model_combo.findData(
+            settings["model_id"]
+        )
         if model_index < 0:
-            raise ValueError(f"Unknown segmentation model: {settings['model_id']}")
+            raise ValueError(
+                f"Unknown segmentation model: {settings['model_id']}"
+            )
         shape_index = dock.roi_shape_combo.findData(settings["roi_shape"])
         if shape_index < 0:
             raise ValueError(f"Unsupported ROI shape: {settings['roi_shape']}")
@@ -444,14 +477,20 @@ class SegmentationController(TaskControllerBase):
             dock.segmentation_model_combo.blockSignals(False)
 
         self.set_active_segmentation_model(settings["model_id"])
-        self.populate_segmentation_controls(set(settings["selected_class_ids"]))
+        self.populate_segmentation_controls(
+            set(settings["selected_class_ids"])
+        )
         dock.roi_class_id_combo.clear()
         # Inference repopulates this combo; keep a preset's class until then.
         self._pending_roi_class_id = settings["roi_class_id"]
 
         dock.roi_shape_combo.setCurrentIndex(shape_index)
-        dock.roi_width_edit.setText(self._format_roi_value(settings["roi_width_mm"]))
-        dock.roi_height_edit.setText(self._format_roi_value(settings["roi_height_mm"]))
+        dock.roi_width_edit.setText(
+            self._format_roi_value(settings["roi_width_mm"])
+        )
+        dock.roi_height_edit.setText(
+            self._format_roi_value(settings["roi_height_mm"])
+        )
         dock.roi_top_margin_edit.setText(
             self._format_roi_value(settings["roi_top_margin_mm"])
         )
@@ -471,6 +510,7 @@ class SegmentationController(TaskControllerBase):
             raise ValueError(f"{label} must be a number.") from exc
 
     def on_save_preset_clicked(self) -> None:
+        """Save the current segmentation and ROI settings as a new user preset."""
         dock = self.optari_controller.segmentation
         selected_class_ids = sorted(self.selected_segmentation_class_ids())
         if not selected_class_ids:
@@ -506,15 +546,14 @@ class SegmentationController(TaskControllerBase):
             )
             preset_path = self.preset_store.save(preset_name, preset_values)
         except (KeyError, ValueError, OSError) as exc:
-            dock.status_label.setText(
-                f"Could not save preset: {exc}"
-            )
+            dock.status_label.setText(f"Could not save preset: {exc}")
             return
 
         add_preset_to_combo(dock.preset_combo, preset_path)
         dock.status_label.setText(f"Saved preset: {preset_path.name}")
 
     def on_remove_preset_clicked(self) -> None:
+        """Remove the selected segmentation preset."""
         dock = self.optari_controller.segmentation
         preset_path = dock.preset_combo.currentData()
         if preset_path is None:
@@ -526,22 +565,16 @@ class SegmentationController(TaskControllerBase):
                 dock.preset_combo, self.preset_store
             )
         except (ValueError, OSError) as exc:
-            dock.status_label.setText(
-                f"Could not remove preset: {exc}"
-            )
+            dock.status_label.setText(f"Could not remove preset: {exc}")
             return
         if not removed:
-            dock.status_label.setText(
-                f"Preset not found: {preset_path.name}"
-            )
+            dock.status_label.setText(f"Preset not found: {preset_path.name}")
             return
 
-        dock.status_label.setText(
-            f"Removed preset: {removed_path.name}"
-        )
-
+        dock.status_label.setText(f"Removed preset: {removed_path.name}")
 
     def set_all_segmentation_classes_checked(self, checked: bool) -> None:
+        """Check or uncheck every entry in the segmentation classes list."""
         seg_dock = self.optari_controller.segmentation
         if seg_dock is None:
             return
@@ -555,9 +588,11 @@ class SegmentationController(TaskControllerBase):
                 item.setCheckState(check_state)
 
     def on_segmentation_select_all_classes_clicked(self) -> None:
+        """Check all segmentation classes."""
         self.set_all_segmentation_classes_checked(checked=True)
 
     def on_segmentation_clear_classes_clicked(self) -> None:
+        """Uncheck all segmentation classes."""
         self.set_all_segmentation_classes_checked(checked=False)
 
     def on_generate_roi_from_mask_clicked(self) -> None:
@@ -582,20 +617,39 @@ class SegmentationController(TaskControllerBase):
 
         shape_type = str(seg_dock.roi_shape_combo.currentData() or "ellipse")
         try:
-            top_margin_mm = self._parse_roi_value(seg_dock.roi_top_margin_edit.text(), "Top margin")
-            width_mm = self._parse_roi_value(seg_dock.roi_width_edit.text(), "Width")
-            height_mm = self._parse_roi_value(seg_dock.roi_height_edit.text(), "Height")
+            top_margin_mm = self._parse_roi_value(
+                seg_dock.roi_top_margin_edit.text(), "Top margin"
+            )
+            width_mm = self._parse_roi_value(
+                seg_dock.roi_width_edit.text(), "Width"
+            )
+            height_mm = self._parse_roi_value(
+                seg_dock.roi_height_edit.text(), "Height"
+            )
         except ValueError as exc:
             seg_dock.status_label.setText(str(exc))
             return
-        if (width_mm is None or height_mm is None) and shape_type in ("rectangle", "ellipse"):
+        if (width_mm is None or height_mm is None) and shape_type in (
+            "rectangle",
+            "ellipse",
+        ):
             seg_dock.status_label.setText("Width and height are required")
             return
 
-        config = ROIPlacementConfig(width_mm=width_mm, height_mm=height_mm, depth_mm=top_margin_mm or 0.0)
-        shape = {"ellipse": Ellipse, "rectangle": Rectangle, "polygon": Polygon}[shape_type](config)
+        config = ROIPlacementConfig(
+            width_mm=width_mm,
+            height_mm=height_mm,
+            depth_mm=top_margin_mm or 0.0,
+        )
+        shape = {
+            "ellipse": Ellipse,
+            "rectangle": Rectangle,
+            "polygon": Polygon,
+        }[shape_type](config)
 
-        frame_idx = selected_frame_idx(self.viewer, np.asarray(seg_layer.data).shape[0])
+        frame_idx = selected_frame_idx(
+            self.viewer, np.asarray(seg_layer.data).shape[0]
+        )
         class_mask = seg_2d == int(class_id)
         if not np.any(class_mask):
             seg_dock.status_label.setText(
@@ -621,13 +675,16 @@ class SegmentationController(TaskControllerBase):
             f"ROI generated from class {class_id} in frame {frame_idx}"
         )
 
-
     # ============ run: params -> prepare -> publish ============
     def _params_from_ui(self) -> SegmentParams:
         """Build run parameters from the dock. Raises ValueError with a user-facing message."""
         seg_dock = self.optari_controller.segmentation
         us_layer = self.optari_controller.active_us_layer
-        n_frames = int(np.asarray(us_layer.data).shape[0]) if us_layer is not None else 0
+        n_frames = (
+            int(np.asarray(us_layer.data).shape[0])
+            if us_layer is not None
+            else 0
+        )
         frame_id = (
             None
             if seg_dock.all_frames_radio.isChecked()
@@ -644,9 +701,15 @@ class SegmentationController(TaskControllerBase):
         """Where the given model's ONNX weights are expected on disk."""
         if model_id not in self._segmentation_model_registry:
             raise ValueError(f"Unknown segmentation model: {model_id}")
-        return get_user_models_dir() / self._segmentation_model_registry[model_id].filename
+        return (
+            get_user_models_dir()
+            / self._segmentation_model_registry[model_id].filename
+        )
 
-    def weights_to_fetch(self, params: SegmentParams) -> tuple[Path, str | None]:
+    def weights_to_fetch(
+        self, params: SegmentParams
+    ) -> tuple[Path, str | None]:
+        """Local path and download URL for the model *params* requires."""
         return (
             self.model_weights_path(params.model_id),
             self._segmentation_model_registry[params.model_id].url,
@@ -660,7 +723,9 @@ class SegmentationController(TaskControllerBase):
         """
         weights = self.model_weights_path(params.model_id)
         if not weights.is_file():
-            raise ValueError(f"Segmentation model weights not found: {weights}")
+            raise ValueError(
+                f"Segmentation model weights not found: {weights}"
+            )
 
         logger.info(
             "running segmentation with model '%s' on %s frame(s)",
@@ -685,7 +750,10 @@ class SegmentationController(TaskControllerBase):
         """Add the finished segmentation as a labels layer. Runs on the main thread."""
         mask, class_names, blank_positions = result
 
-        if self._seg_layer is not None and self._seg_layer in self.viewer.layers:
+        if (
+            self._seg_layer is not None
+            and self._seg_layer in self.viewer.layers
+        ):
             self.viewer.layers.remove(self._seg_layer)
         self._seg_layer = self.viewer.add_labels(
             mask,
@@ -715,7 +783,8 @@ class SegmentationController(TaskControllerBase):
         blank_frames = [params.output_frames[i] for i in blank_positions]
         logger.warning(
             "%d frame(s) contain no image data and were left unsegmented: %s",
-            len(blank_frames), blank_frames,
+            len(blank_frames),
+            blank_frames,
         )
         return (
             f"{len(params.output_frames)} frame(s) segmented, "
@@ -733,12 +802,15 @@ class SegmentationController(TaskControllerBase):
                 f"{class_id}: {class_names.get(class_id, str(class_id))}",
                 userData=class_id,
             )
-        roi_class_index = seg_dock.roi_class_id_combo.findData(self._pending_roi_class_id)
+        roi_class_index = seg_dock.roi_class_id_combo.findData(
+            self._pending_roi_class_id
+        )
         if roi_class_index < 0:
             roi_class_index = min(1, seg_dock.roi_class_id_combo.count() - 1)
         seg_dock.roi_class_id_combo.setCurrentIndex(roi_class_index)
         self._pending_roi_class_id = None
 
     def on_generate_tissue_segmentation_clicked(self) -> None:
+        """Run segmentation from the dock's Run button."""
         if self.optari_controller.segmentation is not None:
             self.run_from_ui(self.optari_controller.segmentation)

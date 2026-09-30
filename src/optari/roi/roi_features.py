@@ -1,3 +1,9 @@
+"""Feature registry: computes every saved and live ROI statistic from a shared context.
+
+``FEATURE_REGISTRY`` maps a column name to a ``FeatureSpec``, so adding a measurement
+is a one-line registry entry rather than a change to the measurement loop itself.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -8,6 +14,14 @@ import numpy as np
 
 @dataclass(frozen=True)
 class ROIContext:
+    """Everything one measurement needs: identifiers, provenance, the geometry blob
+    and the pixel values a ``FeatureSpec`` reads.
+
+    Provenance covers ``scan_name``, ``frame``, ``channel``, ``src_layer`` and
+    timestamps. Pixel values are ``vals_raw`` and the clamped ``vals``, alongside the
+    pixel scale and the ROI's vertices.
+    """
+
     roi_id: int
     track_id: int
     roi_group_uid: str
@@ -31,10 +45,13 @@ class ROIContext:
 
 @dataclass(frozen=True)
 class FeatureSpec:
+    """Pairs a dtype with a function from an :class:`ROIContext` to the column's value."""
+
     dtype: type
     fn: Callable[[ROIContext], object]
 
     def compute(self, ctx: ROIContext) -> object:
+        """Evaluate this spec's function against *ctx*."""
         return self.fn(ctx)
 
 
@@ -80,8 +97,12 @@ FEATURE_REGISTRY: dict[str, FeatureSpec] = {
     "mean": FeatureSpec(float, lambda c: _nan_stat(c.vals, np.nanmean)),
     "median": FeatureSpec(float, lambda c: _nan_stat(c.vals, np.nanmedian)),
     "std": FeatureSpec(float, lambda c: _nan_stat(c.vals, np.nanstd)),
-    "p10": FeatureSpec(float, lambda c: _nan_stat(c.vals, lambda v: np.nanpercentile(v, 10))),
-    "p90": FeatureSpec(float, lambda c: _nan_stat(c.vals, lambda v: np.nanpercentile(v, 90))),
+    "p10": FeatureSpec(
+        float, lambda c: _nan_stat(c.vals, lambda v: np.nanpercentile(v, 10))
+    ),
+    "p90": FeatureSpec(
+        float, lambda c: _nan_stat(c.vals, lambda v: np.nanpercentile(v, 90))
+    ),
     "iqr": FeatureSpec(float, lambda c: _nan_stat(c.vals, _iqr)),
     "min": FeatureSpec(float, lambda c: _nan_stat(c.vals, np.nanmin)),
     "max": FeatureSpec(float, lambda c: _nan_stat(c.vals, np.nanmax)),
@@ -89,7 +110,7 @@ FEATURE_REGISTRY: dict[str, FeatureSpec] = {
     "n_pixels": FeatureSpec(int, lambda c: int(c.vals.size)),
     "size_mm": FeatureSpec(float, _size_mm),
     "src_layer": FeatureSpec(str, lambda c: str(c.src_layer)),
-    "kind": FeatureSpec(str, lambda c: str(c.kind)), # "shape_type" in napari
+    "kind": FeatureSpec(str, lambda c: str(c.kind)),  # "shape_type" in napari
     "study_folder": FeatureSpec(str, lambda c: str(c.study_folder)),
     "scan_folder": FeatureSpec(str, lambda c: str(c.scan_folder)),
     "scan_name": FeatureSpec(str, lambda c: str(c.scan_name)),
@@ -99,7 +120,9 @@ FEATURE_REGISTRY: dict[str, FeatureSpec] = {
     "roi_ts": FeatureSpec(str, lambda c: ""),
     "scan_ts": FeatureSpec(str, lambda c: str(c.scan_ts)),
     "roi_centroid": FeatureSpec(tuple, lambda c: c.roi_centroid),
-    "roi_geometry": FeatureSpec(str, lambda c: c.roi_geometry), # JSON blob of vertices in PATATO coordinates, kind, tissue_class and source
+    "roi_geometry": FeatureSpec(
+        str, lambda c: c.roi_geometry
+    ),  # JSON blob of vertices in PATATO coordinates, kind, tissue_class and source
     "filepath": FeatureSpec(str, lambda c: str(c.filepath)),
 }
 
@@ -107,7 +130,13 @@ ALL_FEATURE_COLUMNS: list[str] = list(FEATURE_REGISTRY.keys())
 
 
 def numeric_feature_ids() -> list[str]:
-    return [fid for fid in ALL_FEATURE_COLUMNS if FEATURE_REGISTRY[fid].dtype in (int, float)]
+    """IDs of the features whose dtype is ``int`` or ``float``."""
+    return [
+        fid
+        for fid in ALL_FEATURE_COLUMNS
+        if FEATURE_REGISTRY[fid].dtype in (int, float)
+    ]
+
 
 # Fixed set of columns that are always included in the saved table, regardless of user settings to identify the origin of the ROI
 SAVED_FIXED_SOURCE_COLUMNS: list[str] = [

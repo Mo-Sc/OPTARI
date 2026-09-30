@@ -23,7 +23,7 @@ feature in the Live Analysis table shows its length in millimeters. See
 
 ## How do I set a fixed contrast limit instead of auto-scaling?
 
-PA layers open with the auto-contrast `continuous` button switched on, which rescales every frame and channel
+OA layers open with the auto-contrast `continuous` button switched on, which rescales every frame and channel
 to its own range. Select the layer in the Layer List and click `once` in the layer controls panel. This switches
 `continuous` off and keeps the current contrast limits constant for that layer. To set specific values manually instead, right-click the
 `contrast limits` slider.
@@ -42,7 +42,7 @@ unmixing) and only one image can be paired with the ROIs. OPTARI resets the stri
 **Known issue with napari 0.9.1:** with a stride other than `1`/`-1`, unhiding a layer while grid mode is on can raise
 `TypeError: unsupported operand type(s) for /: 'float' and 'NoneType'`, and the layer may not appear even though it is ticked in
 the layer list. In this mode napari detaches the colorbar of a hidden layer from the canvas. When the layer is shown again, napari
-refreshes the image before it reattaches the colorbar, and the `continuous` auto-contrast of PA layers changes the contrast limits
+refreshes the image before it reattaches the colorbar, and the `continuous` auto-contrast of OA layers changes the contrast limits
 during that refresh. The colorbar then tries to redraw its tick labels without a canvas and fails. To avoid it, leave grid mode
 (`Ctrl+G` / `Cmd+G`), unhide the layer and switch grid mode back on, or click `once` in the auto-contrast controls of the layer
 before unhiding it.

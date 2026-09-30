@@ -1,7 +1,7 @@
 [project]
 name = "optari"
 dynamic = ["version"]
-description = "Analysis tool for clinical photoacoustic/optoacoustic studies based on PATATO and NAPARI"
+description = "Analysis tool for clinical photoacoustic/optoacoustic studies based on PATATO and napari"
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [
@@ -46,6 +46,9 @@ test = [
 docs = [
     "mkdocs-material>=9.5",
     "mkdocstrings[python]>=0.25",
+]
+dev = [
+    "black>=26.5",
 ]
 
 [project.gui-scripts]
