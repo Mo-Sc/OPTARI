@@ -58,7 +58,7 @@ To build the docs locally:
 mkdocs build --no-directory-urls --site-dir optari-docs
 ```
 
-**Note:** OPTARI currently depends on a custom PATATO fork for compatibility fixes and legacy HDF5 support (see `pyproject.toml`). 
+**Note:** OPTARI currently depends on a [custom PATATO fork](https://github.com/Mo-Sc/patato/releases/tag/patari-v0.8.0) (see `pyproject.toml`). 
  
 To contribute to OPTARI, follow [Contributing](https://mo-sc.github.io/OPTARI/developer-guide/contributing/).
 
@@ -84,4 +84,4 @@ If OPTARI is useful in your research, please cite the accompanying paper:
 }
 ```
 
-OPTARI is research software intended for the analysis of data from clinical studies and has not undergone  assessment as a medical device. It is not intended for diagnosis or treatment decisions. 
+OPTARI is research software intended for the analysis of data from clinical studies and has not undergone conformity assessment as a medical device. It is not intended for diagnosis or treatment decisions. 

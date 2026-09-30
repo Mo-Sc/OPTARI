@@ -108,4 +108,4 @@ nav:
           - Segmentation: developer-guide/api-reference/segmentation.md
           - PATATO Bridge & Export: developer-guide/api-reference/patato-bridge.md
           - Batch: developer-guide/api-reference/batch.md
-  - Credits: credits.md
+  - Citing: citing.md

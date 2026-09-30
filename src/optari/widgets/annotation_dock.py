@@ -221,7 +221,7 @@ def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
     save_roi_layout.addWidget(save_scope_row)
 
     # Time analysis feature selection (default is mean)
-    time_analysis_box = QGroupBox("Time Analysis")
+    time_analysis_box = QGroupBox("Temporal Analysis")
     time_analysis_layout = QFormLayout(time_analysis_box)
     time_analysis_feature_combo = QComboBox()
     for feature_id in numeric_feature_ids():

@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 class AnalysisController(TaskControllerBase):
-    """Time analysis, histograms, and spectral plotting helpers."""
+    """Temporal analysis, histograms, and spectral plotting helpers."""
 
     def __init__(self, parent_controller):
         """Initialize the analysis controller."""

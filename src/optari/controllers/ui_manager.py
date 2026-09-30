@@ -66,7 +66,7 @@ class UiManager:
             controller._time_analysis_dock_widget = (
                 controller.viewer.window.add_dock_widget(
                     controller.time_analysis.widget,
-                    name="Time Analysis",
+                    name="Temporal",
                     area="bottom",
                     tabify=True,
                 )
@@ -88,7 +88,7 @@ class UiManager:
             controller._spectrum_dock_widget = (
                 controller.viewer.window.add_dock_widget(
                     controller.spectrum.widget,
-                    name="Spectrum",
+                    name="Spectral",
                     area="bottom",
                     tabify=True,
                 )
