@@ -314,27 +314,31 @@ def roi_records_from_scan_rois(
     try:
         rois = pa_data.get_rois()
         n_frames = int(pa_data.shape[0])
-    except Exception:
-        logger.exception("could not load ROI records")
-        return []
+    except Exception as exc:
+        raise ValueError("could not read stored ROI annotations") from exc
 
     records: list[ROIRecord] = []
     used_ids: set[int] = set()
     next_id = 0
     next_track = 0
-    for (_name, _number), roi in rois.items():
-        geometry = RoiGeometry(
-            verts_m=np.asarray(roi.points, dtype=float),
-            kind=getattr(roi, "shape_type", "polygon"),
-            source=getattr(roi, "roi_class", "PATATO"),
-            tissue_class=getattr(roi, "position", "undefined"),
-        )
-        frames = np.asarray(getattr(roi, "ax0_index", []), dtype=int).reshape(
-            -1
-        )
-        frames = np.unique(frames[(frames >= 0) & (frames < n_frames)])
-        if not frames.size:
-            frames = np.arange(n_frames, dtype=int)
+    for key, roi in rois.items():
+        try:
+            geometry = RoiGeometry(
+                verts_m=np.asarray(roi.points, dtype=float),
+                kind=getattr(roi, "shape_type", "polygon"),
+                source=getattr(roi, "roi_class", "PATATO"),
+                tissue_class=getattr(roi, "position", "undefined"),
+            )
+            frames = np.asarray(
+                getattr(roi, "ax0_index", []), dtype=int
+            ).reshape(-1)
+            frames = np.unique(frames[(frames >= 0) & (frames < n_frames)])
+            if not frames.size:
+                frames = np.arange(n_frames, dtype=int)
+        except (AttributeError, TypeError, ValueError) as exc:
+            raise ValueError(
+                f"stored ROI {key!r} has invalid geometry"
+            ) from exc
 
         # PATATO calls this "roi_group_id", in OPTARI it is `track_id`.
         try:

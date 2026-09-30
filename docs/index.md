@@ -12,15 +12,14 @@ visualization, then adds a multi-patient study workflow, ROI annotation, automat
 **Supported scan formats:**
 
 - PATATO HDF5
+- IPASC HDF5
 - iThera MSOT Acuity Echo
 - iThera Frontier (upcoming)
-
-<!-- TODO: one-sentence description of each supported scanner/format -->
 
 <div class="grid cards" markdown>
 
 - :material-download: **First Time:**
-  Read the [publication]() <!-- TODO: link to publication once available --> and start the [Installation](installation/index.md). Download the [test scans](developer-guide/contributing.md#test-data).
+  Read the [publication]() <!-- TODO: link to publication once available --> and start with [Installation](installation/index.md). Download the [test scans](developer-guide/contributing.md#test-data).
 
 - :material-hospital-box: **Using OPTARI:**
   Read the [User Guide](user-guide/index.md) and see [Sample Workflow](clinical-workflows/manual-roi-workflow.md) examples.

@@ -30,7 +30,7 @@ Unzip the archive, put the test folder under tests/testdata/ and run:
 python -m pytest
 ```
 
-Segmentation tests additionally need the ONNX weights of `unet_msot_2_ta` and skip when they are not in `~/.optari/models`. Run segmentation once from the GUI to download them.
+Segmentation tests additionally need the ONNX weights of `c_unet_gastrocnemius-transverse` and skip when they are not in `~/.optari/models`. Run segmentation once from the GUI to download them.
 
 
 ### Tests overview

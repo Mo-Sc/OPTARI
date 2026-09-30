@@ -65,7 +65,7 @@ def vendor_recon(hdf5_scan):
 
 @pytest.fixture(scope="session")
 def seg_model():
-    config = load_model_registry()["unet_msot_2_ta"]
+    config = load_model_registry()["c_unet_gastrocnemius-transverse"]
     if not (get_user_models_dir() / config.filename).is_file():
         pytest.skip(f"segmentation weights {config.filename} not downloaded")
     return config

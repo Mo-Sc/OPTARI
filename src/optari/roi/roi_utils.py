@@ -202,7 +202,12 @@ def _roi_mask(
             float(sx),
             tuple(image_shape),
         )
-    except Exception:
+    except (IndexError, ValueError):
+        logger.warning(
+            "skipping invalid ROI geometry for ROI %s",
+            roi.roi_id,
+            exc_info=True,
+        )
         return None
 
 

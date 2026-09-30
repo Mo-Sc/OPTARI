@@ -85,7 +85,7 @@ Which model/class to run, and how to place an ROI from the resulting mask (see
 
 ```json title="muscle.json"
 {
-  "model_id": "unet_msot_2_ta",
+  "model_id": "c_unet_gastrocnemius-transverse",
   "selected_class_ids": [3],
   "roi_class_id": null,
   "roi_shape": "ellipse",

@@ -58,11 +58,16 @@ class ScanController(TaskControllerBase):
             parent_controller: OptariController instance with viewer and session state.
         """
         super().__init__(parent_controller)
+        self._export_view_handler = (
+            lambda: ViewerExportController.on_export_clicked(
+                self.optari_controller
+            )
+        )
 
     def bind_events(self) -> None:
         """Connect scan browser signals."""
         self.optari_controller.scan_browser.browse_button.clicked.connect(
-            self.on_browse_folder_clicked
+            self.on_browse_study_clicked
         )
         self.optari_controller.scan_browser.scans_list.currentRowChanged.connect(
             self.on_scan_selected
@@ -74,15 +79,13 @@ class ScanController(TaskControllerBase):
             self.on_ipasc_export_clicked
         )
         self.optari_controller.scan_browser.export_layer_button.clicked.connect(
-            lambda: ViewerExportController.on_export_clicked(
-                self.optari_controller
-            )
+            self._export_view_handler
         )
 
     def unbind_events(self) -> None:
         """Disconnect scan browser signals."""
         self.optari_controller.scan_browser.browse_button.clicked.disconnect(
-            self.on_browse_folder_clicked
+            self.on_browse_study_clicked
         )
         self.optari_controller.scan_browser.scans_list.currentRowChanged.disconnect(
             self.on_scan_selected
@@ -93,7 +96,9 @@ class ScanController(TaskControllerBase):
         self.optari_controller.scan_browser.ipasc_button.clicked.disconnect(
             self.on_ipasc_export_clicked
         )
-        self.optari_controller.scan_browser.export_layer_button.clicked.disconnect()
+        self.optari_controller.scan_browser.export_layer_button.clicked.disconnect(
+            self._export_view_handler
+        )
 
     def refresh_ui(self) -> None:
         """Lock the scan browser while a task runs, and gate HDF5 export on a scan being loaded."""
@@ -176,51 +181,36 @@ class ScanController(TaskControllerBase):
             return
 
         if path.is_file():
-            self.load_scan(path)
+            self.open_scan_file(path)
             return
 
         # Not a real path yet (e.g. in tests). Leave UI usable.
         if self.optari_controller.scan_browser is not None:
             self.optari_controller.scan_browser.set_folder(path)
 
-    def on_browse_folder_clicked(self) -> None:
-        """Prompt for a folder or scan file via a native dialog, and load the selection."""
-        # start_path = str(
-        #     self.optari_controller.path
-        #     if self.optari_controller.path.exists()
-        #     else Path.cwd()
-        # )
-
+    def on_browse_study_clicked(self) -> None:
+        """Prompt for a study folder or HDF5 scan file."""
         dialog = QFileDialog(
             None,
-            "Select folder or HDF5 scan file",
+            "Select study folder or HDF5 scan file",
             str(Path.cwd()),
         )
-        dialog.setFileMode(QFileDialog.Directory)
-
+        dialog.setFileMode(QFileDialog.AnyFile)
+        dialog.setNameFilter("HDF5 scans (*.hdf5);;All files (*)")
         if not dialog.exec():
             return
-
         selected = dialog.selectedFiles()
         if not selected:
             return
-
         target = Path(selected[0])
         if target.is_dir():
             self.set_scan_folder(target)
-            return
+        elif target.is_file():
+            self.open_scan_file(target)
 
-        if target.is_file():
-            self.set_scan_folder(target.parent)
-            scan_paths = list(self.optari_controller._scans.keys())
-            try:
-                idx = scan_paths.index(target)
-                if self.optari_controller.scan_browser is not None:
-                    self.optari_controller.scan_browser.scans_list.setCurrentRow(
-                        idx
-                    )
-            except ValueError:
-                self.load_scan(target)
+    def open_scan_file(self, scan_path: Path) -> None:
+        """Discover a scan's study and select that scan in the browser."""
+        self.set_scan_folder(scan_path.parent, selected_scan=scan_path)
 
     def on_scan_selected(self, row: int) -> None:
         """Load the scan at *row* in the scan list, ignoring an out-of-range selection."""
@@ -229,8 +219,10 @@ class ScanController(TaskControllerBase):
             return
         self.load_scan(scan_paths[row])
 
-    def set_scan_folder(self, folder: Path) -> None:
-        """Discover scans in *folder*, populate the scan browser, and load the first scan if any."""
+    def set_scan_folder(
+        self, folder: Path, *, selected_scan: Path | None = None
+    ) -> None:
+        """Discover scans in *folder* and select *selected_scan* or the first available scan."""
         folder = Path(folder)
         self.optari_controller.study_path = folder
 
@@ -248,7 +240,15 @@ class ScanController(TaskControllerBase):
             self.optari_controller._scans
             and self.optari_controller.scan_browser is not None
         ):
-            self.optari_controller.scan_browser.scans_list.setCurrentRow(0)
+            selected_scan = selected_scan or next(
+                iter(self.optari_controller._scans)
+            )
+            try:
+                row = list(self.optari_controller._scans).index(selected_scan)
+            except ValueError:
+                self.reset_scan_state()
+                return
+            self.optari_controller.scan_browser.scans_list.setCurrentRow(row)
         else:
             self.reset_scan_state()
 
@@ -577,20 +577,16 @@ class ScanController(TaskControllerBase):
 
     def init_shapes_from_scan(self) -> None:
         """Clear the ROIs layer and populate it with any ROIs stored in the scan."""
-        if self.optari_controller.shapes_layer is None:
+        shapes_layer = self.optari_controller.shapes_layer
+        if shapes_layer is None:
             return
 
+        data_event = shapes_layer.events.data
+        data_event.disconnect(self.optari_controller._on_shapes_data_changed)
         try:
-            # Disconnect the data-change handler for the duration of the bulk
-            # operation — otherwise it fires once per shape.add(), triggering
-            # redundant compute_roi_stats calls and table refreshes.
-            self.optari_controller.shapes_layer.events.data.disconnect(
-                self.optari_controller._on_shapes_data_changed
-            )
-
             shapes: list = []
             self.optari_controller.roi_ctrl.clear_roi_records()
-            self.optari_controller.shapes_layer.data = []
+            shapes_layer.data = []
             fov = (
                 self.get_fov()
                 if self.optari_controller.pa_data is not None
@@ -614,33 +610,31 @@ class ScanController(TaskControllerBase):
 
                 # Auto select the loaded ROIs for convenience and to activate the button
                 if shapes:
-                    self.optari_controller.shapes_layer.selected_data = set(
-                        range(len(shapes))
-                    )
+                    shapes_layer.selected_data = set(range(len(shapes)))
 
                 # add roi_tissue_class property to shapes layer
-                props = dict(
-                    getattr(
-                        self.optari_controller.shapes_layer, "properties", {}
-                    )
-                    or {}
-                )
+                props = dict(getattr(shapes_layer, "properties", {}) or {})
                 props["roi_tissue_class"] = [tc for _, _, tc, _ in shapes]
                 props["roi_source"] = [src for _, _, _, src in shapes]
-                self.optari_controller.shapes_layer.properties = props
+                shapes_layer.properties = props
 
                 if shapes:
                     logger.info("loaded %s ROI(s) from scan", len(shapes))
 
-            self.optari_controller.shapes_layer.events.data.connect(
-                self.optari_controller._on_shapes_data_changed
+        except ValueError as exc:
+            logger.warning(
+                "could not restore stored ROIs from %s: %s",
+                self.optari_controller.path,
+                exc,
+                exc_info=True,
             )
-
-        except Exception:
-            logging.exception("failed to initialize ROIs from scan data")
-            pass
-        # Single refresh at the end regardless of success/failure.
-        self.optari_controller._on_shapes_data_changed()
+            show_warning(
+                "Scan loaded without saved ROI annotations: " f"{exc}"
+            )
+        finally:
+            data_event.connect(self.optari_controller._on_shapes_data_changed)
+            # Single refresh at the end regardless of success/failure.
+            self.optari_controller._on_shapes_data_changed()
 
     def export_hdf5(self, destination: Path) -> bool:
         """Export scan to HDF5 including OPTARI ROIs and derived datasets."""

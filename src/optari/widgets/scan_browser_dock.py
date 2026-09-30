@@ -60,9 +60,7 @@ def create_scan_browser_dock() -> ScanBrowserDock:
     folder_lineedit = QLineEdit()
     folder_lineedit.setReadOnly(True)
     browse_button = QPushButton("Open Study")
-    browse_button.setToolTip(
-        "Select a folder containing scans to load (iThera or HDF5)"
-    )
+    browse_button.setToolTip("Select a study folder or one HDF5 scan to load")
 
     row_layout.addWidget(folder_lineedit, stretch=1)
     row_layout.addWidget(browse_button)

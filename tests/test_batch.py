@@ -53,7 +53,7 @@ def test_shipped_presets_resolve_against_the_dataset(tmp_path):
         == "Reference Backprojection"
     )
     assert plan.unmixing["SPECTRA"] == ["Hb", "HbO2"]
-    assert plan.segmentation["model_id"] == "unet_msot_2_ta"
+    assert plan.segmentation["model_id"] == "c_unet_gastrocnemius-transverse"
     assert (
         plan.roi.geometry.tissue_class == "Muskel1" and plan.frame == "motion"
     )
@@ -131,7 +131,7 @@ def test_validate_plan_reports_every_problem(tmp_path):
         "already contains batch_roi_table.xlsx",
     ]
     if not (
-        get_user_models_dir() / "unet_msot_2_ta_sl0_20260430-172821.onnx"
+        get_user_models_dir() / "c_unet_ta_20260928_gastrocnemius.onnx"
     ).is_file():
         expected.insert(0, "are not downloaded")
     assert len(problems) == len(expected) + 1

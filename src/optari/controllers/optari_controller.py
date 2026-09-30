@@ -19,6 +19,7 @@ from optari.widgets.scan_browser_dock import ScanBrowserDock
 from optari.controllers.scan_controller import ScanInfo
 from optari.widgets.annotation_dock import AnnotationDock
 from optari.widgets.reconstruction_dock import ReconstructionDock
+from optari.widgets.segmentation_dock import SegmentationDock
 from optari.widgets.time_analysis_dock import TimeAnalysisDock
 from optari.widgets.unmixing_dock import UnmixingDock
 from optari.widgets.histogram_dock import HistogramDock
@@ -67,7 +68,7 @@ class OptariController:
         # --- right elements ---
         self.scan_browser: ScanBrowserDock | None = None
         self.annotation: AnnotationDock | None = None
-        self.segmentation = None
+        self.segmentation: SegmentationDock | None = None
         self.unmixing: UnmixingDock | None = None
         self.reconstruction: ReconstructionDock | None = None
         self._scan_browser_dock_widget = None
@@ -112,10 +113,6 @@ class OptariController:
         self._connect_events()
         self.register_shortcuts()
 
-        # If a path is provided, populate scan browser / load scan.
-        # Otherwise, the Scan Browser dock drives loading.
-        # if path is not None:
-        #     self._init_path(self.path)
         if self.scan_browser is not None:
             # Show an empty folder field instead of defaulting to '.'
             self.scan_browser.folder_lineedit.setText("")

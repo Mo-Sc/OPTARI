@@ -12,7 +12,7 @@ clinical studies without scripting. Scans are read from iThera `.msot`, PATATO H
 [IPASC](https://www.ipasc.science) HDF5 files.
 
 
-**Full documentation, inlcuding instructions, sample workflows, and API references: [mo-sc.github.io/OPTARI](https://mo-sc.github.io/OPTARI/)**.
+**Full documentation, including instructions, sample workflows, and API references: [mo-sc.github.io/OPTARI](https://mo-sc.github.io/OPTARI/)**.
 
 ![Demo Layers](docs/assets/optari_startup.png)
 
@@ -31,7 +31,7 @@ clinical studies without scripting. Scans are read from iThera `.msot`, PATATO H
 
 ## Quickstart
 
-The easiest way to use OPTARI is by using one of the standalone executables: (todo: link to doc about quick installation)
+The easiest way to use OPTARI is one of the [standalone executables](https://mo-sc.github.io/OPTARI/installation/).
 
 Alternatively, install from source into a Python 3.12 environment (the PATATO binaries OPTARI depends on are only available for 3.12):
 

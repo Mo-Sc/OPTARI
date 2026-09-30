@@ -12,7 +12,9 @@ from __future__ import annotations
 import datetime as dt
 import json
 import logging
+import os
 import re
+import tempfile
 from pathlib import Path
 
 import h5py
@@ -160,25 +162,30 @@ def export_scan_to_hdf5(controller, destination: Path) -> bool:
     if destination is None:
         return False
 
-    try:
-        controller.pa_data.save_hdf5(str(destination))
-        _write_file_origin(destination)
-    except Exception:
-        logger.exception("Failed to export scan to %s", destination.name)
-        return False
-
+    fd, temporary_name = tempfile.mkstemp(
+        dir=destination.parent,
+        prefix=f".{destination.stem}-",
+        suffix=destination.suffix,
+    )
+    os.close(fd)
+    temporary_destination = Path(temporary_name)
+    temporary_destination.unlink()
     destination_pa_data = None
     try:
-        destination_pa_data = pat.PAData.from_hdf5(str(destination), mode="r+")
+        controller.pa_data.save_hdf5(str(temporary_destination))
+        _write_file_origin(temporary_destination)
+        destination_pa_data = pat.PAData.from_hdf5(
+            str(temporary_destination), mode="r+"
+        )
         _write_rois(controller, destination_pa_data)
         _write_derived_data(controller, destination_pa_data)
+        destination_pa_data.close()
+        destination_pa_data = None
+        temporary_destination.replace(destination)
         logger.info("exported scan to %s", destination)
         return True
     except Exception:
-        logger.exception(
-            "Exported scan to %s, but failed to write ROIs and derived images",
-            destination.name,
-        )
+        logger.exception("Failed to export scan to %s", destination.name)
         return False
     finally:
         if destination_pa_data is not None:
@@ -186,6 +193,7 @@ def export_scan_to_hdf5(controller, destination: Path) -> bool:
                 destination_pa_data.close()
             except Exception:
                 pass
+        temporary_destination.unlink(missing_ok=True)
 
 
 def export_scan_to_ipasc(controller, destination: Path) -> bool:
