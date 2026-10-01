@@ -13,13 +13,14 @@ import patato as pat
 from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QListWidgetItem
 
-from patato.io.attribute_tags import UnmixingAttributeTags
+from patato.io.attribute_tags import HDF5Tags, UnmixingAttributeTags
 from patato.unmixing.spectra import SPECTRA_NAMES
 from optari.controllers.base import TaskControllerBase
 from optari.utils.tasks import BackgroundStep
 from optari.patato_bridge import (
     display_data_from_patato_obj,
     expand_to_acquisition_frames,
+    layer_colormap,
 )
 from optari.utils.presets import PresetStore
 from optari.utils.setup import get_user_unmixing_presets_dir
@@ -746,7 +747,7 @@ class UnmixingController(TaskControllerBase):
                 # Channel labels are used by downstream spectrum displays.
                 axis1_labels=list(map(str, unmixed.ax_1_labels)),
                 pa_kind="unmixed",
-                colormap="magma",
+                colormap=layer_colormap(HDF5Tags.UNMIXED),
                 include_chromophores=True,
             )
         ]
@@ -758,7 +759,7 @@ class UnmixingController(TaskControllerBase):
                     prefix="THb",
                     axis1_labels=["thb"],
                     pa_kind="unmixed_param",
-                    colormap="inferno",
+                    colormap=layer_colormap(HDF5Tags.THB),
                     parameter="thb",
                 )
             )
@@ -770,7 +771,7 @@ class UnmixingController(TaskControllerBase):
                     prefix="sO2",
                     axis1_labels=["so2"],
                     pa_kind="unmixed_param",
-                    colormap="twilight_shifted",
+                    colormap=layer_colormap(HDF5Tags.SO2),
                     parameter="so2",
                 )
             )

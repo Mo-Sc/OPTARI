@@ -119,6 +119,23 @@ def expand_to_acquisition_frames(
 # ---------------------------------------------------------------------------
 
 
+# Used for any image group that LAYER_COLOR_MAPS in config.json does not name.
+DEFAULT_COLORMAPS = {
+    HDF5Tags.ULTRASOUND: "gray",
+    HDF5Tags.RECONSTRUCTION: "viridis",
+    HDF5Tags.UNMIXED: "magma",
+    HDF5Tags.SO2: "twilight_shifted",
+    HDF5Tags.THB: "inferno",
+}
+
+
+def layer_colormap(group: str) -> str:
+    """Colormap for an HDF5 image *group*, whether loaded from the scan or computed."""
+    return settings.general.LAYER_COLOR_MAPS.get(
+        group, DEFAULT_COLORMAPS[group]
+    )
+
+
 def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
     """Build napari image layers from an open *pa_data* handle.
 
@@ -133,16 +150,6 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
     """
     _us_fallback = settings.general.US_FALLBACK_SCALE
     _pa_fallback = settings.general.PA_FALLBACK_SCALE
-
-    _user_cmaps = settings.general.LAYER_COLOR_MAPS
-    # fallback to hardcoded defaults if any of the configured cmaps are missing
-    _default_cmaps = {
-        HDF5Tags.ULTRASOUND: "gray",
-        HDF5Tags.RECONSTRUCTION: "viridis",
-        HDF5Tags.UNMIXED: "magma",
-        HDF5Tags.SO2: "twilight_shifted",
-        HDF5Tags.THB: "inferno",
-    }
 
     patato_objects: dict = {}
     layers: list = []
@@ -170,10 +177,7 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
             (
                 us_img,
                 {
-                    "colormap": _user_cmaps.get(
-                        HDF5Tags.ULTRASOUND,
-                        _default_cmaps[HDF5Tags.ULTRASOUND],
-                    ),
+                    "colormap": layer_colormap(HDF5Tags.ULTRASOUND),
                     "name": "US",
                     "scale": scale_from_patato_obj(us_obj, _us_fallback),
                     "opacity": 1.0,
@@ -212,10 +216,7 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
             (
                 recon_img,
                 {
-                    "colormap": _user_cmaps.get(
-                        HDF5Tags.RECONSTRUCTION,
-                        _default_cmaps[HDF5Tags.RECONSTRUCTION],
-                    ),
+                    "colormap": layer_colormap(HDF5Tags.RECONSTRUCTION),
                     "name": layer_name,
                     "scale": scale_from_patato_obj(recon, _pa_fallback),
                     "opacity": 1.0,
@@ -274,10 +275,7 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
                 (
                     data,
                     {
-                        "colormap": _user_cmaps.get(
-                            group_name,
-                            _default_cmaps.get(group_name, "viridis"),
-                        ),
+                        "colormap": layer_colormap(group_name),
                         "name": f"{prefix}: {dataset_name}_{idx}",
                         "scale": scale_from_patato_obj(image, _pa_fallback),
                         "opacity": 1.0,

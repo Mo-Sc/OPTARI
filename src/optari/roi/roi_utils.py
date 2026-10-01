@@ -480,27 +480,20 @@ def _time_axis(
     data = np.asarray(active_recon_layer.data)
     n_frames = data.shape[0]
 
-    frames_meta = getattr(active_recon_layer, "metadata", {}).get("frames")
+    frames_meta = active_recon_layer.metadata.get("frames")
     frames = (
         np.asarray(frames_meta, dtype=int)
         if frames_meta
         else np.arange(n_frames, dtype=int)
     )
 
-    ts = getattr(active_recon_layer, "metadata", {}).get("timestamps")
-    if ts is not None:
-        try:
-            ts = np.asarray(ts)
-            # Use per-channel timestamps for the plotted channel,
-            # but reference all values to scan start
-            x = ts[frames, channel_idx].astype(float)
-            x = x - float(ts[0, 0])
-        except Exception:
-            x = frames.astype(float)
-    else:
-        x = frames.astype(float)
-
-    return frames, x
+    # The plot labels its x-axis from the same metadata, see AnalysisController.
+    ts = active_recon_layer.metadata.get("timestamps")
+    if ts is None:
+        return frames, frames.astype(float)
+    # Per-channel timestamps for the plotted channel, referenced to the scan start
+    ts = np.asarray(ts, dtype=float)
+    return frames, ts[frames, channel_idx] - ts[0, 0]
 
 
 def _time_series_setup(active_recon_layer, channel_idx: int):

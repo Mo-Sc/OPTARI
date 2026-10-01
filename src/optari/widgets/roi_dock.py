@@ -61,7 +61,7 @@ def create_roi_dock() -> RoiDock:
     xlsx_button = QPushButton("Export XLSX")
     import_button = QPushButton("Import XLSX")
     import_button.setToolTip(
-        "Replace the Saved Analysis table with a previously exported table"
+        "Append a previously exported table to the Saved Analysis table, skipping rows already in it"
     )
 
     # build Qt container for the bottom dock

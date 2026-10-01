@@ -13,12 +13,13 @@ from pathlib import Path
 
 import patato as pat
 from patato import PAT_MAXIMUM_BATCH_SIZE
-from patato.io.attribute_tags import ReconAttributeTags
+from patato.io.attribute_tags import HDF5Tags, ReconAttributeTags
 from qtpy.QtCore import Qt
 from optari.controllers.base import TaskControllerBase
 from optari.patato_bridge import (
     acquisition_start,
     display_data_from_patato_obj,
+    layer_colormap,
     expand_to_acquisition_frames,
 )
 from optari.utils.presets import PresetStore
@@ -545,7 +546,7 @@ class ReconstructionController(TaskControllerBase):
             data,
             layer_metadata,
             reconstruction,
-            colormap="viridis",
+            colormap=layer_colormap(HDF5Tags.RECONSTRUCTION),
             translate=translate,
         )
         self.optari_controller._patato_objects[layer_name] = reconstruction

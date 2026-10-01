@@ -251,9 +251,11 @@ class AnalysisController(TaskControllerBase):
         vb.enableAutoRange(axis=getattr(vb, "YAxis", "y"), enable=True)
         vb.autoRange(padding=0.02)
 
+        # Same source as the x values themselves (roi_utils._time_axis).
+        layer_metadata = self.optari_controller.active_recon_layer.metadata
         xlabel = (
             "Time (s)"
-            if self.optari_controller.timestamps is not None
+            if layer_metadata.get("timestamps") is not None
             else "Frame"
         )
 

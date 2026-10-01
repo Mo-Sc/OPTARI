@@ -53,7 +53,7 @@ logger = logging.getLogger(__name__)
 LOG_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
 # Keys of general.LAYER_COLOR_MAPS, paired with a readable label. Sourced from HDF5Tags so they
-# stay in step with the lookup in patato_bridge.build_napari_layers().
+# stay in step with the lookup in patato_bridge.layer_colormap().
 COLOR_MAP_KEYS: list[tuple[str, str]] = [
     (HDF5Tags.ULTRASOUND, "Ultrasound"),
     (HDF5Tags.RECONSTRUCTION, "Reconstruction"),

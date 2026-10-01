@@ -275,10 +275,10 @@ class OptariController:
             return
 
         current_index = self.viewer.layers.index(self.shapes_layer)
-        top_index = len(self.viewer.layers)
+        top_index = len(self.viewer.layers) - 1
         if current_index != top_index:
-            # Layer order defines draw order; top index renders above image layers.
-            self.viewer.layers.move(current_index, top_index)
+            # Layer order defines draw order. the last layer renders above all others.
+            self.viewer.layers.move(current_index, len(self.viewer.layers))
             logger.info("moved ROI layer to top index %s", top_index)
 
     # ============ scan loading ============
