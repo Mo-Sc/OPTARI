@@ -37,7 +37,6 @@ from qtpy.QtWidgets import (
 from optari.config.config import read_user_config_dict, write_user_config_dict
 from optari.roi.roi_features import FEATURE_REGISTRY
 from optari.segmentation.segmenter import load_model_registry
-from optari.widgets.dock_helpers import DOCK_LABELS
 from optari.utils.setup import (
     get_default_config_file,
     get_user_config_file,
@@ -90,7 +89,7 @@ class SettingsDialog(QDialog):
     Requires restart to take effect.
     """
 
-    def __init__(self, parent):
+    def __init__(self, parent, dock_labels: list[str]):
         super().__init__(parent)
         self.setWindowTitle("OPTARI Settings")
         self.setMinimumSize(560, 520)
@@ -100,7 +99,7 @@ class SettingsDialog(QDialog):
         self.tabs = QTabWidget()
         self.tabs.addTab(self._build_general_tab(), "General")
         self.tabs.addTab(self._build_viewer_tab(), "Viewer")
-        self.tabs.addTab(self._build_docks_tab(), "Docks")
+        self.tabs.addTab(self._build_docks_tab(dock_labels), "Docks")
         self.tabs.addTab(self._build_roi_tab(), "ROI Table")
         self.tabs.addTab(self._build_models_tab(), "Models")
         self.tabs.addTab(self._build_paths_tab(), "Paths")
@@ -247,7 +246,7 @@ class SettingsDialog(QDialog):
         form.addRow(label, row)
         return spins
 
-    def _build_docks_tab(self) -> QWidget:
+    def _build_docks_tab(self, dock_labels: list[str]) -> QWidget:
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.addWidget(
@@ -260,7 +259,7 @@ class SettingsDialog(QDialog):
         group = QGroupBox("Default visible docks")
         grid = QGridLayout(group)
         self.dock_checkboxes: dict[str, QCheckBox] = {}
-        for position, label in enumerate(DOCK_LABELS):
+        for position, label in enumerate(dock_labels):
             checkbox = QCheckBox(label)
             self.dock_checkboxes[label] = checkbox
             grid.addWidget(checkbox, position // 3, position % 3)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from functools import partial
 from typing import TYPE_CHECKING
 
 from qtpy.QtCore import QTimer
@@ -28,115 +29,45 @@ class UiManager:
     # ============ dock setup ============
     @staticmethod
     def setup_docks(controller: "OptariController") -> None:
-        # Create docks once per controller instance.
-        if controller.scan_browser is None:
-            controller.scan_browser = create_scan_browser_dock()
-            controller._scan_browser_dock_widget = (
-                controller.viewer.window.add_dock_widget(
-                    controller.scan_browser.widget,
-                    name="Scan Browser",
-                    area="right",
-                )
-            )
+        """Create OPTARI's docks and register them, with napari's own, in
+        ``controller.dock_widgets``. The order there is the order of OPTARI ▸ Docks
+        and of the Settings dock list; tabified docks join the previous one in their area.
+        """
+        add = partial(UiManager._add_dock, controller)
+        controller.scan_browser = add(
+            create_scan_browser_dock(), "Scan Browser", "right", tabify=False
+        )
+        controller.info = add(
+            create_info_dock(), "Active Slice Info", "left", tabify=False
+        )
+        controller.roi = add(
+            create_roi_dock(), "Tabular", "bottom", tabify=False
+        )
+        controller.time_analysis = add(
+            create_time_analysis_dock(), "Temporal", "bottom"
+        )
+        controller.histograms = add(
+            create_histogram_dock(), "Histogram", "bottom"
+        )
+        controller.spectrum = add(create_spectrum_dock(), "Spectral", "bottom")
+        controller.annotation = add(
+            create_annotation_dock(), "Annotation", "right"
+        )
+        controller.segmentation = add(
+            create_segmentation_dock(), "Segmentation", "right"
+        )
+        controller.unmixing = add(create_unmixing_dock(), "Unmixing", "right")
+        controller.reconstruction = add(
+            create_reconstruction_dock(), "Reconstruction", "right"
+        )
+        # The info dock floats by default instead of sitting in the left area.
+        controller.dock_widgets["Active Slice Info"].setFloating(True)
 
-        if controller.info is None:
-            # info dock is not tabified, but floating by default
-            controller.info = create_info_dock()
-            controller._info_dock_widget = (
-                controller.viewer.window.add_dock_widget(
-                    controller.info.widget,
-                    name="Active Slice Info",
-                    area="left",
-                )
-            )
-            controller._info_dock_widget.setFloating(True)
-
-        if controller.roi is None:
-            controller.roi = create_roi_dock()
-            controller._roi_dock_widget = (
-                controller.viewer.window.add_dock_widget(
-                    controller.roi.widget,
-                    name="Tabular",
-                    area="bottom",
-                )
-            )
-
-        if controller.time_analysis is None:
-            controller.time_analysis = create_time_analysis_dock()
-            controller._time_analysis_dock_widget = (
-                controller.viewer.window.add_dock_widget(
-                    controller.time_analysis.widget,
-                    name="Temporal",
-                    area="bottom",
-                    tabify=True,
-                )
-            )
-
-        if controller.histograms is None:
-            controller.histograms = create_histogram_dock()
-            controller._histograms_dock_widget = (
-                controller.viewer.window.add_dock_widget(
-                    controller.histograms.widget,
-                    name="Histogram",
-                    area="bottom",
-                    tabify=True,
-                )
-            )
-
-        if controller.spectrum is None:
-            controller.spectrum = create_spectrum_dock()
-            controller._spectrum_dock_widget = (
-                controller.viewer.window.add_dock_widget(
-                    controller.spectrum.widget,
-                    name="Spectral",
-                    area="bottom",
-                    tabify=True,
-                )
-            )
-
-        if controller.annotation is None:
-            controller.annotation = create_annotation_dock()
-            controller._annotation_dock_widget = (
-                controller.viewer.window.add_dock_widget(
-                    controller.annotation.widget,
-                    name="Annotation",
-                    area="right",
-                    tabify=True,
-                )
-            )
-
-        if controller.segmentation is None:
-            controller.segmentation = create_segmentation_dock()
-            controller._segmentation_dock_widget = (
-                controller.viewer.window.add_dock_widget(
-                    controller.segmentation.widget,
-                    name="Segmentation",
-                    area="right",
-                    tabify=True,
-                )
-            )
-
-        if controller.unmixing is None:
-            controller.unmixing = create_unmixing_dock()
-            controller._unmixing_dock_widget = (
-                controller.viewer.window.add_dock_widget(
-                    controller.unmixing.widget,
-                    name="Unmixing",
-                    area="right",
-                    tabify=True,
-                )
-            )
-
-        if controller.reconstruction is None:
-            controller.reconstruction = create_reconstruction_dock()
-            controller._reconstruction_dock_widget = (
-                controller.viewer.window.add_dock_widget(
-                    controller.reconstruction.widget,
-                    name="Reconstruction",
-                    area="right",
-                    tabify=True,
-                )
-            )
+        # napari's own docks, so they can be toggled and defaulted like OPTARI's.
+        # private _qt_viewer (public qt_viewer is deprecated), still present in napari 0.9.1
+        qt_viewer = controller.viewer.window._qt_viewer
+        controller.dock_widgets["Layer Controls"] = qt_viewer.dockLayerControls
+        controller.dock_widgets["Layer List"] = qt_viewer.dockLayerList
 
         # Select default docks after the event loop has started
         QTimer.singleShot(
@@ -145,14 +76,24 @@ class UiManager:
 
         logger.info("Dock widgets created and added to the viewer window.")
 
+    @staticmethod
+    def _add_dock(
+        controller, dock, title: str, area: str, tabify: bool = True
+    ):
+        """Add *dock*'s widget to the window under *title* and return *dock*."""
+        controller.dock_widgets[title] = (
+            controller.viewer.window.add_dock_widget(
+                dock.widget, name=title, area=area, tabify=tabify
+            )
+        )
+        return dock
+
     # ============ dock layout ============
     @staticmethod
     def _select_default_docks(controller: "OptariController") -> None:
         # by default, Scan Browser on the right and Tables at the bottom
-        if controller._roi_dock_widget is not None:
-            controller._roi_dock_widget.raise_()
-        if controller._scan_browser_dock_widget is not None:
-            controller._scan_browser_dock_widget.raise_()
+        controller.dock_widgets["Tabular"].raise_()
+        controller.dock_widgets["Scan Browser"].raise_()
 
     @staticmethod
     def _install_shutdown_hook(controller: "OptariController") -> None:

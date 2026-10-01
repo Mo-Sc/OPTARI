@@ -11,7 +11,6 @@ import cv2
 from napari.utils.progress import cancelable_progress
 from qtpy.QtWidgets import QFileDialog
 
-from optari.controllers.base import TaskControllerBase
 from optari.io.utils import colorbars_visible, save_viewer_screenshot
 from optari.utils.viewer import show_activity_dock
 from optari.widgets.viewer_export_dialog import ViewerExportDialog
@@ -19,7 +18,7 @@ from optari.widgets.viewer_export_dialog import ViewerExportDialog
 logger = logging.getLogger(__name__)
 
 
-class ViewerExportController(TaskControllerBase):
+class ViewerExportController:
     """Export the currently visible viewer content as image or video."""
 
     @staticmethod

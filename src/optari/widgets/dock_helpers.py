@@ -22,24 +22,6 @@ from qtpy.QtWidgets import (
 
 from optari.utils.presets import PresetStore
 
-# display names for OPTARI's toggleable dock panels, shared between MenuManager (which
-# builds the OPTARI > Docks menu and applies default visibility at startup) and SettingsDialog
-# (which lets the startup default be configured). Order here is the display order in both places.
-DOCK_LABELS: tuple[str, ...] = (
-    "Scan Browser",
-    "Active Slice Info",
-    "Tabular",
-    "Temporal",
-    "Histogram",
-    "Spectral",
-    "Annotation",
-    "Segmentation",
-    "Unmixing",
-    "Reconstruction",
-    "Layer Controls",
-    "Layer List",
-)
-
 
 @dataclass
 class DockShell:

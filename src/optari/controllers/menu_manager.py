@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 from qtpy.QtCore import QUrl
 from qtpy.QtGui import QAction, QDesktopServices
 from qtpy.QtWidgets import QMenu
 
 from optari.config import settings
-from optari.widgets.dock_helpers import DOCK_LABELS
 from optari.widgets.batch_dialog import BatchDialog
 from optari.widgets.settings_dialog import SettingsDialog
 
@@ -43,35 +42,6 @@ HIDDEN_VIEW_ENTRIES = (
     "napari.scene.toggle_ndisplay",
     "napari.scene.toggle_synced_camera",
 )
-
-# How to reach each dock widget named in DOCK_LABELS, from a OptariController. The OPTARI-owned
-# docks are attributes set by UiManager.setup_docks(). Layer Controls/List are napari's own,
-# reached through its private QtViewer.
-_DOCK_RESOLVERS: dict[str, Callable[["OptariController"], object]] = {
-    "Scan Browser": lambda c: c._scan_browser_dock_widget,
-    "Active Slice Info": lambda c: c._info_dock_widget,
-    "Tabular": lambda c: c._roi_dock_widget,
-    "Temporal": lambda c: c._time_analysis_dock_widget,
-    "Histogram": lambda c: c._histograms_dock_widget,
-    "Spectral": lambda c: c._spectrum_dock_widget,
-    "Annotation": lambda c: c._annotation_dock_widget,
-    "Segmentation": lambda c: c._segmentation_dock_widget,
-    "Unmixing": lambda c: c._unmixing_dock_widget,
-    "Reconstruction": lambda c: c._reconstruction_dock_widget,
-    "Layer Controls": lambda c: c.viewer.window._qt_viewer.dockLayerControls,
-    "Layer List": lambda c: c.viewer.window._qt_viewer.dockLayerList,
-}
-
-
-def _iter_dock_widgets(controller: "OptariController"):
-    """Yield (label, dock_widget) for every dock in DOCK_LABELS that currently resolves."""
-    for label in DOCK_LABELS:
-        try:
-            dock_widget = _DOCK_RESOLVERS[label](controller)
-        except AttributeError:
-            dock_widget = None
-        if dock_widget is not None:
-            yield label, dock_widget
 
 
 class MenuManager:
@@ -138,7 +108,7 @@ class MenuManager:
         Window menu so visibility stays in sync even when a dock is closed some other way.
         """
         docks_menu = menu.addMenu("Docks")
-        for label, dock_widget in _iter_dock_widgets(controller):
+        for label, dock_widget in controller.dock_widgets.items():
             action = dock_widget.toggleViewAction()
             action.setText(label)
             docks_menu.addAction(action)
@@ -151,14 +121,16 @@ class MenuManager:
         (save_window_state) would otherwise show
         """
         defaults = settings.general.DEFAULT_VISIBLE_DOCKS
-        for label, dock_widget in _iter_dock_widgets(controller):
+        for label, dock_widget in controller.dock_widgets.items():
             dock_widget.setVisible(bool(int(defaults.get(label, 1))))
 
     @staticmethod
     def _show_settings(controller: "OptariController") -> None:
         if controller.settings_dialog is None:
             qt_window = controller.viewer.window._qt_window
-            controller.settings_dialog = SettingsDialog(qt_window)
+            controller.settings_dialog = SettingsDialog(
+                qt_window, list(controller.dock_widgets)
+            )
         controller.settings_dialog.show()
         controller.settings_dialog.raise_()
         controller.settings_dialog.activateWindow()

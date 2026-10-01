@@ -11,6 +11,7 @@ from napari.viewer import Viewer
 
 if TYPE_CHECKING:
     from napari.qt.threading import GeneratorWorker
+    from qtpy.QtWidgets import QDockWidget
 
 from optari.roi.roi_utils import slice_datetime
 from optari.utils.viewer import selected_frame_and_channel
@@ -63,9 +64,11 @@ class OptariController:
         self.active_us_layer: Image | None = None
         self.active_task: GeneratorWorker | None = None
 
+        # Docks, created by UiManager.setup_docks. dock_widgets maps each dock's title to
+        # the Qt dock widget holding it, napari's own Layer Controls/List included.
+        self.dock_widgets: dict[str, QDockWidget] = {}
         # --- left elements ---
         self.info: InfoDock | None = None
-        # Info widget is the plugin-provided dock widget; controller does not dock it.
 
         # --- right elements ---
         self.scan_browser: ScanBrowserDock | None = None
@@ -73,11 +76,6 @@ class OptariController:
         self.segmentation: SegmentationDock | None = None
         self.unmixing: UnmixingDock | None = None
         self.reconstruction: ReconstructionDock | None = None
-        self._scan_browser_dock_widget = None
-        self._annotation_dock_widget = None
-        self._segmentation_dock_widget = None
-        self._unmixing_dock_widget = None
-        self._reconstruction_dock_widget = None
 
         self.scan_ctrl = ScanController(self)
         self.roi_ctrl = RoiController(self)
@@ -94,10 +92,6 @@ class OptariController:
         self.time_analysis: TimeAnalysisDock | None = None
         self.histograms: HistogramDock | None = None
         self.spectrum: SpectrumDock | None = None
-        self._roi_dock_widget = None
-        self._time_analysis_dock_widget = None
-        self._histograms_dock_widget = None
-        self._spectrum_dock_widget = None
 
         self.settings_dialog = None
         self.batch_dialog = None
