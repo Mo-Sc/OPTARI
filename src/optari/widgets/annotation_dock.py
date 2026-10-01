@@ -181,8 +181,9 @@ def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
         "Save this ROI's data for every frame in the scan"
     )
     include_all_channels_checkbox.setToolTip(
-        "Save this ROI's data for every channel (wavelength/chromophore); "
-        "auto-enabled by Include all layers"
+        "Save this ROI's data for every wavelength of a reconstruction; "
+        "auto-enabled by Include all layers. Unmixed, sO2 and THb layers are "
+        "always saved for every channel"
     )
 
     # When include all layers, always include all channels

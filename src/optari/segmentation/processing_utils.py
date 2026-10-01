@@ -9,8 +9,9 @@ from skimage.morphology import remove_small_objects
 # --- processing functions for images ---
 
 
-def resize_img(image: np.ndarray, target_size: tuple[int, int]) -> np.ndarray:
-    return cv2.resize(image, target_size, interpolation=cv2.INTER_LINEAR)
+def resize_img(image: np.ndarray, shape: tuple[int, int]) -> np.ndarray:
+    """Resize to *shape* ``(H, W)``; cv2 itself takes ``(W, H)``."""
+    return cv2.resize(image, shape[::-1], interpolation=cv2.INTER_LINEAR)
 
 
 def normalize_img(
@@ -31,8 +32,9 @@ def normalize_img(
 # --- processing functions for segmentation masks ---
 
 
-def resize_mask(mask: np.ndarray, target_size: tuple[int, int]) -> np.ndarray:
-    return cv2.resize(mask, target_size, interpolation=cv2.INTER_NEAREST)
+def resize_mask(mask: np.ndarray, shape: tuple[int, int]) -> np.ndarray:
+    """Resize to *shape* ``(H, W)``; cv2 itself takes ``(W, H)``."""
+    return cv2.resize(mask, shape[::-1], interpolation=cv2.INTER_NEAREST)
 
 
 def combine_classes(

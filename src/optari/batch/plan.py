@@ -406,11 +406,16 @@ def describe_plan(plan: BatchPlan) -> str:
             if scope.all_layers
             else "that layer and what is unmixed from it"
         )
+        channels = (
+            "all channels"
+            if scope.all_layers or scope.all_channels
+            else "current wavelength (derived layers: all channels)"
+        )
         lines.append(
             "Measure:    "
             f"{layers}, "
             f"{'all frames' if scope.all_frames else 'analysis frame'}, "
-            f"{'all channels' if scope.all_channels else 'current channel'}"
+            f"{channels}"
         )
     wanted = [
         name

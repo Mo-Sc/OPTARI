@@ -165,7 +165,7 @@ How wide the measurement reaches. Mirrors the **Include all …** boxes in the A
 | Key | Values | Meaning |
 | --- | --- | --- |
 | `layers` | `"analysis"` (default), `"all_pa"` | `analysis` measures the `source` reconstruction plus what this run unmixed from it. `all_pa` measures every OA layer in the scan, including reconstructions the plan did not make. |
-| `all_channels` | `true` (default), `false` | Every channel, or just the default one. |
+| `all_channels` | `true` (default), `false` | Every wavelength of the reconstruction, or just the default one. Derived layers (unmixed, sO₂, THb) are always measured on every channel. |
 | `all_frames` | `false` (default), `true` | Every frame, overriding `frame` above. Reconstruction, segmentation and measurement all run over every frame instead of just the anchor frame. The ROI is placed on each frame (re-anchored per frame for `auto` placement) and measured there. `frame` still picks the overlay/report anchor. |
 
 ### `outputs`

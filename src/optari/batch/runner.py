@@ -34,6 +34,7 @@ from optari.controllers.unmixing_controller import UnmixParams
 from optari.io.export_pipeline import export_scan_to_hdf5, export_scan_to_ipasc
 from optari.io.utils import save_viewer_screenshot
 from optari.roi.roi_table import SavedRoiTable
+from optari.roi.roi_utils import NO_CLAMP
 from optari.utils.logging import run_log_file
 from optari.utils.tasks import BackgroundStep, run_background_task
 
@@ -359,8 +360,12 @@ class BatchRunner:
             if self.plan.measure.all_layers
             else self._analysis_layers(source_layer)
         )
+        # A plan has no intensity filter, so the dock's must not leak into its numbers.
         rows = roi_ctrl._measure_selected_rois(
-            selected_ids, scope=self.plan.measure, layers=layers
+            selected_ids,
+            scope=self.plan.measure,
+            layers=layers,
+            clamp=NO_CLAMP,
         )
         if rows.empty:
             raise BatchStepError("ROI measured no rows on this scan")

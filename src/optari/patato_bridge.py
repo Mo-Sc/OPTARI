@@ -329,16 +329,22 @@ def roi_records_from_scan_rois(
                 source=getattr(roi, "roi_class", "PATATO"),
                 tissue_class=getattr(roi, "position", "undefined"),
             )
-            frames = np.asarray(
-                getattr(roi, "ax0_index", []), dtype=int
-            ).reshape(-1)
-            frames = np.unique(frames[(frames >= 0) & (frames < n_frames)])
-            if not frames.size:
-                frames = np.arange(n_frames, dtype=int)
+            frames = np.unique(
+                np.asarray(getattr(roi, "ax0_index", []), dtype=int)
+            )
         except (AttributeError, TypeError, ValueError) as exc:
             raise ValueError(
                 f"stored ROI {key!r} has invalid geometry"
             ) from exc
+        # A frame this scan does not have means the ROI was drawn on another acquisition.
+        if np.any((frames < 0) | (frames >= n_frames)):
+            raise ValueError(
+                f"stored ROI {key!r} references frame(s) {frames.tolist()}, "
+                f"but the scan has {n_frames}"
+            )
+        if not frames.size:
+            # No frame recorded at all: the ROI covers the whole acquisition.
+            frames = np.arange(n_frames, dtype=int)
 
         # PATATO calls this "roi_group_id", in OPTARI it is `track_id`.
         try:

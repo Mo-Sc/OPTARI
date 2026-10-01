@@ -32,6 +32,7 @@ from optari.roi.roi_records import ROIRecord
 from optari.roi.roi_shapes import class_top_at_center_column
 from optari.roi.roi_table import SavedRoiTable
 from optari.roi.roi_utils import (
+    NO_CLAMP,
     IntensityClamp,
     MeasureScope,
     clear_mask_cache,
@@ -117,7 +118,7 @@ class RoiController(TaskControllerBase):
         self._next_roi_id = 0
         self._next_track_id = 0
         self._projecting = False
-        self.intensity_clamp = IntensityClamp()
+        self.intensity_clamp = NO_CLAMP
         self._roi_preset_store = RoiPresetStore(get_user_roi_presets_dir())
 
     @property
@@ -410,11 +411,14 @@ class RoiController(TaskControllerBase):
                 ),
                 mode="exclude",
             )
-        if annotation.roi_clipping_box.isChecked():
+        elif annotation.roi_clipping_box.isChecked():
             self.intensity_clamp = IntensityClamp(
                 minimum=parse_float_input(annotation.roi_clip_min_edit.text()),
                 maximum=parse_float_input(annotation.roi_clip_max_edit.text()),
             )
+        else:
+            # Both boxes off must mean no filtering, not the last range that was set.
+            self.intensity_clamp = NO_CLAMP
 
         self.update_live_table()
 
@@ -731,12 +735,13 @@ class RoiController(TaskControllerBase):
         *,
         scope: MeasureScope | None = None,
         layers: list | None = None,
+        clamp: IntensityClamp | None = None,
     ) -> pd.DataFrame:
         """Measure the selected ROIs over every layer, frame and channel in scope.
 
-        *scope* defaults to the annotation dock's checkboxes and *layers* to whatever
-        that scope resolves to. Batch mode passes both, so it can measure one
-        reconstruction and its own derived layers rather than every layer present.
+        *scope* defaults to the annotation dock's checkboxes, *layers* to whatever
+        that scope resolves to and *clamp* to the dock's intensity filter. Batch mode
+        passes all three, so its numbers depend on the plan alone, not on the dock.
         """
         active_layer = self.optari_controller.active_recon_layer
         if active_layer is None:
@@ -750,6 +755,7 @@ class RoiController(TaskControllerBase):
         frame_idx, channel_idx = frame_channel
 
         scope = scope if scope is not None else self._save_scope()
+        clamp = clamp if clamp is not None else self.intensity_clamp
         follow_track = scope.all_frames and scope.follow_track
         if layers is not None:
             target_layers = layers
@@ -777,9 +783,17 @@ class RoiController(TaskControllerBase):
                 if scope.all_frames
                 else [frame_idx]
             )
+            # The viewer's channel index is a wavelength of the reconstruction. On a derived
+            # layer (unmixed, sO2, THb) it would pick an arbitrary chromophore, so those are
+            # always measured on every channel.
+            every_channel = (
+                scope.all_layers
+                or scope.all_channels
+                or layer.metadata["pa_kind"] != "recon"
+            )
             channel_indices = (
                 list(range(layer_data.shape[1]))
-                if scope.all_layers or scope.all_channels
+                if every_channel
                 else [channel_idx]
             )
 
@@ -793,7 +807,7 @@ class RoiController(TaskControllerBase):
                         layer,
                         f_idx,
                         c_idx,
-                        clamp=self.intensity_clamp,
+                        clamp=clamp,
                     )
                     if not measured.empty:
                         collected.append(measured)

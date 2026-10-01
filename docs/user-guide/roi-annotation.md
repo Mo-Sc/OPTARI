@@ -72,7 +72,7 @@ computed:
 - **ROI Clipping** — clamp values to a min/max range.
 - **ROI Exclusion** — drop out-of-range pixels entirely before computing statistics.
 
-Setting values here automatically updates the entries in the Live Analysis table.
+Setting values here automatically updates the entries in the Live Analysis table. With both boxes unchecked, pixel values are used unchanged. [Batch runs](batch-processing.md) never apply this filter, so their results depend on the plan alone.
 
 ## ROI Presets
 

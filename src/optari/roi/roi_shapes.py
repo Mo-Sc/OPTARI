@@ -132,9 +132,8 @@ class ROIShape(ABC):
             width_px = max(
                 1, int(round(float(self.config.width_mm) / float(sx)))
             )
-            half_w = width_px // 2
-            x0 = max(0, center_x - half_w)
-            x1 = min(w, center_x + half_w)
+            x0 = max(0, center_x - width_px // 2)
+            x1 = min(w, center_x - width_px // 2 + width_px)
         else:
             x0, x1 = 0, w
 
@@ -147,7 +146,9 @@ class ROIShape(ABC):
             height_px = max(
                 1, int(round(float(self.config.height_mm) / float(sy)))
             )
-            y1 = min(h, y0 + height_px)
+            # Not clipped to the image: a box must keep its requested height or be
+            # refused, and slicing past the edge is harmless for the polygon.
+            y1 = y0 + height_px
         else:
             y1 = h
 
@@ -168,7 +169,7 @@ class BoxShape(ROIShape):
     ) -> np.ndarray:
         """Rectangle/ellipse corners anchored to the class's top at the centre column.
 
-        Raises if the requested height exceeds the class's depth at that column.
+        Raises if top margin plus height reach below the class at that column.
         """
         # Get standardized bounds
         x0, x1, y0, y1, largest_mask = self._get_pixel_bounds(
@@ -176,13 +177,14 @@ class BoxShape(ROIShape):
         )
 
         # The box must not reach below the class at the centre column (non-empty: the
-        # anchor above was found there).
+        # anchor above was found there). The top margin counts against the depth too.
         hit_rows = np.flatnonzero(largest_mask[:, largest_mask.shape[1] // 2])
-        available_depth = hit_rows[-1] - hit_rows[0] + 1
-        requested_height = y1 - y0
-        if requested_height > available_depth:
+        class_depth = hit_rows[-1] - hit_rows[0] + 1
+        needed_depth = y1 - hit_rows[0]
+        if needed_depth > class_depth:
             raise ValueError(
-                f"Error: ROI height ({requested_height}px) exceeds class depth ({available_depth}px)."
+                f"ROI top margin plus height ({needed_depth}px) exceeds class depth "
+                f"({class_depth}px)."
             )
 
         y0w = float(ty) + float(y0) * float(sy)
