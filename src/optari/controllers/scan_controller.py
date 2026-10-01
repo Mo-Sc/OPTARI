@@ -116,10 +116,7 @@ class ScanController(TaskControllerBase):
 
     def scan_name(self) -> "str | None":
         """The scan's internal (vendor) name, for stamping onto layers OPTARI creates."""
-        scan_info = self.optari_controller._scans.get(
-            self.optari_controller.path
-        )
-        return scan_info.internal_name if scan_info is not None else None
+        return self.optari_controller.scan_info.internal_name
 
     def wavelengths(self) -> "list[int] | None":
         """Return scan wavelengths in nm, or ``None`` if unavailable."""
@@ -154,6 +151,7 @@ class ScanController(TaskControllerBase):
                     "failed to close current scan handle", exc_info=True
                 )
         self.optari_controller.pa_data = None
+        self.optari_controller.scan_info = None
         self.optari_controller._patato_objects = {}
         self.optari_controller._derived_patato_objects = {}
         self.optari_controller.clinical_metadata_edits = None
@@ -214,18 +212,16 @@ class ScanController(TaskControllerBase):
 
     def on_scan_selected(self, row: int) -> None:
         """Load the scan at *row* in the scan list, ignoring an out-of-range selection."""
-        scan_paths = list(self.optari_controller._scans.keys())
-        if row < 0 or row >= len(scan_paths):
+        scans = list(self.optari_controller._scans.items())
+        if row < 0 or row >= len(scans):
             return
-        self.load_scan(scan_paths[row])
+        self.load_scan(*scans[row])
 
     def set_scan_folder(
         self, folder: Path, *, selected_scan: Path | None = None
     ) -> None:
         """Discover scans in *folder* and select *selected_scan* or the first available scan."""
         folder = Path(folder)
-        self.optari_controller.study_path = folder
-
         self.optari_controller._scans = self.discover_scans(folder)
 
         if self.optari_controller.scan_browser is not None:
@@ -252,30 +248,22 @@ class ScanController(TaskControllerBase):
         else:
             self.reset_scan_state()
 
-    def load_scan(self, scan_path: Path) -> bool:
+    def load_scan(self, scan_path: Path, scan_info: ScanInfo) -> bool:
         """Open *scan_path* and build its layers. False if the scan could not be loaded.
 
         Failures fall back to the startup logo rather than raising, which is what the
         GUI wants. The return value is what lets an unattended caller (batch mode) tell
-        a loaded scan from an empty viewer.
+        a loaded scan from an empty viewer. *scan_info* comes from discovery, so the
+        Scan Browser's list and a batch plan can each load their own scans.
         """
         logger.info("loading scan: %s", scan_path)
 
-        scan_path = Path(scan_path)
         self.optari_controller.path = scan_path
+        self.optari_controller.study_path = scan_path.parent
         self.reset_scan_state(restore_startup_logo=False)
 
         if not scan_path.exists():
             logger.warning("scan not found: %s", scan_path)
-            load_startup_logo(self.viewer)
-            self.optari_controller.refresh_all()
-            return False
-
-        scan_info = self.optari_controller._scans.get(scan_path)
-        if scan_info is None:
-            logger.warning(
-                "scan was not discovered in the current folder: %s", scan_path
-            )
             load_startup_logo(self.viewer)
             self.optari_controller.refresh_all()
             return False
@@ -295,6 +283,7 @@ class ScanController(TaskControllerBase):
             load_startup_logo(self.viewer)
             self.optari_controller.refresh_all()
             return False
+        self.optari_controller.scan_info = scan_info
 
         try:
             layers = self.layers_from_pa_data()
@@ -596,7 +585,7 @@ class ScanController(TaskControllerBase):
                 records = roi_records_from_scan_rois(
                     self.optari_controller.pa_data, *fov
                 )
-                self.optari_controller.roi_ctrl.set_roi_records(records)
+                self.optari_controller.roi_ctrl.restore_roi_records(records)
                 shapes = [
                     (
                         record.verts,

@@ -436,9 +436,10 @@ class BatchDialog(QDialog):
         failures = report.failures
         for entry in failures:
             logger.warning(
-                "batch failure: %s/%s: %s",
+                "batch failure: %s/%s at %s: %s",
                 entry.study,
                 entry.scan,
+                entry.failed_step,
                 entry.message,
             )
 
@@ -451,7 +452,8 @@ class BatchDialog(QDialog):
         detail = f"{report.summary()}\n\nResults written to:\n{self._plan.output_dir}"
         if failures:
             names = "\n".join(
-                f"  {e.study}/{e.scan}: {e.message}" for e in failures[:8]
+                f"  {e.study}/{e.scan} ({e.failed_step}): {e.message}"
+                for e in failures[:8]
             )
             more = (
                 f"\n  … and {len(failures) - 8} more"

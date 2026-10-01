@@ -48,6 +48,7 @@ class OptariController:
         self.viewer = viewer
         self.path: Path | None = None
         self.study_path: Path | None = None
+        self.scan_info: ScanInfo | None = None  # of the loaded scan
 
         self._scans: dict[Path, ScanInfo] = {}
         self.pa_data: pat.PAData | None = None
@@ -566,12 +567,7 @@ class OptariController:
 
         ts, ts_delta = self.timestamp_for_slice(frame_idx, channel_idx)
         scan_folder = self.path.stem if self.path else "N/A"
-        scan_info = self._scans.get(self.path)
-        scan_name = (
-            scan_info.internal_name
-            if scan_info and scan_info.internal_name
-            else ""
-        )
+        scan_name = self.scan_info.internal_name if self.scan_info else ""
         scan_display = (
             f"{scan_folder} ({scan_name})" if scan_name else scan_folder
         )
@@ -603,7 +599,7 @@ class OptariController:
             pa_data=self.pa_data,
             scan_path=self.path,
             study_path=self.study_path,
-            scan_info=self._scans.get(self.path),
+            scan_info=self.scan_info,
             controller=self,
             parent=self.viewer.window._qt_window,
         )

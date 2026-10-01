@@ -6,6 +6,8 @@ from pathlib import Path
 
 from imageio.v3 import imread
 
+from optari import __version__
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_CONFIGS_DIR = (
@@ -16,16 +18,23 @@ DEFAULT_CONFIGS_DIR = (
 # running side by side never write to the same file, and a session's log and backup match.
 SESSION_ID = f"{datetime.now():%Y%m%dT%H%M%S}_{os.getpid()}"
 KEPT_SESSION_FILES = 20
+# OPTARI version that last copied its shipped presets into the user directory.
+PRESETS_VERSION_FILE = ".presets_version"
 
 
 def _copy_default_presets(
     default_configs_dir: Path, user_config_dir: Path
 ) -> None:
+    """Copy missing shipped presets once per OPTARI version.
+
+    A deleted shipped preset comes back with the next version
+    """
     default_presets_dir = default_configs_dir / "presets"
-    if not default_presets_dir.exists():
+    user_presets_dir = user_config_dir / "presets"
+    version_file = user_presets_dir / PRESETS_VERSION_FILE
+    if version_file.exists() and version_file.read_text() == __version__:
         return
 
-    user_presets_dir = user_config_dir / "presets"
     for preset_file in default_presets_dir.rglob("*.json"):
         target = user_presets_dir / preset_file.relative_to(
             default_presets_dir
@@ -35,6 +44,7 @@ def _copy_default_presets(
             continue
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(preset_file, target)
+    version_file.write_text(__version__)
 
 
 def get_user_dir() -> Path:

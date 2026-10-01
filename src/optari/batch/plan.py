@@ -14,6 +14,8 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from patato.io.attribute_tags import ReconAttributeTags
+
 from optari.controllers.scan_controller import ScanController, ScanInfo
 from optari.roi.roi_presets import RoiPreset, RoiPresetStore
 from optari.roi.roi_utils import MeasureScope
@@ -264,6 +266,7 @@ def validate_plan(plan: BatchPlan) -> list[str]:
             "The plan has no analysis steps and no file export, so it would do nothing."
         )
 
+    problems += _validate_reconstruction(plan)
     problems += _validate_segmentation(plan)
     problems += _validate_unmixing(plan)
     problems += _validate_output_dir(plan)
@@ -279,6 +282,21 @@ def plan_warnings(plan: BatchPlan) -> list[str]:
     return [
         "No reconstruction step and no 'source', so the scan's default PA layer will "
         "be analysed. Set 'source' to a layer-name prefix to choose deliberately."
+    ]
+
+
+def _validate_reconstruction(plan: BatchPlan) -> list[str]:
+    if plan.reconstruction is None:
+        return []
+    # Learned reconstructions (DeepMB) name their weights, a batch run never downloads.
+    model_path = plan.reconstruction.get(
+        ReconAttributeTags.ADDITIONAL_PARAMETERS, {}
+    ).get("model_path")
+    if model_path is None or Path(model_path).expanduser().is_file():
+        return []
+    return [
+        f"Reconstruction weights '{model_path}' are not downloaded. Run the "
+        "reconstruction once from the Reconstruction dock to fetch them, then retry."
     ]
 
 
