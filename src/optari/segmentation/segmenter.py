@@ -245,7 +245,7 @@ class UKErUSSegAdapter(ModelAdapterBase):
         mask_2d = keep_largest_region(
             mask_2d, post_cfg["keep_largest_per_class"]
         )
-        # reassign freed pixels row-wise to the nearest remaining class in that row
+        # give freed pixels the most frequent remaining class in their row
         mask_2d = reassign_freed_pixels_row_based(mask_2d)
         # combine given classes into one class (here fascia classes)
         mask_2d = combine_classes(mask_2d, post_cfg["combine_class_groups"])
@@ -255,7 +255,12 @@ class UKErUSSegAdapter(ModelAdapterBase):
                 class_mask, max_size=max_size
             )
             mask_2d[class_mask & ~processed_class] = 0
-        # reassign any remaining freed pixels to the nearest class
+        # The row-wise step hands a row's majority class to pixels anywhere in that row,
+        # which can recreate fragments of a class reduced to its largest component above.
+        # Enforce that again last, then give the gaps their nearest class.
+        mask_2d = keep_largest_region(
+            mask_2d, post_cfg["keep_largest_per_class"]
+        )
         mask_2d = reassign_freed_pixels(mask_2d)
 
         return mask_2d

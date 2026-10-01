@@ -2,7 +2,7 @@
 # must operate on 2d np arrays (single frame)
 import cv2
 import numpy as np
-from scipy.ndimage import convolve
+from scipy.ndimage import distance_transform_edt
 from skimage.measure import label, regionprops
 from skimage.morphology import remove_small_objects
 
@@ -77,20 +77,15 @@ def reassign_freed_pixels_row_based(mask: np.ndarray) -> np.ndarray:
 
 
 def reassign_freed_pixels(mask: np.ndarray) -> np.ndarray:
-    """Give freed pixels (0) the majority class of their 3x3 neighbourhood."""
-    classes = np.unique(mask[mask > 0])
-    if not classes.size:
+    """Give each freed pixel (0) the class of its nearest labelled pixel.
+
+    A filled pixel joins the class of the labelled pixel it is closest to, so no class
+    gets a new disconnected component.
+    """
+    freed = mask == 0
+    if freed.all():
         return mask
-    votes = np.stack(
-        [
-            convolve(
-                (mask == c).astype(int),
-                np.ones((3, 3), dtype=int),
-                mode="constant",
-            )
-            for c in classes
-        ]
+    rows, cols = distance_transform_edt(
+        freed, return_distances=False, return_indices=True
     )
-    freed = (mask == 0) & (votes.sum(axis=0) > 0)
-    mask[freed] = classes[votes.argmax(axis=0)][freed]
-    return mask
+    return mask[rows, cols]
