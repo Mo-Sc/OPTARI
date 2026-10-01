@@ -1,6 +1,7 @@
 """Exporting scans: OPTARI HDF5 with ROIs and derived images, IPASC raw data, batch report."""
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -11,6 +12,7 @@ import patato as pat
 import pytest
 from patato.io.attribute_tags import HDF5Tags
 
+from optari import OPTARI_SOURCE_TAG
 from optari.batch.plan import BatchJob
 from optari.batch.report import REPORT_COLUMNS, REPORT_SHEET, BatchReport
 from optari.controllers.scan_controller import ScanController, ScanInfo
@@ -38,13 +40,14 @@ FRAME = 24  # lowest-motion frame of Scan_2
 FOV = (0.04, 0.04)
 
 
-def controller_with(pa_data, records=(), derived=None):
+def controller_with(pa_data, records=(), derived=None, restored=True):
     """The slice of OptariController that the export pipeline reads."""
     return SimpleNamespace(
         pa_data=pa_data,
-        shapes_layer=SimpleNamespace(data=[r.verts for r in records]),
         roi_ctrl=SimpleNamespace(
-            sync_records_from_shapes=lambda: True, roi_records=list(records)
+            sync_records_from_shapes=lambda: True,
+            roi_records=list(records),
+            stored_rois_restored=restored,
         ),
         _get_fov=lambda: FOV,
         _derived_patato_objects=derived or {},

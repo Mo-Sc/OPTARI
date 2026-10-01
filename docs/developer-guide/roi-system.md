@@ -106,7 +106,10 @@ projection of it:
   napari appends new shapes at the end and in-place edits keep their position.
 
 `source` is the provenance tag, `OPTARI_v<version>` for anything OPTARI drew, or the
-originating `roi_class` for ROIs loaded from a scan. 
+originating `roi_class` for ROIs loaded from a scan. Editing a loaded ROI sets it to
+`OPTARI_v<version>`. HDF5 export writes `source` as PATATO's `roi_class`, replaces the
+stored ROIs whose class starts with `OPTARI` with the session's records, and leaves every
+other stored ROI untouched.
 
 
 ## `RoiGeometry`

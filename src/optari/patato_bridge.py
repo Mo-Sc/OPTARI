@@ -396,12 +396,14 @@ def patato_roi_from_geometry(
     run: float = 0.0,
     rep: float = 0.0,
     frame_idx: int = 0,
-    roi_class: str = "OPTARI",
     roi_id: int | None = None,
     track_id: int | None = None,
     roi_group_uid: str | None = None,
 ) -> object:
-    """Convert an ROI geometry into a PATATO ROI object for the native writer."""
+    """Convert an ROI geometry into a PATATO ROI object for the native writer.
+
+    The geometry's ``source`` becomes PATATO's ``roi_class``, so provenance survives export.
+    """
     from patato.utils.rois.roi_type import ROI as PatatoROI  # type: ignore[import]
 
     roi = PatatoROI.from_polygon_mm(
@@ -411,7 +413,7 @@ def patato_roi_from_geometry(
         run=run,
         repetition=rep,
         ax0_index=np.array([frame_idx]),
-        roi_class=str(roi_class),
+        roi_class=geometry.source,
         position=geometry.tissue_class,  # PATATO's own kwarg name
         generated=True,
         shape_type=geometry.kind,

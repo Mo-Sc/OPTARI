@@ -277,27 +277,31 @@ def _write_file_origin(destination: Path) -> None:
 
 
 def _write_rois(controller, destination_pa_data) -> None:
-    if controller.shapes_layer is None or controller.shapes_layer.data is None:
-        return
+    """Replace OPTARI's ROI groups in the export with the session's own records.
 
-    controller.roi_ctrl.sync_records_from_shapes()
-    records = controller.roi_ctrl.roi_records
+    Annotations from other tools (vendor software, PATATO) are kept as stored.
+    An edited one became OPTARI's in the session and is written next to the original.
+    """
+    roi_ctrl = controller.roi_ctrl
+    roi_ctrl.sync_records_from_shapes()
+
+    # Stored OPTARI ROIs that failed to restore are not in the session, so keep them.
+    if roi_ctrl.stored_rois_restored:
+        stored = destination_pa_data.get_rois()
+        for name_position in {
+            name
+            for (name, _), roi in stored.items()
+            if roi.roi_class.startswith("OPTARI")
+        }:
+            destination_pa_data.delete_rois(name_position=name_position)
+
+    records = [
+        r for r in roi_ctrl.roi_records if r.source.startswith("OPTARI")
+    ]
     if not records:
         return
 
-    # Overwrite OPTARI-created ROI groups while preserving non-OPTARI groups.
-    existing_rois = dict(destination_pa_data.get_rois())
-    optari_groups_to_delete: set[str] = set()
-    for (name_position, _number), roi in list(existing_rois.items()):
-        if not str(getattr(roi, "roi_class", "")).startswith("OPTARI"):
-            continue
-        optari_groups_to_delete.add(str(name_position))
-
-    for name_position in optari_groups_to_delete:
-        destination_pa_data.delete_rois(name_position=name_position)
-
     fov_x_m, fov_y_m = controller._get_fov()
-    export_roi_class = f"OPTARI_{dt.datetime.now().strftime('%Y%m%d%H%M%S%f')}"
     z_values = controller.pa_data.scan_reader.get_scanner_z_position()
     run_values = controller.pa_data.scan_reader.get_run_numbers()
     rep_values = controller.pa_data.scan_reader.get_repetition_numbers()
@@ -319,7 +323,6 @@ def _write_rois(controller, destination_pa_data) -> None:
             run=run,
             rep=rep,
             frame_idx=frame_idx,
-            roi_class=export_roi_class,
             roi_id=record.roi_id,
             track_id=record.track_id,
             roi_group_uid=record.roi_group_uid,

@@ -20,6 +20,7 @@ from qtpy.QtWidgets import (
     QMessageBox,
 )
 
+from optari import OPTARI_SOURCE_TAG
 from optari.config import settings
 from optari.controllers.base import TaskControllerBase
 from optari.io.export_pipeline import (
@@ -61,6 +62,13 @@ ROI_EDGE_WIDTH = 0.1
 # napari actions that we are listening to for ROI changes
 # usually emit two events: an intent event before the layer is mutated, and a completion event after
 _COMPLETED_DATA_ACTIONS = {"added", "changed", "removed"}
+
+
+def _layer_holds(record: ROIRecord, verts: np.ndarray, kind: str) -> bool:
+    """Whether the Shapes layer still shows *record* unedited"""
+    return record.kind == kind and np.array_equal(
+        record.verts.astype(verts.dtype), verts
+    )
 
 
 def _roi_name_popup() -> tuple[str, str, str] | None:
@@ -118,6 +126,9 @@ class RoiController(TaskControllerBase):
         self._next_roi_id = 0
         self._next_track_id = 0
         self._projecting = False
+        # Whether the ROIs stored in the scan are in the session. Export only replaces
+        # stored OPTARI ROIs if they are, so a failed restore cannot drop them.
+        self.stored_rois_restored = False
         self.intensity_clamp = NO_CLAMP
         self._roi_preset_store = RoiPresetStore(get_user_roi_presets_dir())
 
@@ -146,11 +157,13 @@ class RoiController(TaskControllerBase):
         self._next_track_id += 1
         return record
 
-    def set_roi_records(self, records: list[ROIRecord]) -> None:
-        """Replace all ROI records with *records*, resuming the id counters above their highest values.
+    def restore_roi_records(self, records: list[ROIRecord]) -> None:
+        """Replace all ROI records with the ones stored in the scan, resuming the id
+        counters above their highest values.
 
         Also projects the current frame, so the Shapes layer reflects the new records.
         """
+        self.stored_rois_restored = True
         self._roi_records = {record.roi_id: record for record in records}
         self._next_roi_id = (
             max((record.roi_id for record in records), default=-1) + 1
@@ -162,6 +175,7 @@ class RoiController(TaskControllerBase):
 
     def clear_roi_records(self) -> None:
         """Discard all ROI records and the rasterized-mask cache, e.g. when switching scans."""
+        self.stored_rois_restored = False
         self._roi_records.clear()
         self._projection_ids = []
         clear_mask_cache()
@@ -244,10 +258,8 @@ class RoiController(TaskControllerBase):
         matched: list[int | None] = []
         j = 0
         for verts, kind in zip(data, kinds):
-            verts = np.asarray(verts, dtype=float)
-            while j < len(old_records) and not (
-                old_records[j].kind == kind
-                and np.array_equal(old_records[j].verts, verts)
+            while j < len(old_records) and not _layer_holds(
+                old_records[j], verts, kind
             ):
                 j += 1
             matched.append(
@@ -289,14 +301,13 @@ class RoiController(TaskControllerBase):
                 changed = True
             else:
                 record = self._roi_records[new_ids[i]]
-                verts = np.asarray(verts, dtype=float)
-                changed = (
-                    changed
-                    or record.kind != kind
-                    or not np.array_equal(record.verts, verts)
-                )
-                record.verts = verts.copy()
+                if _layer_holds(record, verts, kind):
+                    continue
+                record.verts = np.array(verts, dtype=float)
                 record.kind = kind
+                # An edited annotation is OPTARI's, but also the stored original stays as it was.
+                record.source = OPTARI_SOURCE_TAG
+                changed = True
 
         for stale_id in set(old_ids) - set(new_ids):
             del self._roi_records[stale_id]
