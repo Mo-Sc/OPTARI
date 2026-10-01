@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime, timedelta
 
 import numpy as np
 
@@ -48,6 +49,36 @@ def scale_from_patato_obj(obj, fallback: tuple) -> tuple:
         )
         return fallback
     return (fallback[0], fov_y_m / ny * 1000, fov_x_m / nx * 1000)
+
+
+# ---------------------------------------------------------------------------
+# Acquisition time
+# ---------------------------------------------------------------------------
+
+YEAR_ONE = datetime(1, 1, 1)
+
+
+def acquisition_start(pa_data: "pat.PAData") -> datetime | None:
+    """Wall-clock time of the first frame, or None if the scan cannot be dated.
+
+    PATATO's iThera and IPASC readers count timestamps in seconds since 0001-01-01, but
+    an HDF5 file from another tool may use any epoch. So the timestamps are only read as
+    wall-clock times when they match the date PATATO reads from the scan itself. A day of
+    tolerance absorbs time zones: iThera records local time, IPASC UTC.
+    """
+    scan_date = pa_data.get_scan_datetime()
+    # NaN when the file records no date
+    if not isinstance(scan_date, datetime):
+        return None
+    first_s = float(np.asarray(pa_data.get_timestamps())[0, 0])
+    scan_date_s = (scan_date.replace(tzinfo=None) - YEAR_ONE).total_seconds()
+    if not abs(first_s - scan_date_s) <= 24 * 3600:
+        logger.warning(
+            "scan timestamps do not match its date %s, frame times stay relative",
+            scan_date,
+        )
+        return None
+    return YEAR_ONE + timedelta(seconds=first_s)
 
 
 # ---------------------------------------------------------------------------
@@ -117,6 +148,7 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
     layers: list = []
 
     timestamps = np.array(pa_data.get_timestamps())
+    start = acquisition_start(pa_data)
     wavelengths = [int(w) for w in pa_data.get_wavelengths()]
 
     # --- ultrasound ---
@@ -196,6 +228,7 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
                         "axis1_name": "Channel",
                         "axis1_labels": wavelengths,
                         "timestamps": timestamps,
+                        "acquisition_start": start,
                         "frames": recon_frame_list,
                     },
                 },
@@ -230,6 +263,7 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
                 "axis1_name": "Channel",
                 "axis1_labels": axis1_labels,
                 "timestamps": timestamps,
+                "acquisition_start": start,
             }
             if pa_kind == "unmixed":
                 metadata["chromophores"] = axis1_labels

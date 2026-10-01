@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
+from datetime import timedelta
 from functools import lru_cache
 from pathlib import Path
 
@@ -120,24 +121,17 @@ def _channel_value(active_recon_layer, channel_idx: int) -> object:
     return channel_value
 
 
-def _timestamp_str(
-    active_recon_layer, frame_idx: int, channel_idx: int
-) -> str:
-    timestamps = getattr(active_recon_layer, "metadata", {}).get("timestamps")
-    try:
-        from datetime import datetime, timedelta
+def slice_datetime(layer, frame_idx: int, channel_idx: int) -> str:
+    """Wall-clock acquisition time of one slice, or "N/A" if the scan cannot be dated.
 
-        return str(
-            datetime(1, 1, 1)
-            + timedelta(seconds=float(timestamps[frame_idx, channel_idx]))
-        )
-    except Exception:
-        logger.info(
-            "could not parse timestamp for frame %s channel %s",
-            frame_idx,
-            channel_idx,
-        )
+    See ``patato_bridge.acquisition_start`` for when a scan counts as datable.
+    """
+    start = layer.metadata.get("acquisition_start")
+    if start is None:
         return "N/A"
+    ts = layer.metadata["timestamps"]
+    elapsed = float(ts[frame_idx, channel_idx] - ts[0, 0])
+    return str(start + timedelta(seconds=elapsed))
 
 
 def _iter_rois(records: list[ROIRecord]) -> list[ROIRecord]:
@@ -299,7 +293,7 @@ def _roi_context(
     frame_idx: int,
     scan_ts: str,
     vals_raw: np.ndarray,
-    vals: np.ndarray,
+    clamp: IntensityClamp,
     roi_geometry: str = "",
 ) -> ROIContext:
     """Assemble the data a FeatureSpec is evaluated against."""
@@ -319,7 +313,8 @@ def _roi_context(
         roi_geometry=roi_geometry,
         filepath=layer_info.filepath,
         vals_raw=vals_raw,
-        vals=vals,
+        vals=clamp.apply(vals_raw),
+        clamp=clamp,
         sy=layer_info.sy,
         sx=layer_info.sx,
         verts=roi.verts,
@@ -361,9 +356,18 @@ class IntensityClamp:
     maximum: float | None = None
     mode: str = "clip"
 
+    @property
+    def label(self) -> str:
+        """What is recorded with each measurement: the mode, or ``none`` without bounds."""
+        return (
+            "none"
+            if self.minimum is None and self.maximum is None
+            else self.mode
+        )
+
     def apply(self, values: np.ndarray) -> np.ndarray:
         """Apply the clip or exclude policy to *values*."""
-        if values.size == 0 or (self.minimum is None and self.maximum is None):
+        if values.size == 0 or self.label == "none":
             return values
 
         low = None if self.minimum is None else float(self.minimum)
@@ -439,7 +443,7 @@ def compute_roi_stats(
     layer_info = _LayerInfo.resolve(
         active_recon_layer, channel_idx, img2d.shape
     )
-    scan_ts = _timestamp_str(active_recon_layer, frame_idx, channel_idx)
+    scan_ts = slice_datetime(active_recon_layer, frame_idx, channel_idx)
 
     rows = []
     for roi, mask in iter_roi_masks(records, active_recon_layer, img2d.shape):
@@ -450,7 +454,7 @@ def compute_roi_stats(
             frame_idx=frame_idx,
             scan_ts=scan_ts,
             vals_raw=vals_raw,
-            vals=clamp.apply(vals_raw),
+            clamp=clamp,
             roi_geometry=(
                 RoiGeometry.from_record(
                     roi, layer_info.fov_x_m, layer_info.fov_y_m
@@ -551,9 +555,9 @@ def _measure_series(
             record,
             layer_info,
             frame_idx=frame_idx,
-            scan_ts=_timestamp_str(active_recon_layer, frame_idx, channel_idx),
+            scan_ts=slice_datetime(active_recon_layer, frame_idx, channel_idx),
             vals_raw=vals_raw,
-            vals=clamp.apply(vals_raw),
+            clamp=clamp,
         )
         y.append(float(FEATURE_REGISTRY[feature_id].compute(ctx)))
     return np.asarray(y, dtype=float)

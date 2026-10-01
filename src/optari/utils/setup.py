@@ -131,6 +131,13 @@ def get_user_models_dir() -> Path:
     return get_user_dir() / "models"
 
 
+def resolve_model_path(path: str) -> Path:
+    """A model file named in a preset. Relative paths live in the user models directory,
+    absolute (and ``~``) paths are taken as given, since pathlib drops the base for them.
+    """
+    return get_user_models_dir() / Path(path).expanduser()
+
+
 def get_user_seg_models_config_file() -> Path:
     """Returns the path to the segmentation models configuration file."""
     return get_user_dir() / "config" / "segmentation_models.json"

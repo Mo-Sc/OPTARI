@@ -27,6 +27,7 @@ from optari.utils.setup import (
     get_user_roi_presets_dir,
     get_user_segmentation_presets_dir,
     get_user_unmixing_presets_dir,
+    resolve_model_path,
 )
 
 logger = logging.getLogger(__name__)
@@ -292,7 +293,7 @@ def _validate_reconstruction(plan: BatchPlan) -> list[str]:
     model_path = plan.reconstruction.get(
         ReconAttributeTags.ADDITIONAL_PARAMETERS, {}
     ).get("model_path")
-    if model_path is None or Path(model_path).expanduser().is_file():
+    if model_path is None or resolve_model_path(model_path).is_file():
         return []
     return [
         f"Reconstruction weights '{model_path}' are not downloaded. Run the "

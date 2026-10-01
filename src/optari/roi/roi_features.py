@@ -7,9 +7,12 @@ is a one-line registry entry rather than a change to the measurement loop itself
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from optari.roi.roi_utils import IntensityClamp
 
 
 @dataclass(frozen=True)
@@ -17,9 +20,9 @@ class ROIContext:
     """Everything one measurement needs: identifiers, provenance, the geometry blob
     and the pixel values a ``FeatureSpec`` reads.
 
-    Provenance covers ``scan_name``, ``frame``, ``channel``, ``src_layer`` and
-    timestamps. Pixel values are ``vals_raw`` and the clamped ``vals``, alongside the
-    pixel scale and the ROI's vertices.
+    Provenance covers ``scan_name``, ``frame``, ``channel``, ``src_layer``, timestamps
+    and the intensity filter. Pixel values are ``vals_raw`` and the filtered ``vals``,
+    alongside the pixel scale and the ROI's vertices.
     """
 
     roi_id: int
@@ -38,6 +41,7 @@ class ROIContext:
     filepath: str
     vals_raw: np.ndarray
     vals: np.ndarray
+    clamp: IntensityClamp
     sy: float
     sx: float
     verts: np.ndarray
@@ -81,6 +85,10 @@ def _snr(values: np.ndarray) -> float:
     return float(np.nanmean(values) / std)
 
 
+def _bound(value: float | None) -> float:
+    return float("nan") if value is None else float(value)
+
+
 def _size_mm(ctx: ROIContext) -> float:
     """
     returns the size of the ROI in mm^2 (for 2D ROIs) or length in mm (for line ROIs).
@@ -109,6 +117,10 @@ FEATURE_REGISTRY: dict[str, FeatureSpec] = {
     "snr": FeatureSpec(float, lambda c: _nan_stat(c.vals, _snr)),
     "n_pixels": FeatureSpec(int, lambda c: int(c.vals.size)),
     "size_mm": FeatureSpec(float, _size_mm),
+    # How vals was filtered, so a saved number can be traced to its filter setting.
+    "intensity_filter": FeatureSpec(str, lambda c: c.clamp.label),
+    "filter_min": FeatureSpec(float, lambda c: _bound(c.clamp.minimum)),
+    "filter_max": FeatureSpec(float, lambda c: _bound(c.clamp.maximum)),
     "src_layer": FeatureSpec(str, lambda c: str(c.src_layer)),
     "kind": FeatureSpec(str, lambda c: str(c.kind)),  # "shape_type" in napari
     "study_folder": FeatureSpec(str, lambda c: str(c.study_folder)),

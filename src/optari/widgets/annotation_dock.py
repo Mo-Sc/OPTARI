@@ -103,7 +103,7 @@ def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
     roi_placement_mode_combo.addItem("auto", userData="auto")
     roi_placement_mode_combo.setToolTip(
         "Static: uses the preset's saved coordinates. Auto: places it inside the matching "
-        "segmentation class, falling back to static if not found. With Scope All Frames, "
+        "segmentation class, and reports an error if there is none. With Scope All Frames, "
         "Auto anchors on each frame's own segmentation, skipping frames the class "
         "isn't present on"
     )

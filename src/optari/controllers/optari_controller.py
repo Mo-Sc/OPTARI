@@ -12,6 +12,7 @@ from napari.viewer import Viewer
 if TYPE_CHECKING:
     from napari.qt.threading import GeneratorWorker
 
+from optari.roi.roi_utils import slice_datetime
 from optari.utils.viewer import selected_frame_and_channel
 from optari.widgets.info_dock import InfoDock
 from optari.widgets.roi_dock import RoiDock
@@ -485,37 +486,16 @@ class OptariController:
         return changed
 
     # ============ timestamps & display ============
-    def timestamp_for_slice(self, frame_idx: int, channel_idx: int):
-        if self.active_recon_layer is None:
-            return "N/A", 0.0
-
-        ts = self.active_recon_layer.metadata.get("timestamps")
-        if ts is not None:
-            ts = np.asarray(ts)
-        else:
-            ts = self.timestamps
-        if ts is None:
-            return "N/A", 0.0
-
-        if frame_idx >= ts.shape[0] or channel_idx >= ts.shape[1]:
-            return "N/A", 0.0
-
-        ts_seconds = ts[frame_idx, channel_idx]
-        ts_start_seconds = ts[0, 0]
-
-        # iThera uses .NET DateTime ticks
-        try:
-            from datetime import datetime, timedelta
-
-            dt = datetime(1, 1, 1) + timedelta(seconds=float(ts_seconds))
-        except Exception:
-            logger.info(
-                "timestamp_for_slice failed to convert timestamp to datetime",
-                exc_info=True,
-            )
-            dt = "N/A"
-
-        return dt, float(ts_seconds) - float(ts_start_seconds)
+    def timestamp_for_slice(
+        self, frame_idx: int, channel_idx: int
+    ) -> tuple[str, float]:
+        """Wall-clock time of the slice ("N/A" if the scan cannot be dated) and its
+        seconds since the first frame."""
+        ts = self.active_recon_layer.metadata["timestamps"]
+        return (
+            slice_datetime(self.active_recon_layer, frame_idx, channel_idx),
+            float(ts[frame_idx, channel_idx] - ts[0, 0]),
+        )
 
     def update_info_labels(self, event=None) -> None:
         if self.info is None:

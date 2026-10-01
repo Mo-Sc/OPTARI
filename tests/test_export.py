@@ -89,6 +89,7 @@ def test_hdf5_export_round_trip(ithera_scan, tmp_path):
         axis1_labels=["Hb", "HbO2"],
         filepath=str(ITHERA_SCAN),
         timestamps=None,
+        acquisition_start=None,
         pa_kind="unmixed",
         frame_mode="current",
         include_chromophores=True,

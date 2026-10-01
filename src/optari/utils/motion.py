@@ -15,15 +15,15 @@ def k_motion_scores_optimized(us_data, mask_transducer=60):
     """
     n_frames = us_data.shape[0]
 
-    # Establish constant peak-to-peak data range for stable SSIM
-    global_range = np.ptp(us_data)
-
     raw_ssim = np.zeros(n_frames)
     raw_zncc = np.zeros(n_frames)
 
     us_data = us_data[:, :, mask_transducer:, :]
     # Counted after cropping
     num_pixels = us_data.shape[2] * us_data.shape[3]
+
+    # Constant peak-to-peak data range for stable SSIM, taken over the compared pixels
+    global_range = np.ptp(us_data)
 
     for i in range(n_frames):
         block = us_data[i]

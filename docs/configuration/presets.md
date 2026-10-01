@@ -18,7 +18,7 @@ A saved ROI template. The `geometry` block is the same representation OPTARI use
 | `static` | Put it at its saved coordinates, scaled to the scan's field of view. |
 | `auto` | Anchor it onto the segmentation class named by `geometry.tissue_class`. Needs a segmentation map. |
 
-Selecting an `auto` preset in the Annotation dock falls back to `static` when the current scan has no matching segmentation, so it never arms a placement bound to fail. A batch run takes the preset at its word and records the failure instead.
+Placing an `auto` preset on a scan without a matching segmentation fails with an error, both in the Annotation dock and in a batch run.
 
 ```json title="clinical_ellipse_10x2mm.json"
 {

@@ -74,6 +74,8 @@ computed:
 
 Setting values here automatically updates the entries in the Live Analysis table. With both boxes unchecked, pixel values are used unchanged. [Batch runs](batch-processing.md) never apply this filter, so their results depend on the plan alone.
 
+Every saved measurement records the filter it was computed with in the `intensity_filter` (`none`, `clip` or `exclude`), `filter_min` and `filter_max` columns. They are always part of the exported table and can be shown in the app via [Settings ▸ ROI Table](../configuration/configuration-schema.md#annotation).
+
 ## ROI Presets
 
 To place the same ROI consistently across multiple frames, scans, or clinical studies, a ROI can be saved to the **ROI Presets** library. 
@@ -91,7 +93,7 @@ The ROI Presets library is constantly synced with [`.json` files](../configurati
 
 By default, ROI placement is set to `static`, meaning the ROI will be placed at the exact coordinates defined in the preset. 
 
-However, if it is set to `automatic`, OPTARI will try to automatically place the ROI in the tissue that is defined as the `position` attribute in the preset, ignoring the coordinates. This requires the scan to have a [**Segmentation**](segmentation.md) layer that contains a class with the same name as the one set in the position attribute. If no Segmentation layer or no corresponding tissue class is found, it will default back to static placement.
+However, if it is set to `automatic`, OPTARI will try to automatically place the ROI in the tissue that is defined as the `position` attribute in the preset, ignoring the coordinates. This requires the scan to have a [**Segmentation**](segmentation.md) layer that contains a class with the same name as the one set in the position attribute. If no Segmentation layer or no corresponding tissue class is found, placement fails with an error. Switch the mode to `static` to place it at its saved coordinates instead.
 
 With Scope set to `All Frames`, `automatic` placement re-anchors independently on **each frame's own segmentation mask** rather than copying the first frame's position everywhere: a frame the tissue class isn't present on is skipped.
 

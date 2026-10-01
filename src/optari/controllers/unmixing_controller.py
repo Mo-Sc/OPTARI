@@ -588,6 +588,7 @@ class UnmixingController(TaskControllerBase):
         axis1_labels: list[str],
         filepath,
         timestamps,
+        acquisition_start,
         pa_kind: str,
         scan_name: str | None = None,
         frame_mode: str,
@@ -608,6 +609,7 @@ class UnmixingController(TaskControllerBase):
             # derived layer or it drops out of the measurement table.
             "scan_name": scan_name,
             "timestamps": timestamps,
+            "acquisition_start": acquisition_start,
         }
         if include_chromophores:
             layer_metadata["chromophores"] = axis1_labels
@@ -707,6 +709,9 @@ class UnmixingController(TaskControllerBase):
             filepath=params.source_layer_metadata.get("filepath"),
             scan_name=params.source_layer_metadata.get("scan_name"),
             timestamps=params.source_layer_metadata.get("timestamps"),
+            acquisition_start=params.source_layer_metadata.get(
+                "acquisition_start"
+            ),
             pa_kind=pa_kind,
             frame_mode=params.frame_mode,
             parameter=parameter,

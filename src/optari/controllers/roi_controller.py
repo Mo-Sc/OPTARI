@@ -1146,45 +1146,6 @@ class RoiController(TaskControllerBase):
             self._refresh_roi_presets_ui()
             logger.info("Removed ROI preset '%s'", preset_name)
 
-    def _set_roi_placement_mode(self, mode: str) -> None:
-
-        combo = self.optari_controller.annotation.roi_placement_mode_combo
-        idx = combo.findData(mode)
-        if idx >= 0:
-            combo.setCurrentIndex(idx)
-
-    def _default_roi_placement_mode_for_preset(self, preset) -> str:
-        """The mode to preselect for *preset*: what it asks for, if that is possible here.
-
-        The preset records how it wants to be placed. Auto is downgraded to static
-        when this scan has no matching segmentation to anchor onto, so selecting a
-        preset in the dock never arms a placement that is bound to fail. A batch run
-        takes the preset at its word instead, and reports the failure.
-        """
-        if preset.placement != "auto":
-            return "static"
-
-        tissue_class = preset.geometry.tissue_class.strip()
-        if not tissue_class or tissue_class == "undefined":
-            return "static"
-
-        result = self.optari_controller.segmentation_ctrl.active_seg_mask_2d()
-        if result is None:
-            return "static"
-
-        seg, seg_layer = result
-        class_names = (seg_layer.metadata or {}).get("class_names", {})
-        class_name_to_id = {
-            str(name).strip(): int(class_id)
-            for class_id, name in class_names.items()
-        }
-
-        if tissue_class not in class_name_to_id:
-            return "static"
-
-        class_id = class_name_to_id[tissue_class]
-        return "auto" if np.any(seg == int(class_id)) else "static"
-
     @staticmethod
     def _place_roi_preset_static(controller, preset) -> None:
         """Place a preset while preserving its physical size across FOVs."""
@@ -1385,9 +1346,10 @@ class RoiController(TaskControllerBase):
             )
             return
 
-        self._set_roi_placement_mode(
-            self._default_roi_placement_mode_for_preset(preset)
-        )
+        # Preselect what the preset asks for. Auto placement without a matching
+        # segmentation then fails with a message instead of quietly going static.
+        combo = self.optari_controller.annotation.roi_placement_mode_combo
+        combo.setCurrentIndex(combo.findData(preset.placement))
 
         desc = str(preset.description or "")
         tissue_class = preset.geometry.tissue_class

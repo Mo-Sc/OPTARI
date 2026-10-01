@@ -6,6 +6,7 @@ import json
 import logging
 from collections.abc import Iterator
 from dataclasses import dataclass
+from datetime import datetime
 from functools import partial
 from math import ceil
 from pathlib import Path
@@ -16,11 +17,15 @@ from patato.io.attribute_tags import ReconAttributeTags
 from qtpy.QtCore import Qt
 from optari.controllers.base import TaskControllerBase
 from optari.patato_bridge import (
+    acquisition_start,
     display_data_from_patato_obj,
     expand_to_acquisition_frames,
 )
 from optari.utils.presets import PresetStore
-from optari.utils.setup import get_user_reconstruction_presets_dir
+from optari.utils.setup import (
+    get_user_reconstruction_presets_dir,
+    resolve_model_path,
+)
 from optari.utils.tasks import BackgroundStep
 from optari.widgets.reconstruction_dock import (
     SPEED_OF_SOUND_DEFAULT,
@@ -60,6 +65,7 @@ class ReconParams:
     offset_x_mm: float = 0.0
     offset_z_mm: float = 0.0
     timestamps: object = None
+    acquisition_start: datetime | None = None
     n_wavelengths: int = 1
 
     @property
@@ -136,6 +142,7 @@ class ReconParams:
             offset_x_mm=offset_x_mm,
             offset_z_mm=offset_z_mm,
             timestamps=controller.timestamps,
+            acquisition_start=acquisition_start(pa_data),
             n_wavelengths=max(1, int(pa_data.shape[1])),
         )
 
@@ -446,7 +453,7 @@ class ReconstructionController(TaskControllerBase):
         if params.algorithm_name != DEEPMB_ALGORITHM:
             return None
         extra = params.settings[ReconAttributeTags.ADDITIONAL_PARAMETERS]
-        return Path(extra["model_path"]).expanduser(), extra.get("model_url")
+        return resolve_model_path(extra["model_path"]), extra.get("model_url")
 
     def prepare(self, params: ReconParams) -> BackgroundStep:
         """Validate *params* and return the work to run. Raises ValueError if it can't run.
@@ -514,6 +521,7 @@ class ReconstructionController(TaskControllerBase):
             "filepath": str(params.scan_path),
             "scan_name": params.scan_name,
             "timestamps": params.timestamps,
+            "acquisition_start": params.acquisition_start,
             "frames": params.output_frames,
             "settings": settings,
         }

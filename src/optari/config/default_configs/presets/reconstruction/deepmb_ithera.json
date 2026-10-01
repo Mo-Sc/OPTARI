@@ -17,7 +17,7 @@
   "OFFSET_Y": 0.0,
   "OFFSET_Z": 6.8,
   "RECONSTRUCTION_PARAMS": {
-    "model_path": "~/.optari/models/DeepMBv1.6.0_PType218_2024-10-15.onnx",
+    "model_path": "DeepMBv1.6.0_PType218_2024-10-15.onnx",
     "model_url": "",
     "use_gpu": true,
     "channels_to_interpolate": [],
