@@ -11,6 +11,7 @@ from functools import partial
 from math import ceil
 from pathlib import Path
 
+import numpy as np
 import patato as pat
 from patato import PAT_MAXIMUM_BATCH_SIZE
 from patato.io.attribute_tags import HDF5Tags, ReconAttributeTags
@@ -142,7 +143,7 @@ class ReconParams:
             current_frame_id=frame_id,
             offset_x_mm=offset_x_mm,
             offset_z_mm=offset_z_mm,
-            timestamps=controller.timestamps,
+            timestamps=np.asarray(pa_data.get_timestamps()),
             acquisition_start=acquisition_start(pa_data),
             n_wavelengths=max(1, int(pa_data.shape[1])),
         )
@@ -503,11 +504,11 @@ class ReconstructionController(TaskControllerBase):
             colormap=layer_colormap(HDF5Tags.RECONSTRUCTION),
             translate=translate,
         )
-        self.optari_controller._patato_objects[layer_name] = reconstruction
-        self.optari_controller._derived_patato_objects[layer_name] = (
+        self.optari_controller.patato_objects[layer_name] = reconstruction
+        self.optari_controller.derived_patato_objects[layer_name] = (
             reconstruction
         )
-        self.optari_controller._ensure_shapes_layer_on_top()
+        self.optari_controller.ensure_shapes_layer_on_top()
 
         logger.info("reconstruction complete: %s", layer_name)
         return layer_name

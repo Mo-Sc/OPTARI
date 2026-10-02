@@ -18,7 +18,7 @@ from optari.utils.viewer import selected_frame_and_channel
 from optari.widgets.info_dock import InfoDock
 from optari.widgets.roi_dock import RoiDock
 from optari.widgets.scan_browser_dock import ScanBrowserDock
-from optari.controllers.scan_controller import ScanInfo
+from optari.io.discovery import ScanInfo
 from optari.widgets.annotation_dock import AnnotationDock
 from optari.widgets.reconstruction_dock import ReconstructionDock
 from optari.widgets.segmentation_dock import SegmentationDock
@@ -49,13 +49,11 @@ class OptariController:
 
         self.viewer = viewer
         self.path: Path | None = None
-        self.study_path: Path | None = None
         self.scan_info: ScanInfo | None = None  # of the loaded scan
 
-        self._scans: dict[Path, ScanInfo] = {}
         self.pa_data: pat.PAData | None = None
-        self._patato_objects: dict[str, pat.ImageSequence] = {}
-        self._derived_patato_objects: dict[str, pat.ImageSequence] = {}
+        self.patato_objects: dict[str, pat.ImageSequence] = {}
+        self.derived_patato_objects: dict[str, pat.ImageSequence] = {}
         self.clinical_metadata_edits: dict[str, str] | None = None
 
         self.shapes_layer: Shapes | None = None
@@ -95,19 +93,19 @@ class OptariController:
 
         self.settings_dialog = None
         self.batch_dialog = None
-        self._is_shut_down = False
+        self.is_shut_down = False
 
         self._setup_viewer()
-        self._ensure_docks()
-        self.setup_menu()
+        UiManager.setup_docks(self)
+        MenuManager.setup(self)
         self.roi_ctrl.initialize_ui()
         self.segmentation_ctrl.initialize_ui()
         self.unmixing_ctrl.initialize_ui()
         self.reconstruction_ctrl.initialize_ui()
         self.analysis_ctrl.refresh_ui()
         self.scan_ctrl.refresh_ui()
-        self._connect_events()
-        self.register_shortcuts()
+        UiManager.connect_events(self)
+        ShortcutManager.register_all(self)
 
         self.refresh_all()
 
@@ -118,9 +116,9 @@ class OptariController:
         which is the last moment at which the dock widgets still exist, and again from the
         launcher as a fallback
         """
-        if self._is_shut_down:
+        if self.is_shut_down:
             return
-        self._is_shut_down = True
+        self.is_shut_down = True
 
         if self.active_task is not None:
             # A worker thread still driving the UI while Qt tears the widget tree down is a
@@ -162,14 +160,14 @@ class OptariController:
 
         # Close current scan to release file handles
         try:
-            self._close_current_scan()
+            self.scan_ctrl.close_current_scan()
         except Exception:
             logger.exception("Error closing current scan during shutdown")
 
         # Clear references to break circular references
         self.pa_data = None
-        self._patato_objects.clear()
-        self._derived_patato_objects.clear()
+        self.patato_objects.clear()
+        self.derived_patato_objects.clear()
         self.shapes_layer = None
         self.active_recon_layer = None
         self.active_us_layer = None
@@ -186,19 +184,7 @@ class OptariController:
         self.viewer.canvas.overlays.scale_bar.visible = True
         self.viewer.dims.axis_labels = ("Frame", "Channel", "z", "x")
 
-    def _ensure_docks(self) -> None:
-        UiManager.setup_docks(self)
-
-    def _connect_events(self) -> None:
-        UiManager.connect_events(self)
-
-    def register_shortcuts(self) -> None:
-        ShortcutManager.register_all(self)
-
-    def setup_menu(self) -> None:
-        MenuManager.setup(self)
-
-    def _connect_shapes_layer_events(self) -> None:
+    def connect_shapes_layer_events(self) -> None:
         """
         Connects events for the shapes layer to the ROI controller. This includes data changes and selection changes.
         data changes mean ROIs were added/removed/replaced
@@ -213,16 +199,19 @@ class OptariController:
 
         self._shapes_layer_bindings = [
             # Shapes layer data changes drive ROI table refresh, label updates, and formatting.
-            (self.shapes_layer.events.data, self._on_shapes_data_changed),
+            (
+                self.shapes_layer.events.data,
+                self.roi_ctrl.on_shapes_data_changed,
+            ),
             # Shape copy/paste appends shapes without emitting events.data, so watch set_data too.
             (
                 self.shapes_layer.events.set_data,
-                self._on_shapes_set_data,
+                self.roi_ctrl.on_shapes_set_data,
             ),
             # selected_data.items_changed is the selection signal for viewer -> table sync.
             (
                 self.shapes_layer.selected_data.events.items_changed,
-                self._on_shapes_selection_changed,
+                self.roi_ctrl.on_shapes_selection_changed,
             ),
             # Live table itemSelectionChanged is signal for table -> viewer sync.
             (
@@ -235,16 +224,7 @@ class OptariController:
             evt.connect(handler)
 
     # ============ ROI layer management ============
-    def _on_shapes_data_changed(self, event=None) -> None:
-        self.roi_ctrl.on_shapes_data_changed(event)
-
-    def _on_shapes_set_data(self, event=None) -> None:
-        self.roi_ctrl.on_shapes_set_data(event)
-
-    def _on_shapes_selection_changed(self, event=None) -> None:
-        self.roi_ctrl.on_shapes_selection_changed(event)
-
-    def _ensure_shapes_layer_on_top(self) -> None:
+    def ensure_shapes_layer_on_top(self) -> None:
         """
         Moves ROI layer to top. Necessary because some operations (e.g. unmixing) add new image layers on top of the ROI layer
         ROI layer should always be on top of the layer stack to be visible and interactive.
@@ -259,12 +239,11 @@ class OptariController:
             self.viewer.layers.move(current_index, len(self.viewer.layers))
             logger.info("moved ROI layer to top index %s", top_index)
 
-    # ============ scan loading ============
-    def _close_current_scan(self) -> None:
-        self.scan_ctrl.close_current_scan()
-
-    def _init_path(self, path: Path) -> None:
-        self.scan_ctrl.init_path(path)
+    # ============ scan state ============
+    @property
+    def study_path(self) -> Path | None:
+        """Folder holding the loaded scan."""
+        return None if self.path is None else self.path.parent
 
     @property
     def task_running(self) -> bool:
@@ -291,26 +270,7 @@ class OptariController:
         ):
             controller.refresh_ui()
 
-    @property
-    def wavelengths(self) -> "list[int] | None":
-        """
-        Wavelengths (nm) for the current scan
-        """
-        return self.scan_ctrl.wavelengths()
-
-    @property
-    def timestamps(self) -> "np.ndarray | None":
-        """
-        Acquisition timestamps for the current scan
-        Returns a 2-D ``np.ndarray`` of shape ``(n_frames, n_wavelengths)`` in
-        seconds
-        """
-        return self.scan_ctrl.timestamps()
-
-    def _get_fov(self) -> "tuple[float, float] | None":
-        return self.scan_ctrl.get_fov()
-
-    def _select_default_pa_layer(self) -> None:
+    def select_default_pa_layer(self) -> None:
 
         # Find layer default PA layer, otherwise pick first PA layer found
         first_pa = None
@@ -336,7 +296,7 @@ class OptariController:
         )
 
     # ============ layer selection ============
-    def _resolve_active_recon_layer(self) -> None:
+    def resolve_active_recon_layer(self) -> None:
         """Set `active_recon_layer` to the selected PA image layer (if exactly one is selected)."""
 
         selection = self.viewer.layers.selection
@@ -370,15 +330,15 @@ class OptariController:
     def on_layer_removed(self, event) -> None:
         """Drop any PATATO object tracked under a removed layer's name.
 
-        Otherwise a deleted reconstruction/unmixed layer stays in `_derived_patato_objects`
+        Otherwise a deleted reconstruction/unmixed layer stays in `derived_patato_objects`
         and gets written into the next HDF5 export as if it were still on screen.
         """
         name = event.value.name
-        self._patato_objects.pop(name, None)
-        self._derived_patato_objects.pop(name, None)
+        self.patato_objects.pop(name, None)
+        self.derived_patato_objects.pop(name, None)
 
     def on_selection_changed(self, event=None) -> None:
-        self._resolve_active_recon_layer()
+        self.resolve_active_recon_layer()
         self.unmixing_ctrl.refresh_ui()
         self.analysis_ctrl.refresh_ui()
         if self._snap_dims_to_active_layer():
@@ -488,23 +448,11 @@ class OptariController:
             return
         frame_idx, channel_idx = frame_channel
 
-        axis1_name = str(
-            self.active_recon_layer.metadata.get("axis1_name", "Channel")
+        # Every PA layer labels its channel axis, dims are snapped to its channels.
+        axis1_name = self.active_recon_layer.metadata["axis1_name"]
+        axis1_value = str(
+            self.active_recon_layer.metadata["axis1_labels"][channel_idx]
         )
-        axis1_labels = self.active_recon_layer.metadata.get("axis1_labels")
-
-        if isinstance(axis1_labels, (list, tuple)) and 0 <= channel_idx < len(
-            axis1_labels
-        ):
-            axis1_value = str(axis1_labels[channel_idx])
-        else:
-            wavelengths = self.wavelengths
-            if isinstance(
-                wavelengths, (list, tuple)
-            ) and 0 <= channel_idx < len(wavelengths):
-                axis1_value = f"{wavelengths[channel_idx]} nm"
-            else:
-                axis1_value = str(channel_idx)
 
         frames = self.active_recon_layer.metadata.get("frames")
         is_reconstructed = frames is None or frame_idx in frames

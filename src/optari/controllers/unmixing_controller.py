@@ -158,7 +158,7 @@ class UnmixParams:
         active_layer = controller.active_recon_layer
         if active_layer is None:
             raise ValueError("Select a PA reconstruction layer.")
-        recon = controller._patato_objects.get(active_layer.name)
+        recon = controller.patato_objects.get(active_layer.name)
         if recon is None:
             raise ValueError("Source layer must be a reconstruction.")
         if not wavelengths:
@@ -684,7 +684,7 @@ class UnmixingController(TaskControllerBase):
             patato_obj=image,
             colormap=colormap,
         )
-        self.optari_controller._derived_patato_objects[name] = image
+        self.optari_controller.derived_patato_objects[name] = image
         return name
 
     def publish(self, result, params: UnmixParams) -> str:
@@ -729,7 +729,7 @@ class UnmixingController(TaskControllerBase):
             )
 
         # Reassert ROI visibility priority after adding multiple result layers.
-        self.optari_controller._ensure_shapes_layer_on_top()
+        self.optari_controller.ensure_shapes_layer_on_top()
         logger.info("unmixing complete: %s", ", ".join(names))
         return ", ".join(names)
 

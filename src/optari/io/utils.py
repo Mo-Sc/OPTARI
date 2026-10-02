@@ -30,7 +30,7 @@ def colorbars_visible(viewer: Viewer, visible: bool):
             layer.colorbar.visible = was_visible
 
 
-def _filename_token(text: str) -> str:
+def filename_token(text: str) -> str:
     """Reduce free text to something safe to embed in a filename."""
     token = re.sub(r"[^A-Za-z0-9]+", "-", str(text)).strip("-")
     return token or "unknown"

@@ -134,7 +134,7 @@ class BatchRunner:
 
     def _advance(self, outcome) -> None:
         """Resume the plan generator with the last step's outcome. Main thread only."""
-        if self.controller._is_shut_down:
+        if self.controller.is_shut_down:
             return
         kind, value = outcome
         try:
@@ -338,7 +338,7 @@ class BatchRunner:
                 )
 
         self.viewer.layers.selection.select_only(layer)
-        self.controller._resolve_active_recon_layer()
+        self.controller.resolve_active_recon_layer()
         return layer
 
     def _analysis_layers(self, source_layer) -> list:
@@ -351,7 +351,7 @@ class BatchRunner:
 
     def _measure(self, source_layer):
         roi_ctrl = self.controller.roi_ctrl
-        selected_ids = roi_ctrl._selected_roi_ids()
+        selected_ids = roi_ctrl.selected_roi_ids()
         if not selected_ids:
             raise BatchStepError(
                 "ROI was placed but could not be selected for measuring", "roi"
@@ -364,7 +364,7 @@ class BatchRunner:
             else self._analysis_layers(source_layer)
         )
         # A plan has no intensity filter, so the dock's must not leak into its numbers.
-        rows = roi_ctrl._measure_selected_rois(
+        rows = roi_ctrl.measure_selected_rois(
             selected_ids,
             scope=self.plan.measure,
             layers=layers,

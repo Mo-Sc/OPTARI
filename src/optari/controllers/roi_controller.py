@@ -609,18 +609,18 @@ class RoiController(TaskControllerBase):
 
     def on_save_clicked(self, event=None) -> None:
         """Measure the ROIs selected in the viewer and add to the Saved Analysis table."""
-        selected_ids = self._selected_roi_ids()
+        selected_ids = self.selected_roi_ids()
         if not selected_ids:
             return
 
-        rows = self._measure_selected_rois(selected_ids)
+        rows = self.measure_selected_rois(selected_ids)
         if rows.empty:
             logger.info("Nothing to save")
             return
 
         self._append_saved_rows(rows, n_rois=len(selected_ids))
 
-    def _selected_roi_ids(self) -> set[int]:
+    def selected_roi_ids(self) -> set[int]:
         """roi_ids of the ROIs selected in the viewer, empty (with a reason) if none."""
         if self.optari_controller.shapes_layer is None:
             return set()
@@ -699,7 +699,7 @@ class RoiController(TaskControllerBase):
             if frame_idx in track
         ]
 
-    def _measure_selected_rois(
+    def measure_selected_rois(
         self,
         selected_ids: set[int],
         *,
@@ -1036,7 +1036,7 @@ class RoiController(TaskControllerBase):
             return
         roi_id, description, tissue_class = metadata
 
-        fov_m = self.optari_controller._get_fov()
+        fov_m = self.optari_controller.scan_ctrl.get_fov()
         if fov_m is None:
             self.optari_controller.annotation.roi_presets_description_label.setText(
                 "Could not save ROI preset: current scan has no valid FOV."
@@ -1092,7 +1092,7 @@ class RoiController(TaskControllerBase):
     @staticmethod
     def _place_roi_preset_static(controller, preset) -> None:
         """Place a preset while preserving its physical size across FOVs."""
-        target_fov = controller._get_fov()
+        target_fov = controller.scan_ctrl.get_fov()
         if target_fov is None:
             raise ValueError("Current scan has no valid FOV.")
 
@@ -1145,7 +1145,7 @@ class RoiController(TaskControllerBase):
             )
         class_id = class_name_to_id[target_class_name]
 
-        target_fov = controller._get_fov()
+        target_fov = controller.scan_ctrl.get_fov()
         if target_fov is None:
             raise ValueError("Current scan has no valid FOV.")
         verts = preset.geometry.verts_mm(*target_fov)

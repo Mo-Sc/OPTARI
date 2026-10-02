@@ -16,7 +16,7 @@ from pathlib import Path
 
 from patato.io.attribute_tags import ReconAttributeTags
 
-from optari.controllers.scan_controller import ScanController, ScanInfo
+from optari.io.discovery import ScanInfo, discover_studies, scan_key
 from optari.roi.roi_presets import RoiPreset, RoiPresetStore
 from optari.roi.roi_utils import MeasureScope
 from optari.segmentation.segmenter import load_model_registry
@@ -48,7 +48,7 @@ class BatchJob:
     @property
     def scan_stem(self) -> str:
         """``Scan_3``, whether the scan is an HDF5 file or an iThera folder."""
-        return ScanController.scan_key(self.scan_path)
+        return scan_key(self.scan_path)
 
     @property
     def key(self) -> str:
@@ -192,7 +192,7 @@ def build_plan(
 
     jobs = [
         BatchJob(study_path=study, scan_path=scan, scan_info=info)
-        for study, scans in ScanController.discover_studies(root).items()
+        for study, scans in discover_studies(root).items()
         for scan, info in scans.items()
     ]
 

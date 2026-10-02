@@ -27,7 +27,7 @@ from optari import __version__
 from optari.config import settings
 from optari.config.config import CONFIG_SCHEMA_VERSION
 from optari.patato_bridge import patato_roi_from_geometry
-from optari.io.utils import _filename_token
+from optari.io.utils import filename_token
 from optari.roi.roi_features import SAVED_FIXED_SOURCE_COLUMNS
 from optari.roi.roi_geometry import RoiGeometry
 from optari.roi.roi_utils import saved_export_columns
@@ -56,8 +56,8 @@ def default_roi_table_filename() -> str:
     """
     timestamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     return (
-        f"roi_data_{_filename_token(settings.general.OPERATOR)}"
-        f"_{_filename_token(settings.general.ANALYSIS_ID)}_{timestamp}.xlsx"
+        f"roi_data_{filename_token(settings.general.OPERATOR)}"
+        f"_{filename_token(settings.general.ANALYSIS_ID)}_{timestamp}.xlsx"
     )
 
 
@@ -78,7 +78,7 @@ def export_roi_table_to_xlsx(df_saved, path=None) -> str | None:
         if not filename.endswith(".xlsx"):
             filename += ".xlsx"
 
-    meta = _file_origin(roi_table_schema_version=ROI_TABLE_SCHEMA_VERSION)
+    meta = file_origin(roi_table_schema_version=ROI_TABLE_SCHEMA_VERSION)
     meta_df = pd.DataFrame(
         {"key": list(meta.keys()), "value": [str(v) for v in meta.values()]}
     )
@@ -254,7 +254,7 @@ def _hdf5_destination(destination: Path) -> Path | None:
     return destination
 
 
-def _file_origin(**extra) -> dict:
+def file_origin(**extra) -> dict:
     """origin recorded in every file OPTARI writes."""
     return {
         "tool": "OPTARI",
@@ -273,7 +273,7 @@ def _file_origin(**extra) -> dict:
 
 def _write_file_origin(destination: Path) -> None:
     with h5py.File(destination, "r+") as file:
-        file.attrs[HDF5Tags.FILE_ORIGIN] = json.dumps(_file_origin())
+        file.attrs[HDF5Tags.FILE_ORIGIN] = json.dumps(file_origin())
 
 
 def _write_rois(controller, destination_pa_data) -> None:
@@ -301,7 +301,7 @@ def _write_rois(controller, destination_pa_data) -> None:
     if not records:
         return
 
-    fov_x_m, fov_y_m = controller._get_fov()
+    fov_x_m, fov_y_m = controller.scan_ctrl.get_fov()
     z_values = controller.pa_data.scan_reader.get_scanner_z_position()
     run_values = controller.pa_data.scan_reader.get_run_numbers()
     rep_values = controller.pa_data.scan_reader.get_repetition_numbers()
@@ -337,12 +337,12 @@ def _write_derived_data(controller, destination_pa_data) -> None:
 
     replaces any existing derived data, segmentation mask, and clinical metadata in the export.
     """
-    for image in controller._derived_patato_objects.values():
+    for image in controller.derived_patato_objects.values():
         destination_pa_data.scan_writer.add_image(image)
-    if controller._derived_patato_objects:
+    if controller.derived_patato_objects:
         logger.info(
             "saved %s derived image dataset(s)",
-            len(controller._derived_patato_objects),
+            len(controller.derived_patato_objects),
         )
 
     seg_layer = controller.segmentation_ctrl.seg_layer

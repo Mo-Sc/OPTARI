@@ -15,7 +15,7 @@ from patato.io.attribute_tags import HDF5Tags
 from optari import OPTARI_SOURCE_TAG
 from optari.batch.plan import BatchJob
 from optari.batch.report import REPORT_COLUMNS, REPORT_SHEET, BatchReport
-from optari.controllers.scan_controller import ScanController, ScanInfo
+from optari.io.discovery import ScanInfo, scan_type
 from optari.controllers.unmixing_controller import (
     UnmixingController,
     _unmix_frames,
@@ -49,8 +49,8 @@ def controller_with(pa_data, records=(), derived=None, restored=True):
             roi_records=list(records),
             stored_rois_restored=restored,
         ),
-        _get_fov=lambda: FOV,
-        _derived_patato_objects=derived or {},
+        scan_ctrl=SimpleNamespace(get_fov=lambda: FOV),
+        derived_patato_objects=derived or {},
         segmentation_ctrl=SimpleNamespace(
             seg_layer=None
         ),  # _write_derived_data reads this
@@ -110,7 +110,7 @@ def test_hdf5_export_round_trip(ithera_scan, tmp_path):
         origin["tool"] == "OPTARI"
         and origin["format_version"] == OPTARI_FILE_FORMAT_VERSION
     )
-    assert ScanController.scan_type(destination) == "hdf5"
+    assert scan_type(destination) == "hdf5"
 
     reopened = pat.PAData.from_hdf5(str(destination), mode="r")
     layers, _ = build_napari_layers(reopened)
@@ -150,7 +150,7 @@ def test_hdf5_export_round_trip(ithera_scan, tmp_path):
 def test_ipasc_export_reloads_as_raw_scan(ithera_scan, tmp_path):
     destination = tmp_path / "Scan_2_ipasc.hdf5"
     assert export_scan_to_ipasc(controller_with(ithera_scan), destination)
-    assert ScanController.scan_type(destination) == "ipasc"
+    assert scan_type(destination) == "ipasc"
 
     reopened = pat.PAData.from_hdf5(str(destination), mode="r")
     np.testing.assert_allclose(

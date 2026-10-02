@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from optari.io.export_pipeline import ROI_TABLE_META_SHEET, _file_origin
+from optari.io.export_pipeline import ROI_TABLE_META_SHEET, file_origin
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +178,7 @@ class BatchReport:
         path = self._destination
         # Keep the .xlsx suffix so ExcelWriter can still infer its engine.
         temporary_path = path.with_name(f".{path.stem}.tmp{path.suffix}")
-        meta = _file_origin(batch_plan=self._plan_source)
+        meta = file_origin(batch_plan=self._plan_source)
         meta_df = pd.DataFrame(
             {
                 "key": list(meta.keys()),

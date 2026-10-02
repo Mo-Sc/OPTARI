@@ -22,7 +22,7 @@ from optari.batch.runner import (
     Tick,
     _in_background,
 )
-from optari.controllers.scan_controller import ScanInfo
+from optari.io.discovery import ScanInfo
 from optari.roi.roi_utils import MeasureScope
 from optari.utils.presets import PresetStore
 from optari.utils.setup import get_user_batch_presets_dir, get_user_models_dir
@@ -221,8 +221,7 @@ def test_runner_isolates_failures_and_honours_cancel():
     controller = SimpleNamespace(
         viewer=viewer,
         active_recon_layer=recon,
-        _resolve_active_recon_layer=lambda: None,
-        study_path=None,
+        resolve_active_recon_layer=lambda: None,
         scan_ctrl=ScanCtrl(),
     )
     runner = make_runner(plan, controller)
@@ -287,7 +286,7 @@ def test_source_and_overlay_layer_selection(tmp_path):
     controller = SimpleNamespace(
         viewer=viewer,
         active_recon_layer=vendor,
-        _resolve_active_recon_layer=lambda: None,
+        resolve_active_recon_layer=lambda: None,
     )
 
     plan = BatchPlan(jobs=[], output_dir=tmp_path)

@@ -177,7 +177,7 @@ def test_unmix_params_from_preset(vendor_recon, image_layer):
         wavelengths=WAVELENGTHS,
     )
     controller = SimpleNamespace(
-        active_recon_layer=layer, _patato_objects={layer.name: vendor_recon}
+        active_recon_layer=layer, patato_objects={layer.name: vendor_recon}
     )
     preset = PresetStore(get_user_unmixing_presets_dir()).load("haemoglobin")
 

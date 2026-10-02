@@ -112,7 +112,7 @@ class UiManager:
     @staticmethod
     def connect_events(controller: "OptariController") -> None:
         # -------- viewer core events --------
-        controller._connect_shapes_layer_events()
+        controller.connect_shapes_layer_events()
         controller.viewer.dims.events.point.connect(controller.on_dims_changed)
         controller.viewer.layers.selection.events.changed.connect(
             controller.on_selection_changed

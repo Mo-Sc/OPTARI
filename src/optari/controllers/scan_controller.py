@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass
 from pathlib import Path
-import re
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -16,6 +14,7 @@ from napari.utils.notifications import show_info, show_warning
 from patato.io.ithera.read_ithera import iTheraMSOT
 from qtpy.QtWidgets import QFileDialog
 
+from optari.io.discovery import ScanInfo, discover_scans
 from optari.patato_bridge import (
     build_napari_layers,
     fov_from_objects,
@@ -41,14 +40,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
-class ScanInfo:
-    """Metadata for a discovered scan."""
-
-    kind: str  # "hdf5", "ipasc", "ithera"
-    internal_name: str | None
-
-
 class ScanController(TaskControllerBase):
     """Scan/session lifecycle and data-loading helpers for OPTARI."""
 
@@ -59,6 +50,8 @@ class ScanController(TaskControllerBase):
             parent_controller: OptariController instance with viewer and session state.
         """
         super().__init__(parent_controller)
+        # The Scan Browser's study. A batch run loads scans from elsewhere.
+        self.scans: dict[Path, ScanInfo] = {}
         self._export_view_handler = (
             lambda: ViewerExportController.on_export_clicked(
                 self.optari_controller
@@ -92,29 +85,6 @@ class ScanController(TaskControllerBase):
         """The scan's internal (vendor) name, for stamping onto layers OPTARI creates."""
         return self.optari_controller.scan_info.internal_name
 
-    def wavelengths(self) -> "list[int] | None":
-        """Return scan wavelengths in nm, or ``None`` if unavailable."""
-        if self.optari_controller.pa_data is None:
-            return None
-        try:
-            return [
-                int(w)
-                for w in self.optari_controller.pa_data.get_wavelengths()
-            ]
-        except Exception:
-            logger.exception("failed to read wavelengths from scan metadata")
-            return None
-
-    def timestamps(self) -> "np.ndarray | None":
-        """Return scan timestamps array, or ``None`` if unavailable."""
-        if self.optari_controller.pa_data is None:
-            return None
-        try:
-            return np.array(self.optari_controller.pa_data.get_timestamps())
-        except Exception:
-            logger.exception("failed to read timestamps from scan metadata")
-            return None
-
     def close_current_scan(self) -> None:
         """Close the HDF5 handle for the current scan."""
         if self.optari_controller.pa_data is not None:
@@ -126,8 +96,8 @@ class ScanController(TaskControllerBase):
                 )
         self.optari_controller.pa_data = None
         self.optari_controller.scan_info = None
-        self.optari_controller._patato_objects = {}
-        self.optari_controller._derived_patato_objects = {}
+        self.optari_controller.patato_objects = {}
+        self.optari_controller.derived_patato_objects = {}
         self.optari_controller.clinical_metadata_edits = None
 
     def reset_scan_state(self, restore_startup_logo: bool = True) -> None:
@@ -145,19 +115,6 @@ class ScanController(TaskControllerBase):
         self.optari_controller.refresh_controller_uis()
         if restore_startup_logo:
             load_startup_logo(self.viewer)
-
-    def init_path(self, path: Path) -> None:
-        """Initialize the scan browser from a startup path, whether it's a folder or a scan file."""
-        if path.is_dir():
-            self.set_scan_folder(path)
-            return
-
-        if path.is_file():
-            self.open_scan_file(path)
-            return
-
-        # Not a real path yet (e.g. in tests). Leave UI usable.
-        self.optari_controller.scan_browser.set_folder(path)
 
     def on_browse_study_clicked(self) -> None:
         """Prompt for a study folder or HDF5 scan file."""
@@ -185,7 +142,7 @@ class ScanController(TaskControllerBase):
 
     def on_scan_selected(self, row: int) -> None:
         """Load the scan at *row* in the scan list, ignoring an out-of-range selection."""
-        scans = list(self.optari_controller._scans.items())
+        scans = list(self.scans.items())
         if row < 0 or row >= len(scans):
             return
         self.load_scan(*scans[row])
@@ -195,20 +152,16 @@ class ScanController(TaskControllerBase):
     ) -> None:
         """Discover scans in *folder* and select *selected_scan* or the first available scan."""
         folder = Path(folder)
-        self.optari_controller._scans = self.discover_scans(folder)
+        self.scans = discover_scans(folder)
 
         self.optari_controller.scan_browser.set_folder(folder)
-        self.optari_controller.scan_browser.set_scans(
-            list(self.optari_controller._scans.items())
-        )
+        self.optari_controller.scan_browser.set_scans(list(self.scans.items()))
 
         # Auto-select first scan if available.
-        if self.optari_controller._scans:
-            selected_scan = selected_scan or next(
-                iter(self.optari_controller._scans)
-            )
+        if self.scans:
+            selected_scan = selected_scan or next(iter(self.scans))
             try:
-                row = list(self.optari_controller._scans).index(selected_scan)
+                row = list(self.scans).index(selected_scan)
             except ValueError:
                 self.reset_scan_state()
                 return
@@ -227,7 +180,6 @@ class ScanController(TaskControllerBase):
         logger.info("loading scan: %s", scan_path)
 
         self.optari_controller.path = scan_path
-        self.optari_controller.study_path = scan_path.parent
         self.reset_scan_state(restore_startup_logo=False)
 
         if not scan_path.exists():
@@ -283,11 +235,11 @@ class ScanController(TaskControllerBase):
             units=("mm", "mm"),
         )
         self.optari_controller.shapes_layer.locked = True
-        self.optari_controller._connect_shapes_layer_events()
+        self.optari_controller.connect_shapes_layer_events()
 
         # After adding layers, pick a sensible default selected layer.
         try:
-            self.optari_controller._select_default_pa_layer()
+            self.optari_controller.select_default_pa_layer()
         except RuntimeError as e:
             logger.info("Default PA layer not found", exc_info=True)
             show_warning(str(e))
@@ -301,7 +253,7 @@ class ScanController(TaskControllerBase):
             ),
             None,
         )
-        self.optari_controller._resolve_active_recon_layer()
+        self.optari_controller.resolve_active_recon_layer()
         self.optari_controller.segmentation_ctrl.restore_from_scan(
             self.optari_controller.pa_data
         )
@@ -375,162 +327,16 @@ class ScanController(TaskControllerBase):
         )
         return frame_id
 
-    @staticmethod
-    def scan_key(scan_path: Path) -> str:
-        """Return the ``Scan_<n>`` prefix of *scan_path*'s name, or the full name if it doesn't match."""
-        name = scan_path.stem if scan_path.is_file() else scan_path.name
-        m = re.match(r"^(Scan_\d+)", name)
-        return m.group(1) if m else name
-
-    @staticmethod
-    def scan_sort_key(scan_path: Path):
-        """Sort key that orders ``Scan_<n>`` names numerically, ahead of any other name sorted alphabetically."""
-        key = ScanController.scan_key(scan_path)
-        m = re.match(r"^Scan_(\d+)$", key)
-        if m:
-            return (0, int(m.group(1)), key)
-        return (1, 0, key)
-
-    @staticmethod
-    def scan_type(path: Path) -> str | None:
-        """
-        Identify the format of a scan on disk, or ``None`` if the path is not a scan.
-        """
-        import h5py
-        from patato.io.attribute_tags import HDF5Tags, IPASCTags
-
-        if path.is_dir():
-            return "ithera" if any(path.glob("*.msot")) else None
-        if path.suffix.lower() != ".hdf5":
-            return None
-        try:
-            with h5py.File(path, "r") as file:
-                if IPASCTags.BINARY_DATA in file:
-                    return "ipasc"
-                if HDF5Tags.RAW_DATA in file:
-                    return "hdf5"
-        except OSError:
-            logger.debug("could not open '%s' as HDF5", path, exc_info=True)
-        return None
-
-    @staticmethod
-    def _read_internal_scan_name(path: Path, kind: str) -> str | None:
-        """
-        Read the name the scanner gave the scan, or ``None`` if the format has none.
-        Tries to avoid reading the whole scan into memory.
-        """
-        if kind == "ipasc":
-            return None
-
-        try:
-            if kind == "ithera":
-                # Parse only the relevant XML node rather than the whole scan.
-                import xml.dom.minidom
-
-                msot = path / f"{path.name}.msot"
-                tree = xml.dom.minidom.parse(str(msot))
-                scan_nodes = tree.getElementsByTagName("ScanNode")
-                if scan_nodes:
-                    name_nodes = scan_nodes[0].getElementsByTagName("Name")
-                    if name_nodes and name_nodes[0].firstChild:
-                        return name_nodes[0].firstChild.nodeValue.strip()
-            else:
-                from patato.io.hdf.hdf5_reader_factory import get_hdf5_reader
-
-                reader = get_hdf5_reader(str(path))
-                name = reader.get_scan_name()
-                reader.close()
-                return str(name) if name else None
-        except Exception:
-            logger.debug(
-                "failed to read internal scan name from '%s'",
-                path,
-                exc_info=True,
-            )
-        return None
-
-    @staticmethod
-    def discover_studies(
-        root: Path, max_depth: int = 3
-    ) -> dict[Path, dict[Path, ScanInfo]]:
-        """Map each study folder under *root* to its scans, in folder-name order.
-
-        A study is simply any folder that holds at least one scan, so a flat folder
-        of scans comes back as a single study and no naming convention is imposed
-        beyond the ``Scan_*`` one ``discover_scans`` already relies on. A folder that
-        is itself a study is not descended into.
-        """
-        root = Path(root)
-        studies: dict[Path, dict[Path, ScanInfo]] = {}
-
-        def walk(folder: Path, depth: int) -> None:
-            """Recurse into *folder* up to *max_depth*, stopping at the first folder that holds a scan."""
-            scans = ScanController.discover_scans(folder)
-            if scans:
-                studies[folder] = scans
-                return
-            if depth >= max_depth:
-                return
-            try:
-                children = sorted(
-                    child
-                    for child in folder.iterdir()
-                    # Following symlinks here risks walking a cycle or wandering
-                    # outside the dataset the user picked.
-                    if child.is_dir() and not child.is_symlink()
-                )
-            except (PermissionError, OSError):
-                logger.warning("could not list '%s', skipping", folder)
-                return
-            for child in children:
-                walk(child, depth + 1)
-
-        walk(root, 0)
-        return studies
-
-    @staticmethod
-    def discover_scans(folder: Path) -> dict[Path, ScanInfo]:
-        """Find every scan directly under *folder*, keyed by path and deduplicated by ``scan_key``.
-
-        When both an HDF5 file and an iThera folder resolve to the same key, the HDF5
-        one wins.
-        """
-        # One entry per scan key; if both exist, prefer HDF5 over iThera folder.
-        by_key: dict[str, tuple[Path, str, str | None]] = {}
-
-        # check every hdf5 file and every Scan_* folder in the directory for a valid scan
-        for p in sorted(folder.glob("*.hdf5")):
-            kind = ScanController.scan_type(p)
-            if kind is None:
-                continue
-            internal = ScanController._read_internal_scan_name(p, kind)
-            by_key[ScanController.scan_key(p)] = (p, kind, internal)
-
-        for d in folder.glob("Scan_*"):
-            kind = ScanController.scan_type(d)
-            if kind is None:
-                continue
-            key = ScanController.scan_key(d)
-            if key not in by_key:
-                internal = ScanController._read_internal_scan_name(d, kind)
-                by_key[key] = (d, kind, internal)
-
-        entries = sorted(
-            ((v[0], v[1], v[2]) for v in by_key.values()),
-            key=lambda item: ScanController.scan_sort_key(item[0]),
-        )
-        return {p: ScanInfo(kind=k, internal_name=n) for p, k, n in entries}
-
     def layers_from_pa_data(self) -> list[tuple]:
         """Build napari LayerData tuples from the open ``controller.pa_data`` handle."""
-        layers, self.optari_controller._patato_objects = build_napari_layers(
+        layers, self.optari_controller.patato_objects = build_napari_layers(
             self.optari_controller.pa_data
         )
         return layers
 
     def get_fov(self) -> "tuple[float, float] | None":
         """Return ``(fov_x_m, fov_y_m)`` from stored PATATO objects, or ``None``."""
-        return fov_from_objects(self.optari_controller._patato_objects)
+        return fov_from_objects(self.optari_controller.patato_objects)
 
     def init_shapes_from_scan(self) -> None:
         """Clear the ROIs layer and populate it with any ROIs stored in the scan."""
@@ -539,7 +345,9 @@ class ScanController(TaskControllerBase):
             return
 
         data_event = shapes_layer.events.data
-        data_event.disconnect(self.optari_controller._on_shapes_data_changed)
+        data_event.disconnect(
+            self.optari_controller.roi_ctrl.on_shapes_data_changed
+        )
         try:
             shapes: list = []
             self.optari_controller.roi_ctrl.clear_roi_records()
@@ -589,9 +397,11 @@ class ScanController(TaskControllerBase):
                 "Scan loaded without saved ROI annotations: " f"{exc}"
             )
         finally:
-            data_event.connect(self.optari_controller._on_shapes_data_changed)
+            data_event.connect(
+                self.optari_controller.roi_ctrl.on_shapes_data_changed
+            )
             # Single refresh at the end regardless of success/failure.
-            self.optari_controller._on_shapes_data_changed()
+            self.optari_controller.roi_ctrl.on_shapes_data_changed()
 
     def export_hdf5(self, destination: Path) -> bool:
         """Export scan to HDF5 including OPTARI ROIs and derived datasets."""

@@ -22,7 +22,7 @@ Model-View-Controller split across four layers.
   image layers, and one instance of each task controller.
 - Controllers hold no references to each other. A controller reaches another only through
   `self.optari_controller.<name>_ctrl`, and shared state (`active_recon_layer`,
-  `active_us_layer`, `_derived_patato_objects`, ...) lives on `OptariController` itself.
+  `active_us_layer`, `derived_patato_objects`, ...) lives on `OptariController` itself.
 - `UiManager` builds the docks and wires every Qt signal to a controller method.
   `MenuManager` builds the menu bar and the Settings/Batch dialogs. `ShortcutManager` binds
   keyboard shortcuts.
