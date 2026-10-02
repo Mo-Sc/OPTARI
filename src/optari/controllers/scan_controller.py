@@ -12,9 +12,9 @@ import patato as pat
 from napari.layers import Image
 from napari.utils.notifications import show_info, show_warning
 from patato.io.ithera.read_ithera import iTheraMSOT
-from qtpy.QtWidgets import QDialog, QFileDialog
+from qtpy.QtWidgets import QFileDialog
 
-from optari.io.discovery import ScanInfo, discover_scans, scan_type
+from optari.io.discovery import ScanInfo, discover_scans
 from optari.patato_bridge import (
     build_napari_layers,
     fov_from_objects,
@@ -38,26 +38,6 @@ if TYPE_CHECKING:
     from optari.controllers.optari_controller import OptariController
 
 logger = logging.getLogger(__name__)
-
-
-class _StudyOrScanDialog(QFileDialog):
-    """Picks a study folder, an iThera scan folder or an HDF5 scan in one dialog.
-    Used as a workaround for windows, where the native file dialog does not allow
-    selecting both folders and files.
-    """
-
-    def __init__(self) -> None:
-        super().__init__(None, "Select study folder or scan", str(Path.cwd()))
-        self.setOption(QFileDialog.DontUseNativeDialog)
-        self.setFileMode(QFileDialog.AnyFile)
-        self.setNameFilter("HDF5 scans (*.hdf5);;All files (*)")
-
-    def accept(self) -> None:
-        target = Path(self.selectedFiles()[0])
-        if target.is_dir():
-            QDialog.accept(self)
-        elif target.is_file():
-            super().accept()
 
 
 class ScanController(TaskControllerBase):
@@ -137,20 +117,12 @@ class ScanController(TaskControllerBase):
             load_startup_logo(self.viewer)
 
     def on_browse_study_clicked(self) -> None:
-        """Prompt for a study folder, or a single scan to open together with its study."""
-        dialog = _StudyOrScanDialog()
-        if not dialog.exec():
-            return
-        target = Path(dialog.selectedFiles()[0])
-        # An iThera scan is a folder too, but opens like a scan file.
-        if target.is_dir() and scan_type(target) is None:
-            self.set_scan_folder(target)
-        else:
-            self.open_scan_file(target)
-
-    def open_scan_file(self, scan_path: Path) -> None:
-        """Discover a scan's study and select that scan in the browser."""
-        self.set_scan_folder(scan_path.parent, selected_scan=scan_path)
+        """Prompt for a study folder, the folder that contains the scans."""
+        folder = QFileDialog.getExistingDirectory(
+            None, "Select study folder", str(Path.cwd())
+        )
+        if folder:
+            self.set_scan_folder(Path(folder))
 
     def on_scan_selected(self, row: int) -> None:
         """Load the scan at *row* in the scan list, ignoring an out-of-range selection."""
@@ -159,25 +131,15 @@ class ScanController(TaskControllerBase):
             return
         self.load_scan(*scans[row])
 
-    def set_scan_folder(
-        self, folder: Path, *, selected_scan: Path | None = None
-    ) -> None:
-        """Discover scans in *folder* and select *selected_scan* or the first available scan."""
-        folder = Path(folder)
+    def set_scan_folder(self, folder: Path) -> None:
+        """Discover scans in *folder* and select the first one."""
         self.scans = discover_scans(folder)
 
         self.optari_controller.scan_browser.set_folder(folder)
         self.optari_controller.scan_browser.set_scans(list(self.scans.items()))
 
-        # Auto-select first scan if available.
         if self.scans:
-            selected_scan = selected_scan or next(iter(self.scans))
-            try:
-                row = list(self.scans).index(selected_scan)
-            except ValueError:
-                self.reset_scan_state()
-                return
-            self.optari_controller.scan_browser.scans_list.setCurrentRow(row)
+            self.optari_controller.scan_browser.scans_list.setCurrentRow(0)
         else:
             self.reset_scan_state()
 

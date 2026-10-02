@@ -1,5 +1,28 @@
 # FAQ
 
+## On Windows, the first start fails with "Could not install packages due to an OSError"
+
+The error ends with a hint about **Windows Long Path support**. On its first start, OPTARI installs its packages
+into your user folder, and one of them contains a file whose full path exceeds the 260 characters Windows allows
+by default. This happens more often with long user names.
+
+The quickest fix moves the installation to a shorter folder and needs no administrator rights. First run
+`UNINSTALL_WINDOWS.bat` from the OPTARI folder to remove the half-finished installation. Then open a Command Prompt
+and run:
+
+```bat
+setx PYAPP_INSTALL_DIR_OPTARI "%USERPROFILE%\optari"
+```
+
+Start OPTARI again by double-clicking it. It now installs into `C:\Users\<your name>\optari`.
+
+Alternatively, an administrator can lift the path limit for the whole computer. In PowerShell, opened with
+**Run as administrator**:
+
+```powershell
+New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
+```
+
 ## My `config.json` edits or settings changes aren't taking effect
 
 Configuration is loaded once at startup — restart OPTARI after editing any file under

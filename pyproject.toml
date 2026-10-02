@@ -73,6 +73,8 @@ where = ["src"]
 [tool.setuptools_scm]
 write_to = "src/optari/_version.py"
 fallback_version = "0.0.1+nogit"
+# Keeps dev builds versions short
+local_scheme = "no-local-version"
 
 [tool.pytest.ini_options]
 minversion = "6.0"
