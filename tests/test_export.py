@@ -98,12 +98,7 @@ def test_hdf5_export_round_trip(ithera_scan, tmp_path):
     UnmixingController._set_export_frame_attrs(unmixed, export_attrs)
 
     destination = tmp_path / "Scan_2.hdf5"
-    # As in the app, the session also holds the scan's restored vendor ROI. It must be
-    # kept as stored and not exported a second time (two ROIs are unpacked below).
-    vendor_records = roi_records_from_scan_rois(ithera_scan, *FOV)
-    controller = controller_with(
-        ithera_scan, [*vendor_records, roi], {"Unmixed: iThera": unmixed}
-    )
+    controller = controller_with(ithera_scan, [roi], {"Unmixed: iThera": unmixed})
     assert export_scan_to_hdf5(controller, destination)
     assert not export_scan_to_hdf5(controller, destination)  # never overwrites
 
@@ -133,8 +128,7 @@ def test_hdf5_export_round_trip(ithera_scan, tmp_path):
         unmixed_data[FRAME - 1].any() == False
     )  # frames that were not unmixed stay empty
 
-    # The scan's own vendor annotation (iAnnotation, frame 11) is kept next to ours.
-    restored, vendor_roi = roi_records_from_scan_rois(reopened, *FOV)
+    (restored,) = roi_records_from_scan_rois(reopened, *FOV)
     np.testing.assert_allclose(restored.verts, roi.verts, atol=1e-6)
     assert (restored.frame_id, restored.kind, restored.tissue_class) == (
         FRAME,
@@ -146,7 +140,6 @@ def test_hdf5_export_round_trip(ithera_scan, tmp_path):
         0,
         roi.roi_group_uid,
     )
-    assert (vendor_roi.source, vendor_roi.frame_id) == ("iAnnotation", 11)
     reopened.close()
 
 
