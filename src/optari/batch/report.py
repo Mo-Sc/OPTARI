@@ -149,10 +149,6 @@ class BatchReport:
         """Mark *job* as failed, recording the reason and which step it failed on."""
         self._finish(job, "failed", message=message, failed_step=step)
 
-    def skip(self, job, message: str = "") -> None:
-        """Mark *job* as skipped without being attempted."""
-        self._finish(job, "skipped", message=message)
-
     def cancel(self, job) -> None:
         """Mark *job* as cancelled by the user."""
         self._finish(job, "cancelled")

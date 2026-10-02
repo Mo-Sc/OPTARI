@@ -54,10 +54,6 @@ class FeatureSpec:
     dtype: type
     fn: Callable[[ROIContext], object]
 
-    def compute(self, ctx: ROIContext) -> object:
-        """Evaluate this spec's function against *ctx*."""
-        return self.fn(ctx)
-
 
 def _nan_stat(values: np.ndarray, fn: Callable[[np.ndarray], float]) -> float:
     """
@@ -128,7 +124,7 @@ FEATURE_REGISTRY: dict[str, FeatureSpec] = {
     "scan_name": FeatureSpec(str, lambda c: str(c.scan_name)),
     "frame": FeatureSpec(int, lambda c: int(c.frame)),
     "channel": FeatureSpec(object, lambda c: c.channel),
-    # following are added by RoiController.on_save_clicked once per save, not computed per ROI
+    # Stamped once per save by SavedRoiTable.add_measurements, empty until then.
     "roi_ts": FeatureSpec(str, lambda c: ""),
     "scan_ts": FeatureSpec(str, lambda c: str(c.scan_ts)),
     "roi_centroid": FeatureSpec(tuple, lambda c: c.roi_centroid),

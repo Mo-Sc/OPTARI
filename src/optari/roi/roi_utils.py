@@ -104,11 +104,6 @@ def slice_datetime(layer, frame_idx: int, channel_idx: int) -> str:
     return str(start + timedelta(seconds=elapsed))
 
 
-def _iter_rois(records: list[ROIRecord]) -> list[ROIRecord]:
-    """Filter out any degenerate (non 2D) ROI geometry."""
-    return [r for r in records if r.verts.ndim == 2]
-
-
 # Rasterizing is most expensive when calculating ROI statistics. the live table
 # recomputes every ROI on every drag while only one of them has actually moved.
 # The key covers everything a mask depends on, so a moved or resized ROI misses
@@ -213,7 +208,7 @@ def iter_roi_masks(
     sy, sx = _scale_sy_sx(active_recon_layer)
     ty, tx = _layer_translate(active_recon_layer)
 
-    for roi in _iter_rois(records):
+    for roi in records:
         mask = _roi_mask(
             roi, sy=sy, sx=sx, ty=ty, tx=tx, image_shape=image_shape
         )
@@ -430,7 +425,7 @@ def compute_roi_stats(
         )
         rows.append(
             {
-                feature_id: FEATURE_REGISTRY[feature_id].compute(ctx)
+                feature_id: FEATURE_REGISTRY[feature_id].fn(ctx)
                 for feature_id in selected_feature_ids
             }
         )
@@ -509,7 +504,7 @@ def _measure_series(
             vals_raw=vals_raw,
             clamp=clamp,
         )
-        y.append(float(FEATURE_REGISTRY[feature_id].compute(ctx)))
+        y.append(float(FEATURE_REGISTRY[feature_id].fn(ctx)))
     return np.asarray(y, dtype=float)
 
 
@@ -641,22 +636,12 @@ def compute_roi_spectra(
         return np.asarray([]), {}, None
 
     n_channels = data.shape[1]
+    # A categorical axis: one evenly spaced tick per channel, labelled with its
+    # wavelength or chromophore, whatever the spacing of the wavelengths.
     x = np.arange(n_channels, dtype=float)
-    x_tick_labels: list[str] | None = None
-
-    axis1_labels = active_recon_layer.metadata.get("axis1_labels")
-    if (
-        isinstance(axis1_labels, (list, tuple))
-        and len(axis1_labels) == n_channels
-    ):
-        x_tick_labels = [str(label) for label in axis1_labels]
-    else:
-        wavelengths = active_recon_layer.metadata.get("wavelengths")
-        if (
-            isinstance(wavelengths, (list, tuple))
-            and len(wavelengths) == n_channels
-        ):
-            x = np.asarray(wavelengths, dtype=float)
+    x_tick_labels = [
+        str(label) for label in active_recon_layer.metadata["axis1_labels"]
+    ]
 
     img_shape = data.shape[-2:]
 

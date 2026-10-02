@@ -25,10 +25,6 @@ logger = logging.getLogger(__name__)
 class AnalysisController(TaskControllerBase):
     """Temporal analysis, histograms, and spectral plotting helpers."""
 
-    def __init__(self, parent_controller):
-        """Initialize the analysis controller."""
-        super().__init__(parent_controller)
-
     def refresh_ui(self) -> None:
         """Refresh gating for the histogram/spectrum/time-analysis buttons."""
         has_data = (

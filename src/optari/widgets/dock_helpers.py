@@ -26,14 +26,6 @@ from qtpy.QtWidgets import (
 from optari.utils.presets import PresetStore
 
 
-@dataclass
-class DockShell:
-    widget: QWidget
-    content_widget: QWidget
-    content_layout: QVBoxLayout
-    scroll_area: QScrollArea | None
-
-
 def create_frame_scope_controls() -> (
     tuple[QWidget, QRadioButton, QRadioButton]
 ):
@@ -119,14 +111,9 @@ def remove_selected_preset(
     return preset_path, removed
 
 
-# Helpers for right-side form docks in UiManager._tabify_docks().
-def create_right_dock_shell(
-    *,
-    enable_scroll: bool = True,
-    horizontal_scroll_policy: Qt.ScrollBarPolicy = Qt.ScrollBarAlwaysOff,
-    vertical_scroll_policy: Qt.ScrollBarPolicy = Qt.ScrollBarAsNeeded,
-) -> DockShell:
-    """Create the shell used by right-side docks with optional scrolling."""
+# helpers for the right-side form docks
+def create_right_dock_shell() -> tuple[QWidget, QVBoxLayout]:
+    """The dock widget and the layout its content goes in, scrolling vertically."""
     widget = QWidget()
     shell_layout = QVBoxLayout(widget)
     shell_layout.setContentsMargins(0, 0, 0, 0)
@@ -134,32 +121,17 @@ def create_right_dock_shell(
     content_widget = QWidget()
     content_layout = QVBoxLayout(content_widget)
 
-    if not enable_scroll:
-        shell_layout.addWidget(content_widget)
-        return DockShell(
-            widget=widget,
-            content_widget=content_widget,
-            content_layout=content_layout,
-            scroll_area=None,
-        )
-
     scroll_area = QScrollArea()
     scroll_area.setWidgetResizable(True)
-    scroll_area.setHorizontalScrollBarPolicy(horizontal_scroll_policy)
-    scroll_area.setVerticalScrollBarPolicy(vertical_scroll_policy)
+    scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
     scroll_area.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
     scroll_area.setWidget(content_widget)
     shell_layout.addWidget(scroll_area)
-
-    return DockShell(
-        widget=widget,
-        content_widget=content_widget,
-        content_layout=content_layout,
-        scroll_area=scroll_area,
-    )
+    return widget, content_layout
 
 
-# Helpers for bottom analysis docks in UiManager._tabify_docks().
+# helpers for the bottom analysis docks
 def create_bottom_dock_header(
     layout: QVBoxLayout,
     *,
@@ -175,15 +147,12 @@ def create_bottom_dock_header(
     return status_label, action_button
 
 
-def create_bottom_plot_strip(
-    *,
-    spacing: int = 8,
-) -> tuple[QScrollArea, QWidget]:
+def create_bottom_plot_strip() -> tuple[QScrollArea, QWidget]:
     """Create the horizontally scrolling plot strip used by bottom analysis docks."""
     plots_container = QWidget()
     plots_layout = QHBoxLayout(plots_container)
     plots_layout.setContentsMargins(0, 0, 0, 0)
-    plots_layout.setSpacing(spacing)
+    plots_layout.setSpacing(8)
 
     scroll_area = QScrollArea()
     scroll_area.setWidgetResizable(True)

@@ -48,12 +48,8 @@ class ReconstructionDock:
     status_label: QLabel
 
 
-def create_reconstruction_dock(
-    *, enable_scroll: bool = True
-) -> ReconstructionDock:
-    shell = create_right_dock_shell(enable_scroll=enable_scroll)
-    widget = shell.widget
-    outer = shell.content_layout
+def create_reconstruction_dock() -> ReconstructionDock:
+    widget, outer = create_right_dock_shell()
 
     setup_box = QGroupBox("Reconstruction Setup")
     setup_layout = QVBoxLayout(setup_box)

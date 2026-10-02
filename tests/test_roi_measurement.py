@@ -147,7 +147,7 @@ def test_time_series_fixed_and_tracked(image_layer):
     np.testing.assert_allclose(tracked[1], [0, np.nan, 10, 15])
 
 
-def test_spectrum_uses_wavelength_axis(image_layer):
+def test_spectrum_per_channel(image_layer):
     data = block_image(n_channels=3)
     data *= np.array([0, 2, 4], dtype=np.float32)[
         None, :, None, None

@@ -371,17 +371,13 @@ class ScanController(TaskControllerBase):
         shapes_layer.selected_data = set(range(len(shapes_layer.data)))
         roi_ctrl.refresh_ui()
 
-    def export_hdf5(self, destination: Path) -> bool:
-        """Export scan to HDF5 including OPTARI ROIs and derived datasets."""
-        return export_scan_to_hdf5(self.optari_controller, destination)
-
     def on_hdf5_export_clicked(self, event=None) -> None:
         """Prompt for a destination and export the current scan to HDF5."""
         destination = self._choose_export_path()
         if destination is None:
             return
 
-        if self.export_hdf5(destination):
+        if export_scan_to_hdf5(self.optari_controller, destination):
             show_info(f"Exported scan to {destination.name}")
 
     def on_ipasc_export_clicked(self, event=None) -> None:

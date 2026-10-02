@@ -129,7 +129,6 @@ class MenuManager:
         controller.settings_dialog.raise_()
         controller.settings_dialog.activateWindow()
 
-    # ============ napari menu pruning ============
     @staticmethod
     def _show_batch(controller: "OptariController") -> None:
         if controller.batch_dialog is None:
@@ -139,6 +138,7 @@ class MenuManager:
         controller.batch_dialog.raise_()
         controller.batch_dialog.activateWindow()
 
+    # ============ napari menu ============
     @staticmethod
     def _prune_napari_menus(window) -> None:
         for attribute in HIDDEN_NAPARI_MENUS:

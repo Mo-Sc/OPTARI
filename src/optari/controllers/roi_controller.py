@@ -321,12 +321,6 @@ class RoiController(TaskControllerBase):
         self._projection_ids = new_ids
         return changed
 
-    @staticmethod
-    def _filter_columns(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
-        if df.empty:
-            return pd.DataFrame(columns=columns)
-        return df.loc[:, columns]
-
     def _set_saved_table_view(self) -> None:
         """Push the saved rows into the widget and gate the actions that need rows."""
         self.optari_controller.roi.saved_table.value = (

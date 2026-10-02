@@ -60,10 +60,8 @@ class AnnotationDock:
             self.roi_presets_list.addItem(name)
 
 
-def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
-    shell = create_right_dock_shell(enable_scroll=enable_scroll)
-    widget = shell.widget
-    outer = shell.content_layout
+def create_annotation_dock() -> AnnotationDock:
+    widget, outer = create_right_dock_shell()
 
     # ROI presets section
     roi_presets_box = QGroupBox("ROI Presets")

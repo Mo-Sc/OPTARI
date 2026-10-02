@@ -47,16 +47,12 @@ class SegmentationDock:
     status_label: QLabel
 
 
-def create_segmentation_dock(
-    *, enable_scroll: bool = True
-) -> SegmentationDock:
+def create_segmentation_dock() -> SegmentationDock:
     """Create the segmentation dock with model/class and ROI-from-mask controls.
 
     Model combo is initially empty; populate via controller.initialize_ui().
     """
-    shell = create_right_dock_shell(enable_scroll=enable_scroll)
-    widget = shell.widget
-    outer = shell.content_layout
+    widget, outer = create_right_dock_shell()
 
     seg_box = QGroupBox("Segmentation")
     seg_layout = QVBoxLayout(seg_box)

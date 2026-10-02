@@ -82,10 +82,9 @@ def run_background_task(
 
     worker = create_worker(_guarded(func), _ignore_errors=True)
 
-    progress_bar = cancelable_progress(
-        total=total, desc=desc, cancel_callback=worker.quit
-    )
-
+    progress_bar = cancelable_progress(total=total, desc=desc)
+    # napari only calls cancel_callback when iterating the bar, which this manually
+    # updated bar never is, so its Cancel button is pointed at the worker directly.
     progress_bar.cancel = worker.quit
 
     def finish() -> None:

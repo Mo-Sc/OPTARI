@@ -14,19 +14,10 @@ def resize_img(image: np.ndarray, shape: tuple[int, int]) -> np.ndarray:
     return cv2.resize(image, shape[::-1], interpolation=cv2.INTER_LINEAR)
 
 
-def normalize_img(
-    image: np.ndarray, mean: float | None = None, std: float | None = None
-) -> np.ndarray:
-    """
-    z score normalization, with optional pre-computed mean and std
-    """
+def normalize_img(image: np.ndarray) -> np.ndarray:
+    """z-score normalization over the frame."""
     image = image.astype(np.float32)
-    if mean is None or std is None:
-        mean = image.mean()
-        std = image.std()
-
-    image = (image - mean) / std
-    return image
+    return (image - image.mean()) / image.std()
 
 
 # --- processing functions for segmentation masks ---
