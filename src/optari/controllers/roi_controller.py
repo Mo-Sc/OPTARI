@@ -323,8 +323,6 @@ class RoiController(TaskControllerBase):
 
     def _set_saved_table_view(self) -> None:
         """Push the saved rows into the widget and gate the actions that need rows."""
-        if self.optari_controller.roi is None:
-            return
         self.optari_controller.roi.saved_table.value = (
             self.saved_table.visible_rows()
         )
@@ -333,8 +331,6 @@ class RoiController(TaskControllerBase):
         self.optari_controller.roi.xlsx_button.setEnabled(has_rows)
 
     def _set_live_table_selection(self, selected_rows: list[int]) -> None:
-        if self.optari_controller.roi is None:
-            return
         table = self.optari_controller.roi.live_table.native
         with QSignalBlocker(table):
             table.clearSelection()
@@ -350,11 +346,7 @@ class RoiController(TaskControllerBase):
     def on_shapes_selection_changed(self, event=None) -> None:
         """Sync shapes selection -> live table selection on selection changes only."""
         shapes = self.optari_controller.shapes_layer
-        if (
-            self._syncing
-            or shapes is None
-            or self.optari_controller.roi is None
-        ):
+        if self._syncing or shapes is None:
             return
         selected = list(shapes.selected_data)
         self._syncing = True
@@ -368,11 +360,7 @@ class RoiController(TaskControllerBase):
     def on_live_table_selection_changed(self) -> None:
         """Sync live table row selection → shapes layer selection."""
         shapes = self.optari_controller.shapes_layer
-        if (
-            self._syncing
-            or shapes is None
-            or self.optari_controller.roi is None
-        ):
+        if self._syncing or shapes is None:
             return
         # Never write selection back into napari during shape drag/select interactions.
         if getattr(shapes, "_is_moving", False) or getattr(
@@ -409,9 +397,6 @@ class RoiController(TaskControllerBase):
     def on_intensity_settings_changed(self, _=None) -> None:
         """Read the intensity filter and measure."""
         annotation = self.optari_controller.annotation
-        if annotation is None:
-            return
-
         if annotation.roi_exclusion_box.isChecked():
             self.intensity_clamp = IntensityClamp(
                 minimum=parse_float_input(
@@ -433,12 +418,8 @@ class RoiController(TaskControllerBase):
 
         self.update_live_table()
 
-    def _signal_bindings(self) -> list[tuple[object, object]]:
-        """Every (signal, handler) pair this controller owns.
-
-        Declared once and walked in both directions, so a new binding cannot be
-        connected but forgotten on teardown
-        """
+    def _signal_bindings(self) -> list[tuple[object, Callable]]:
+        """ROI dock and annotation dock signals."""
         roi = self.optari_controller.roi
         ann = self.optari_controller.annotation
         intensity_edits = (
@@ -498,20 +479,6 @@ class RoiController(TaskControllerBase):
             ),
             (ann.place_roi_button.clicked, self.on_place_roi_clicked),
         ]
-
-    def bind_events(self) -> None:
-        """Connect ROI and annotation dock signals."""
-        for signal, handler in self._signal_bindings():
-            signal.connect(handler)
-
-    def unbind_events(self) -> None:
-        """Disconnect ROI and annotation dock signals."""
-        for signal, handler in self._signal_bindings():
-
-            try:
-                signal.disconnect(handler)
-            except TypeError:
-                logger.debug("ROI signal was not connected", exc_info=True)
 
     def _refresh_shape_display(self) -> None:
         """Recolor and relabel ROI shapes from their records."""
@@ -586,9 +553,6 @@ class RoiController(TaskControllerBase):
         Falls back to an empty table when there is no shapes layer or no active
         reconstruction layer to measure against.
         """
-        if self.optari_controller.roi is None:
-            return
-
         if self.optari_controller.shapes_layer is None:
             self.optari_controller.roi.live_table.value = pd.DataFrame(
                 columns=visible_feature_columns()
@@ -658,10 +622,7 @@ class RoiController(TaskControllerBase):
 
     def _selected_roi_ids(self) -> set[int]:
         """roi_ids of the ROIs selected in the viewer, empty (with a reason) if none."""
-        if (
-            self.optari_controller.roi is None
-            or self.optari_controller.shapes_layer is None
-        ):
+        if self.optari_controller.shapes_layer is None:
             return set()
 
         selected = list(self.optari_controller.shapes_layer.selected_data)
@@ -675,15 +636,13 @@ class RoiController(TaskControllerBase):
         }
 
     def _save_scope(self) -> MeasureScope:
-        """The "include all ..." checkboxes, all off without an annotation dock.
+        """The annotation dock's "include all ..." checkboxes as a scope.
 
         ``follow_track`` decides which record "Include all frames" uses on each frame:
         the one the user selected, reused everywhere (default), or that ROI's tracked
         group's own record per frame, skipping a frame the track has no record on.
         """
         annotation = self.optari_controller.annotation
-        if annotation is None:
-            return MeasureScope()
         return MeasureScope(
             all_layers=annotation.include_all_layers_checkbox.isChecked(),
             all_frames=annotation.include_all_frames_checkbox.isChecked(),
@@ -845,9 +804,6 @@ class RoiController(TaskControllerBase):
 
     def on_delete_saved_clicked(self, event=None) -> None:
         """Delete the selected rows from the Saved Analysis table."""
-        if self.optari_controller.roi is None:
-            return
-
         selection_model = (
             self.optari_controller.roi.saved_table.native.selectionModel()
         )
@@ -863,9 +819,6 @@ class RoiController(TaskControllerBase):
 
     def on_xlsx_export_clicked(self, event=None) -> None:
         """Prompt for a destination and export the Saved Analysis table to XLSX."""
-        if self.optari_controller.roi is None:
-            return
-
         filename = export_roi_table_to_xlsx(self.saved_table.rows)
         if filename is None:
             return
@@ -875,9 +828,6 @@ class RoiController(TaskControllerBase):
 
     def on_import_clicked(self, event=None) -> None:
         """Append a previously exported table to the saved table."""
-        if self.optari_controller.roi is None:
-            return
-
         try:
             imported = import_roi_table_from_xlsx()
         except ValueError as exc:
@@ -1032,8 +982,6 @@ class RoiController(TaskControllerBase):
         dims.current_step = (int(frame_idx), *dims.current_step[1:])
 
     def _refresh_roi_presets_ui(self) -> None:
-        if self.optari_controller.annotation is None:
-            return
         try:
             names = [
                 preset.name for preset in self._roi_preset_store.list_presets()
@@ -1052,8 +1000,6 @@ class RoiController(TaskControllerBase):
 
     def _update_remove_roi_preset_button_state(self) -> None:
         """Update remove-preset button enabled state based on the current list selection."""
-        if self.optari_controller.annotation is None:
-            return
         ann = self.optari_controller.annotation
         ann.remove_roi_preset_button.setEnabled(
             ann.roi_presets_list.currentItem() is not None
@@ -1072,10 +1018,9 @@ class RoiController(TaskControllerBase):
         selected = list(self.optari_controller.shapes_layer.selected_data)
         if len(selected) == 0:
             logger.info("Save ROI preset clicked with no selected ROI")
-            if self.optari_controller.annotation is not None:
-                self.optari_controller.annotation.roi_presets_description_label.setText(
-                    "No ROI selected in viewer."
-                )
+            self.optari_controller.annotation.roi_presets_description_label.setText(
+                "No ROI selected in viewer."
+            )
             return
 
         roi_idx = int(selected[0])
@@ -1126,8 +1071,6 @@ class RoiController(TaskControllerBase):
 
     def on_remove_roi_preset_clicked(self, event=None) -> None:
         """Delete the preset currently selected in the presets list."""
-        if self.optari_controller.annotation is None:
-            return
         item = self.optari_controller.annotation.roi_presets_list.currentItem()
         if item is None:
             return
@@ -1336,8 +1279,6 @@ class RoiController(TaskControllerBase):
 
     def on_roi_preset_item_selected(self, item) -> None:
         """Preselect the placement mode for *item*'s preset, and show its description and tissue class."""
-        if self.optari_controller.annotation is None:
-            return
         try:
             preset = self._roi_preset_store.get(item.text())
         except (TypeError, ValueError, OSError) as exc:
@@ -1371,8 +1312,6 @@ class RoiController(TaskControllerBase):
 
     def refresh_ui(self) -> None:
         """Refresh ROI controls after scan or active-layer state changes."""
-        if self.optari_controller.roi is None:
-            return
         if self.optari_controller.shapes_layer is None:
             self.optari_controller.roi.save_button.setEnabled(False)
             self.update_live_table()

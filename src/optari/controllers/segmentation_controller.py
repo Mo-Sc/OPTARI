@@ -4,7 +4,7 @@ Labels layer, and automatic ROI-from-mask placement."""
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
@@ -177,59 +177,34 @@ class SegmentationController(TaskControllerBase):
         self._pending_roi_class_id: int | None = None
         self.preset_store = PresetStore(get_user_segmentation_presets_dir())
 
-    def bind_events(self) -> None:
-        """Connect segmentation dock signals."""
-        self.optari_controller.segmentation.segmentation_model_combo.currentIndexChanged.connect(
-            self.on_segmentation_model_changed
-        )
-        self.optari_controller.segmentation.select_all_classes_button.clicked.connect(
-            self.on_segmentation_select_all_classes_clicked
-        )
-        self.optari_controller.segmentation.clear_classes_button.clicked.connect(
-            self.on_segmentation_clear_classes_clicked
-        )
-        self.optari_controller.segmentation.generate_roi_button.clicked.connect(
-            self.on_generate_roi_from_mask_clicked
-        )
-        self.optari_controller.segmentation.generate_tissue_segmentation_button.clicked.connect(
-            self.on_generate_tissue_segmentation_clicked
-        )
-        self.optari_controller.segmentation.preset_combo.currentIndexChanged.connect(
-            self.on_preset_changed
-        )
-        self.optari_controller.segmentation.save_preset_button.clicked.connect(
-            self.on_save_preset_clicked
-        )
-        self.optari_controller.segmentation.remove_preset_button.clicked.connect(
-            self.on_remove_preset_clicked
-        )
-
-    def unbind_events(self) -> None:
-        """Disconnect segmentation dock signals."""
-        self.optari_controller.segmentation.segmentation_model_combo.currentIndexChanged.disconnect(
-            self.on_segmentation_model_changed
-        )
-        self.optari_controller.segmentation.select_all_classes_button.clicked.disconnect(
-            self.on_segmentation_select_all_classes_clicked
-        )
-        self.optari_controller.segmentation.clear_classes_button.clicked.disconnect(
-            self.on_segmentation_clear_classes_clicked
-        )
-        self.optari_controller.segmentation.generate_roi_button.clicked.disconnect(
-            self.on_generate_roi_from_mask_clicked
-        )
-        self.optari_controller.segmentation.generate_tissue_segmentation_button.clicked.disconnect(
-            self.on_generate_tissue_segmentation_clicked
-        )
-        self.optari_controller.segmentation.preset_combo.currentIndexChanged.disconnect(
-            self.on_preset_changed
-        )
-        self.optari_controller.segmentation.save_preset_button.clicked.disconnect(
-            self.on_save_preset_clicked
-        )
-        self.optari_controller.segmentation.remove_preset_button.clicked.disconnect(
-            self.on_remove_preset_clicked
-        )
+    def _signal_bindings(self) -> list[tuple[object, Callable]]:
+        """Segmentation dock signals."""
+        dock = self.optari_controller.segmentation
+        return [
+            (
+                dock.segmentation_model_combo.currentIndexChanged,
+                self.on_segmentation_model_changed,
+            ),
+            (
+                dock.select_all_classes_button.clicked,
+                self.on_segmentation_select_all_classes_clicked,
+            ),
+            (
+                dock.clear_classes_button.clicked,
+                self.on_segmentation_clear_classes_clicked,
+            ),
+            (
+                dock.generate_roi_button.clicked,
+                self.on_generate_roi_from_mask_clicked,
+            ),
+            (
+                dock.generate_tissue_segmentation_button.clicked,
+                self.on_generate_tissue_segmentation_clicked,
+            ),
+            (dock.preset_combo.currentIndexChanged, self.on_preset_changed),
+            (dock.save_preset_button.clicked, self.on_save_preset_clicked),
+            (dock.remove_preset_button.clicked, self.on_remove_preset_clicked),
+        ]
 
     def initialize_ui(self) -> None:
         """Initialize model combo and populate default classes once."""
@@ -270,9 +245,6 @@ class SegmentationController(TaskControllerBase):
     def refresh_ui(self) -> None:
         """Refresh controls that require scan or segmentation output."""
         dock = self.optari_controller.segmentation
-        if dock is None:
-            return
-
         has_us_layer = (
             self.optari_controller.pa_data is not None
             and self.optari_controller.active_us_layer is not None
@@ -315,9 +287,6 @@ class SegmentationController(TaskControllerBase):
     def selected_segmentation_class_ids(self) -> set[int]:
         """Return the class IDs checked in the segmentation classes list."""
         seg_dock = self.optari_controller.segmentation
-        if seg_dock is None:
-            return set()
-
         class_ids: set[int] = set()
         for i in range(seg_dock.segmentation_classes_list.count()):
             item = seg_dock.segmentation_classes_list.item(i)
@@ -389,9 +358,6 @@ class SegmentationController(TaskControllerBase):
 
     def on_segmentation_model_changed(self) -> None:
         """Apply the model picked in the combo and repopulate the class list."""
-        if self.optari_controller.segmentation is None:
-            return
-
         dock = self.optari_controller.segmentation
         model_id = dock.segmentation_model_combo.currentData()
         if model_id is None:
@@ -576,9 +542,6 @@ class SegmentationController(TaskControllerBase):
     def set_all_segmentation_classes_checked(self, checked: bool) -> None:
         """Check or uncheck every entry in the segmentation classes list."""
         seg_dock = self.optari_controller.segmentation
-        if seg_dock is None:
-            return
-
         check_state = (
             Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked
         )
@@ -598,9 +561,6 @@ class SegmentationController(TaskControllerBase):
     def on_generate_roi_from_mask_clicked(self) -> None:
         """Generate one ROI from the selected frame of the segmentation mask."""
         seg_dock = self.optari_controller.segmentation
-        if seg_dock is None:
-            return
-
         result = self.active_seg_mask_2d()
         if result is None:
             seg_dock.status_label.setText("No segmentation mask found")
@@ -794,8 +754,6 @@ class SegmentationController(TaskControllerBase):
     def _populate_roi_class_combo(self, mask, class_names: dict) -> None:
         """Offer only the classes the output mask actually contains."""
         seg_dock = self.optari_controller.segmentation
-        if seg_dock is None:
-            return
         seg_dock.roi_class_id_combo.clear()
         for class_id in sorted(int(c) for c in np.unique(mask)):
             seg_dock.roi_class_id_combo.addItem(
@@ -812,5 +770,4 @@ class SegmentationController(TaskControllerBase):
 
     def on_generate_tissue_segmentation_clicked(self) -> None:
         """Run segmentation from the dock's Run button."""
-        if self.optari_controller.segmentation is not None:
-            self.run_from_ui(self.optari_controller.segmentation)
+        self.run_from_ui(self.optari_controller.segmentation)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import datetime
 from functools import partial
@@ -202,51 +202,25 @@ class ReconstructionController(TaskControllerBase):
         self._applied_settings: dict = {}
         self.preset_store = PresetStore(get_user_reconstruction_presets_dir())
 
-    def bind_events(self) -> None:
-        """Connect reconstruction dock signals."""
+    def _signal_bindings(self) -> list[tuple[object, Callable]]:
+        """Reconstruction dock signals."""
         dock = self.optari_controller.reconstruction
-        dock.preset_combo.currentIndexChanged.connect(self.on_preset_changed)
-        dock.all_settings_button.toggled.connect(self.on_all_settings_toggled)
-        dock.settings_edit.textChanged.connect(self.on_settings_text_changed)
-        dock.apply_preset_button.clicked.connect(self.on_apply_preset_clicked)
-        dock.save_preset_button.clicked.connect(self.on_save_preset_clicked)
-        dock.remove_preset_button.clicked.connect(
-            self.on_remove_preset_clicked
-        )
-        dock.speed_of_sound_slider.valueChanged.connect(
-            self.on_speed_of_sound_changed
-        )
-        dock.run_button.clicked.connect(self.on_run_reconstruction_clicked)
-
-    def unbind_events(self) -> None:
-        """Disconnect reconstruction dock signals."""
-        dock = self.optari_controller.reconstruction
-        dock.preset_combo.currentIndexChanged.disconnect(
-            self.on_preset_changed
-        )
-        dock.all_settings_button.toggled.disconnect(
-            self.on_all_settings_toggled
-        )
-        dock.settings_edit.textChanged.disconnect(
-            self.on_settings_text_changed
-        )
-        dock.apply_preset_button.clicked.disconnect(
-            self.on_apply_preset_clicked
-        )
-        dock.save_preset_button.clicked.disconnect(self.on_save_preset_clicked)
-        dock.remove_preset_button.clicked.disconnect(
-            self.on_remove_preset_clicked
-        )
-        dock.speed_of_sound_slider.valueChanged.disconnect(
-            self.on_speed_of_sound_changed
-        )
-        dock.run_button.clicked.disconnect(self.on_run_reconstruction_clicked)
+        return [
+            (dock.preset_combo.currentIndexChanged, self.on_preset_changed),
+            (dock.all_settings_button.toggled, self.on_all_settings_toggled),
+            (dock.settings_edit.textChanged, self.on_settings_text_changed),
+            (dock.apply_preset_button.clicked, self.on_apply_preset_clicked),
+            (dock.save_preset_button.clicked, self.on_save_preset_clicked),
+            (dock.remove_preset_button.clicked, self.on_remove_preset_clicked),
+            (
+                dock.speed_of_sound_slider.valueChanged,
+                self.on_speed_of_sound_changed,
+            ),
+            (dock.run_button.clicked, self.on_run_reconstruction_clicked),
+        ]
 
     def initialize_ui(self) -> None:
         """Populate the preset combo once."""
-        if self.optari_controller.reconstruction is None:
-            return
-
         dock = self.optari_controller.reconstruction
 
         populate_preset_combo(dock.preset_combo, self.preset_store)
@@ -260,9 +234,6 @@ class ReconstructionController(TaskControllerBase):
         """Refresh scan-dependent controls. Reconstruction runs off the loaded scan, not a
         layer. There is no "Source" to pick, so the only thing to reflect here is whether a
         scan is loaded at all."""
-        if self.optari_controller.reconstruction is None:
-            return
-
         dock = self.optari_controller.reconstruction
         pa_data = self.optari_controller.pa_data
 
@@ -277,9 +248,6 @@ class ReconstructionController(TaskControllerBase):
 
     def on_preset_changed(self) -> None:
         """Load the selected preset into the in-memory settings editor."""
-        if self.optari_controller.reconstruction is None:
-            return
-
         dock = self.optari_controller.reconstruction
         preset_path = dock.preset_combo.currentData()
         if preset_path is None:
@@ -303,9 +271,6 @@ class ReconstructionController(TaskControllerBase):
 
     def on_all_settings_toggled(self, checked: bool) -> None:
         """Show or hide the in-memory JSON settings editor."""
-        if self.optari_controller.reconstruction is None:
-            return
-
         dock = self.optari_controller.reconstruction
         dock.settings_edit.setVisible(checked)
         dock.apply_preset_button.setVisible(checked)
@@ -321,9 +286,6 @@ class ReconstructionController(TaskControllerBase):
 
     def on_apply_preset_clicked(self) -> None:
         """Validate and apply the edited JSON settings in memory."""
-        if self.optari_controller.reconstruction is None:
-            return
-
         dock = self.optari_controller.reconstruction
         try:
             settings_dict = json.loads(dock.settings_edit.toPlainText())
@@ -344,9 +306,6 @@ class ReconstructionController(TaskControllerBase):
 
     def on_remove_preset_clicked(self) -> None:
         """Remove the selected reconstruction preset."""
-        if self.optari_controller.reconstruction is None:
-            return
-
         dock = self.optari_controller.reconstruction
         preset_path = dock.preset_combo.currentData()
         if preset_path is None:
@@ -368,9 +327,6 @@ class ReconstructionController(TaskControllerBase):
 
     def on_save_preset_clicked(self) -> None:
         """Save the current JSON editor contents as a new user preset."""
-        if self.optari_controller.reconstruction is None:
-            return
-
         dock = self.optari_controller.reconstruction
         try:
             settings_dict = json.loads(dock.settings_edit.toPlainText())
@@ -420,8 +376,6 @@ class ReconstructionController(TaskControllerBase):
 
     def on_speed_of_sound_changed(self, value: int) -> None:
         """Keep the speed of sound label in sync with the slider."""
-        if self.optari_controller.reconstruction is None:
-            return
         dock = self.optari_controller.reconstruction
         dock.speed_of_sound_value_label.setText(f"{value} m/s")
 
@@ -560,5 +514,4 @@ class ReconstructionController(TaskControllerBase):
 
     def on_run_reconstruction_clicked(self) -> None:
         """Run reconstruction from the dock's Run button."""
-        if self.optari_controller.reconstruction is not None:
-            self.run_from_ui(self.optari_controller.reconstruction)
+        self.run_from_ui(self.optari_controller.reconstruction)

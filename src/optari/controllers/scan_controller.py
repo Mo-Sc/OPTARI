@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 import re
@@ -64,46 +65,19 @@ class ScanController(TaskControllerBase):
             )
         )
 
-    def bind_events(self) -> None:
-        """Connect scan browser signals."""
-        self.optari_controller.scan_browser.browse_button.clicked.connect(
-            self.on_browse_study_clicked
-        )
-        self.optari_controller.scan_browser.scans_list.currentRowChanged.connect(
-            self.on_scan_selected
-        )
-        self.optari_controller.scan_browser.hdf5_button.clicked.connect(
-            self.on_hdf5_export_clicked
-        )
-        self.optari_controller.scan_browser.ipasc_button.clicked.connect(
-            self.on_ipasc_export_clicked
-        )
-        self.optari_controller.scan_browser.export_layer_button.clicked.connect(
-            self._export_view_handler
-        )
-
-    def unbind_events(self) -> None:
-        """Disconnect scan browser signals."""
-        self.optari_controller.scan_browser.browse_button.clicked.disconnect(
-            self.on_browse_study_clicked
-        )
-        self.optari_controller.scan_browser.scans_list.currentRowChanged.disconnect(
-            self.on_scan_selected
-        )
-        self.optari_controller.scan_browser.hdf5_button.clicked.disconnect(
-            self.on_hdf5_export_clicked
-        )
-        self.optari_controller.scan_browser.ipasc_button.clicked.disconnect(
-            self.on_ipasc_export_clicked
-        )
-        self.optari_controller.scan_browser.export_layer_button.clicked.disconnect(
-            self._export_view_handler
-        )
+    def _signal_bindings(self) -> list[tuple[object, Callable]]:
+        """Scan browser signals."""
+        dock = self.optari_controller.scan_browser
+        return [
+            (dock.browse_button.clicked, self.on_browse_study_clicked),
+            (dock.scans_list.currentRowChanged, self.on_scan_selected),
+            (dock.hdf5_button.clicked, self.on_hdf5_export_clicked),
+            (dock.ipasc_button.clicked, self.on_ipasc_export_clicked),
+            (dock.export_layer_button.clicked, self._export_view_handler),
+        ]
 
     def refresh_ui(self) -> None:
         """Lock the scan browser while a task runs, and gate HDF5 export on a scan being loaded."""
-        if self.optari_controller.scan_browser is None:
-            return
         self.optari_controller.scan_browser.widget.setEnabled(
             not self.optari_controller.task_running
         )
@@ -183,8 +157,7 @@ class ScanController(TaskControllerBase):
             return
 
         # Not a real path yet (e.g. in tests). Leave UI usable.
-        if self.optari_controller.scan_browser is not None:
-            self.optari_controller.scan_browser.set_folder(path)
+        self.optari_controller.scan_browser.set_folder(path)
 
     def on_browse_study_clicked(self) -> None:
         """Prompt for a study folder or HDF5 scan file."""
@@ -224,18 +197,13 @@ class ScanController(TaskControllerBase):
         folder = Path(folder)
         self.optari_controller._scans = self.discover_scans(folder)
 
-        if self.optari_controller.scan_browser is not None:
-            self.optari_controller.scan_browser.set_folder(folder)
-            scan_items = [
-                (p, info) for p, info in self.optari_controller._scans.items()
-            ]
-            self.optari_controller.scan_browser.set_scans(scan_items)
+        self.optari_controller.scan_browser.set_folder(folder)
+        self.optari_controller.scan_browser.set_scans(
+            list(self.optari_controller._scans.items())
+        )
 
         # Auto-select first scan if available.
-        if (
-            self.optari_controller._scans
-            and self.optari_controller.scan_browser is not None
-        ):
+        if self.optari_controller._scans:
             selected_scan = selected_scan or next(
                 iter(self.optari_controller._scans)
             )

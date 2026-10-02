@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from functools import partial
 from math import ceil
@@ -287,50 +287,24 @@ class UnmixingController(TaskControllerBase):
         super().__init__(parent_controller)
         self.preset_store = PresetStore(get_user_unmixing_presets_dir())
 
-    def bind_events(self) -> None:
-        """Connect unmixing dock signals."""
-        self.optari_controller.unmixing.preset_combo.currentIndexChanged.connect(
-            self.on_preset_changed
-        )
-        self.optari_controller.unmixing.chromophores_list.itemChanged.connect(
-            self.on_chromophores_changed
-        )
-        self.optari_controller.unmixing.select_all_wavelengths_button.clicked.connect(
-            self.on_select_all_wavelengths_clicked
-        )
-        self.optari_controller.unmixing.clear_wavelengths_button.clicked.connect(
-            self.on_clear_wavelengths_clicked
-        )
-        self.optari_controller.unmixing.run_button.clicked.connect(
-            self.on_run_unmixing_clicked
-        )
-        self.optari_controller.unmixing.save_preset_button.clicked.connect(
-            self.on_save_preset_clicked
-        )
-        self.optari_controller.unmixing.remove_preset_button.clicked.connect(
-            self.on_remove_preset_clicked
-        )
-
-    def unbind_events(self) -> None:
-        """Disconnect unmixing dock signals."""
+    def _signal_bindings(self) -> list[tuple[object, Callable]]:
+        """Unmixing dock signals."""
         dock = self.optari_controller.unmixing
-        dock.preset_combo.currentIndexChanged.disconnect(
-            self.on_preset_changed
-        )
-        dock.chromophores_list.itemChanged.disconnect(
-            self.on_chromophores_changed
-        )
-        dock.select_all_wavelengths_button.clicked.disconnect(
-            self.on_select_all_wavelengths_clicked
-        )
-        dock.clear_wavelengths_button.clicked.disconnect(
-            self.on_clear_wavelengths_clicked
-        )
-        dock.run_button.clicked.disconnect(self.on_run_unmixing_clicked)
-        dock.save_preset_button.clicked.disconnect(self.on_save_preset_clicked)
-        dock.remove_preset_button.clicked.disconnect(
-            self.on_remove_preset_clicked
-        )
+        return [
+            (dock.preset_combo.currentIndexChanged, self.on_preset_changed),
+            (dock.chromophores_list.itemChanged, self.on_chromophores_changed),
+            (
+                dock.select_all_wavelengths_button.clicked,
+                self.on_select_all_wavelengths_clicked,
+            ),
+            (
+                dock.clear_wavelengths_button.clicked,
+                self.on_clear_wavelengths_clicked,
+            ),
+            (dock.run_button.clicked, self.on_run_unmixing_clicked),
+            (dock.save_preset_button.clicked, self.on_save_preset_clicked),
+            (dock.remove_preset_button.clicked, self.on_remove_preset_clicked),
+        ]
 
     @staticmethod
     def _set_checked_by_text(list_widget, selected: set[str]) -> None:
@@ -351,9 +325,6 @@ class UnmixingController(TaskControllerBase):
 
     def initialize_ui(self) -> None:
         """Initialize preset, chromophore, and wavelength controls once."""
-        if self.optari_controller.unmixing is None:
-            return
-
         dock = self.optari_controller.unmixing
 
         populate_preset_combo(dock.preset_combo, self.preset_store)
@@ -370,9 +341,6 @@ class UnmixingController(TaskControllerBase):
 
     def on_save_preset_clicked(self) -> None:
         """Save the current unmixing controls as a new user preset."""
-        if self.optari_controller.unmixing is None:
-            return
-
         dock = self.optari_controller.unmixing
         selected_wavelengths = [
             int(dock.wavelengths_list.item(i).data(Qt.UserRole))
@@ -410,9 +378,6 @@ class UnmixingController(TaskControllerBase):
 
     def on_remove_preset_clicked(self) -> None:
         """Remove the selected unmixing preset."""
-        if self.optari_controller.unmixing is None:
-            return
-
         dock = self.optari_controller.unmixing
         preset_path = dock.preset_combo.currentData()
         if preset_path is None:
@@ -434,9 +399,6 @@ class UnmixingController(TaskControllerBase):
 
     def refresh_ui(self) -> None:
         """Refresh source-dependent controls from the active layer."""
-        if self.optari_controller.unmixing is None:
-            return
-
         dock = self.optari_controller.unmixing
         active_recon_layer = self.optari_controller.active_recon_layer
 
@@ -477,8 +439,6 @@ class UnmixingController(TaskControllerBase):
 
     def on_select_all_wavelengths_clicked(self) -> None:
         """Select all source wavelengths in the list widget."""
-        if self.optari_controller.unmixing is None:
-            return
         for i in range(
             self.optari_controller.unmixing.wavelengths_list.count()
         ):
@@ -488,8 +448,6 @@ class UnmixingController(TaskControllerBase):
 
     def on_clear_wavelengths_clicked(self) -> None:
         """Clear all source wavelength selections in the list widget."""
-        if self.optari_controller.unmixing is None:
-            return
         for i in range(
             self.optari_controller.unmixing.wavelengths_list.count()
         ):
@@ -499,9 +457,6 @@ class UnmixingController(TaskControllerBase):
 
     def on_preset_changed(self) -> None:
         """Load selected preset values into the unmixing controls."""
-        if self.optari_controller.unmixing is None:
-            return
-
         dock = self.optari_controller.unmixing
         preset_path = dock.preset_combo.currentData()
         if preset_path is None:
@@ -555,9 +510,6 @@ class UnmixingController(TaskControllerBase):
         Enable THb and sO2 options only when Hb and HbO2 are selected.
         so2 is activated by default
         """
-        if self.optari_controller.unmixing is None:
-            return
-
         dock = self.optari_controller.unmixing
         selected = {
             dock.chromophores_list.item(i).text()
@@ -783,5 +735,4 @@ class UnmixingController(TaskControllerBase):
 
     def on_run_unmixing_clicked(self) -> None:
         """Run unmixing from the dock's Run button."""
-        if self.optari_controller.unmixing is not None:
-            self.run_from_ui(self.optari_controller.unmixing)
+        self.run_from_ui(self.optari_controller.unmixing)

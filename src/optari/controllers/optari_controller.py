@@ -109,10 +109,6 @@ class OptariController:
         self._connect_events()
         self.register_shortcuts()
 
-        if self.scan_browser is not None:
-            # Show an empty folder field instead of defaulting to '.'
-            self.scan_browser.folder_lineedit.setText("")
-
         self.refresh_all()
 
     def shutdown(self) -> None:
@@ -177,18 +173,6 @@ class OptariController:
         self.shapes_layer = None
         self.active_recon_layer = None
         self.active_us_layer = None
-
-        # Clear widget references
-        self.info = None
-        self.scan_browser = None
-        self.annotation = None
-        self.segmentation = None
-        self.unmixing = None
-        self.reconstruction = None
-        self.roi = None
-        self.time_analysis = None
-        self.histograms = None
-        self.spectrum = None
 
         logger.info("OptariController: Shutdown complete")
 
@@ -492,8 +476,6 @@ class OptariController:
         )
 
     def update_info_labels(self, event=None) -> None:
-        if self.info is None:
-            return
         # Scan, IPASC and clinical metadata need no layer, only the Layer tab does.
         self.info.metadata_button.setEnabled(self.pa_data is not None)
         if self.active_recon_layer is None:
