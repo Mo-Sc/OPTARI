@@ -4,7 +4,7 @@ Labels layer, and automatic ROI-from-mask placement."""
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
@@ -15,6 +15,7 @@ from qtpy.QtCore import Qt
 
 from optari.patato_bridge import segmentation_from_scan
 from optari.segmentation.segmenter import (
+    MASK_DTYPE,
     create_segmenter,
     load_model_registry,
     SegmentationModelConfig,
@@ -25,7 +26,7 @@ from optari.segmentation.segmentation_presets import (
 from optari.utils.viewer import selected_frame_idx
 from optari.utils.tasks import BackgroundStep
 from optari.controllers.base import TaskControllerBase
-from optari.roi import Ellipse, Rectangle, Polygon, ROIPlacementConfig
+from optari.roi import ROIPlacementConfig, roi_verts_from_mask
 from optari.config import settings
 from optari.utils.presets import PresetStore
 from optari.utils.setup import (
@@ -52,13 +53,12 @@ def _segment_frames(
     n_channels: int,
     frame_idx: int | None,
     us_shape: tuple[int, ...],
-) -> Iterator[None]:
+) -> Generator[None, None, tuple[np.ndarray, dict[int, str], list[int]]]:
     """Segment *us_data* one frame at a time, yielding once per finished frame.
 
-    Runs in a worker thread, so it must not touch Qt or napari. Segmenter.predict never
-    batches multiple frames into one inference call regardless of chunk size (each frame is
-    a separate ONNX session.run). The mask post-processing (class filtering, channel repeat, frame-padding) that used to
-    run on the main thread after predict() is done here too
+    Runs in a worker thread, so it must not touch Qt or napari. Each frame is a separate
+    ONNX session.run, so yielding per frame costs nothing. Class filtering, the channel
+    repeat and frame padding happen here too, off the main thread.
 
     Returns the mask, the class names and the positions in *us_data* of blank frames, which
     got an empty mask
@@ -70,15 +70,14 @@ def _segment_frames(
 
     class_names = results[0].class_names
     filtered = [
-        np.where(np.isin(r.seg, list(selected_ids)), r.seg, 0).astype(np.int32)
-        for r in results
+        np.where(np.isin(r.seg, list(selected_ids)), r.seg, 0) for r in results
     ]
     mask_3d = np.stack(filtered)
     # Repeat across channel dimension for correct napari display;
     # segmenter output is (nframes, H, W) but napari expects (nframes, n_channels, H, W)
     mask = np.repeat(mask_3d[:, np.newaxis], n_channels, axis=1)
     if frame_idx is not None:
-        full_mask = np.zeros(us_shape, dtype=np.int32)
+        full_mask = np.zeros(us_shape, dtype=MASK_DTYPE)
         full_mask[frame_idx] = mask[0]
         mask = full_mask
 
@@ -592,11 +591,6 @@ class SegmentationController(TaskControllerBase):
             height_mm=height_mm,
             depth_mm=top_margin_mm or 0.0,
         )
-        shape = {
-            "ellipse": Ellipse,
-            "rectangle": Rectangle,
-            "polygon": Polygon,
-        }[shape_type](config)
 
         frame_idx = selected_frame_idx(
             self.viewer, np.asarray(seg_layer.data).shape[0]
@@ -609,14 +603,14 @@ class SegmentationController(TaskControllerBase):
             return
 
         try:
-            verts = shape.to_napari_verts_world(
-                class_mask=class_mask, sy=sy, sx=sx, ty=ty, tx=tx
+            verts = roi_verts_from_mask(
+                shape_type, class_mask, config, sy=sy, sx=sx, ty=ty, tx=tx
             )
         except ValueError as exc:
             seg_dock.status_label.setText(str(exc))
             return
 
-        self.optari_controller.roi_ctrl.add_shape(verts, shape.shape_type)
+        self.optari_controller.roi_ctrl.add_shape(verts, shape_type)
         seg_dock.status_label.setText(
             f"ROI generated from class {class_id} in frame {frame_idx}"
         )

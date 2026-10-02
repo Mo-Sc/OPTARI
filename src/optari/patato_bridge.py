@@ -15,6 +15,7 @@ import patato as pat  # type: ignore[import]
 from optari.config import settings
 from optari.roi.roi_geometry import RoiGeometry
 from optari.roi.roi_records import ROIRecord, new_roi_group_uid
+from optari.segmentation.segmenter import MASK_DTYPE
 
 logger = logging.getLogger(__name__)
 
@@ -328,7 +329,7 @@ def segmentation_from_scan(pa_data: "pat.PAData") -> dict | None:
         )
         return None
     meta = json.loads(dataset.attrs["optari_meta"])
-    meta["mask"] = np.asarray(seg, dtype=np.int32)  # (n_frames, H, W)
+    meta["mask"] = np.asarray(seg, dtype=MASK_DTYPE)  # (n_frames, H, W)
     meta["class_names"] = {int(k): v for k, v in meta["class_names"].items()}
     return meta
 

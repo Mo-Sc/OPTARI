@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from datetime import datetime
 from functools import partial
@@ -162,7 +162,7 @@ def _resolve_deepmb_model(settings_dict: dict, model_path: Path) -> None:
 
 def _reconstruct_frames(
     settings: dict, pa_data, speed_of_sound: float, chunk_frames: int
-) -> Iterator[None]:
+) -> Generator[None, None, tuple[pat.ImageSequence, dict]]:
     """Preprocess and reconstruct *pa_data* in frame chunks, yielding once per finished chunk.
 
     Runs in a worker thread, so it must not touch Qt or napari. The preprocessing ->

@@ -10,7 +10,6 @@ from __future__ import annotations
 import logging
 import json
 from abc import ABC, abstractmethod
-from collections.abc import Callable
 from dataclasses import dataclass
 
 import numpy as np
@@ -32,6 +31,8 @@ from optari.segmentation.processing_utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+MASK_DTYPE = np.uint8
 
 
 @dataclass(frozen=True)
@@ -75,6 +76,11 @@ def load_model_registry() -> dict[str, SegmentationModelConfig]:
     for item in model_config["models"]:
         model_id = str(item["id"])
         class_names = {int(k): str(v) for k, v in item["class_names"].items()}
+        if max(class_names) > np.iinfo(MASK_DTYPE).max:
+            raise ValueError(
+                f"Segmentation model '{model_id}': class ids must be below "
+                f"{np.iinfo(MASK_DTYPE).max + 1}"
+            )
         models[model_id] = SegmentationModelConfig(
             model_id=model_id,
             filename=str(item["filename"]),
@@ -103,9 +109,7 @@ class ModelAdapterBase(ABC):
         self.class_names = model_config.class_names
 
     @abstractmethod
-    def preprocess(
-        self, frame_2d: np.ndarray
-    ) -> tuple[np.ndarray, tuple[int, int]]:
+    def preprocess(self, frame_2d: np.ndarray) -> np.ndarray:
         """Prepare a single 2D grayscale frame for infer().
 
         Implementations resize and normalize the frame to the model's expected
@@ -119,24 +123,21 @@ class ModelAdapterBase(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def postprocess(self, mask_2d: np.ndarray) -> np.ndarray:
+    def postprocess(
+        self, mask_2d: np.ndarray, frame_shape: tuple[int, int]
+    ) -> np.ndarray:
         """Turn the raw predicted mask into the final class id map for the original frame.
 
-        Implementations resize the mask back to the original frame shape and clean
-        up the class predictions.
+        Implementations resize the mask back to *frame_shape* and clean up the class
+        predictions.
         """
         raise NotImplementedError
 
-    def predict(
-        self,
-        frames: np.ndarray,
-        on_frame_complete: Callable[[int], None] | None = None,
-    ) -> list[SegmentationResult]:
+    def predict(self, frames: np.ndarray) -> list[SegmentationResult]:
         """Segment a batch of frames.
 
         Args:
             frames: (nframes, H, W), use frames[np.newaxis] for a single frame.
-            on_frame_complete: optional callback to report progress.
         """
         results = []
         for frame_2d in frames:
@@ -145,22 +146,21 @@ class ModelAdapterBase(ABC):
             if np.ptp(frame_2d) == 0:
                 results.append(
                     SegmentationResult(
-                        seg=np.zeros(frame_2d.shape, dtype=np.int64),
+                        seg=np.zeros(frame_2d.shape, dtype=MASK_DTYPE),
                         class_names=dict(self.class_names),
                         blank=True,
                     )
                 )
             else:
-                frame_2d_pre = self.preprocess(frame_2d)
-                mask_2d = self.infer(frame_2d_pre)
-                mask_2d_post = self.postprocess(mask_2d)
+                mask_2d = self.postprocess(
+                    self.infer(self.preprocess(frame_2d)), frame_2d.shape
+                )
                 results.append(
                     SegmentationResult(
-                        seg=mask_2d_post, class_names=dict(self.class_names)
+                        seg=mask_2d.astype(MASK_DTYPE),
+                        class_names=dict(self.class_names),
                     )
                 )
-            if on_frame_complete is not None:
-                on_frame_complete(1)
         return results
 
 
@@ -207,12 +207,8 @@ class UKErUSSegAdapter(ModelAdapterBase):
         self.input_name = self.session.get_inputs()[0].name
         self.output_name = self.session.get_outputs()[0].name
 
-    def preprocess(
-        self, frame_2d: np.ndarray
-    ) -> tuple[np.ndarray, tuple[int, int]]:
+    def preprocess(self, frame_2d: np.ndarray) -> np.ndarray:
         """Resize the frame to the model's input shape and apply z-score normalization."""
-        self.frame_orig_shape = frame_2d.shape
-
         # resize to model input shape
         # TODO: check resize vs padding
         frame_2d = resize_img(frame_2d, self.input_shape)
@@ -234,13 +230,15 @@ class UKErUSSegAdapter(ModelAdapterBase):
 
         return mask_2d
 
-    def postprocess(self, mask_2d: np.ndarray) -> np.ndarray:
+    def postprocess(
+        self, mask_2d: np.ndarray, frame_shape: tuple[int, int]
+    ) -> np.ndarray:
         """
         Perform custom postprocessing on the segmentation masks
         """
         post_cfg = self.model_config.postprocessing_config
         # resize back to original frame shape
-        mask_2d = resize_mask(mask_2d, self.frame_orig_shape)
+        mask_2d = resize_mask(mask_2d, frame_shape)
         # only keep the largest connected component for the given class ids
         mask_2d = keep_largest_region(
             mask_2d, post_cfg["keep_largest_per_class"]
@@ -270,11 +268,13 @@ def create_segmenter(
     model_config: SegmentationModelConfig,
 ) -> ModelAdapterBase:
     """Factory to create a segmentation adapter from a config."""
-    adapter_cls = globals().get(model_config.adapter_class)
+    # Every adapter defined here is available by class name
+    adapters = {cls.__name__: cls for cls in ModelAdapterBase.__subclasses__()}
+    adapter_cls = adapters.get(model_config.adapter_class)
     if adapter_cls is None:
         raise ValueError(
             f"Unknown adapter class: {model_config.adapter_class}. "
-            f"Available adapters: {[k for k in globals() if k.endswith('Adapter')]}"
+            f"Available adapters: {sorted(adapters)}"
         )
     logger.info(
         "creating segmenter with model %s using adapter %s",

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from functools import partial
 from math import ceil
@@ -244,7 +244,13 @@ def _unmix_frames(
     generate_thb: bool,
     generate_so2: bool,
     chunk_frames: int,
-) -> Iterator[None]:
+) -> Generator[
+    None,
+    None,
+    tuple[
+        pat.ImageSequence, pat.ImageSequence | None, pat.ImageSequence | None
+    ],
+]:
     """Unmix *recon_for_run* in frame chunks, yielding once per finished chunk.
 
     Runs in a worker thread, so it must not touch Qt or napari. THb/sO2 (when requested)

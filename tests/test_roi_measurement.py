@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from optari.roi.roi_records import ROIRecord
-from optari.roi.roi_shapes import Polygon, Rectangle, ROIPlacementConfig
+from optari.roi.roi_shapes import ROIPlacementConfig, roi_verts_from_mask
 from optari.roi.roi_utils import (
     IntensityClamp,
     compute_roi_spectra,
@@ -166,27 +166,20 @@ def test_roi_shape_from_mask_is_exact():
     mask = np.zeros((100, 100), dtype=bool)
     mask[30:60] = True  # tissue band from row 30 to 59
 
-    rect = Rectangle(
-        ROIPlacementConfig(width_mm=4.0, height_mm=2.0, depth_mm=None)
-    )
-    verts = rect.to_napari_verts_world(class_mask=mask, sy=SCALE, sx=SCALE)
+    config = ROIPlacementConfig(width_mm=4.0, height_mm=2.0, depth_mm=None)
+    verts = roi_verts_from_mask("rectangle", mask, config, sy=SCALE, sx=SCALE)
     assert sorted(set(verts[:, 0])) == [
         3.0,
         5.0,
     ]  # anchored to the band's top edge
     assert sorted(set(verts[:, 1])) == [3.0, 7.0]  # centred on column 50
 
-    poly = Polygon(
-        ROIPlacementConfig(width_mm=4.0, height_mm=2.0, depth_mm=None)
-    )
-    poly_verts = poly.to_napari_verts_world(
-        class_mask=mask, sy=SCALE, sx=SCALE
+    poly_verts = roi_verts_from_mask(
+        "polygon", mask, config, sy=SCALE, sx=SCALE
     )
     assert poly_verts[:, 0].min() >= 3.0 and poly_verts[:, 0].max() <= 5.0
     assert poly_verts[:, 1].min() >= 3.0 and poly_verts[:, 1].max() <= 7.0
 
-    too_tall = Rectangle(
-        ROIPlacementConfig(width_mm=4.0, height_mm=5.0, depth_mm=None)
-    )
+    too_tall = ROIPlacementConfig(width_mm=4.0, height_mm=5.0, depth_mm=None)
     with pytest.raises(ValueError, match="exceeds class depth"):
-        too_tall.to_napari_verts_world(class_mask=mask, sy=SCALE, sx=SCALE)
+        roi_verts_from_mask("rectangle", mask, too_tall, sy=SCALE, sx=SCALE)

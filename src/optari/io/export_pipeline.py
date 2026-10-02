@@ -30,6 +30,7 @@ from optari.utils.files import atomic_destination
 from optari.roi.roi_features import SAVED_FIXED_SOURCE_COLUMNS
 from optari.roi.roi_geometry import RoiGeometry
 from optari.roi.roi_utils import saved_export_columns
+from optari.segmentation.segmenter import MASK_DTYPE
 from patato.io.attribute_tags import HDF5Tags
 
 logger = logging.getLogger(__name__)
@@ -334,7 +335,7 @@ def _write_derived_data(controller, destination_pa_data) -> None:
         if HDF5Tags.SEGMENTATION in writer.file:
             del writer.file[HDF5Tags.SEGMENTATION]
         writer.set_segmentation(
-            np.asarray(seg_layer.data)[:, 0].astype(np.int32)
+            np.asarray(seg_layer.data)[:, 0].astype(MASK_DTYPE)
         )
         meta = {
             "source_model_id": seg_layer.metadata.get("source_model_id", ""),

@@ -301,15 +301,13 @@ returns the segmentation layer and class id it resolved, and `_per_frame_auto_re
 them to re-anchor independently on **each frame's own mask**. A frame the class isn't present
 on (including one the segmentation layer doesn't cover) returns `None` and is **skipped**.
 
-<!-- TODO: still unsure whether this shouldnt be combined with geometry -->
 !!! note "`roi_shapes.py` has different use:"
-    `ROIShape`/`Rectangle`/`Ellipse`/`Polygon` in `roi_shapes.py` are generators used by the
-    segmentation dock: given a class mask and size parameters, they derive a **new** shape's
-    geometry (largest-component isolation, centre-column anchoring, depth offset, contour
-    extraction). They do not participate in persistence. `RoiGeometry` represents an ROI,
-    `roi_shapes.py` constructs one and their `shape_type` property is named after napari's
-    own Shapes-layer argument (`shapes_layer.add(shape_type=...)`), which is what they exist
-    to build. it is the same concept as `ROIRecord.kind`.
+    `roi_verts_from_mask()` in `roi_shapes.py` is used by the segmentation dock: given a class
+    mask and size parameters, it derives a **new** shape's geometry (largest-component
+    isolation, centre-column anchoring, depth offset, contour extraction). It does not
+    participate in persistence: `RoiGeometry` represents an ROI, `roi_shapes.py` constructs
+    one. Its `shape_type` argument is named after napari's Shapes-layer argument
+    (`shapes_layer.add(shape_type=...)`) and is the same concept as `ROIRecord.kind`.
 
 
 ## Live Refresh

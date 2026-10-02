@@ -44,7 +44,7 @@ independent of the segmentation preset. See [Segmentation](../user-guide/segment
 | `adapter_class` | Name of the `ModelAdapterBase` subclass implementing this model's pre/postprocessing. |
 | `filename` | ONNX weights filename, expected under `~/.optari/models/`. |
 | `input_height` / `input_width` | Expected input frame size for the model. |
-| `class_names` | Class-id → name map for the model's segmentation output. |
+| `class_names` | Class-id → name map for the model's segmentation output (max class id is 255) |
 | `default_class` | Class selected by default in the Segmentation dock. |
 | `postprocessing_config` | Postprocessing steps for the mask. Integers refer to class IDs: keep only the largest connected component per class, merge specific class groups, and remove small objects below a pixel threshold. |
 | `url` |  Model download URL. If the weights file is missing locally, OPTARI tries to download it from here on first use. |
