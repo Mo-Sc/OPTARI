@@ -20,7 +20,7 @@ Batch mode builds `params` from a preset instead of the dock and calls the same 
 
 | Controller | Owns |
 | --- | --- |
-| `ScanController` | Study/scan discovery, loading a scan (iThera/HDF5/IPASC), building napari layers, frame selection (incl. motion scoring). |
+| `ScanController` | The Scan Browser's study, loading a scan (iThera/HDF5/IPASC), building napari layers, frame selection (incl. motion scoring). Finding studies and scans is in `optari/io/discovery.py`, shared with batch mode. |
 | `RoiController` | The ROI shapes layer, live/saved analysis tables, ROI presets and placement. See [The ROI System](roi-system.md). |
 | `SegmentationController` | The ONNX model registry, running inference, the segmentation `Labels` layer, and automatic ROI-from-mask placement. |
 | `ReconstructionController` | Reconstruction presets and running PATATO's backprojection/DeepMB pipelines. |

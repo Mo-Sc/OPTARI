@@ -3,3 +3,5 @@
 ::: optari.patato_bridge
 
 ::: optari.io.export_pipeline
+
+::: optari.io.discovery

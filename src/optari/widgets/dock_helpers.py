@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -11,6 +12,8 @@ from qtpy.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QPushButton,
     QInputDialog,
     QRadioButton,
@@ -21,32 +24,6 @@ from qtpy.QtWidgets import (
 )
 
 from optari.utils.presets import PresetStore
-
-# display names for OPTARI's toggleable dock panels, shared between MenuManager (which
-# builds the OPTARI > Docks menu and applies default visibility at startup) and SettingsDialog
-# (which lets the startup default be configured). Order here is the display order in both places.
-DOCK_LABELS: tuple[str, ...] = (
-    "Scan Browser",
-    "Active Slice Info",
-    "Tabular",
-    "Temporal",
-    "Histogram",
-    "Spectral",
-    "Annotation",
-    "Segmentation",
-    "Unmixing",
-    "Reconstruction",
-    "Layer Controls",
-    "Layer List",
-)
-
-
-@dataclass
-class DockShell:
-    widget: QWidget
-    content_widget: QWidget
-    content_layout: QVBoxLayout
-    scroll_area: QScrollArea | None
 
 
 def create_frame_scope_controls() -> (
@@ -134,14 +111,9 @@ def remove_selected_preset(
     return preset_path, removed
 
 
-# Helpers for right-side form docks in UiManager._tabify_docks().
-def create_right_dock_shell(
-    *,
-    enable_scroll: bool = True,
-    horizontal_scroll_policy: Qt.ScrollBarPolicy = Qt.ScrollBarAlwaysOff,
-    vertical_scroll_policy: Qt.ScrollBarPolicy = Qt.ScrollBarAsNeeded,
-) -> DockShell:
-    """Create the shell used by right-side docks with optional scrolling."""
+# helpers for the right-side form docks
+def create_right_dock_shell() -> tuple[QWidget, QVBoxLayout]:
+    """The dock widget and the layout its content goes in, scrolling vertically."""
     widget = QWidget()
     shell_layout = QVBoxLayout(widget)
     shell_layout.setContentsMargins(0, 0, 0, 0)
@@ -149,32 +121,17 @@ def create_right_dock_shell(
     content_widget = QWidget()
     content_layout = QVBoxLayout(content_widget)
 
-    if not enable_scroll:
-        shell_layout.addWidget(content_widget)
-        return DockShell(
-            widget=widget,
-            content_widget=content_widget,
-            content_layout=content_layout,
-            scroll_area=None,
-        )
-
     scroll_area = QScrollArea()
     scroll_area.setWidgetResizable(True)
-    scroll_area.setHorizontalScrollBarPolicy(horizontal_scroll_policy)
-    scroll_area.setVerticalScrollBarPolicy(vertical_scroll_policy)
+    scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
     scroll_area.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
     scroll_area.setWidget(content_widget)
     shell_layout.addWidget(scroll_area)
-
-    return DockShell(
-        widget=widget,
-        content_widget=content_widget,
-        content_layout=content_layout,
-        scroll_area=scroll_area,
-    )
+    return widget, content_layout
 
 
-# Helpers for bottom analysis docks in UiManager._tabify_docks().
+# helpers for the bottom analysis docks
 def create_bottom_dock_header(
     layout: QVBoxLayout,
     *,
@@ -190,20 +147,47 @@ def create_bottom_dock_header(
     return status_label, action_button
 
 
-def create_bottom_plot_strip(
-    *,
-    spacing: int = 8,
-) -> tuple[QScrollArea, QWidget]:
+def create_bottom_plot_strip() -> tuple[QScrollArea, QWidget]:
     """Create the horizontally scrolling plot strip used by bottom analysis docks."""
     plots_container = QWidget()
     plots_layout = QHBoxLayout(plots_container)
     plots_layout.setContentsMargins(0, 0, 0, 0)
-    plots_layout.setSpacing(spacing)
+    plots_layout.setSpacing(8)
 
     scroll_area = QScrollArea()
     scroll_area.setWidgetResizable(True)
     scroll_area.setWidget(plots_container)
     return scroll_area, plots_container
+
+
+@dataclass
+class RoiPlotsDock:
+    """Base for bottom docks that show one plot per ROI in a scrolling strip."""
+
+    widget: QWidget
+    refresh_button: QPushButton
+    scroll_area: QScrollArea
+    plots_container: QWidget
+    status_label: QLabel
+
+    @classmethod
+    def create(cls, *, status_text: str, refresh_tooltip: str):
+        """Build the dock: status line, Refresh button, and the plot strip."""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        status_label, refresh_button = create_bottom_dock_header(
+            layout, status_text=status_text
+        )
+        refresh_button.setToolTip(refresh_tooltip)
+        scroll_area, plots_container = create_bottom_plot_strip()
+        layout.addWidget(scroll_area, stretch=1)
+        return cls(
+            widget=widget,
+            refresh_button=refresh_button,
+            scroll_area=scroll_area,
+            plots_container=plots_container,
+            status_label=status_label,
+        )
 
 
 def create_bottom_single_plot_container() -> QWidget:
@@ -238,3 +222,37 @@ def create_range_edits(
         return edit
 
     return _new_numeric_edit(), _new_numeric_edit()
+
+
+# helpers for lists of checkboxes (chromophores, wavelengths, segmentation classes)
+def add_checkable_item(
+    list_widget: QListWidget, text: str, data=None, *, checked: bool = False
+) -> None:
+    """Append a checkbox entry, with *data* stored under ``Qt.UserRole``."""
+    item = QListWidgetItem(text)
+    item.setData(Qt.UserRole, data)
+    item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+    item.setCheckState(Qt.Checked if checked else Qt.Unchecked)
+    list_widget.addItem(item)
+
+
+def list_items(list_widget: QListWidget) -> list[QListWidgetItem]:
+    """All entries, in display order."""
+    return [list_widget.item(i) for i in range(list_widget.count())]
+
+
+def checked_items(list_widget: QListWidget) -> list[QListWidgetItem]:
+    """The checked entries, in display order."""
+    return [
+        item
+        for item in list_items(list_widget)
+        if item.checkState() == Qt.Checked
+    ]
+
+
+def set_checked(
+    list_widget: QListWidget, should_check: Callable[[QListWidgetItem], bool]
+) -> None:
+    """Check exactly the entries *should_check* accepts."""
+    for item in list_items(list_widget):
+        item.setCheckState(Qt.Checked if should_check(item) else Qt.Unchecked)

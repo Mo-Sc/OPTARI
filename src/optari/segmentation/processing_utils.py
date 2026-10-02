@@ -2,37 +2,30 @@
 # must operate on 2d np arrays (single frame)
 import cv2
 import numpy as np
-from scipy.ndimage import convolve
+from scipy.ndimage import distance_transform_edt
 from skimage.measure import label, regionprops
 from skimage.morphology import remove_small_objects
 
 # --- processing functions for images ---
 
 
-def resize_img(image: np.ndarray, target_size: tuple[int, int]) -> np.ndarray:
-    return cv2.resize(image, target_size, interpolation=cv2.INTER_LINEAR)
+def resize_img(image: np.ndarray, shape: tuple[int, int]) -> np.ndarray:
+    """Resize to *shape* ``(H, W)``; cv2 itself takes ``(W, H)``."""
+    return cv2.resize(image, shape[::-1], interpolation=cv2.INTER_LINEAR)
 
 
-def normalize_img(
-    image: np.ndarray, mean: float | None = None, std: float | None = None
-) -> np.ndarray:
-    """
-    z score normalization, with optional pre-computed mean and std
-    """
+def normalize_img(image: np.ndarray) -> np.ndarray:
+    """z-score normalization over the frame."""
     image = image.astype(np.float32)
-    if mean is None or std is None:
-        mean = image.mean()
-        std = image.std()
-
-    image = (image - mean) / std
-    return image
+    return (image - image.mean()) / image.std()
 
 
 # --- processing functions for segmentation masks ---
 
 
-def resize_mask(mask: np.ndarray, target_size: tuple[int, int]) -> np.ndarray:
-    return cv2.resize(mask, target_size, interpolation=cv2.INTER_NEAREST)
+def resize_mask(mask: np.ndarray, shape: tuple[int, int]) -> np.ndarray:
+    """Resize to *shape* ``(H, W)``; cv2 itself takes ``(W, H)``."""
+    return cv2.resize(mask, shape[::-1], interpolation=cv2.INTER_NEAREST)
 
 
 def combine_classes(
@@ -75,20 +68,15 @@ def reassign_freed_pixels_row_based(mask: np.ndarray) -> np.ndarray:
 
 
 def reassign_freed_pixels(mask: np.ndarray) -> np.ndarray:
-    """Give freed pixels (0) the majority class of their 3x3 neighbourhood."""
-    classes = np.unique(mask[mask > 0])
-    if not classes.size:
+    """Give each freed pixel (0) the class of its nearest labelled pixel.
+
+    A filled pixel joins the class of the labelled pixel it is closest to, so no class
+    gets a new disconnected component.
+    """
+    freed = mask == 0
+    if freed.all():
         return mask
-    votes = np.stack(
-        [
-            convolve(
-                (mask == c).astype(int),
-                np.ones((3, 3), dtype=int),
-                mode="constant",
-            )
-            for c in classes
-        ]
+    rows, cols = distance_transform_edt(
+        freed, return_distances=False, return_indices=True
     )
-    freed = (mask == 0) & (votes.sum(axis=0) > 0)
-    mask[freed] = classes[votes.argmax(axis=0)][freed]
-    return mask
+    return mask[rows, cols]

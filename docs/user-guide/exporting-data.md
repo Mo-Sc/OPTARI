@@ -10,6 +10,8 @@ into an HDF5 file that uses a custom, PATATO-inspired format carrying IPASC-conf
 
 From the **Scan Browser** dock, click **Export HDF5** and choose a destination.
 
+ROIs from other tools (e.g. annotations made in the vendor software) are always written exactly as stored in the scan. If you edit one in OPTARI, the edited shape is saved as an OPTARI ROI next to the original, and removing one in OPTARI does not remove it from the export.
+
 ## IPASC Export
 
 Click **Export IPASC** to write the scan's raw time series as a native

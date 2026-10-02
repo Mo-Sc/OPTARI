@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -51,13 +52,23 @@ class TaskControllerBase:
         """Initialize UI controls (populate lists, combos, etc). Override if needed."""
         pass
 
+    def _signal_bindings(self) -> list[tuple[object, Callable]]:
+        """Every (signal, handler) pair this controller owns. Override if needed.
+
+        Declared once and walked in both directions, so a binding cannot be connected
+        but forgotten on teardown.
+        """
+        return []
+
     def bind_events(self) -> None:
-        """Connect signals to event handlers. Override if needed."""
-        pass
+        """Connect this controller's dock signals to their handlers."""
+        for signal, handler in self._signal_bindings():
+            signal.connect(handler)
 
     def unbind_events(self) -> None:
-        """Disconnect signals. Override if needed."""
-        pass
+        """Disconnect everything bind_events connected."""
+        for signal, handler in self._signal_bindings():
+            signal.disconnect(handler)
 
     def teardown(self) -> None:
         """Release resources (models, threads). Override if needed."""

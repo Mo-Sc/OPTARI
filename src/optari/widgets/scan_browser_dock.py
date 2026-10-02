@@ -16,7 +16,7 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from optari.controllers.scan_controller import ScanInfo
+from optari.io.discovery import ScanInfo
 
 
 @dataclass

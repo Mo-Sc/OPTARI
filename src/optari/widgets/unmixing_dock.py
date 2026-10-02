@@ -46,10 +46,8 @@ class UnmixingDock:
     status_label: QLabel
 
 
-def create_unmixing_dock(*, enable_scroll: bool = True) -> UnmixingDock:
-    shell = create_right_dock_shell(enable_scroll=enable_scroll)
-    widget = shell.widget
-    outer = shell.content_layout
+def create_unmixing_dock() -> UnmixingDock:
+    widget, outer = create_right_dock_shell()
 
     source_box = QGroupBox("Source")
     source_form = QFormLayout(source_box)

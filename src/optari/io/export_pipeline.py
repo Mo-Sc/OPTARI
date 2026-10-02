@@ -12,9 +12,6 @@ from __future__ import annotations
 import datetime as dt
 import json
 import logging
-import os
-import re
-import tempfile
 from pathlib import Path
 
 import h5py
@@ -27,10 +24,12 @@ from optari import __version__
 from optari.config import settings
 from optari.config.config import CONFIG_SCHEMA_VERSION
 from optari.patato_bridge import patato_roi_from_geometry
-from optari.io.utils import _filename_token
+from optari.io.utils import filename_token
+from optari.utils.files import atomic_destination
 from optari.roi.roi_features import SAVED_FIXED_SOURCE_COLUMNS
 from optari.roi.roi_geometry import RoiGeometry
 from optari.roi.roi_utils import saved_export_columns
+from optari.segmentation.segmenter import MASK_DTYPE
 from patato.io.attribute_tags import HDF5Tags
 
 logger = logging.getLogger(__name__)
@@ -56,8 +55,8 @@ def default_roi_table_filename() -> str:
     """
     timestamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     return (
-        f"roi_data_{_filename_token(settings.general.OPERATOR)}"
-        f"_{_filename_token(settings.general.ANALYSIS_ID)}_{timestamp}.xlsx"
+        f"roi_data_{filename_token(settings.general.OPERATOR)}"
+        f"_{filename_token(settings.general.ANALYSIS_ID)}_{timestamp}.xlsx"
     )
 
 
@@ -78,7 +77,7 @@ def export_roi_table_to_xlsx(df_saved, path=None) -> str | None:
         if not filename.endswith(".xlsx"):
             filename += ".xlsx"
 
-    meta = _file_origin(roi_table_schema_version=ROI_TABLE_SCHEMA_VERSION)
+    meta = file_origin(roi_table_schema_version=ROI_TABLE_SCHEMA_VERSION)
     meta_df = pd.DataFrame(
         {"key": list(meta.keys()), "value": [str(v) for v in meta.values()]}
     )
@@ -162,38 +161,22 @@ def export_scan_to_hdf5(controller, destination: Path) -> bool:
     if destination is None:
         return False
 
-    fd, temporary_name = tempfile.mkstemp(
-        dir=destination.parent,
-        prefix=f".{destination.stem}-",
-        suffix=destination.suffix,
-    )
-    os.close(fd)
-    temporary_destination = Path(temporary_name)
-    temporary_destination.unlink()
-    destination_pa_data = None
     try:
-        controller.pa_data.save_hdf5(str(temporary_destination))
-        _write_file_origin(temporary_destination)
-        destination_pa_data = pat.PAData.from_hdf5(
-            str(temporary_destination), mode="r+"
-        )
-        _write_rois(controller, destination_pa_data)
-        _write_derived_data(controller, destination_pa_data)
-        destination_pa_data.close()
-        destination_pa_data = None
-        temporary_destination.replace(destination)
-        logger.info("exported scan to %s", destination)
-        return True
+        with atomic_destination(destination) as temporary:
+            controller.pa_data.save_hdf5(str(temporary))
+            _write_file_origin(temporary)
+            exported = pat.PAData.from_hdf5(str(temporary), mode="r+")
+            try:
+                _write_rois(controller, exported)
+                _write_derived_data(controller, exported)
+            finally:
+                # Closed before the move, which Windows refuses for an open file.
+                exported.close()
     except Exception:
         logger.exception("Failed to export scan to %s", destination.name)
         return False
-    finally:
-        if destination_pa_data is not None:
-            try:
-                destination_pa_data.close()
-            except Exception:
-                pass
-        temporary_destination.unlink(missing_ok=True)
+    logger.info("exported scan to %s", destination)
+    return True
 
 
 def export_scan_to_ipasc(controller, destination: Path) -> bool:
@@ -254,7 +237,7 @@ def _hdf5_destination(destination: Path) -> Path | None:
     return destination
 
 
-def _file_origin(**extra) -> dict:
+def file_origin(**extra) -> dict:
     """origin recorded in every file OPTARI writes."""
     return {
         "tool": "OPTARI",
@@ -273,31 +256,35 @@ def _file_origin(**extra) -> dict:
 
 def _write_file_origin(destination: Path) -> None:
     with h5py.File(destination, "r+") as file:
-        file.attrs[HDF5Tags.FILE_ORIGIN] = json.dumps(_file_origin())
+        file.attrs[HDF5Tags.FILE_ORIGIN] = json.dumps(file_origin())
 
 
 def _write_rois(controller, destination_pa_data) -> None:
-    if controller.shapes_layer is None or controller.shapes_layer.data is None:
-        return
+    """Replace OPTARI's ROI groups in the export with the session's own records.
 
-    controller.roi_ctrl.sync_records_from_shapes()
-    records = controller.roi_ctrl.roi_records
+    Annotations from other tools (vendor software, PATATO) are kept as stored.
+    An edited one became OPTARI's in the session and is written next to the original.
+    """
+    roi_ctrl = controller.roi_ctrl
+    roi_ctrl.sync_records_from_shapes()
+
+    # Stored OPTARI ROIs that failed to restore are not in the session, so keep them.
+    if roi_ctrl.stored_rois_restored:
+        stored = destination_pa_data.get_rois()
+        for name_position in {
+            name
+            for (name, _), roi in stored.items()
+            if roi.roi_class.startswith("OPTARI")
+        }:
+            destination_pa_data.delete_rois(name_position=name_position)
+
+    records = [
+        r for r in roi_ctrl.roi_records if r.source.startswith("OPTARI")
+    ]
     if not records:
         return
 
-    # Overwrite OPTARI-created ROI groups while preserving non-OPTARI groups.
-    existing_rois = dict(destination_pa_data.get_rois())
-    optari_groups_to_delete: set[str] = set()
-    for (name_position, _number), roi in list(existing_rois.items()):
-        if not str(getattr(roi, "roi_class", "")).startswith("OPTARI"):
-            continue
-        optari_groups_to_delete.add(str(name_position))
-
-    for name_position in optari_groups_to_delete:
-        destination_pa_data.delete_rois(name_position=name_position)
-
-    fov_x_m, fov_y_m = controller._get_fov()
-    export_roi_class = f"OPTARI_{dt.datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+    fov_x_m, fov_y_m = controller.scan_ctrl.get_fov()
     z_values = controller.pa_data.scan_reader.get_scanner_z_position()
     run_values = controller.pa_data.scan_reader.get_run_numbers()
     rep_values = controller.pa_data.scan_reader.get_repetition_numbers()
@@ -319,7 +306,6 @@ def _write_rois(controller, destination_pa_data) -> None:
             run=run,
             rep=rep,
             frame_idx=frame_idx,
-            roi_class=export_roi_class,
             roi_id=record.roi_id,
             track_id=record.track_id,
             roi_group_uid=record.roi_group_uid,
@@ -334,12 +320,12 @@ def _write_derived_data(controller, destination_pa_data) -> None:
 
     replaces any existing derived data, segmentation mask, and clinical metadata in the export.
     """
-    for image in controller._derived_patato_objects.values():
+    for image in controller.derived_patato_objects.values():
         destination_pa_data.scan_writer.add_image(image)
-    if controller._derived_patato_objects:
+    if controller.derived_patato_objects:
         logger.info(
             "saved %s derived image dataset(s)",
-            len(controller._derived_patato_objects),
+            len(controller.derived_patato_objects),
         )
 
     seg_layer = controller.segmentation_ctrl.seg_layer
@@ -348,7 +334,7 @@ def _write_derived_data(controller, destination_pa_data) -> None:
         if HDF5Tags.SEGMENTATION in writer.file:
             del writer.file[HDF5Tags.SEGMENTATION]
         writer.set_segmentation(
-            np.asarray(seg_layer.data)[:, 0].astype(np.int32)
+            np.asarray(seg_layer.data)[:, 0].astype(MASK_DTYPE)
         )
         meta = {
             "source_model_id": seg_layer.metadata.get("source_model_id", ""),

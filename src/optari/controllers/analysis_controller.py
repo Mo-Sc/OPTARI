@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
+
 import numpy as np
 import pyqtgraph as pg
 
@@ -23,59 +25,39 @@ logger = logging.getLogger(__name__)
 class AnalysisController(TaskControllerBase):
     """Temporal analysis, histograms, and spectral plotting helpers."""
 
-    def __init__(self, parent_controller):
-        """Initialize the analysis controller."""
-        super().__init__(parent_controller)
-
     def refresh_ui(self) -> None:
         """Refresh gating for the histogram/spectrum/time-analysis buttons."""
         has_data = (
             self.optari_controller.shapes_layer is not None
             and self.optari_controller.active_recon_layer is not None
         )
-        if self.optari_controller.time_analysis is not None:
-            self.optari_controller.time_analysis.generate_button.setEnabled(
-                has_data
-            )
-        if self.optari_controller.histograms is not None:
-            self.optari_controller.histograms.refresh_button.setEnabled(
-                has_data
-            )
-        if self.optari_controller.spectrum is not None:
-            self.optari_controller.spectrum.refresh_button.setEnabled(has_data)
+        self.optari_controller.time_analysis.generate_button.setEnabled(
+            has_data
+        )
+        self.optari_controller.histograms.refresh_button.setEnabled(has_data)
+        self.optari_controller.spectrum.refresh_button.setEnabled(has_data)
 
-    def bind_events(self) -> None:
-        """Connect analysis dock signals."""
-        self.optari_controller.time_analysis.generate_button.clicked.connect(
-            self.on_generate_time_analysis_clicked
-        )
-
-        self.optari_controller.histograms.refresh_button.clicked.connect(
-            self.on_refresh_histograms_clicked
-        )
-
-        self.optari_controller.spectrum.refresh_button.clicked.connect(
-            self.on_refresh_spectrum_clicked
-        )
-
-        self.optari_controller.annotation.time_analysis_track_radio.toggled.connect(
-            self.on_time_analysis_scope_changed
-        )
-
-    def unbind_events(self) -> None:
-        """Disconnect analysis dock signals."""
-        self.optari_controller.time_analysis.generate_button.clicked.disconnect(
-            self.on_generate_time_analysis_clicked
-        )
-        self.optari_controller.histograms.refresh_button.clicked.disconnect(
-            self.on_refresh_histograms_clicked
-        )
-        self.optari_controller.spectrum.refresh_button.clicked.disconnect(
-            self.on_refresh_spectrum_clicked
-        )
-        self.optari_controller.annotation.time_analysis_track_radio.toggled.disconnect(
-            self.on_time_analysis_scope_changed
-        )
+    def _signal_bindings(self) -> list[tuple[object, Callable]]:
+        """Plot dock signals, and the Time Analysis scope in the annotation dock."""
+        ctrl = self.optari_controller
+        return [
+            (
+                ctrl.time_analysis.generate_button.clicked,
+                self.on_generate_time_analysis_clicked,
+            ),
+            (
+                ctrl.histograms.refresh_button.clicked,
+                self.on_refresh_histograms_clicked,
+            ),
+            (
+                ctrl.spectrum.refresh_button.clicked,
+                self.on_refresh_spectrum_clicked,
+            ),
+            (
+                ctrl.annotation.time_analysis_track_radio.toggled,
+                self.on_time_analysis_scope_changed,
+            ),
+        ]
 
     def on_time_analysis_scope_changed(self, checked: bool) -> None:
         """When the user switches between "Selected ROI" and "Track ID" scopes,
@@ -162,9 +144,6 @@ class AnalysisController(TaskControllerBase):
         plot widget on first use, then redraws all series for either the selected ROIs
         or a single tracked ID.
         """
-        if self.optari_controller.time_analysis is None:
-            return
-
         annotation = self.optari_controller.annotation
         track_scope = annotation.time_analysis_track_radio.isChecked()
 
@@ -248,12 +227,14 @@ class AnalysisController(TaskControllerBase):
             )
 
         vb = plot.getViewBox()
-        vb.enableAutoRange(axis=getattr(vb, "YAxis", "y"), enable=True)
+        vb.enableAutoRange(axis=vb.YAxis, enable=True)
         vb.autoRange(padding=0.02)
 
+        # Same source as the x values themselves (roi_utils._time_axis).
+        layer_metadata = self.optari_controller.active_recon_layer.metadata
         xlabel = (
             "Time (s)"
-            if self.optari_controller.timestamps is not None
+            if layer_metadata.get("timestamps") is not None
             else "Frame"
         )
 
@@ -272,8 +253,6 @@ class AnalysisController(TaskControllerBase):
 
     def on_refresh_histograms_clicked(self, event=None) -> None:
         """Recompute and redraw per-ROI intensity histograms for the current frame and channel."""
-        if self.optari_controller.histograms is None:
-            return
         if self.optari_controller.shapes_layer is None:
             self.optari_controller.histograms.status_label.setText(
                 "No ROIs layer"
@@ -355,8 +334,6 @@ class AnalysisController(TaskControllerBase):
 
     def on_refresh_spectrum_clicked(self, event=None) -> None:
         """Recompute and redraw per-ROI spectra across channels for the current frame."""
-        if self.optari_controller.spectrum is None:
-            return
         if self.optari_controller.shapes_layer is None:
             self.optari_controller.spectrum.status_label.setText(
                 "No ROIs layer"

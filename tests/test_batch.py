@@ -16,8 +16,13 @@ from optari.batch.plan import (
     validate_plan,
 )
 from optari.batch.report import BatchReport
-from optari.batch.runner import BatchRunner, BatchStepError, Tick
-from optari.controllers.scan_controller import ScanInfo
+from optari.batch.runner import (
+    BatchRunner,
+    BatchStepError,
+    Tick,
+    _in_background,
+)
+from optari.io.discovery import ScanInfo
 from optari.roi.roi_utils import MeasureScope
 from optari.utils.presets import PresetStore
 from optari.utils.setup import get_user_batch_presets_dir, get_user_models_dir
@@ -141,6 +146,12 @@ def test_validate_plan_reports_every_problem(tmp_path):
     plan.segmentation = None
     assert any("needs a segmentation step" in p for p in validate_plan(plan))
 
+    # DeepMB names its weights in the preset; a batch run never downloads them.
+    plan.reconstruction = {
+        "RECONSTRUCTION_PARAMS": {"model_path": str(tmp_path / "deepmb.onnx")}
+    }
+    assert any("Reconstruction weights" in p for p in validate_plan(plan))
+
 
 def job(number, kind="hdf5"):
     return BatchJob(
@@ -198,7 +209,7 @@ def test_runner_isolates_failures_and_honours_cancel():
     class ScanCtrl:
         """Scan_1 cannot be opened, Scan_2 does not have the requested frame."""
 
-        def load_scan(self, path):
+        def load_scan(self, path, info):
             self.current = path.stem
             return self.current != "Scan_1"
 
@@ -210,8 +221,7 @@ def test_runner_isolates_failures_and_honours_cancel():
     controller = SimpleNamespace(
         viewer=viewer,
         active_recon_layer=recon,
-        _resolve_active_recon_layer=lambda: None,
-        study_path=None,
+        resolve_active_recon_layer=lambda: None,
         scan_ctrl=ScanCtrl(),
     )
     runner = make_runner(plan, controller)
@@ -224,18 +234,18 @@ def test_runner_isolates_failures_and_honours_cancel():
         "Scan_3.hdf5": "ok",
         "Scan_4.hdf5": "ok",
     }
-    assert runner.report.failures[0].message == "could not open scan"
-    assert (
-        runner.report.failures[1].message
-        == "frame: frame 30 is outside this scan"
-    )
+    failures = runner.report.rows.loc[:1, ["failed_step", "message"]]
+    assert failures.values.tolist() == [
+        ["load", "could not open scan"],
+        ["frame", "frame 30 is outside this scan"],
+    ]
 
     runner = make_runner(plan, controller)
     runner._write_outputs = lambda job, frame_idx, layer: 1 / 0
     drive(runner._run())
     assert (
-        runner.report.rows["message"].tolist()[2:]
-        == ["ZeroDivisionError: division by zero"] * 2
+        runner.report.rows.loc[2:, ["failed_step", "message"]].values.tolist()
+        == [["unexpected", "ZeroDivisionError: division by zero"]] * 2
     )
 
     runner = make_runner(plan, controller)
@@ -276,7 +286,7 @@ def test_source_and_overlay_layer_selection(tmp_path):
     controller = SimpleNamespace(
         viewer=viewer,
         active_recon_layer=vendor,
-        _resolve_active_recon_layer=lambda: None,
+        resolve_active_recon_layer=lambda: None,
     )
 
     plan = BatchPlan(jobs=[], output_dir=tmp_path)

@@ -14,7 +14,9 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from optari.controllers.scan_controller import ScanController, ScanInfo
+from patato.io.attribute_tags import ReconAttributeTags
+
+from optari.io.discovery import ScanInfo, discover_studies, scan_key
 from optari.roi.roi_presets import RoiPreset, RoiPresetStore
 from optari.roi.roi_utils import MeasureScope
 from optari.segmentation.segmenter import load_model_registry
@@ -25,6 +27,7 @@ from optari.utils.setup import (
     get_user_roi_presets_dir,
     get_user_segmentation_presets_dir,
     get_user_unmixing_presets_dir,
+    resolve_model_path,
 )
 
 logger = logging.getLogger(__name__)
@@ -45,7 +48,7 @@ class BatchJob:
     @property
     def scan_stem(self) -> str:
         """``Scan_3``, whether the scan is an HDF5 file or an iThera folder."""
-        return ScanController.scan_key(self.scan_path)
+        return scan_key(self.scan_path)
 
     @property
     def key(self) -> str:
@@ -139,7 +142,7 @@ def _step_preset_name(steps: dict, label: str) -> str | None:
 def _load_named(store: PresetStore, name: str, label: str) -> dict:
     try:
         return store.load(name)
-    except (FileNotFoundError, ValueError, OSError) as exc:
+    except (ValueError, OSError) as exc:
         raise ValueError(
             f"Could not load {label} preset '{name}': {exc}"
         ) from exc
@@ -189,7 +192,7 @@ def build_plan(
 
     jobs = [
         BatchJob(study_path=study, scan_path=scan, scan_info=info)
-        for study, scans in ScanController.discover_studies(root).items()
+        for study, scans in discover_studies(root).items()
         for scan, info in scans.items()
     ]
 
@@ -219,7 +222,7 @@ def build_plan(
     if name is not None:
         try:
             roi = RoiPresetStore(get_user_roi_presets_dir()).get(name)
-        except (FileNotFoundError, TypeError, ValueError, OSError) as exc:
+        except (TypeError, ValueError, OSError) as exc:
             raise ValueError(
                 f"Could not load ROI preset '{name}': {exc}"
             ) from exc
@@ -264,6 +267,7 @@ def validate_plan(plan: BatchPlan) -> list[str]:
             "The plan has no analysis steps and no file export, so it would do nothing."
         )
 
+    problems += _validate_reconstruction(plan)
     problems += _validate_segmentation(plan)
     problems += _validate_unmixing(plan)
     problems += _validate_output_dir(plan)
@@ -279,6 +283,21 @@ def plan_warnings(plan: BatchPlan) -> list[str]:
     return [
         "No reconstruction step and no 'source', so the scan's default PA layer will "
         "be analysed. Set 'source' to a layer-name prefix to choose deliberately."
+    ]
+
+
+def _validate_reconstruction(plan: BatchPlan) -> list[str]:
+    if plan.reconstruction is None:
+        return []
+    # Learned reconstructions (DeepMB) name their weights, a batch run never downloads.
+    model_path = plan.reconstruction.get(
+        ReconAttributeTags.ADDITIONAL_PARAMETERS, {}
+    ).get("model_path")
+    if model_path is None or resolve_model_path(model_path).is_file():
+        return []
+    return [
+        f"Reconstruction weights '{model_path}' are not downloaded. Run the "
+        "reconstruction once from the Reconstruction dock to fetch them, then retry."
     ]
 
 
@@ -406,11 +425,16 @@ def describe_plan(plan: BatchPlan) -> str:
             if scope.all_layers
             else "that layer and what is unmixed from it"
         )
+        channels = (
+            "all channels"
+            if scope.all_layers or scope.all_channels
+            else "current wavelength (derived layers: all channels)"
+        )
         lines.append(
             "Measure:    "
             f"{layers}, "
             f"{'all frames' if scope.all_frames else 'analysis frame'}, "
-            f"{'all channels' if scope.all_channels else 'current channel'}"
+            f"{channels}"
         )
     wanted = [
         name

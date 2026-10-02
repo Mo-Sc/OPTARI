@@ -15,8 +15,6 @@ def _json_default(value):
         return value.tolist()
     if isinstance(value, np.generic):
         return value.item()
-    if isinstance(value, Path):
-        return str(value)
     return str(value)
 
 

@@ -32,7 +32,7 @@ Full reference for `~/.optari/config/config.json`. All fields are required unles
 Available feature names:
 
 `roi_id`, `track_id`, `roi_group_uid`, `mean`, `median`, `std`, `p10`, `p90`, `iqr`, `min`, `max`, `snr`,
-`n_pixels`, `size_mm`, `src_layer`, `kind`, `study_folder`, `scan_folder`, `scan_name`, `frame`, `channel`,
+`n_pixels`, `size_mm`, `intensity_filter`, `filter_min`, `filter_max`, `src_layer`, `kind`, `study_folder`, `scan_folder`, `scan_name`, `frame`, `channel`,
 `roi_ts`, `scan_ts`, `roi_centroid`, `roi_geometry`, `filepath`.
 
 A fixed set of columns (`roi_id`, `track_id`, `roi_group_uid`, `study_folder`, `scan_folder`, `scan_name`,

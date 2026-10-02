@@ -60,10 +60,8 @@ class AnnotationDock:
             self.roi_presets_list.addItem(name)
 
 
-def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
-    shell = create_right_dock_shell(enable_scroll=enable_scroll)
-    widget = shell.widget
-    outer = shell.content_layout
+def create_annotation_dock() -> AnnotationDock:
+    widget, outer = create_right_dock_shell()
 
     # ROI presets section
     roi_presets_box = QGroupBox("ROI Presets")
@@ -103,7 +101,7 @@ def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
     roi_placement_mode_combo.addItem("auto", userData="auto")
     roi_placement_mode_combo.setToolTip(
         "Static: uses the preset's saved coordinates. Auto: places it inside the matching "
-        "segmentation class, falling back to static if not found. With Scope All Frames, "
+        "segmentation class, and reports an error if there is none. With Scope All Frames, "
         "Auto anchors on each frame's own segmentation, skipping frames the class "
         "isn't present on"
     )
@@ -181,8 +179,9 @@ def create_annotation_dock(*, enable_scroll: bool = True) -> AnnotationDock:
         "Save this ROI's data for every frame in the scan"
     )
     include_all_channels_checkbox.setToolTip(
-        "Save this ROI's data for every channel (wavelength/chromophore); "
-        "auto-enabled by Include all layers"
+        "Save this ROI's data for every wavelength of a reconstruction; "
+        "auto-enabled by Include all layers. Unmixed, sO2 and THb layers are "
+        "always saved for every channel"
     )
 
     # When include all layers, always include all channels

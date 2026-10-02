@@ -1,6 +1,7 @@
 """Exporting scans: OPTARI HDF5 with ROIs and derived images, IPASC raw data, batch report."""
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -11,9 +12,10 @@ import patato as pat
 import pytest
 from patato.io.attribute_tags import HDF5Tags
 
+from optari import OPTARI_SOURCE_TAG
 from optari.batch.plan import BatchJob
 from optari.batch.report import REPORT_COLUMNS, REPORT_SHEET, BatchReport
-from optari.controllers.scan_controller import ScanController, ScanInfo
+from optari.io.discovery import ScanInfo, scan_type
 from optari.controllers.unmixing_controller import (
     UnmixingController,
     _unmix_frames,
@@ -38,16 +40,17 @@ FRAME = 24  # lowest-motion frame of Scan_2
 FOV = (0.04, 0.04)
 
 
-def controller_with(pa_data, records=(), derived=None):
+def controller_with(pa_data, records=(), derived=None, restored=True):
     """The slice of OptariController that the export pipeline reads."""
     return SimpleNamespace(
         pa_data=pa_data,
-        shapes_layer=SimpleNamespace(data=[r.verts for r in records]),
         roi_ctrl=SimpleNamespace(
-            sync_records_from_shapes=lambda: True, roi_records=list(records)
+            sync_records_from_shapes=lambda: True,
+            roi_records=list(records),
+            stored_rois_restored=restored,
         ),
-        _get_fov=lambda: FOV,
-        _derived_patato_objects=derived or {},
+        scan_ctrl=SimpleNamespace(get_fov=lambda: FOV),
+        derived_patato_objects=derived or {},
         segmentation_ctrl=SimpleNamespace(
             seg_layer=None
         ),  # _write_derived_data reads this
@@ -86,6 +89,7 @@ def test_hdf5_export_round_trip(ithera_scan, tmp_path):
         axis1_labels=["Hb", "HbO2"],
         filepath=str(ITHERA_SCAN),
         timestamps=None,
+        acquisition_start=None,
         pa_kind="unmixed",
         frame_mode="current",
         include_chromophores=True,
@@ -94,8 +98,11 @@ def test_hdf5_export_round_trip(ithera_scan, tmp_path):
     UnmixingController._set_export_frame_attrs(unmixed, export_attrs)
 
     destination = tmp_path / "Scan_2.hdf5"
+    # As in the app, the session also holds the scan's restored vendor ROI. It must be
+    # kept as stored and not exported a second time (two ROIs are unpacked below).
+    vendor_records = roi_records_from_scan_rois(ithera_scan, *FOV)
     controller = controller_with(
-        ithera_scan, [roi], {"Unmixed: iThera": unmixed}
+        ithera_scan, [*vendor_records, roi], {"Unmixed: iThera": unmixed}
     )
     assert export_scan_to_hdf5(controller, destination)
     assert not export_scan_to_hdf5(controller, destination)  # never overwrites
@@ -106,7 +113,7 @@ def test_hdf5_export_round_trip(ithera_scan, tmp_path):
         origin["tool"] == "OPTARI"
         and origin["format_version"] == OPTARI_FILE_FORMAT_VERSION
     )
-    assert ScanController.scan_type(destination) == "hdf5"
+    assert scan_type(destination) == "hdf5"
 
     reopened = pat.PAData.from_hdf5(str(destination), mode="r")
     layers, _ = build_napari_layers(reopened)
@@ -146,7 +153,7 @@ def test_hdf5_export_round_trip(ithera_scan, tmp_path):
 def test_ipasc_export_reloads_as_raw_scan(ithera_scan, tmp_path):
     destination = tmp_path / "Scan_2_ipasc.hdf5"
     assert export_scan_to_ipasc(controller_with(ithera_scan), destination)
-    assert ScanController.scan_type(destination) == "ipasc"
+    assert scan_type(destination) == "ipasc"
 
     reopened = pat.PAData.from_hdf5(str(destination), mode="r")
     np.testing.assert_allclose(

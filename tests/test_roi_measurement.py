@@ -1,11 +1,15 @@
 """ROI statistics on synthetic images whose correct values are known exactly."""
 
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
+from optari.controllers.roi_controller import RoiController, _layer_holds
 from optari.roi.roi_records import ROIRecord
-from optari.roi.roi_shapes import Polygon, Rectangle, ROIPlacementConfig
+from optari.roi.roi_shapes import ROIPlacementConfig, roi_verts_from_mask
 from optari.roi.roi_utils import (
+    NO_CLAMP,
     IntensityClamp,
     compute_roi_spectra,
     compute_roi_stats,
@@ -62,6 +66,11 @@ def test_rectangle_stats_are_exact(image_layer):
         "Recon: test",
     )
 
+    # napari keeps shape vertices as float32, where 3.9 mm is not exact: that
+    # rounding must not count as an edit (which would turn a vendor ROI into OPTARI's)
+    record = rectangle_over_block()
+    assert _layer_holds(record, record.verts.astype(np.float32), "rectangle")
+
 
 def test_ellipse_area_is_close_to_analytic(image_layer):
     layer = image_layer(np.ones((1, 1, 200, 200)), SCALE)
@@ -106,6 +115,27 @@ def test_clamp_clip_keeps_pixels_exclude_drops_them(image_layer):
     )
     assert excluded["size_mm"] == pytest.approx(clipped["size_mm"] / 2)
 
+    # Unchecking both filter boxes in the Annotation dock switches filtering off again.
+    box = lambda checked: SimpleNamespace(isChecked=lambda: checked)
+    text = lambda value: SimpleNamespace(text=lambda: value)
+    dock = SimpleNamespace(
+        roi_exclusion_box=box(False),
+        roi_clipping_box=box(True),
+        roi_clip_min_edit=text(""),
+        roi_clip_max_edit=text("4"),
+        roi_exclude_min_edit=text(""),
+        roi_exclude_max_edit=text(""),
+    )
+    roi_ctrl = SimpleNamespace(
+        optari_controller=SimpleNamespace(annotation=dock),
+        update_live_table=lambda: None,
+    )
+    RoiController.on_intensity_settings_changed(roi_ctrl)
+    assert roi_ctrl.intensity_clamp == IntensityClamp(maximum=4, mode="clip")
+    dock.roi_clipping_box = box(False)
+    RoiController.on_intensity_settings_changed(roi_ctrl)
+    assert roi_ctrl.intensity_clamp == NO_CLAMP
+
 
 def test_layer_translate_shifts_mask(image_layer):
     # Layer content sits 1 mm down and 2 mm right of an untranslated one, like DeepMB output.
@@ -147,7 +177,7 @@ def test_time_series_fixed_and_tracked(image_layer):
     np.testing.assert_allclose(tracked[1], [0, np.nan, 10, 15])
 
 
-def test_spectrum_uses_wavelength_axis(image_layer):
+def test_spectrum_per_channel(image_layer):
     data = block_image(n_channels=3)
     data *= np.array([0, 2, 4], dtype=np.float32)[
         None, :, None, None
@@ -166,27 +196,20 @@ def test_roi_shape_from_mask_is_exact():
     mask = np.zeros((100, 100), dtype=bool)
     mask[30:60] = True  # tissue band from row 30 to 59
 
-    rect = Rectangle(
-        ROIPlacementConfig(width_mm=4.0, height_mm=2.0, depth_mm=None)
-    )
-    verts = rect.to_napari_verts_world(class_mask=mask, sy=SCALE, sx=SCALE)
+    config = ROIPlacementConfig(width_mm=4.0, height_mm=2.0, depth_mm=None)
+    verts = roi_verts_from_mask("rectangle", mask, config, sy=SCALE, sx=SCALE)
     assert sorted(set(verts[:, 0])) == [
         3.0,
         5.0,
     ]  # anchored to the band's top edge
     assert sorted(set(verts[:, 1])) == [3.0, 7.0]  # centred on column 50
 
-    poly = Polygon(
-        ROIPlacementConfig(width_mm=4.0, height_mm=2.0, depth_mm=None)
-    )
-    poly_verts = poly.to_napari_verts_world(
-        class_mask=mask, sy=SCALE, sx=SCALE
+    poly_verts = roi_verts_from_mask(
+        "polygon", mask, config, sy=SCALE, sx=SCALE
     )
     assert poly_verts[:, 0].min() >= 3.0 and poly_verts[:, 0].max() <= 5.0
     assert poly_verts[:, 1].min() >= 3.0 and poly_verts[:, 1].max() <= 7.0
 
-    too_tall = Rectangle(
-        ROIPlacementConfig(width_mm=4.0, height_mm=5.0, depth_mm=None)
-    )
+    too_tall = ROIPlacementConfig(width_mm=4.0, height_mm=5.0, depth_mm=None)
     with pytest.raises(ValueError, match="exceeds class depth"):
-        too_tall.to_napari_verts_world(class_mask=mask, sy=SCALE, sx=SCALE)
+        roi_verts_from_mask("rectangle", mask, too_tall, sy=SCALE, sx=SCALE)

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
-import tempfile
+
+from optari.utils.files import atomic_destination
 
 
 def normalize_preset_name(name: str) -> str:
@@ -66,23 +66,11 @@ class PresetStore:
         if path.exists() and not overwrite:
             raise ValueError(f"Preset already exists: {path.stem}")
 
-        temporary_path: Path | None = None
-        try:
-            with tempfile.NamedTemporaryFile(
-                mode="w",
+        with atomic_destination(path) as temporary:
+            temporary.write_text(
+                json.dumps(data, indent=2, ensure_ascii=False) + "\n",
                 encoding="utf-8",
-                dir=self.directory,
-                prefix=f".{path.stem}.",
-                suffix=".tmp",
-                delete=False,
-            ) as temporary_file:
-                json.dump(data, temporary_file, indent=2, ensure_ascii=False)
-                temporary_file.write("\n")
-                temporary_path = Path(temporary_file.name)
-            os.replace(temporary_path, path)
-        finally:
-            if temporary_path is not None and temporary_path.exists():
-                temporary_path.unlink()
+            )
         return path
 
     def delete(self, preset: str | Path) -> bool:

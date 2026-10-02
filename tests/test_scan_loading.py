@@ -5,7 +5,12 @@ import numpy as np
 import pytest
 from patato.io.attribute_tags import HDF5Tags, IPASCTags
 
-from optari.controllers.scan_controller import ScanController
+from optari.io.discovery import (
+    discover_studies,
+    scan_key,
+    scan_sort_key,
+    scan_type,
+)
 from optari.patato_bridge import (
     build_napari_layers,
     display_data_from_patato_obj,
@@ -18,7 +23,7 @@ pytestmark = needs_study
 
 
 def test_discover_studies_finds_both_scans(tmp_path):
-    studies = ScanController.discover_studies(STUDY_DIR.parent)
+    studies = discover_studies(STUDY_DIR.parent)
     assert list(studies) == [STUDY_DIR]
     scans = studies[STUDY_DIR]
     assert list(scans) == [ITHERA_SCAN, HDF5_SCAN]
@@ -30,9 +35,9 @@ def test_discover_studies_finds_both_scans(tmp_path):
     # Numeric ordering, not lexical: Scan_10 comes after Scan_2.
     keys = sorted(
         [tmp_path / "Scan_10.hdf5", tmp_path / "Scan_2", tmp_path / "other"],
-        key=ScanController.scan_sort_key,
+        key=scan_sort_key,
     )
-    assert [ScanController.scan_key(k) for k in keys] == [
+    assert [scan_key(k) for k in keys] == [
         "Scan_2",
         "Scan_10",
         "other",
@@ -49,10 +54,10 @@ def test_discover_studies_finds_both_scans(tmp_path):
         with h5py.File(tmp_path / name, "w") as file:
             if group:
                 file.create_group(group)
-    assert ScanController.scan_type(tmp_path / "Scan_1") == "ithera"
-    assert ScanController.scan_type(tmp_path / "patato.hdf5") == "hdf5"
-    assert ScanController.scan_type(tmp_path / "ipasc.hdf5") == "ipasc"
-    assert ScanController.scan_type(tmp_path / "empty.hdf5") is None
+    assert scan_type(tmp_path / "Scan_1") == "ithera"
+    assert scan_type(tmp_path / "patato.hdf5") == "hdf5"
+    assert scan_type(tmp_path / "ipasc.hdf5") == "ipasc"
+    assert scan_type(tmp_path / "empty.hdf5") is None
 
 
 def test_build_layers_from_hdf5_scan(hdf5_scan, vendor_recon):
@@ -62,9 +67,6 @@ def test_build_layers_from_hdf5_scan(hdf5_scan, vendor_recon):
     assert us_kw["name"] == "US" and us.shape == (26, 13, 210, 210)
     assert us_kw["scale"] == pytest.approx((1, 40 / 210, 40 / 210), rel=1e-6)
     assert us_kw["metadata"]["type"] == "us"
-    assert us_kw["metadata"]["motion_scores"].shape == (
-        26,
-    )  # DEFAULT_FRAME_INDEX is "motion"
 
     assert recon_kw[
         "name"

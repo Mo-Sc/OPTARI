@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import pyqtgraph as pg
 from qtpy.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget
 
 from .dock_helpers import (
@@ -17,8 +18,8 @@ class TimeAnalysisDock:
     plot_container: QWidget
     status_label: QLabel
 
-    # Optional pyqtgraph PlotWidget; kept as object to avoid hard dependency
-    plot_widget: object | None = None
+    # Created by AnalysisController on the first plot.
+    plot_widget: pg.PlotWidget | None = None
 
 
 def create_time_analysis_dock() -> TimeAnalysisDock:

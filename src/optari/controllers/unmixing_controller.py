@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterator
+from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from functools import partial
 from math import ceil
@@ -11,23 +11,27 @@ from math import ceil
 import numpy as np
 import patato as pat
 from qtpy.QtCore import Qt
-from qtpy.QtWidgets import QListWidgetItem
 
-from patato.io.attribute_tags import UnmixingAttributeTags
+from patato.io.attribute_tags import HDF5Tags, UnmixingAttributeTags
 from patato.unmixing.spectra import SPECTRA_NAMES
 from optari.controllers.base import TaskControllerBase
 from optari.utils.tasks import BackgroundStep
 from optari.patato_bridge import (
     display_data_from_patato_obj,
     expand_to_acquisition_frames,
+    layer_colormap,
 )
 from optari.utils.presets import PresetStore
 from optari.utils.setup import get_user_unmixing_presets_dir
 from optari.widgets.dock_helpers import (
+    add_checkable_item,
     add_preset_to_combo,
+    checked_items,
+    list_items,
     populate_preset_combo,
     prompt_preset_name,
     remove_selected_preset,
+    set_checked,
 )
 
 logger = logging.getLogger(__name__)
@@ -157,7 +161,7 @@ class UnmixParams:
         active_layer = controller.active_recon_layer
         if active_layer is None:
             raise ValueError("Select a PA reconstruction layer.")
-        recon = controller._patato_objects.get(active_layer.name)
+        recon = controller.patato_objects.get(active_layer.name)
         if recon is None:
             raise ValueError("Source layer must be a reconstruction.")
         if not wavelengths:
@@ -240,7 +244,13 @@ def _unmix_frames(
     generate_thb: bool,
     generate_so2: bool,
     chunk_frames: int,
-) -> Iterator[None]:
+) -> Generator[
+    None,
+    None,
+    tuple[
+        pat.ImageSequence, pat.ImageSequence | None, pat.ImageSequence | None
+    ],
+]:
     """Unmix *recon_for_run* in frame chunks, yielding once per finished chunk.
 
     Runs in a worker thread, so it must not touch Qt or napari. THb/sO2 (when requested)
@@ -286,107 +296,61 @@ class UnmixingController(TaskControllerBase):
         super().__init__(parent_controller)
         self.preset_store = PresetStore(get_user_unmixing_presets_dir())
 
-    def bind_events(self) -> None:
-        """Connect unmixing dock signals."""
-        self.optari_controller.unmixing.preset_combo.currentIndexChanged.connect(
-            self.on_preset_changed
-        )
-        self.optari_controller.unmixing.chromophores_list.itemChanged.connect(
-            self.on_chromophores_changed
-        )
-        self.optari_controller.unmixing.select_all_wavelengths_button.clicked.connect(
-            self.on_select_all_wavelengths_clicked
-        )
-        self.optari_controller.unmixing.clear_wavelengths_button.clicked.connect(
-            self.on_clear_wavelengths_clicked
-        )
-        self.optari_controller.unmixing.run_button.clicked.connect(
-            self.on_run_unmixing_clicked
-        )
-        self.optari_controller.unmixing.save_preset_button.clicked.connect(
-            self.on_save_preset_clicked
-        )
-        self.optari_controller.unmixing.remove_preset_button.clicked.connect(
-            self.on_remove_preset_clicked
-        )
-
-    def unbind_events(self) -> None:
-        """Disconnect unmixing dock signals."""
+    def _signal_bindings(self) -> list[tuple[object, Callable]]:
+        """Unmixing dock signals."""
         dock = self.optari_controller.unmixing
-        dock.preset_combo.currentIndexChanged.disconnect(
-            self.on_preset_changed
-        )
-        dock.chromophores_list.itemChanged.disconnect(
-            self.on_chromophores_changed
-        )
-        dock.select_all_wavelengths_button.clicked.disconnect(
-            self.on_select_all_wavelengths_clicked
-        )
-        dock.clear_wavelengths_button.clicked.disconnect(
-            self.on_clear_wavelengths_clicked
-        )
-        dock.run_button.clicked.disconnect(self.on_run_unmixing_clicked)
-        dock.save_preset_button.clicked.disconnect(self.on_save_preset_clicked)
-        dock.remove_preset_button.clicked.disconnect(
-            self.on_remove_preset_clicked
-        )
+        return [
+            (dock.preset_combo.currentIndexChanged, self.on_preset_changed),
+            (dock.chromophores_list.itemChanged, self.on_chromophores_changed),
+            (
+                dock.select_all_wavelengths_button.clicked,
+                self.on_select_all_wavelengths_clicked,
+            ),
+            (
+                dock.clear_wavelengths_button.clicked,
+                self.on_clear_wavelengths_clicked,
+            ),
+            (dock.run_button.clicked, self.on_run_unmixing_clicked),
+            (dock.save_preset_button.clicked, self.on_save_preset_clicked),
+            (dock.remove_preset_button.clicked, self.on_remove_preset_clicked),
+        ]
 
-    @staticmethod
-    def _set_checked_by_text(list_widget, selected: set[str]) -> None:
-        """Apply checked state to list items that match selected texts."""
-        for i in range(list_widget.count()):
-            item = list_widget.item(i)
-            state = Qt.Checked if item.text() in selected else Qt.Unchecked
-            item.setCheckState(state)
+    def _checked_wavelengths(self) -> list[int]:
+        return [
+            item.data(Qt.UserRole)
+            for item in checked_items(
+                self.optari_controller.unmixing.wavelengths_list
+            )
+        ]
 
-    @staticmethod
-    def _set_checked_wavelengths(list_widget, selected: set[int]) -> None:
-        """Apply checked state to wavelength items in selected set."""
-        for i in range(list_widget.count()):
-            item = list_widget.item(i)
-            wavelength = int(item.data(Qt.UserRole))
-            state = Qt.Checked if wavelength in selected else Qt.Unchecked
-            item.setCheckState(state)
+    def _checked_chromophores(self) -> list[str]:
+        return [
+            item.text()
+            for item in checked_items(
+                self.optari_controller.unmixing.chromophores_list
+            )
+        ]
 
     def initialize_ui(self) -> None:
         """Initialize preset, chromophore, and wavelength controls once."""
-        if self.optari_controller.unmixing is None:
-            return
-
         dock = self.optari_controller.unmixing
 
         populate_preset_combo(dock.preset_combo, self.preset_store)
 
         if dock.chromophores_list.count() == 0:
             for name in sorted(SPECTRA_NAMES.keys()):
-                item = QListWidgetItem(name)
-                item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-                item.setCheckState(Qt.Unchecked)
-                dock.chromophores_list.addItem(item)
+                add_checkable_item(dock.chromophores_list, name)
 
         self.refresh_ui()
         self.on_chromophores_changed()
 
     def on_save_preset_clicked(self) -> None:
         """Save the current unmixing controls as a new user preset."""
-        if self.optari_controller.unmixing is None:
-            return
-
         dock = self.optari_controller.unmixing
-        selected_wavelengths = [
-            int(dock.wavelengths_list.item(i).data(Qt.UserRole))
-            for i in range(dock.wavelengths_list.count())
-            if dock.wavelengths_list.item(i).checkState() == Qt.Checked
-        ]
-        selected_chromophores = [
-            dock.chromophores_list.item(i).text()
-            for i in range(dock.chromophores_list.count())
-            if dock.chromophores_list.item(i).checkState() == Qt.Checked
-        ]
         preset_settings = {
             UnmixingAttributeTags.RESOLUTION_REDUCE: dock.resolution_reduction_factor.value(),
-            UnmixingAttributeTags.UNMIXING_WAVELENGTHS: selected_wavelengths,
-            UnmixingAttributeTags.SPECTRA: selected_chromophores,
+            UnmixingAttributeTags.UNMIXING_WAVELENGTHS: self._checked_wavelengths(),
+            UnmixingAttributeTags.SPECTRA: self._checked_chromophores(),
             UnmixingAttributeTags.COMPUTE_THB: dock.generate_thb_checkbox.isChecked(),
             UnmixingAttributeTags.COMPUTE_SO2: dock.generate_so2_checkbox.isChecked(),
             UnmixingAttributeTags.SUFFIX: dock.suffix_edit.text().strip(),
@@ -409,9 +373,6 @@ class UnmixingController(TaskControllerBase):
 
     def on_remove_preset_clicked(self) -> None:
         """Remove the selected unmixing preset."""
-        if self.optari_controller.unmixing is None:
-            return
-
         dock = self.optari_controller.unmixing
         preset_path = dock.preset_combo.currentData()
         if preset_path is None:
@@ -433,9 +394,6 @@ class UnmixingController(TaskControllerBase):
 
     def refresh_ui(self) -> None:
         """Refresh source-dependent controls from the active layer."""
-        if self.optari_controller.unmixing is None:
-            return
-
         dock = self.optari_controller.unmixing
         active_recon_layer = self.optari_controller.active_recon_layer
 
@@ -465,42 +423,27 @@ class UnmixingController(TaskControllerBase):
         dock.widget.setProperty("_unmixing_source_name", source_name)
         dock.wavelengths_list.clear()
         for w in wavelengths:
-            wavelength = int(w)
-            item = QListWidgetItem(f"{wavelength} nm")
-            item.setData(Qt.UserRole, wavelength)
-            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-            item.setCheckState(Qt.Checked)
-            dock.wavelengths_list.addItem(item)
+            add_checkable_item(
+                dock.wavelengths_list, f"{int(w)} nm", int(w), checked=True
+            )
 
         self.on_preset_changed()
 
     def on_select_all_wavelengths_clicked(self) -> None:
         """Select all source wavelengths in the list widget."""
-        if self.optari_controller.unmixing is None:
-            return
-        for i in range(
-            self.optari_controller.unmixing.wavelengths_list.count()
-        ):
-            self.optari_controller.unmixing.wavelengths_list.item(
-                i
-            ).setCheckState(Qt.Checked)
+        set_checked(
+            self.optari_controller.unmixing.wavelengths_list, lambda item: True
+        )
 
     def on_clear_wavelengths_clicked(self) -> None:
         """Clear all source wavelength selections in the list widget."""
-        if self.optari_controller.unmixing is None:
-            return
-        for i in range(
-            self.optari_controller.unmixing.wavelengths_list.count()
-        ):
-            self.optari_controller.unmixing.wavelengths_list.item(
-                i
-            ).setCheckState(Qt.Unchecked)
+        set_checked(
+            self.optari_controller.unmixing.wavelengths_list,
+            lambda item: False,
+        )
 
     def on_preset_changed(self) -> None:
         """Load selected preset values into the unmixing controls."""
-        if self.optari_controller.unmixing is None:
-            return
-
         dock = self.optari_controller.unmixing
         preset_path = dock.preset_combo.currentData()
         if preset_path is None:
@@ -512,25 +455,16 @@ class UnmixingController(TaskControllerBase):
                 settings.get(UnmixingAttributeTags.RESOLUTION_REDUCE, 1)
             )
             spectra = set(settings.get(UnmixingAttributeTags.SPECTRA, []))
-            selected_wavelengths = set()
-            wavelength_range = settings.get(
-                UnmixingAttributeTags.WAVELENGTH_RANGE
+            # Same resolution as a batch run, so the dock shows what a run would use.
+            selected_wavelengths = set(
+                resolve_unmixing_wavelengths(
+                    settings,
+                    [
+                        item.data(Qt.UserRole)
+                        for item in list_items(dock.wavelengths_list)
+                    ],
+                )
             )
-            if wavelength_range is not None and len(wavelength_range) == 2:
-                start, end = int(wavelength_range[0]), int(wavelength_range[1])
-                selected_wavelengths = {
-                    int(dock.wavelengths_list.item(i).data(Qt.UserRole))
-                    for i in range(dock.wavelengths_list.count())
-                    if start
-                    <= int(dock.wavelengths_list.item(i).data(Qt.UserRole))
-                    <= end
-                }
-
-            explicit_wavelengths = settings.get(
-                UnmixingAttributeTags.UNMIXING_WAVELENGTHS
-            )
-            if explicit_wavelengths is not None:
-                selected_wavelengths = {int(w) for w in explicit_wavelengths}
 
             compute_so2 = settings.get(UnmixingAttributeTags.COMPUTE_SO2, True)
             compute_thb = settings.get(UnmixingAttributeTags.COMPUTE_THB, True)
@@ -541,9 +475,12 @@ class UnmixingController(TaskControllerBase):
 
         dock.resolution_reduction_factor.setValue(max(1, reduce_factor))
         dock.suffix_edit.setText(suffix)
-        self._set_checked_by_text(dock.chromophores_list, spectra)
-        self._set_checked_wavelengths(
-            dock.wavelengths_list, selected_wavelengths
+        set_checked(
+            dock.chromophores_list, lambda item: item.text() in spectra
+        )
+        set_checked(
+            dock.wavelengths_list,
+            lambda item: item.data(Qt.UserRole) in selected_wavelengths,
         )
         dock.generate_so2_checkbox.setChecked(bool(compute_so2))
         dock.generate_thb_checkbox.setChecked(bool(compute_thb))
@@ -554,16 +491,8 @@ class UnmixingController(TaskControllerBase):
         Enable THb and sO2 options only when Hb and HbO2 are selected.
         so2 is activated by default
         """
-        if self.optari_controller.unmixing is None:
-            return
-
         dock = self.optari_controller.unmixing
-        selected = {
-            dock.chromophores_list.item(i).text()
-            for i in range(dock.chromophores_list.count())
-            if dock.chromophores_list.item(i).checkState() == Qt.Checked
-        }
-        hb_pair_available = "Hb" in selected and "HbO2" in selected
+        hb_pair_available = {"Hb", "HbO2"} <= set(self._checked_chromophores())
 
         dock.generate_so2_checkbox.setEnabled(hb_pair_available)
         dock.generate_thb_checkbox.setEnabled(hb_pair_available)
@@ -588,6 +517,7 @@ class UnmixingController(TaskControllerBase):
         axis1_labels: list[str],
         filepath,
         timestamps,
+        acquisition_start,
         pa_kind: str,
         scan_name: str | None = None,
         frame_mode: str,
@@ -608,6 +538,7 @@ class UnmixingController(TaskControllerBase):
             # derived layer or it drops out of the measurement table.
             "scan_name": scan_name,
             "timestamps": timestamps,
+            "acquisition_start": acquisition_start,
         }
         if include_chromophores:
             layer_metadata["chromophores"] = axis1_labels
@@ -631,16 +562,6 @@ class UnmixingController(TaskControllerBase):
     def _params_from_ui(self) -> UnmixParams:
         """Build run parameters from the dock. Raises ValueError with a user-facing message."""
         dock = self.optari_controller.unmixing
-        wavelengths = [
-            int(dock.wavelengths_list.item(i).data(Qt.UserRole))
-            for i in range(dock.wavelengths_list.count())
-            if dock.wavelengths_list.item(i).checkState() == Qt.Checked
-        ]
-        chromophores = [
-            dock.chromophores_list.item(i).text()
-            for i in range(dock.chromophores_list.count())
-            if dock.chromophores_list.item(i).checkState() == Qt.Checked
-        ]
         frame_id = (
             int(self.viewer.dims.current_step[0])
             if dock.current_frames_radio.isChecked()
@@ -648,8 +569,8 @@ class UnmixingController(TaskControllerBase):
         )
         return UnmixParams.build(
             self.optari_controller,
-            wavelengths=wavelengths,
-            chromophores=chromophores,
+            wavelengths=self._checked_wavelengths(),
+            chromophores=self._checked_chromophores(),
             reduce_factor=int(dock.resolution_reduction_factor.value()),
             suffix=dock.suffix_edit.text(),
             generate_thb=dock.generate_thb_checkbox.isChecked(),
@@ -707,6 +628,9 @@ class UnmixingController(TaskControllerBase):
             filepath=params.source_layer_metadata.get("filepath"),
             scan_name=params.source_layer_metadata.get("scan_name"),
             timestamps=params.source_layer_metadata.get("timestamps"),
+            acquisition_start=params.source_layer_metadata.get(
+                "acquisition_start"
+            ),
             pa_kind=pa_kind,
             frame_mode=params.frame_mode,
             parameter=parameter,
@@ -726,7 +650,7 @@ class UnmixingController(TaskControllerBase):
             patato_obj=image,
             colormap=colormap,
         )
-        self.optari_controller._derived_patato_objects[name] = image
+        self.optari_controller.derived_patato_objects[name] = image
         return name
 
     def publish(self, result, params: UnmixParams) -> str:
@@ -741,7 +665,7 @@ class UnmixingController(TaskControllerBase):
                 # Channel labels are used by downstream spectrum displays.
                 axis1_labels=list(map(str, unmixed.ax_1_labels)),
                 pa_kind="unmixed",
-                colormap="magma",
+                colormap=layer_colormap(HDF5Tags.UNMIXED),
                 include_chromophores=True,
             )
         ]
@@ -753,7 +677,7 @@ class UnmixingController(TaskControllerBase):
                     prefix="THb",
                     axis1_labels=["thb"],
                     pa_kind="unmixed_param",
-                    colormap="inferno",
+                    colormap=layer_colormap(HDF5Tags.THB),
                     parameter="thb",
                 )
             )
@@ -765,17 +689,16 @@ class UnmixingController(TaskControllerBase):
                     prefix="sO2",
                     axis1_labels=["so2"],
                     pa_kind="unmixed_param",
-                    colormap="twilight_shifted",
+                    colormap=layer_colormap(HDF5Tags.SO2),
                     parameter="so2",
                 )
             )
 
         # Reassert ROI visibility priority after adding multiple result layers.
-        self.optari_controller._ensure_shapes_layer_on_top()
+        self.optari_controller.ensure_shapes_layer_on_top()
         logger.info("unmixing complete: %s", ", ".join(names))
         return ", ".join(names)
 
     def on_run_unmixing_clicked(self) -> None:
         """Run unmixing from the dock's Run button."""
-        if self.optari_controller.unmixing is not None:
-            self.run_from_ui(self.optari_controller.unmixing)
+        self.run_from_ui(self.optari_controller.unmixing)

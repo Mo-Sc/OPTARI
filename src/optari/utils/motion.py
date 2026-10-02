@@ -13,17 +13,17 @@ def k_motion_scores_optimized(us_data, mask_transducer=60):
     Input shape: (n_frames, n_wavelengths, height, width)
     mask_transducer: int, number of pixels to mask out from the top of the image (transducer)
     """
-    n_frames, n_waves, h, w = us_data.shape
-    num_pixels = h * w
-
-    # Establish constant peak-to-peak data range for stable SSIM
-    global_range = np.ptp(us_data)
+    n_frames = us_data.shape[0]
 
     raw_ssim = np.zeros(n_frames)
     raw_zncc = np.zeros(n_frames)
 
-    if mask_transducer > 0:
-        us_data = us_data[:, :, mask_transducer:, :]
+    us_data = us_data[:, :, mask_transducer:, :]
+    # Counted after cropping
+    num_pixels = us_data.shape[2] * us_data.shape[3]
+
+    # Constant peak-to-peak data range for stable SSIM, taken over the compared pixels
+    global_range = np.ptp(us_data)
 
     for i in range(n_frames):
         block = us_data[i]

@@ -34,6 +34,7 @@ from optari.controllers.unmixing_controller import UnmixParams
 from optari.io.export_pipeline import export_scan_to_hdf5, export_scan_to_ipasc
 from optari.io.utils import save_viewer_screenshot
 from optari.roi.roi_table import SavedRoiTable
+from optari.roi.roi_utils import NO_CLAMP
 from optari.utils.logging import run_log_file
 from optari.utils.tasks import BackgroundStep, run_background_task
 
@@ -45,6 +46,10 @@ logger = logging.getLogger(__name__)
 
 class BatchStepError(Exception):
     """This scan cannot be processed. Record it and move on to the next one."""
+
+    def __init__(self, message: str, step: str = "") -> None:
+        super().__init__(message)
+        self.step = step
 
 
 class BatchCancelled(Exception):
@@ -109,7 +114,7 @@ class BatchRunner:
 
     # ============ driving ============
     def start(self) -> None:
-        """Open the run's log file, seed the controller's scan map, and begin the plan."""
+        """Open the run's log file and begin the plan."""
         stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         log_path = self.plan.output_dir / f"batch_{stamp}.log"
         self._resources.enter_context(run_log_file(log_path))
@@ -118,11 +123,6 @@ class BatchRunner:
             len(self.plan.jobs),
             " -> ".join(self.plan.step_names) or "none",
         )
-        # load_scan resolves a path through the controller's scan map, so every scan
-        # the plan covers has to be in it before the first load.
-        self.controller._scans = {
-            job.scan_path: job.scan_info for job in self.plan.jobs
-        }
         self._gen = self._run()
         self._advance(("ok", None))
 
@@ -134,7 +134,7 @@ class BatchRunner:
 
     def _advance(self, outcome) -> None:
         """Resume the plan generator with the last step's outcome. Main thread only."""
-        if self.controller._is_shut_down:
+        if self.controller.is_shut_down:
             return
         kind, value = outcome
         try:
@@ -196,8 +196,10 @@ class BatchRunner:
             try:
                 yield from self._run_job(job)
             except BatchStepError as exc:
-                logger.warning("scan %s failed: %s", job.scan_path, exc)
-                self.report.fail(job, str(exc))
+                logger.warning(
+                    "scan %s failed at %s: %s", job.scan_path, exc.step, exc
+                )
+                self.report.fail(job, str(exc), step=exc.step)
                 self._on_progress(job, "failed")
                 continue
             except BatchCancelled:
@@ -207,7 +209,9 @@ class BatchRunner:
             except Exception as exc:
                 # A bug in one step must not take the rest of the dataset with it.
                 logger.exception("unexpected failure on %s", job.scan_path)
-                self.report.fail(job, f"{type(exc).__name__}: {exc}")
+                self.report.fail(
+                    job, f"{type(exc).__name__}: {exc}", step="unexpected"
+                )
                 self._on_progress(job, "failed")
                 continue
 
@@ -216,9 +220,8 @@ class BatchRunner:
 
     def _run_job(self, job: BatchJob):
         controller = self.controller
-        if not controller.scan_ctrl.load_scan(job.scan_path):
-            raise BatchStepError("could not open scan")
-        controller.study_path = job.study_path
+        if not controller.scan_ctrl.load_scan(job.scan_path, job.scan_info):
+            raise BatchStepError("could not open scan", "load")
 
         frame_idx = _guard(
             "frame", controller.scan_ctrl.go_to_frame, self.plan.frame
@@ -237,7 +240,7 @@ class BatchRunner:
                 controller,
                 frame_id=run_frame,
             )
-            result = yield _guard(
+            result = yield from _in_background(
                 "reconstruction",
                 controller.reconstruction_ctrl.prepare,
                 params,
@@ -266,7 +269,7 @@ class BatchRunner:
                 },
                 frame_id=run_frame,
             )
-            result = yield _guard(
+            result = yield from _in_background(
                 "segmentation", controller.segmentation_ctrl.prepare, params
             )
             controller.segmentation_ctrl.publish(result, params)
@@ -279,7 +282,7 @@ class BatchRunner:
                 controller,
                 frame_id=run_frame,
             )
-            result = yield _guard(
+            result = yield from _in_background(
                 "unmixing", controller.unmixing_ctrl.prepare, params
             )
             controller.unmixing_ctrl.publish(result, params)
@@ -322,7 +325,8 @@ class BatchRunner:
             if layer is None:
                 available = ", ".join(l.name for l in pa_layers) or "none"
                 raise BatchStepError(
-                    f"no reconstruction layer starting with '{wanted}' (scan has: {available})"
+                    f"no reconstruction layer starting with '{wanted}' (scan has: {available})",
+                    "source",
                 )
         else:
             # Nothing named and nothing produced: fall back to whatever opening the
@@ -330,11 +334,11 @@ class BatchRunner:
             layer = self.controller.active_recon_layer
             if layer is None:
                 raise BatchStepError(
-                    "scan contains no reconstruction to analyse"
+                    "scan contains no reconstruction to analyse", "source"
                 )
 
         self.viewer.layers.selection.select_only(layer)
-        self.controller._resolve_active_recon_layer()
+        self.controller.resolve_active_recon_layer()
         return layer
 
     def _analysis_layers(self, source_layer) -> list:
@@ -347,10 +351,10 @@ class BatchRunner:
 
     def _measure(self, source_layer):
         roi_ctrl = self.controller.roi_ctrl
-        selected_ids = roi_ctrl._selected_roi_ids()
+        selected_ids = roi_ctrl.selected_roi_ids()
         if not selected_ids:
             raise BatchStepError(
-                "ROI was placed but could not be selected for measuring"
+                "ROI was placed but could not be selected for measuring", "roi"
             )
         # "all_pa" lets the scope pick up every PA layer in the scan; otherwise
         # measure only this run's own chain.
@@ -359,11 +363,15 @@ class BatchRunner:
             if self.plan.measure.all_layers
             else self._analysis_layers(source_layer)
         )
-        rows = roi_ctrl._measure_selected_rois(
-            selected_ids, scope=self.plan.measure, layers=layers
+        # A plan has no intensity filter, so the dock's must not leak into its numbers.
+        rows = roi_ctrl.measure_selected_rois(
+            selected_ids,
+            scope=self.plan.measure,
+            layers=layers,
+            clamp=NO_CLAMP,
         )
         if rows.empty:
-            raise BatchStepError("ROI measured no rows on this scan")
+            raise BatchStepError("ROI measured no rows on this scan", "roi")
         return rows
 
     def _write_outputs(
@@ -377,7 +385,7 @@ class BatchRunner:
             )
             if not export_scan_to_hdf5(self.controller, destination):
                 raise BatchStepError(
-                    f"HDF5 export failed (see log): {destination.name}"
+                    f"HDF5 export failed (see log): {destination.name}", "hdf5"
                 )
             self.report.note(job, hdf5_path=str(destination))
 
@@ -388,7 +396,8 @@ class BatchRunner:
             )
             if not export_scan_to_ipasc(self.controller, destination):
                 raise BatchStepError(
-                    f"IPASC export failed (see log): {destination.name}"
+                    f"IPASC export failed (see log): {destination.name}",
+                    "ipasc",
                 )
             self.report.note(job, ipasc_path=str(destination))
 
@@ -451,7 +460,8 @@ class BatchRunner:
         if match is None:
             names = ", ".join(l.name for l in candidates)
             raise BatchStepError(
-                f"no layer starting with '{wanted}' for the overlay (have: {names})"
+                f"no layer starting with '{wanted}' for the overlay (have: {names})",
+                "overlay",
             )
         return match
 
@@ -461,4 +471,13 @@ def _guard(step: str, func, *args, **kwargs):
     try:
         return func(*args, **kwargs)
     except ValueError as exc:
-        raise BatchStepError(f"{step}: {exc}") from exc
+        raise BatchStepError(str(exc), step) from exc
+
+
+def _in_background(step: str, prepare, params):
+    """Hand *prepare(params)* to a worker and return its result; failures count against *step*."""
+    background = _guard(step, prepare, params)
+    try:
+        return (yield background)
+    except BatchStepError as exc:
+        raise BatchStepError(str(exc), step) from exc

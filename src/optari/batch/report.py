@@ -9,13 +9,13 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
-import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import pandas as pd
 
-from optari.io.export_pipeline import ROI_TABLE_META_SHEET, _file_origin
+from optari.io.export_pipeline import ROI_TABLE_META_SHEET, file_origin
+from optari.utils.files import atomic_destination
 
 logger = logging.getLogger(__name__)
 
@@ -149,10 +149,6 @@ class BatchReport:
         """Mark *job* as failed, recording the reason and which step it failed on."""
         self._finish(job, "failed", message=message, failed_step=step)
 
-    def skip(self, job, message: str = "") -> None:
-        """Mark *job* as skipped without being attempted."""
-        self._finish(job, "skipped", message=message)
-
     def cancel(self, job) -> None:
         """Mark *job* as cancelled by the user."""
         self._finish(job, "cancelled")
@@ -176,9 +172,7 @@ class BatchReport:
         if self._destination is None:
             return
         path = self._destination
-        # Keep the .xlsx suffix so ExcelWriter can still infer its engine.
-        temporary_path = path.with_name(f".{path.stem}.tmp{path.suffix}")
-        meta = _file_origin(batch_plan=self._plan_source)
+        meta = file_origin(batch_plan=self._plan_source)
         meta_df = pd.DataFrame(
             {
                 "key": list(meta.keys()),
@@ -186,16 +180,17 @@ class BatchReport:
             }
         )
         try:
-            with pd.ExcelWriter(temporary_path) as writer:
+            with (
+                atomic_destination(path) as temporary,
+                pd.ExcelWriter(temporary) as writer,
+            ):
                 self.rows.to_excel(
                     writer, sheet_name=REPORT_SHEET, index=False
                 )
                 meta_df.to_excel(
                     writer, sheet_name=ROI_TABLE_META_SHEET, index=False
                 )
-            os.replace(temporary_path, path)
         except OSError:
-            temporary_path.unlink(missing_ok=True)
             logger.exception("could not write the batch report to %s", path)
 
     def summary(self) -> str:

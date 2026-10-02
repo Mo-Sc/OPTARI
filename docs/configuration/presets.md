@@ -18,7 +18,7 @@ A saved ROI template. The `geometry` block is the same representation OPTARI use
 | `static` | Put it at its saved coordinates, scaled to the scan's field of view. |
 | `auto` | Anchor it onto the segmentation class named by `geometry.tissue_class`. Needs a segmentation map. |
 
-Selecting an `auto` preset in the Annotation dock falls back to `static` when the current scan has no matching segmentation, so it never arms a placement bound to fail. A batch run takes the preset at its word and records the failure instead.
+Placing an `auto` preset on a scan without a matching segmentation fails with an error, both in the Annotation dock and in a batch run.
 
 ```json title="clinical_ellipse_10x2mm.json"
 {
@@ -165,7 +165,7 @@ How wide the measurement reaches. Mirrors the **Include all …** boxes in the A
 | Key | Values | Meaning |
 | --- | --- | --- |
 | `layers` | `"analysis"` (default), `"all_pa"` | `analysis` measures the `source` reconstruction plus what this run unmixed from it. `all_pa` measures every OA layer in the scan, including reconstructions the plan did not make. |
-| `all_channels` | `true` (default), `false` | Every channel, or just the default one. |
+| `all_channels` | `true` (default), `false` | Every wavelength of the reconstruction, or just the default one. Derived layers (unmixed, sO₂, THb) are always measured on every channel. |
 | `all_frames` | `false` (default), `true` | Every frame, overriding `frame` above. Reconstruction, segmentation and measurement all run over every frame instead of just the anchor frame. The ROI is placed on each frame (re-anchored per frame for `auto` placement) and measured there. `frame` still picks the overlay/report anchor. |
 
 ### `outputs`
