@@ -1,11 +1,15 @@
 """ROI statistics on synthetic images whose correct values are known exactly."""
 
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
+from optari.controllers.roi_controller import RoiController, _layer_holds
 from optari.roi.roi_records import ROIRecord
 from optari.roi.roi_shapes import ROIPlacementConfig, roi_verts_from_mask
 from optari.roi.roi_utils import (
+    NO_CLAMP,
     IntensityClamp,
     compute_roi_spectra,
     compute_roi_stats,
@@ -62,6 +66,11 @@ def test_rectangle_stats_are_exact(image_layer):
         "Recon: test",
     )
 
+    # napari keeps shape vertices as float32, where 3.9 mm is not exact: that
+    # rounding must not count as an edit (which would turn a vendor ROI into OPTARI's)
+    record = rectangle_over_block()
+    assert _layer_holds(record, record.verts.astype(np.float32), "rectangle")
+
 
 def test_ellipse_area_is_close_to_analytic(image_layer):
     layer = image_layer(np.ones((1, 1, 200, 200)), SCALE)
@@ -105,6 +114,27 @@ def test_clamp_clip_keeps_pixels_exclude_drops_them(image_layer):
         2.0
     )
     assert excluded["size_mm"] == pytest.approx(clipped["size_mm"] / 2)
+
+    # Unchecking both filter boxes in the Annotation dock switches filtering off again.
+    box = lambda checked: SimpleNamespace(isChecked=lambda: checked)
+    text = lambda value: SimpleNamespace(text=lambda: value)
+    dock = SimpleNamespace(
+        roi_exclusion_box=box(False),
+        roi_clipping_box=box(True),
+        roi_clip_min_edit=text(""),
+        roi_clip_max_edit=text("4"),
+        roi_exclude_min_edit=text(""),
+        roi_exclude_max_edit=text(""),
+    )
+    roi_ctrl = SimpleNamespace(
+        optari_controller=SimpleNamespace(annotation=dock),
+        update_live_table=lambda: None,
+    )
+    RoiController.on_intensity_settings_changed(roi_ctrl)
+    assert roi_ctrl.intensity_clamp == IntensityClamp(maximum=4, mode="clip")
+    dock.roi_clipping_box = box(False)
+    RoiController.on_intensity_settings_changed(roi_ctrl)
+    assert roi_ctrl.intensity_clamp == NO_CLAMP
 
 
 def test_layer_translate_shifts_mask(image_layer):

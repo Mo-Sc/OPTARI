@@ -257,18 +257,19 @@ class ReconstructionController(TaskControllerBase):
 
         try:
             preset_settings = self.preset_store.load(preset_path)
-            speed_of_sound = int(
+            self._set_settings_editor(preset_settings)
+            self._applied_settings = preset_settings
+            self._settings_dirty = False
+            warning = self._set_speed_of_sound_slider(
                 preset_settings.get(
                     ReconAttributeTags.SPEED_OF_SOUND, SPEED_OF_SOUND_DEFAULT
                 )
             )
-            self._set_settings_editor(preset_settings)
-            self._applied_settings = preset_settings
-            self._settings_dirty = False
-            self._set_speed_of_sound_slider(speed_of_sound)
         except (ValueError, OSError) as e:
             dock.status_label.setText(f"Could not load preset: {e}")
             return
+        if warning:
+            dock.status_label.setText(warning)
 
     def on_all_settings_toggled(self, checked: bool) -> None:
         """Show or hide the in-memory JSON settings editor."""
@@ -302,8 +303,8 @@ class ReconstructionController(TaskControllerBase):
         speed_of_sound = settings_dict.get(
             ReconAttributeTags.SPEED_OF_SOUND, SPEED_OF_SOUND_DEFAULT
         )
-        self._set_speed_of_sound_slider(speed_of_sound)
-        dock.status_label.setText("Preset applied.")
+        warning = self._set_speed_of_sound_slider(speed_of_sound)
+        dock.status_label.setText(f"Preset applied. {warning}".strip())
 
     def on_remove_preset_clicked(self) -> None:
         """Remove the selected reconstruction preset."""
@@ -363,17 +364,29 @@ class ReconstructionController(TaskControllerBase):
         finally:
             self._updating_settings = False
 
-    def _set_speed_of_sound_slider(self, speed_of_sound) -> None:
+    def _set_speed_of_sound_slider(self, speed_of_sound: float) -> str:
+        """Put a preset's speed of sound on the slider.
+
+        The slider holds whole m/s within its range, and a run from the dock uses the
+        slider's value while a batch run uses the preset's own. Returns a warning when
+        the two differ, otherwise an empty string.
+        """
         dock = self.optari_controller.reconstruction
-        clamped = max(
-            SPEED_OF_SOUND_MIN, min(SPEED_OF_SOUND_MAX, int(speed_of_sound))
+        value = max(
+            SPEED_OF_SOUND_MIN,
+            min(SPEED_OF_SOUND_MAX, round(float(speed_of_sound))),
         )
-        self._updating_settings = True
-        try:
-            dock.speed_of_sound_slider.setValue(clamped)
-        finally:
-            self._updating_settings = False
-        self.on_speed_of_sound_changed(clamped)
+        dock.speed_of_sound_slider.setValue(value)
+        self.on_speed_of_sound_changed(value)
+        if value == float(speed_of_sound):
+            return ""
+        warning = (
+            f"The preset's speed of sound of {float(speed_of_sound):g} m/s does not fit the "
+            f"slider (whole m/s, {SPEED_OF_SOUND_MIN}-{SPEED_OF_SOUND_MAX}), so runs from "
+            f"this dock use {value} m/s. Batch runs use the preset's value."
+        )
+        logger.warning(warning)
+        return warning
 
     def on_speed_of_sound_changed(self, value: int) -> None:
         """Keep the speed of sound label in sync with the slider."""

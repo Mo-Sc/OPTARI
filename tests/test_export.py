@@ -98,8 +98,11 @@ def test_hdf5_export_round_trip(ithera_scan, tmp_path):
     UnmixingController._set_export_frame_attrs(unmixed, export_attrs)
 
     destination = tmp_path / "Scan_2.hdf5"
+    # As in the app, the session also holds the scan's restored vendor ROI. It must be
+    # kept as stored and not exported a second time (two ROIs are unpacked below).
+    vendor_records = roi_records_from_scan_rois(ithera_scan, *FOV)
     controller = controller_with(
-        ithera_scan, [roi], {"Unmixed: iThera": unmixed}
+        ithera_scan, [*vendor_records, roi], {"Unmixed: iThera": unmixed}
     )
     assert export_scan_to_hdf5(controller, destination)
     assert not export_scan_to_hdf5(controller, destination)  # never overwrites
