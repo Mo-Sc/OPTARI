@@ -1,50 +1,17 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-
-from qtpy.QtWidgets import (
-    QLabel,
-    QPushButton,
-    QScrollArea,
-    QVBoxLayout,
-    QWidget,
-)
-
-from .dock_helpers import (
-    create_bottom_dock_header,
-    create_bottom_plot_strip,
-)
+from .dock_helpers import RoiPlotsDock
 
 
-@dataclass
-class HistogramDock:
-    widget: QWidget
-    refresh_button: QPushButton
-    scroll_area: QScrollArea
-    plots_container: QWidget
-    status_label: QLabel
+class HistogramDock(RoiPlotsDock):
+    """Per-ROI intensity histograms for the current layer, frame and channel."""
 
 
 def create_histogram_dock() -> HistogramDock:
-    widget = QWidget()
-    layout = QVBoxLayout(widget)
-
-    status_label, refresh_button = create_bottom_dock_header(
-        layout,
+    return HistogramDock.create(
         status_text="Click 'Refresh' to compute ROI histograms.",
-    )
-    refresh_button.setToolTip(
-        "Recompute intensity histograms for the active ROI(s) on the current layer, "
-        "frame, and channel"
-    )
-    scroll_area, plots_container = create_bottom_plot_strip()
-
-    layout.addWidget(scroll_area, stretch=1)
-
-    return HistogramDock(
-        widget=widget,
-        refresh_button=refresh_button,
-        scroll_area=scroll_area,
-        plots_container=plots_container,
-        status_label=status_label,
+        refresh_tooltip=(
+            "Recompute intensity histograms for the active ROI(s) on the current layer, "
+            "frame, and channel"
+        ),
     )

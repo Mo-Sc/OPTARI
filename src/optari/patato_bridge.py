@@ -11,7 +11,6 @@ import numpy as np
 from patato.io.attribute_tags import HDF5Tags  # type: ignore[import]
 import patato as pat  # type: ignore[import]
 
-from optari.utils.motion import k_motion_scores_optimized
 
 from optari.config import settings
 from optari.roi.roi_geometry import RoiGeometry
@@ -25,10 +24,21 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def _fov_size(value) -> float:
-    if isinstance(value, (tuple, list, np.ndarray)):
-        return abs(float(value[1]) - float(value[0]))
-    return float(value)
+def _fov_m(obj) -> tuple[float, float] | None:
+    """``(fov_x_m, fov_y_m)`` a PATATO object records, or None if it records none.
+
+    Each axis is stored either as an extent or as a ``(start, end)`` pair.
+    """
+    if obj.fov is None or None in obj.fov:
+        return None
+    return tuple(
+        (
+            abs(float(axis[1]) - float(axis[0]))
+            if isinstance(axis, (tuple, list, np.ndarray))
+            else float(axis)
+        )
+        for axis in obj.fov[:2]
+    )
 
 
 def scale_from_patato_obj(obj, fallback: tuple) -> tuple:
@@ -38,11 +48,11 @@ def scale_from_patato_obj(obj, fallback: tuple) -> tuple:
     ``shape_2d`` (``(ny, nx)`` in pixels).  Returns *fallback* if either
     value is absent or zero.
     """
-    fov = obj.fov  # (fov_x_m, fov_y_m) metres
-    ny, nx = obj.shape_2d[-2:]  # pixels
-    if fov is None or None in fov:
+    fov = _fov_m(obj)
+    if fov is None:
         return fallback
-    fov_x_m, fov_y_m = _fov_size(fov[0]), _fov_size(fov[1])
+    fov_x_m, fov_y_m = fov
+    ny, nx = obj.shape_2d[-2:]  # pixels
     if not (ny and nx and fov_x_m and fov_y_m):
         logger.warning(
             "no usable FOV on %s, using fallback scale %s", obj, fallback
@@ -166,13 +176,6 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
         n_acq_frames = us_img.shape[0]
         patato_objects["US"] = us_obj
 
-        # if motion-based frame selection is enabled, compute motion scores for each frame
-        # TODO: or maybe always include
-        if settings.general.DEFAULT_FRAME_INDEX == "motion":
-            motion_scores = k_motion_scores_optimized(us_img)
-        else:
-            motion_scores = None
-
         layers.append(
             (
                 us_img,
@@ -184,7 +187,6 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
                     "metadata": {
                         "type": "us",
                         "timestamps": timestamps,
-                        "motion_scores": motion_scores,
                     },
                 },
             )
@@ -300,12 +302,9 @@ def fov_from_objects(patato_objects: dict) -> "tuple[float, float] | None":
     Returns ``None`` if no object exposes usable FOV metadata.
     """
     for obj in patato_objects.values():
-        fov = obj.fov
-        if fov is None or None in fov:
-            continue
-        fov_x_m, fov_y_m = _fov_size(fov[0]), _fov_size(fov[1])
-        if fov_x_m > 0 and fov_y_m > 0:
-            return fov_x_m, fov_y_m
+        fov = _fov_m(obj)
+        if fov is not None and min(fov) > 0:
+            return fov
     return None
 
 

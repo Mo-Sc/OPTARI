@@ -11,12 +11,12 @@ All the Qt stuff is in the controller
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 
 import pandas as pd
 
 from optari.io.export_pipeline import export_roi_table_to_xlsx
+from optari.utils.files import atomic_destination
 from optari.roi.roi_utils import saved_export_columns, saved_table_columns
 
 logger = logging.getLogger(__name__)
@@ -128,15 +128,12 @@ class SavedRoiTable:
         if self._autosave_path is None:
             return
         path = self._autosave_path
-        # Keep the .xlsx suffix so ExcelWriter can still infer its engine.
-        temporary_path = path.with_name(f".{path.stem}.tmp{path.suffix}")
         try:
             if self._rows.empty:
                 path.unlink(missing_ok=True)
                 return
-            export_roi_table_to_xlsx(self._rows, temporary_path)
-            os.replace(temporary_path, path)
+            with atomic_destination(path) as temporary:
+                export_roi_table_to_xlsx(self._rows, temporary)
         except OSError:
             # A failing backup must never discard the ROI data just saved.
-            temporary_path.unlink(missing_ok=True)
             logger.exception("could not autosave the ROI table to %s", path)

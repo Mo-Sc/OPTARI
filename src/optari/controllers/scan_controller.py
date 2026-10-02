@@ -287,11 +287,10 @@ class ScanController(TaskControllerBase):
     def go_to_frame(self, selector: int | str) -> int:
         """Show the frame *selector* means for the loaded scan, and return it.
 
-        ``"motion"`` is the lowest-motion frame. The scores are computed here on demand
-        if the scan was opened with a different default, and cached on the US layer so
-        the next caller gets them for free. A scan with no ultrasound (a raw time
-        series) has nothing to score and falls back to frame 0. Both the viewer and a
-        batch run go through this, so "motion" means the same frame in either.
+        ``"motion"`` is the frame with the lowest ``motion_scores()``. A scan with no
+        ultrasound (a raw time series) has nothing to score and falls back to frame 0.
+        Both the viewer and a batch run go through this, so "motion" means the same
+        frame in either.
 
         Raises ValueError for a frame number the scan does not have.
         """
@@ -309,16 +308,27 @@ class ScanController(TaskControllerBase):
         self.viewer.dims.set_point(0, frame_id)
         return frame_id
 
-    def _lowest_motion_frame(self) -> int:
+    def motion_scores(self) -> np.ndarray | None:
+        """Motion score per frame of the loaded scan (0 = stillest, 1 = most motion),
+        or None without ultrasound.
+
+        Computed on first use and cached on the US layer, so frame selection and any
+        later display of the scores share one computation.
+        """
         us_layer = self.optari_controller.active_us_layer
         if us_layer is None:
+            return None
+        if "motion_scores" not in us_layer.metadata:
+            us_layer.metadata["motion_scores"] = k_motion_scores_optimized(
+                np.asarray(us_layer.data)
+            )
+        return us_layer.metadata["motion_scores"]
+
+    def _lowest_motion_frame(self) -> int:
+        scores = self.motion_scores()
+        if scores is None:
             logger.info("no ultrasound to score motion on, using frame 0")
             return 0
-
-        scores = us_layer.metadata.get("motion_scores")
-        if scores is None:
-            scores = k_motion_scores_optimized(np.asarray(us_layer.data))
-            us_layer.metadata["motion_scores"] = scores
         frame_id = int(np.argmin(scores))
         logger.info(
             "motion-based frame selection: frame %d, score %.4f",
@@ -339,69 +349,36 @@ class ScanController(TaskControllerBase):
         return fov_from_objects(self.optari_controller.patato_objects)
 
     def init_shapes_from_scan(self) -> None:
-        """Clear the ROIs layer and populate it with any ROIs stored in the scan."""
-        shapes_layer = self.optari_controller.shapes_layer
-        if shapes_layer is None:
-            return
-
-        data_event = shapes_layer.events.data
-        data_event.disconnect(
-            self.optari_controller.roi_ctrl.on_shapes_data_changed
-        )
-        try:
-            shapes: list = []
-            self.optari_controller.roi_ctrl.clear_roi_records()
-            shapes_layer.data = []
-            fov = (
-                self.get_fov()
-                if self.optari_controller.pa_data is not None
-                else None
-            )
-            if fov is not None:
-                records = roi_records_from_scan_rois(
-                    self.optari_controller.pa_data, *fov
-                )
-                self.optari_controller.roi_ctrl.restore_roi_records(records)
-                shapes = [
-                    (
-                        record.verts,
-                        record.kind,
-                        record.tissue_class,
-                        record.source,
+        """Fill the freshly created ROIs layer with the ROIs stored in the scan."""
+        roi_ctrl = self.optari_controller.roi_ctrl
+        fov = self.get_fov()
+        if fov is not None:
+            try:
+                # Projects the current frame into the layer, with ids and properties.
+                roi_ctrl.restore_roi_records(
+                    roi_records_from_scan_rois(
+                        self.optari_controller.pa_data, *fov
                     )
-                    for record in records
-                    if record.frame_id == int(self.viewer.dims.point[0])
-                ]
+                )
+                logger.info(
+                    "restored %s stored ROI record(s)",
+                    len(roi_ctrl.roi_records),
+                )
+            except ValueError as exc:
+                logger.warning(
+                    "could not restore stored ROIs from %s: %s",
+                    self.optari_controller.path,
+                    exc,
+                    exc_info=True,
+                )
+                show_warning(
+                    f"Scan loaded without saved ROI annotations: {exc}"
+                )
 
-                # Auto select the loaded ROIs for convenience and to activate the button
-                if shapes:
-                    shapes_layer.selected_data = set(range(len(shapes)))
-
-                # add roi_tissue_class property to shapes layer
-                props = dict(getattr(shapes_layer, "properties", {}) or {})
-                props["roi_tissue_class"] = [tc for _, _, tc, _ in shapes]
-                props["roi_source"] = [src for _, _, _, src in shapes]
-                shapes_layer.properties = props
-
-                if shapes:
-                    logger.info("loaded %s ROI(s) from scan", len(shapes))
-
-        except ValueError as exc:
-            logger.warning(
-                "could not restore stored ROIs from %s: %s",
-                self.optari_controller.path,
-                exc,
-                exc_info=True,
-            )
-            show_warning(
-                "Scan loaded without saved ROI annotations: " f"{exc}"
-            )
-        finally:
-            data_event.connect(
-                self.optari_controller.roi_ctrl.on_shapes_data_changed
-            )
-            # Single refresh at the end regardless of success/failure.
-            self.optari_controller.roi_ctrl.on_shapes_data_changed()
+        # Select the restored ROIs, which also enables the Save button.
+        shapes_layer = self.optari_controller.shapes_layer
+        shapes_layer.selected_data = set(range(len(shapes_layer.data)))
+        roi_ctrl.refresh_ui()
 
     def export_hdf5(self, destination: Path) -> bool:
         """Export scan to HDF5 including OPTARI ROIs and derived datasets."""

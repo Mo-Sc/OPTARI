@@ -67,9 +67,6 @@ def test_build_layers_from_hdf5_scan(hdf5_scan, vendor_recon):
     assert us_kw["name"] == "US" and us.shape == (26, 13, 210, 210)
     assert us_kw["scale"] == pytest.approx((1, 40 / 210, 40 / 210), rel=1e-6)
     assert us_kw["metadata"]["type"] == "us"
-    assert us_kw["metadata"]["motion_scores"].shape == (
-        26,
-    )  # DEFAULT_FRAME_INDEX is "motion"
 
     assert recon_kw[
         "name"

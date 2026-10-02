@@ -12,7 +12,6 @@ from pathlib import Path
 import numpy as np
 from napari.layers import Labels
 from qtpy.QtCore import Qt
-from qtpy.QtWidgets import QListWidgetItem
 
 from optari.patato_bridge import segmentation_from_scan
 from optari.segmentation.segmenter import (
@@ -34,10 +33,13 @@ from optari.utils.setup import (
     get_user_segmentation_presets_dir,
 )
 from optari.widgets.dock_helpers import (
+    add_checkable_item,
     add_preset_to_combo,
+    checked_items,
     populate_preset_combo,
     prompt_preset_name,
     remove_selected_preset,
+    set_checked,
 )
 
 logger = logging.getLogger(__name__)
@@ -286,13 +288,12 @@ class SegmentationController(TaskControllerBase):
 
     def selected_segmentation_class_ids(self) -> set[int]:
         """Return the class IDs checked in the segmentation classes list."""
-        seg_dock = self.optari_controller.segmentation
-        class_ids: set[int] = set()
-        for i in range(seg_dock.segmentation_classes_list.count()):
-            item = seg_dock.segmentation_classes_list.item(i)
-            if item is not None and item.checkState() == Qt.CheckState.Checked:
-                class_ids.add(int(item.data(Qt.ItemDataRole.UserRole)))
-        return class_ids
+        return {
+            item.data(Qt.UserRole)
+            for item in checked_items(
+                self.optari_controller.segmentation.segmentation_classes_list
+            )
+        }
 
     def get_segmenter(self, model_id: str | None = None):
         """The segmenter for *model_id*, defaulting to the dock's current selection.
@@ -383,21 +384,16 @@ class SegmentationController(TaskControllerBase):
         seg_dock.segmentation_classes_list.clear()
 
         for class_id, class_name in self.active_segmentation_class_items():
-            # Add to classes list
-            item = QListWidgetItem(f"{class_id}: {class_name}")
-            item.setData(Qt.ItemDataRole.UserRole, class_id)
-            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
-            item.setCheckState(
-                Qt.CheckState.Checked
-                if (
+            add_checkable_item(
+                seg_dock.segmentation_classes_list,
+                f"{class_id}: {class_name}",
+                class_id,
+                checked=(
                     class_id in selected_class_ids
                     if selected_class_ids is not None
                     else default_class == class_name
-                )
-                else Qt.CheckState.Unchecked
+                ),
             )
-
-            seg_dock.segmentation_classes_list.addItem(item)
 
     def on_preset_changed(self) -> None:
         """Load and apply the selected segmentation preset."""
@@ -539,24 +535,19 @@ class SegmentationController(TaskControllerBase):
 
         dock.status_label.setText(f"Removed preset: {removed_path.name}")
 
-    def set_all_segmentation_classes_checked(self, checked: bool) -> None:
-        """Check or uncheck every entry in the segmentation classes list."""
-        seg_dock = self.optari_controller.segmentation
-        check_state = (
-            Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked
-        )
-        for i in range(seg_dock.segmentation_classes_list.count()):
-            item = seg_dock.segmentation_classes_list.item(i)
-            if item is not None:
-                item.setCheckState(check_state)
-
     def on_segmentation_select_all_classes_clicked(self) -> None:
         """Check all segmentation classes."""
-        self.set_all_segmentation_classes_checked(checked=True)
+        set_checked(
+            self.optari_controller.segmentation.segmentation_classes_list,
+            lambda item: True,
+        )
 
     def on_segmentation_clear_classes_clicked(self) -> None:
         """Uncheck all segmentation classes."""
-        self.set_all_segmentation_classes_checked(checked=False)
+        set_checked(
+            self.optari_controller.segmentation.segmentation_classes_list,
+            lambda item: False,
+        )
 
     def on_generate_roi_from_mask_clicked(self) -> None:
         """Generate one ROI from the selected frame of the segmentation mask."""
@@ -625,12 +616,7 @@ class SegmentationController(TaskControllerBase):
             seg_dock.status_label.setText(str(exc))
             return
 
-        self.optari_controller.shapes_layer.add(
-            verts, shape_type=shape.shape_type
-        )
-        # auto-select the newly added shape, also activates the save button
-        new_idx = len(self.optari_controller.shapes_layer.data) - 1
-        self.optari_controller.shapes_layer.selected_data = {new_idx}
+        self.optari_controller.roi_ctrl.add_shape(verts, shape.shape_type)
         seg_dock.status_label.setText(
             f"ROI generated from class {class_id} in frame {frame_idx}"
         )

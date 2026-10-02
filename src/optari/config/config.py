@@ -2,11 +2,10 @@
 
 from dataclasses import dataclass, field
 import json
-import os
 from pathlib import Path
-import tempfile
 
 from optari.utils.setup import archive_config_dir, get_user_config_file
+from optari.utils.files import atomic_destination
 
 CONFIG_SCHEMA_VERSION = 5  # adapt in default config.json as well
 
@@ -129,21 +128,9 @@ def write_user_config_dict(data: dict) -> Path:
     _config_from_dict(data)
 
     path = get_user_config_file()
-    temporary_path: Path | None = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="w",
+    with atomic_destination(path) as temporary:
+        temporary.write_text(
+            json.dumps(data, indent=4, ensure_ascii=False) + "\n",
             encoding="utf-8",
-            dir=path.parent,
-            prefix=f".{path.stem}.",
-            suffix=".tmp",
-            delete=False,
-        ) as temporary_file:
-            json.dump(data, temporary_file, indent=4, ensure_ascii=False)
-            temporary_file.write("\n")
-            temporary_path = Path(temporary_file.name)
-        os.replace(temporary_path, path)
-    finally:
-        if temporary_path is not None and temporary_path.exists():
-            temporary_path.unlink()
+        )
     return path

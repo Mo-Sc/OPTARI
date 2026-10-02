@@ -11,7 +11,6 @@ from math import ceil
 import numpy as np
 import patato as pat
 from qtpy.QtCore import Qt
-from qtpy.QtWidgets import QListWidgetItem
 
 from patato.io.attribute_tags import HDF5Tags, UnmixingAttributeTags
 from patato.unmixing.spectra import SPECTRA_NAMES
@@ -25,10 +24,14 @@ from optari.patato_bridge import (
 from optari.utils.presets import PresetStore
 from optari.utils.setup import get_user_unmixing_presets_dir
 from optari.widgets.dock_helpers import (
+    add_checkable_item,
     add_preset_to_combo,
+    checked_items,
+    list_items,
     populate_preset_combo,
     prompt_preset_name,
     remove_selected_preset,
+    set_checked,
 )
 
 logger = logging.getLogger(__name__)
@@ -306,22 +309,21 @@ class UnmixingController(TaskControllerBase):
             (dock.remove_preset_button.clicked, self.on_remove_preset_clicked),
         ]
 
-    @staticmethod
-    def _set_checked_by_text(list_widget, selected: set[str]) -> None:
-        """Apply checked state to list items that match selected texts."""
-        for i in range(list_widget.count()):
-            item = list_widget.item(i)
-            state = Qt.Checked if item.text() in selected else Qt.Unchecked
-            item.setCheckState(state)
+    def _checked_wavelengths(self) -> list[int]:
+        return [
+            item.data(Qt.UserRole)
+            for item in checked_items(
+                self.optari_controller.unmixing.wavelengths_list
+            )
+        ]
 
-    @staticmethod
-    def _set_checked_wavelengths(list_widget, selected: set[int]) -> None:
-        """Apply checked state to wavelength items in selected set."""
-        for i in range(list_widget.count()):
-            item = list_widget.item(i)
-            wavelength = int(item.data(Qt.UserRole))
-            state = Qt.Checked if wavelength in selected else Qt.Unchecked
-            item.setCheckState(state)
+    def _checked_chromophores(self) -> list[str]:
+        return [
+            item.text()
+            for item in checked_items(
+                self.optari_controller.unmixing.chromophores_list
+            )
+        ]
 
     def initialize_ui(self) -> None:
         """Initialize preset, chromophore, and wavelength controls once."""
@@ -331,10 +333,7 @@ class UnmixingController(TaskControllerBase):
 
         if dock.chromophores_list.count() == 0:
             for name in sorted(SPECTRA_NAMES.keys()):
-                item = QListWidgetItem(name)
-                item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-                item.setCheckState(Qt.Unchecked)
-                dock.chromophores_list.addItem(item)
+                add_checkable_item(dock.chromophores_list, name)
 
         self.refresh_ui()
         self.on_chromophores_changed()
@@ -342,20 +341,10 @@ class UnmixingController(TaskControllerBase):
     def on_save_preset_clicked(self) -> None:
         """Save the current unmixing controls as a new user preset."""
         dock = self.optari_controller.unmixing
-        selected_wavelengths = [
-            int(dock.wavelengths_list.item(i).data(Qt.UserRole))
-            for i in range(dock.wavelengths_list.count())
-            if dock.wavelengths_list.item(i).checkState() == Qt.Checked
-        ]
-        selected_chromophores = [
-            dock.chromophores_list.item(i).text()
-            for i in range(dock.chromophores_list.count())
-            if dock.chromophores_list.item(i).checkState() == Qt.Checked
-        ]
         preset_settings = {
             UnmixingAttributeTags.RESOLUTION_REDUCE: dock.resolution_reduction_factor.value(),
-            UnmixingAttributeTags.UNMIXING_WAVELENGTHS: selected_wavelengths,
-            UnmixingAttributeTags.SPECTRA: selected_chromophores,
+            UnmixingAttributeTags.UNMIXING_WAVELENGTHS: self._checked_wavelengths(),
+            UnmixingAttributeTags.SPECTRA: self._checked_chromophores(),
             UnmixingAttributeTags.COMPUTE_THB: dock.generate_thb_checkbox.isChecked(),
             UnmixingAttributeTags.COMPUTE_SO2: dock.generate_so2_checkbox.isChecked(),
             UnmixingAttributeTags.SUFFIX: dock.suffix_edit.text().strip(),
@@ -428,32 +417,24 @@ class UnmixingController(TaskControllerBase):
         dock.widget.setProperty("_unmixing_source_name", source_name)
         dock.wavelengths_list.clear()
         for w in wavelengths:
-            wavelength = int(w)
-            item = QListWidgetItem(f"{wavelength} nm")
-            item.setData(Qt.UserRole, wavelength)
-            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-            item.setCheckState(Qt.Checked)
-            dock.wavelengths_list.addItem(item)
+            add_checkable_item(
+                dock.wavelengths_list, f"{int(w)} nm", int(w), checked=True
+            )
 
         self.on_preset_changed()
 
     def on_select_all_wavelengths_clicked(self) -> None:
         """Select all source wavelengths in the list widget."""
-        for i in range(
-            self.optari_controller.unmixing.wavelengths_list.count()
-        ):
-            self.optari_controller.unmixing.wavelengths_list.item(
-                i
-            ).setCheckState(Qt.Checked)
+        set_checked(
+            self.optari_controller.unmixing.wavelengths_list, lambda item: True
+        )
 
     def on_clear_wavelengths_clicked(self) -> None:
         """Clear all source wavelength selections in the list widget."""
-        for i in range(
-            self.optari_controller.unmixing.wavelengths_list.count()
-        ):
-            self.optari_controller.unmixing.wavelengths_list.item(
-                i
-            ).setCheckState(Qt.Unchecked)
+        set_checked(
+            self.optari_controller.unmixing.wavelengths_list,
+            lambda item: False,
+        )
 
     def on_preset_changed(self) -> None:
         """Load selected preset values into the unmixing controls."""
@@ -468,25 +449,16 @@ class UnmixingController(TaskControllerBase):
                 settings.get(UnmixingAttributeTags.RESOLUTION_REDUCE, 1)
             )
             spectra = set(settings.get(UnmixingAttributeTags.SPECTRA, []))
-            selected_wavelengths = set()
-            wavelength_range = settings.get(
-                UnmixingAttributeTags.WAVELENGTH_RANGE
+            # Same resolution as a batch run, so the dock shows what a run would use.
+            selected_wavelengths = set(
+                resolve_unmixing_wavelengths(
+                    settings,
+                    [
+                        item.data(Qt.UserRole)
+                        for item in list_items(dock.wavelengths_list)
+                    ],
+                )
             )
-            if wavelength_range is not None and len(wavelength_range) == 2:
-                start, end = int(wavelength_range[0]), int(wavelength_range[1])
-                selected_wavelengths = {
-                    int(dock.wavelengths_list.item(i).data(Qt.UserRole))
-                    for i in range(dock.wavelengths_list.count())
-                    if start
-                    <= int(dock.wavelengths_list.item(i).data(Qt.UserRole))
-                    <= end
-                }
-
-            explicit_wavelengths = settings.get(
-                UnmixingAttributeTags.UNMIXING_WAVELENGTHS
-            )
-            if explicit_wavelengths is not None:
-                selected_wavelengths = {int(w) for w in explicit_wavelengths}
 
             compute_so2 = settings.get(UnmixingAttributeTags.COMPUTE_SO2, True)
             compute_thb = settings.get(UnmixingAttributeTags.COMPUTE_THB, True)
@@ -497,9 +469,12 @@ class UnmixingController(TaskControllerBase):
 
         dock.resolution_reduction_factor.setValue(max(1, reduce_factor))
         dock.suffix_edit.setText(suffix)
-        self._set_checked_by_text(dock.chromophores_list, spectra)
-        self._set_checked_wavelengths(
-            dock.wavelengths_list, selected_wavelengths
+        set_checked(
+            dock.chromophores_list, lambda item: item.text() in spectra
+        )
+        set_checked(
+            dock.wavelengths_list,
+            lambda item: item.data(Qt.UserRole) in selected_wavelengths,
         )
         dock.generate_so2_checkbox.setChecked(bool(compute_so2))
         dock.generate_thb_checkbox.setChecked(bool(compute_thb))
@@ -511,12 +486,7 @@ class UnmixingController(TaskControllerBase):
         so2 is activated by default
         """
         dock = self.optari_controller.unmixing
-        selected = {
-            dock.chromophores_list.item(i).text()
-            for i in range(dock.chromophores_list.count())
-            if dock.chromophores_list.item(i).checkState() == Qt.Checked
-        }
-        hb_pair_available = "Hb" in selected and "HbO2" in selected
+        hb_pair_available = {"Hb", "HbO2"} <= set(self._checked_chromophores())
 
         dock.generate_so2_checkbox.setEnabled(hb_pair_available)
         dock.generate_thb_checkbox.setEnabled(hb_pair_available)
@@ -586,16 +556,6 @@ class UnmixingController(TaskControllerBase):
     def _params_from_ui(self) -> UnmixParams:
         """Build run parameters from the dock. Raises ValueError with a user-facing message."""
         dock = self.optari_controller.unmixing
-        wavelengths = [
-            int(dock.wavelengths_list.item(i).data(Qt.UserRole))
-            for i in range(dock.wavelengths_list.count())
-            if dock.wavelengths_list.item(i).checkState() == Qt.Checked
-        ]
-        chromophores = [
-            dock.chromophores_list.item(i).text()
-            for i in range(dock.chromophores_list.count())
-            if dock.chromophores_list.item(i).checkState() == Qt.Checked
-        ]
         frame_id = (
             int(self.viewer.dims.current_step[0])
             if dock.current_frames_radio.isChecked()
@@ -603,8 +563,8 @@ class UnmixingController(TaskControllerBase):
         )
         return UnmixParams.build(
             self.optari_controller,
-            wavelengths=wavelengths,
-            chromophores=chromophores,
+            wavelengths=self._checked_wavelengths(),
+            chromophores=self._checked_chromophores(),
             reduce_factor=int(dock.resolution_reduction_factor.value()),
             suffix=dock.suffix_edit.text(),
             generate_thb=dock.generate_thb_checkbox.isChecked(),

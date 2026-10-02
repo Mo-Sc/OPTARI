@@ -157,6 +157,12 @@ class RoiController(TaskControllerBase):
         self._next_track_id += 1
         return record
 
+    def add_shape(self, verts: np.ndarray, shape_type: str) -> None:
+        """Add an ROI to the current frame and select it, which also enables Save."""
+        shapes = self.optari_controller.shapes_layer
+        shapes.add(verts, shape_type=shape_type)
+        shapes.selected_data = {len(shapes.data) - 1}
+
     def restore_roi_records(self, records: list[ROIRecord]) -> None:
         """Replace all ROI records with the ones stored in the scan, resuming the id
         counters above their highest values.
@@ -1108,10 +1114,7 @@ class RoiController(TaskControllerBase):
         ):
             raise ValueError("ROI preset does not fit in the target FOV.")
 
-        controller.shapes_layer.add(verts, shape_type=geometry.kind)
-        # Auto-select the newly placed ROI so the Save button activates immediately.
-        new_idx = len(controller.shapes_layer.data) - 1
-        controller.shapes_layer.selected_data = {new_idx}
+        controller.roi_ctrl.add_shape(verts, geometry.kind)
 
     @staticmethod
     def _place_roi_preset_auto(controller, preset) -> tuple[Labels, int]:
@@ -1157,12 +1160,7 @@ class RoiController(TaskControllerBase):
         except ValueError as exc:
             raise ValueError(f"Class '{target_class_name}': {exc}") from exc
 
-        controller.shapes_layer.add(
-            verts_shifted, shape_type=preset.geometry.kind
-        )
-        # Auto-select the newly placed ROI so the Save button activates immediately.
-        new_idx = len(controller.shapes_layer.data) - 1
-        controller.shapes_layer.selected_data = {new_idx}
+        controller.roi_ctrl.add_shape(verts_shifted, preset.geometry.kind)
         return seg_layer, class_id
 
     @staticmethod

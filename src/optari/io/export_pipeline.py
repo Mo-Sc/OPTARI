@@ -12,9 +12,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import logging
-import os
 import re
-import tempfile
 from pathlib import Path
 
 import h5py
@@ -28,6 +26,7 @@ from optari.config import settings
 from optari.config.config import CONFIG_SCHEMA_VERSION
 from optari.patato_bridge import patato_roi_from_geometry
 from optari.io.utils import filename_token
+from optari.utils.files import atomic_destination
 from optari.roi.roi_features import SAVED_FIXED_SOURCE_COLUMNS
 from optari.roi.roi_geometry import RoiGeometry
 from optari.roi.roi_utils import saved_export_columns
@@ -162,38 +161,22 @@ def export_scan_to_hdf5(controller, destination: Path) -> bool:
     if destination is None:
         return False
 
-    fd, temporary_name = tempfile.mkstemp(
-        dir=destination.parent,
-        prefix=f".{destination.stem}-",
-        suffix=destination.suffix,
-    )
-    os.close(fd)
-    temporary_destination = Path(temporary_name)
-    temporary_destination.unlink()
-    destination_pa_data = None
     try:
-        controller.pa_data.save_hdf5(str(temporary_destination))
-        _write_file_origin(temporary_destination)
-        destination_pa_data = pat.PAData.from_hdf5(
-            str(temporary_destination), mode="r+"
-        )
-        _write_rois(controller, destination_pa_data)
-        _write_derived_data(controller, destination_pa_data)
-        destination_pa_data.close()
-        destination_pa_data = None
-        temporary_destination.replace(destination)
-        logger.info("exported scan to %s", destination)
-        return True
+        with atomic_destination(destination) as temporary:
+            controller.pa_data.save_hdf5(str(temporary))
+            _write_file_origin(temporary)
+            exported = pat.PAData.from_hdf5(str(temporary), mode="r+")
+            try:
+                _write_rois(controller, exported)
+                _write_derived_data(controller, exported)
+            finally:
+                # Closed before the move, which Windows refuses for an open file.
+                exported.close()
     except Exception:
         logger.exception("Failed to export scan to %s", destination.name)
         return False
-    finally:
-        if destination_pa_data is not None:
-            try:
-                destination_pa_data.close()
-            except Exception:
-                pass
-        temporary_destination.unlink(missing_ok=True)
+    logger.info("exported scan to %s", destination)
+    return True
 
 
 def export_scan_to_ipasc(controller, destination: Path) -> bool:

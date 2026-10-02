@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -11,6 +12,8 @@ from qtpy.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QPushButton,
     QInputDialog,
     QRadioButton,
@@ -188,6 +191,36 @@ def create_bottom_plot_strip(
     return scroll_area, plots_container
 
 
+@dataclass
+class RoiPlotsDock:
+    """Base for bottom docks that show one plot per ROI in a scrolling strip."""
+
+    widget: QWidget
+    refresh_button: QPushButton
+    scroll_area: QScrollArea
+    plots_container: QWidget
+    status_label: QLabel
+
+    @classmethod
+    def create(cls, *, status_text: str, refresh_tooltip: str):
+        """Build the dock: status line, Refresh button, and the plot strip."""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        status_label, refresh_button = create_bottom_dock_header(
+            layout, status_text=status_text
+        )
+        refresh_button.setToolTip(refresh_tooltip)
+        scroll_area, plots_container = create_bottom_plot_strip()
+        layout.addWidget(scroll_area, stretch=1)
+        return cls(
+            widget=widget,
+            refresh_button=refresh_button,
+            scroll_area=scroll_area,
+            plots_container=plots_container,
+            status_label=status_label,
+        )
+
+
 def create_bottom_single_plot_container() -> QWidget:
     """Create the single-plot container used by the time-analysis bottom dock."""
     plot_container = QWidget()
@@ -220,3 +253,37 @@ def create_range_edits(
         return edit
 
     return _new_numeric_edit(), _new_numeric_edit()
+
+
+# helpers for lists of checkboxes (chromophores, wavelengths, segmentation classes)
+def add_checkable_item(
+    list_widget: QListWidget, text: str, data=None, *, checked: bool = False
+) -> None:
+    """Append a checkbox entry, with *data* stored under ``Qt.UserRole``."""
+    item = QListWidgetItem(text)
+    item.setData(Qt.UserRole, data)
+    item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+    item.setCheckState(Qt.Checked if checked else Qt.Unchecked)
+    list_widget.addItem(item)
+
+
+def list_items(list_widget: QListWidget) -> list[QListWidgetItem]:
+    """All entries, in display order."""
+    return [list_widget.item(i) for i in range(list_widget.count())]
+
+
+def checked_items(list_widget: QListWidget) -> list[QListWidgetItem]:
+    """The checked entries, in display order."""
+    return [
+        item
+        for item in list_items(list_widget)
+        if item.checkState() == Qt.Checked
+    ]
+
+
+def set_checked(
+    list_widget: QListWidget, should_check: Callable[[QListWidgetItem], bool]
+) -> None:
+    """Check exactly the entries *should_check* accepts."""
+    for item in list_items(list_widget):
+        item.setCheckState(Qt.Checked if should_check(item) else Qt.Unchecked)
