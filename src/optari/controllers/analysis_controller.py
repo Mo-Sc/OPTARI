@@ -1,4 +1,5 @@
-"""Analysis controller: time-series, histogram and spectral plots (pyqtgraph) over selected ROIs."""
+"""Analysis controller: time-series, histogram and spectral plots (pyqtgraph) over selected ROIs,
+and the scan's motion score per frame."""
 
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ from optari.roi.roi_utils import (
     compute_roi_time_series,
     compute_roi_spectra,
     extract_roi_pixels_for_slice,
+    time_axis,
 )
 from optari.utils.misc import roi_color_for_index
 from optari.controllers.base import TaskControllerBase
@@ -36,6 +38,9 @@ class AnalysisController(TaskControllerBase):
         )
         self.optari_controller.histograms.refresh_button.setEnabled(has_data)
         self.optari_controller.spectrum.refresh_button.setEnabled(has_data)
+        self.optari_controller.motion.refresh_button.setEnabled(
+            self.optari_controller.active_us_layer is not None
+        )
 
     def _signal_bindings(self) -> list[tuple[object, Callable]]:
         """Plot dock signals, and the Time Analysis scope in the annotation dock."""
@@ -57,6 +62,18 @@ class AnalysisController(TaskControllerBase):
                 ctrl.annotation.time_analysis_track_radio.toggled,
                 self.on_time_analysis_scope_changed,
             ),
+            (
+                ctrl.motion.refresh_button.clicked,
+                self.on_refresh_motion_clicked,
+            ),
+            (
+                ctrl.motion.frame_line.sigPositionChangeFinished,
+                self.on_motion_frame_line_dragged,
+            ),
+            (
+                ctrl.time_analysis.frame_line.sigPositionChangeFinished,
+                self.on_time_frame_line_dragged,
+            ),
         ]
 
     def on_time_analysis_scope_changed(self, checked: bool) -> None:
@@ -66,6 +83,79 @@ class AnalysisController(TaskControllerBase):
         """
         if checked:
             self._refresh_time_analysis_track_combo()
+
+    # ============ motion ============
+    def on_refresh_motion_clicked(self) -> None:
+        """Score the loaded scan's motion (once, then cached) and plot it."""
+        self.show_motion_scores(compute=True)
+
+    def show_motion_scores(self, *, compute: bool) -> None:
+        """Plot the motion score per frame of the loaded scan, or say why there is none.
+
+        Without *compute* only already cached scores are plotted, so a scan load can
+        refresh the dock for free when the "motion" default frame scored it anyway.
+        """
+        dock = self.optari_controller.motion
+        scores = self.optari_controller.scan_ctrl.motion_scores(
+            compute=compute
+        )
+        if scores is None:
+            dock.curve.setData([], [])
+            dock.stillest.setData([], [])
+            dock.frame_line.hide()
+            if self.optari_controller.pa_data is None:
+                dock.status_label.setText("Load a scan to score its motion.")
+            elif self.optari_controller.active_us_layer is None:
+                dock.status_label.setText(
+                    "This scan has no ultrasound to score motion on."
+                )
+            else:
+                dock.status_label.setText(
+                    "Click 'Refresh' to score motion per frame."
+                )
+            return
+
+        stillest = int(np.argmin(scores))
+        dock.curve.setData(np.arange(len(scores)), scores)
+        dock.stillest.setData([stillest], [scores[stillest]])
+        dock.frame_line.show()
+        self.update_frame_lines()
+        dock.status_label.setText(f"Lowest motion: frame {stillest} (green).")
+
+    def update_frame_lines(self) -> None:
+        """Move the Motion and Temporal frame lines to the viewer's current frame."""
+        frame_channel = selected_frame_and_channel(self.viewer)
+        if frame_channel is None:
+            return
+        frame = frame_channel[0]
+        self.optari_controller.motion.frame_line.setValue(frame)
+
+        time_analysis = self.optari_controller.time_analysis
+        plotted = np.flatnonzero(time_analysis.plotted_frames == frame)
+        # A frame the plot has no point for (not in the plotted layer) gets no line.
+        time_analysis.frame_line.setVisible(plotted.size > 0)
+        if plotted.size:
+            time_analysis.frame_line.setValue(
+                time_analysis.plotted_x[plotted[0]]
+            )
+
+    def on_motion_frame_line_dragged(self, line) -> None:
+        """Show the frame the user dragged the line to."""
+        last_frame = int(self.viewer.dims.nsteps[0]) - 1
+        self.viewer.dims.set_point(
+            0, int(np.clip(round(line.value()), 0, last_frame))
+        )
+        # Snap the line onto the frame actually shown, also when it did not change.
+        self.update_frame_lines()
+
+    def on_time_frame_line_dragged(self, line) -> None:
+        """Show the plotted frame nearest to where the user dragged the line."""
+        time_analysis = self.optari_controller.time_analysis
+        nearest = np.argmin(np.abs(time_analysis.plotted_x - line.value()))
+        self.viewer.dims.set_point(
+            0, int(time_analysis.plotted_frames[nearest])
+        )
+        self.update_frame_lines()
 
     def _current_frame_channel(self) -> tuple[int, int]:
         """Current (frame, channel) from viewer dims. Plots fall back to the first."""
@@ -211,6 +301,9 @@ class AnalysisController(TaskControllerBase):
 
         plot.clear()
         plot.addLegend()
+        plot.addItem(
+            self.optari_controller.time_analysis.frame_line, ignoreBounds=True
+        )
 
         for position, (key, y) in enumerate(series.items()):
             color = roi_color_for_index(position)
@@ -230,7 +323,13 @@ class AnalysisController(TaskControllerBase):
         vb.enableAutoRange(axis=vb.YAxis, enable=True)
         vb.autoRange(padding=0.02)
 
-        # Same source as the x values themselves (roi_utils._time_axis).
+        (
+            self.optari_controller.time_analysis.plotted_frames,
+            self.optari_controller.time_analysis.plotted_x,
+        ) = time_axis(self.optari_controller.active_recon_layer, channel_idx)
+        self.update_frame_lines()
+
+        # Same source as the x values themselves (roi_utils.time_axis).
         layer_metadata = self.optari_controller.active_recon_layer.metadata
         xlabel = (
             "Time (s)"

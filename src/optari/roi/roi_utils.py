@@ -433,7 +433,7 @@ def compute_roi_stats(
     return pd.DataFrame(rows, columns=selected_feature_ids)
 
 
-def _time_axis(
+def time_axis(
     active_recon_layer, channel_idx: int
 ) -> tuple[np.ndarray, np.ndarray]:
     """Resolve the frame indices to plot and the x-axis value for each."""
@@ -460,7 +460,7 @@ def _time_series_setup(active_recon_layer, channel_idx: int):
     x-axis values to plot, the image shape and the per-layer constants.
     """
     data = active_recon_layer.data
-    frames, x = _time_axis(active_recon_layer, channel_idx)
+    frames, x = time_axis(active_recon_layer, channel_idx)
     img_shape = data.shape[-2:]
     layer_info = _LayerInfo.resolve(active_recon_layer, channel_idx, img_shape)
     return data, frames, x, img_shape, layer_info

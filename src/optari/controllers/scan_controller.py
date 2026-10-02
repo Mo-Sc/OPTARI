@@ -113,6 +113,7 @@ class ScanController(TaskControllerBase):
         for layer in list(self.viewer.layers):
             self.viewer.layers.remove(layer)
         self.optari_controller.refresh_controller_uis()
+        self.optari_controller.analysis_ctrl.show_motion_scores(compute=False)
         if restore_startup_logo:
             load_startup_logo(self.viewer)
 
@@ -269,6 +270,8 @@ class ScanController(TaskControllerBase):
 
         # Populate ROIs after dims are initialized to avoid computing stats before the viewer is ready.
         self.init_shapes_from_scan()
+        # Free when the default "motion" frame selection already scored the scan.
+        self.optari_controller.analysis_ctrl.show_motion_scores(compute=False)
 
         # Fit view to the newly loaded data (prevents "zoomed out" state).
         self.viewer.reset_view()
@@ -299,17 +302,20 @@ class ScanController(TaskControllerBase):
         self.viewer.dims.set_point(0, frame_id)
         return frame_id
 
-    def motion_scores(self) -> np.ndarray | None:
+    def motion_scores(self, *, compute: bool = True) -> np.ndarray | None:
         """Motion score per frame of the loaded scan (0 = stillest, 1 = most motion),
         or None without ultrasound.
 
-        Computed on first use and cached on the US layer, so frame selection and any
-        later display of the scores share one computation.
+        Computed on first use and cached on the US layer, so frame selection and the
+        Motion dock share one computation. With ``compute=False`` only cached scores
+        are returned, which lets a caller show them without paying for scoring.
         """
         us_layer = self.optari_controller.active_us_layer
         if us_layer is None:
             return None
         if "motion_scores" not in us_layer.metadata:
+            if not compute:
+                return None
             us_layer.metadata["motion_scores"] = k_motion_scores_optimized(
                 np.asarray(us_layer.data)
             )

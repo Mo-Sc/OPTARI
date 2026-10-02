@@ -27,7 +27,7 @@ The **Scan Browser** dock lists available scans in the selected folder.
 
 By default, OPTARI scores every US frame for motion, using an algorithm that combines structural similarity and
 zero-mean normalized cross-correlation. When a new scan is loaded, it automatically selects the frame with lowest motion. This is an attempt to reduce operator variability in frame selection. It can be turned off in
-[`config.json`](../configuration/configuration-schema.md) (`general.DEFAULT_FRAME_INDEX`).
+[`config.json`](../configuration/configuration-schema.md) (`general.DEFAULT_FRAME_INDEX`). The calculated motion score for every frame can be inspected using the Motion widget, where the stillest frame is marked in green.
 
 ## Grid mode
 

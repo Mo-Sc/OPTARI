@@ -14,6 +14,7 @@ from optari.widgets.roi_dock import create_roi_dock
 from optari.widgets.scan_browser_dock import create_scan_browser_dock
 from optari.widgets.segmentation_dock import create_segmentation_dock
 from optari.widgets.spectrum_dock import create_spectrum_dock
+from optari.widgets.motion_dock import create_motion_dock
 from optari.widgets.time_analysis_dock import create_time_analysis_dock
 from optari.widgets.unmixing_dock import create_unmixing_dock
 
@@ -46,6 +47,7 @@ class UiManager:
         controller.time_analysis = add(
             create_time_analysis_dock(), "Temporal", "bottom"
         )
+        controller.motion = add(create_motion_dock(), "Motion", "bottom")
         controller.histograms = add(
             create_histogram_dock(), "Histogram", "bottom"
         )

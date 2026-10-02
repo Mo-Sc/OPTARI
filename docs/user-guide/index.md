@@ -9,7 +9,7 @@ OPTARI's window is built from napari's dock system around a central image viewer
 |---|---|
 | Left | **Layer List** and **Layer Controls** — napari's built-in docks for the loaded US, OA, and annotation layers |
 | Right (tabbed) | **Scan Browser**, **Annotation**, **Segmentation**, **Unmixing**, **Reconstruction** |
-| Bottom (tabbed) | **ROI Tables**, **Time Analysis**, **Histogram**, **Spectrum** |
+| Bottom (tabbed) | **ROI Tables**, **Time Analysis**, **Motion**, **Histogram**, **Spectrum** |
 | Center | The napari viewer — displays US, OA, and annotation layers |
 
 In addition, there is an **Info** dock (showing metadata for the current scan/slice) that floats as its own window rather than docking to a fixed position.

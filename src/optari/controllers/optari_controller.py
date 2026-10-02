@@ -22,6 +22,7 @@ from optari.io.discovery import ScanInfo
 from optari.widgets.annotation_dock import AnnotationDock
 from optari.widgets.reconstruction_dock import ReconstructionDock
 from optari.widgets.segmentation_dock import SegmentationDock
+from optari.widgets.motion_dock import MotionDock
 from optari.widgets.time_analysis_dock import TimeAnalysisDock
 from optari.widgets.unmixing_dock import UnmixingDock
 from optari.widgets.histogram_dock import HistogramDock
@@ -88,6 +89,7 @@ class OptariController:
         # -- bottom elements --
         self.roi: RoiDock | None = None
         self.time_analysis: TimeAnalysisDock | None = None
+        self.motion: MotionDock | None = None
         self.histograms: HistogramDock | None = None
         self.spectrum: SpectrumDock | None = None
 
@@ -354,6 +356,7 @@ class OptariController:
         if frame_idx != self._last_frame_idx:
             self._last_frame_idx = frame_idx
             self.roi_ctrl.project_current_frame()
+            self.analysis_ctrl.update_frame_lines()
 
         self.refresh_all()
 
