@@ -1,0 +1,2645 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for OPTARI, an open-source napari-based toolkit for clinical photoacoustic/optoacoustic imaging analysis.">
+      
+      
+      
+        <link rel="canonical" href="https://mo-sc.github.io/OPTARI/developer-guide/roi-system/">
+      
+      
+        <link rel="prev" href="../data-and-integrations/">
+      
+      
+        <link rel="next" href="../contributing/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/logo.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>The ROI System - OPTARI</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#the-roi-system" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="OPTARI" class="md-header__button md-logo" aria-label="OPTARI" data-md-component="logo">
+      
+  <img src="../../assets/logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            OPTARI
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              The ROI System
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Mo-Sc/OPTARI" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Mo-Sc/OPTARI
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../installation/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Installation
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../user-guide/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  User Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../clinical-workflows/manual-roi-workflow/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Sample Workflow
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../configuration/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Configuration
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../architecture/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Developer Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../citing/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Citing
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="OPTARI" class="md-nav__button md-logo" aria-label="OPTARI" data-md-component="logo">
+      
+  <img src="../../assets/logo.png" alt="logo">
+
+    </a>
+    OPTARI
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Mo-Sc/OPTARI" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Mo-Sc/OPTARI
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../user-guide/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/viewer-and-navigation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Viewer & Navigation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/metadata/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metadata
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/roi-annotation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ROI Annotation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/temporal-and-spectral-analysis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Temporal & Spectral Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/segmentation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Segmentation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/reconstruction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reconstruction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/unmixing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Unmixing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/batch-processing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Batch Processing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/exporting-data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exporting Data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/keyboard-shortcuts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Keyboard Shortcuts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/faq/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FAQ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sample Workflow
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Sample Workflow
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../clinical-workflows/manual-roi-workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Manual ROI Workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../clinical-workflows/segmentation-unmixing-workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Segmentation + Unmixing Workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../clinical-workflows/time-tracking-workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracking Intensity over Time
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../clinical-workflows/batch-mode-workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Batch Mode Workflow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../configuration/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Configuration
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/configuration-schema/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration Schema
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/presets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Presets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../configuration/segmentation-models/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Segmentation Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Developer Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../controllers-and-widgets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Controllers & Widgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../data-and-integrations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data & Integrations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The ROI System
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The ROI System
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lifecycle
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-three-identifiers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The three identifiers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#roirecord" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ROIRecord
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#roigeometry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RoiGeometry
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="RoiGeometry">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-not-napari-mm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why not napari mm?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-coordinate-frames" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3 coordinate frames
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-type" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The type
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#measurement-roicontext-and-the-feature-registry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Measurement: ROIContext and the feature registry
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-saved-analysis-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Saved Analysis table
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The Saved Analysis table">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#saving-across-frames" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Saving across frames
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#schema-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Schema version
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#restoring-to-the-viewer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Restoring to the viewer
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#roi-presets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ROI presets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#live-refresh" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Live Refresh
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mask-caching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mask caching
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rules
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_6" id="__nav_6_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/controllers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Controllers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/roi-system/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ROI System
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/segmentation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Segmentation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/patato-bridge/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PATATO Bridge & Export
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-reference/batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../citing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Citing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lifecycle
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-three-identifiers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The three identifiers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#roirecord" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ROIRecord
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#roigeometry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RoiGeometry
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="RoiGeometry">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-not-napari-mm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why not napari mm?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-coordinate-frames" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3 coordinate frames
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-type" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The type
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#measurement-roicontext-and-the-feature-registry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Measurement: ROIContext and the feature registry
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-saved-analysis-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Saved Analysis table
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The Saved Analysis table">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#saving-across-frames" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Saving across frames
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#schema-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Schema version
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#restoring-to-the-viewer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Restoring to the viewer
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#roi-presets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ROI presets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#live-refresh" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Live Refresh
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mask-caching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mask caching
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rules
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/Mo-Sc/OPTARI/edit/main/docs/developer-guide/roi-system.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="the-roi-system">The ROI System<a class="headerlink" href="#the-roi-system" title="Permanent link">&para;</a></h1>
+<p>Regions of interest are the main measurement tool in OPTARI: everything in the
+Saved Analysis table, the time and spectral plots, and the ROI parts of the HDF5 export 
+comes from one. This page describes how an ROI is represented.</p>
+<p>The challenge is to keep the ROI correct and persist across multiple transitions:</p>
+<ul>
+<li><strong>Between frames.</strong> One drawn region may exist on every frame of a sequence (e.g. when preset scope is all frames), and those
+  copies must stay recognisable as the same region.</li>
+<li><strong>Between reconstructions.</strong> The same anatomy may be measured on layers with different
+  pixel grids and different fields of view.</li>
+<li><strong>Between sessions and machines.</strong> The saved table should survive a crash, we should be able to resume a previous analysis, and be able to import/export it to a new machine.</li>
+</ul>
+<p>All that without ROIs colliding, unintended duplication or loss of data.</p>
+<h2 id="lifecycle">Lifecycle<a class="headerlink" href="#lifecycle" title="Permanent link">&para;</a></h2>
+<p>The following diagram shows the stages one ROI passes through:</p>
+<pre class="mermaid"><code>flowchart TD
+    A["1 · Created&lt;br/&gt;drawn, placed from a preset, or loaded from a scan"]
+    B["2 · Live in the viewer&lt;br/&gt;shown in the Live Analysis table as you edit it"]
+    C["3 · Saved&lt;br/&gt;a snapshot is copied into the Saved Analysis table"]
+    D["4 · Persisted&lt;br/&gt;autosaved, and exportable to XLSX or HDF5"]
+
+    A --&gt; B --&gt; C --&gt; D
+    D -. "double-click a saved row" .-&gt; B</code></pre>
+<p>While the next one shows the involved classes:</p>
+<pre class="mermaid"><code>flowchart LR
+    subgraph Sources
+        draw[Draw / apply a preset]
+        scan[Load a scan's ROIs]
+    end
+
+    record["ROIRecord&lt;br/&gt;&lt;small&gt;one per shape per frame&lt;/small&gt;"]
+    ctx["ROIContext&lt;br/&gt;&lt;small&gt;via FEATURE_REGISTRY&lt;/small&gt;"]
+    geometry["RoiGeometry&lt;br/&gt;&lt;small&gt;FOV-independent form&lt;/small&gt;"]
+
+    live[Live Analysis table]
+    saved[SavedRoiTable]
+    export[XLSX / HDF5 export]
+
+    draw --&gt; record
+    scan --&gt; record
+    record --&gt; ctx --&gt; live
+    ctx --&gt; saved
+    record -- "from_record" --&gt; geometry --&gt; saved
+    saved --&gt; export
+    export -. "Import XLSX" .-&gt; saved
+    saved -. "to_record, on restore" .-&gt; record</code></pre>
+<h2 id="the-three-identifiers">The three identifiers<a class="headerlink" href="#the-three-identifiers" title="Permanent link">&para;</a></h2>
+<p>The most common source of confusion is that an ROI carries three IDs. They exist at
+different scopes and are not interchangeable.</p>
+<table>
+<thead>
+<tr>
+<th>Identifier</th>
+<th>Type</th>
+<th>Scope</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>roi_id</code></td>
+<td><code>int</code></td>
+<td>session</td>
+<td>One shape on one frame. Allocated from a counter, and used for display ordering and colour.</td>
+</tr>
+<tr>
+<td><code>track_id</code></td>
+<td><code>int</code></td>
+<td>session</td>
+<td>The tracked group a shape belongs to — the same region followed across frames. What the analysis plots aggregate on.</td>
+</tr>
+<tr>
+<td><code>roi_group_uid</code></td>
+<td><code>str</code></td>
+<td>global</td>
+<td>The group's stable identity, e.g. <code>20260828T115300-5127328a2658</code>. Survives export, import, restore and other machines.</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition warning">
+<p class="admonition-title">Group by <code>roi_group_uid</code>, never by <code>roi_id</code></p>
+<p><code>roi_id</code> and <code>track_id</code> are per-session counters. After importing a table, or when
+merging exports from two machines, two unrelated ROIs can share them. Only
+<code>roi_group_uid</code> is safe as a grouping key, in code and in downstream statistics alike.</p>
+</div>
+<p><strong>Every record in a group shares one <code>roi_group_uid</code>.</strong> A uid identifies a <strong>region</strong>, not a measurement of it. Copying a shape to another frame,
+merging shapes into a group, or interpolating between keyframes all mean giving the results
+a common uid. <code>ROIRecord</code> creates a fresh one by default, so any code that copies a record
+must pass the source's uid explicitly.</p>
+<p>To uniquely identify a measurement, <code>roi_ts</code>, created once per save, can be used. <code>new_roi_group_uid()</code> in <code>roi_records.py</code> creates roi_group_uid as a UTC timestamp plus 48 random bits.</p>
+<h2 id="roirecord"><code>ROIRecord</code><a class="headerlink" href="#roirecord" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">ROIRecord</span><span class="p">:</span>
+    <span class="n">roi_id</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">track_id</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">frame_id</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">verts</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>          <span class="c1"># napari (y_mm, x_mm)</span>
+    <span class="n">kind</span><span class="p">:</span> <span class="nb">str</span>                  <span class="c1"># "polygon" | "ellipse" | "line" | ...</span>
+    <span class="n">source</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">OPTARI_SOURCE_TAG</span>
+    <span class="n">tissue_class</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"undefined"</span>
+    <span class="n">roi_group_uid</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="n">new_roi_group_uid</span><span class="p">)</span>
+</code></pre></div>
+<p>Records are <strong>frame-owned</strong>: there is one per (shape, frame), not one shape with a list of
+frames. <code>RoiController</code> holds them in <code>self._roi_records: dict[int, ROIRecord]</code>, keyed by
+<code>roi_id</code>, and this dict is the single source of truth. The napari Shapes layer is a
+projection of it:</p>
+<ul>
+<li><code>project_current_frame()</code> writes the current frame's records into <code>shapes.data</code>, and
+  records the display order in <code>self._projection_ids</code> (display index → <code>roi_id</code>).</li>
+<li><code>sync_records_from_shapes()</code> reads user edits back. Ids are matched positionally, since
+  napari appends new shapes at the end and in-place edits keep their position.</li>
+</ul>
+<p><code>source</code> is the provenance tag, <code>OPTARI_v&lt;version&gt;</code> for anything OPTARI drew, or the
+originating <code>roi_class</code> for ROIs loaded from a scan. Editing a loaded ROI sets it to
+<code>OPTARI_v&lt;version&gt;</code>. HDF5 export writes <code>source</code> as PATATO's <code>roi_class</code>, replaces the
+stored ROIs whose class starts with <code>OPTARI</code> with the session's records, and leaves every
+other stored ROI untouched.</p>
+<h2 id="roigeometry"><code>RoiGeometry</code><a class="headerlink" href="#roigeometry" title="Permanent link">&para;</a></h2>
+<p>Everything OPTARI writes to disk uses <code>RoiGeometry</code> (<code>roi_geometry.py</code>): vertices in
+<strong>PATATO coordinates</strong>, metres, origin at the image centre.</p>
+<h3 id="why-not-napari-mm">Why not napari mm?<a class="headerlink" href="#why-not-napari-mm" title="Permanent link">&para;</a></h3>
+<p>napari coordinates are millimetres relative to the field of view corner. The same
+physical point therefore has different napari coordinates on two reconstructions with
+different fields of view.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Origin</th>
+<th>Axes</th>
+<th>Units</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>napari</td>
+<td>top-left of the FOV</td>
+<td>y down, x right</td>
+<td>mm</td>
+</tr>
+<tr>
+<td>PATATO</td>
+<td>image centre</td>
+<td>y up, x right</td>
+<td>m</td>
+</tr>
+</tbody>
+</table>
+<p><code>patato_to_napari()</code> and <code>napari_to_patato()</code> are the only two places for that and
+every conversion in the codebase goes through them.</p>
+<h3 id="3-coordinate-frames">3 coordinate frames<a class="headerlink" href="#3-coordinate-frames" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Frame</th>
+<th>Use</th>
+<th>Anchored to</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>world mm</strong></td>
+<td><code>ROIRecord.verts</code>, always</td>
+<td>the viewer's shared physical space</td>
+</tr>
+<tr>
+<td><strong>PATATO metres</strong></td>
+<td><code>RoiGeometry.verts_m</code>, everything persisted</td>
+<td>the scan's FOV centre</td>
+</tr>
+<tr>
+<td><strong>layer pixels</strong></td>
+<td>mask indices</td>
+<td>one layer's own array</td>
+</tr>
+</tbody>
+</table>
+<p>A layer can be placed at a nonzero <code>translate</code>, its own offset within world space. The Shapes layer carrying ROIs is never translated, so ROI vertices are always world mm, and
+scan-loaded layers sit at translate 0.</p>
+<p><code>roi_centroid</code> is left in <strong>world</strong> mm on purpose. It is an informative column only, never
+round-tripped back into a shape.</p>
+<h3 id="the-type">The type<a class="headerlink" href="#the-type" title="Permanent link">&para;</a></h3>
+<p><code>RoiGeometry</code> holds <code>verts_m</code>, <code>kind</code>, <code>tissue_class</code> and <code>source</code>, which is everything needed to
+rebuild an <code>ROIRecord</code> and converts in both directions:</p>
+<div class="highlight"><pre><span></span><code><span class="n">geometry</span> <span class="o">=</span> <span class="n">RoiGeometry</span><span class="o">.</span><span class="n">from_record</span><span class="p">(</span><span class="n">record</span><span class="p">,</span> <span class="n">fov_x_m</span><span class="p">,</span> <span class="n">fov_y_m</span><span class="p">)</span>
+<span class="n">record</span>   <span class="o">=</span> <span class="n">geometry</span><span class="o">.</span><span class="n">to_record</span><span class="p">(</span><span class="n">roi_id</span><span class="o">=...</span><span class="p">,</span> <span class="n">track_id</span><span class="o">=...</span><span class="p">,</span> <span class="n">frame_id</span><span class="o">=...</span><span class="p">,</span>
+                              <span class="n">roi_group_uid</span><span class="o">=...</span><span class="p">,</span> <span class="n">fov_x_m</span><span class="o">=...</span><span class="p">,</span> <span class="n">fov_y_m</span><span class="o">=...</span><span class="p">)</span>
+<span class="n">blob</span>     <span class="o">=</span> <span class="n">geometry</span><span class="o">.</span><span class="n">to_json</span><span class="p">()</span>          <span class="c1"># the roi_geometry table column</span>
+<span class="n">geometry</span> <span class="o">=</span> <span class="n">RoiGeometry</span><span class="o">.</span><span class="n">from_json</span><span class="p">(</span><span class="n">blob</span><span class="p">)</span>
+</code></pre></div>
+<p>It does <strong>not</strong> carry any identifier. Geometry is shape, identity is
+<code>ROIRecord</code>. Keeping them apart is what lets one preset be placed many times,
+each placement getting its own identity.</p>
+<h2 id="measurement-roicontext-and-the-feature-registry">Measurement: <code>ROIContext</code> and the feature registry<a class="headerlink" href="#measurement-roicontext-and-the-feature-registry" title="Permanent link">&para;</a></h2>
+<p>Statistics are computed by a registry, so adding a measurement only requires a one-line change.</p>
+<p><code>ROIContext</code> (<code>roi_features.py</code>) is an bundle of everything a single measurement needs: the identifiers, provenance (<code>scan_name</code>, <code>frame</code>, <code>channel</code>, <code>src_layer</code>,
+timestamps), the geometry blob, and the pixel values (<code>vals_raw</code>, the clamped <code>vals</code>, the
+scale, the vertices).</p>
+<p>The functions in <code>roi_utils.py</code> that measure ROIs share three pieces:</p>
+<p><code>iter_roi_masks(records, layer, image_shape)</code>
+    Yields each usable ROI with its mask, and is the only place that turns a world-space ROI
+    into pixel indices.
+<code>IntensityClamp</code>
+    The ROI intensity filter <code>clip</code> bounds outliers into range. <code>exclude</code> drops them, which also changes <code>n_pixels</code> and <code>size_mm</code>.
+    The default instance is a no-op
+<code>_LayerInfo</code> / <code>_roi_context</code>
+    Per-layer constants resolved once per call rather than per ROI.</p>
+<p><code>FeatureSpec</code> pairs a dtype with a function from context to value, and <code>FEATURE_REGISTRY</code>
+maps a column name to a spec:</p>
+<div class="highlight"><pre><span></span><code><span class="n">FEATURE_REGISTRY</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">FeatureSpec</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">"roi_id"</span><span class="p">:</span> <span class="n">FeatureSpec</span><span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">c</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">roi_id</span><span class="p">)),</span>
+    <span class="s2">"mean"</span><span class="p">:</span>   <span class="n">FeatureSpec</span><span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">c</span><span class="p">:</span> <span class="n">_nan_stat</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">vals</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">nanmean</span><span class="p">)),</span>
+    <span class="o">...</span>
+<span class="p">}</span>
+</code></pre></div>
+<p><code>compute_roi_stats()</code> builds one context per ROI and evaluates only the requested specs.
+Three column sets are derived from the registry, in <code>roi_utils.py</code>:</p>
+<ul>
+<li><code>visible_feature_columns()</code> — what the user enabled in settings; also the live table's columns.</li>
+<li><code>saved_table_columns()</code> — <code>SAVED_FIXED_SOURCE_COLUMNS</code> plus the enabled features.</li>
+<li><code>saved_export_columns()</code> — <code>SAVED_FIXED_SOURCE_COLUMNS</code> all features.</li>
+</ul>
+<p>This is intentional: the saved table always stores the full feature set, and
+visibility settings only affect what is displayed. </p>
+<div class="admonition note">
+<p class="admonition-title">Adding a feature</p>
+<p>Add a <code>FeatureSpec</code> to <code>FEATURE_REGISTRY</code>, add the field to <code>ROIContext</code> if it needs new
+input, and add the key to <code>annotation.roi_features</code> in the packaged
+<code>config.json</code>. Existing user configs tolerate a missing key so no schema bump is needed for a purely additive feature.</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">Expensive features must be conditional</p>
+<p>Context fields are built once per ROI, and <code>compute_roi_stats</code> runs on every
+drag. Serializing <code>roi_geometry</code> is guarded by <code>needs_geometry</code>to not waste per time-series refresh. If you add a field
+that is more than arithmetic, guard it the same way.</p>
+</div>
+<h2 id="the-saved-analysis-table">The Saved Analysis table<a class="headerlink" href="#the-saved-analysis-table" title="Permanent link">&para;</a></h2>
+<p><code>SavedRoiTable</code> (<code>roi_table.py</code>) contains saved measurements and mirrors them to file. The table is not reset when the scan changes, so one table can span several scans.</p>
+<ul>
+<li><strong>Saving never overwrites.</strong> <code>add_measurements</code> appends and returns the
+  <code>roi_group_uid</code>s that already had earlier measurements.</li>
+<li><strong>Every change reaches disk.</strong> Each change autosaves.</li>
+<li><strong>Re-importing a file adds nothing.</strong> <code>merge_imported</code> skips rows already present.</li>
+</ul>
+<p><code>SAVED_FIXED_SOURCE_COLUMNS</code> are present regardless of visibility settings, so a saved row is
+always fully identifiable: the three identifiers, <code>study_folder</code>, <code>scan_folder</code>, <code>scan_name</code>,
+<code>frame</code>, <code>channel</code>, <code>src_layer</code>, <code>roi_ts</code>, <code>kind</code>, <code>scan_ts</code>, <code>filepath</code>.</p>
+<h3 id="saving-across-frames">Saving across frames<a class="headerlink" href="#saving-across-frames" title="Permanent link">&para;</a></h3>
+<p>With <strong>include all frames</strong> checked, a second, explicit choice — the same Scope
+naming as Time Analysis — decides which record <code>on_save_clicked</code> measures each target frame on:</p>
+<ul>
+<li><strong>Selected ROI</strong> (default) — the record the user selected, unchanged on every frame.
+  The one predictable choice regardless of tracking history, and what an ROI drawn once on a
+  single frame needs to be measured across the whole sequence.</li>
+<li><strong>Track ID</strong> — each frame is measured on <em>that frame's own</em> record if the
+  selected ROI's track has one there; a frame the track has no record on is <strong>skipped</strong>, not
+  measured with a substitute. Opt-in rather than automatic on purpose: whether a frame gets a
+  real measurement or a fabricated stand-in must not depend on invisible tracking history the
+  checkbox alone can't convey.</li>
+</ul>
+<p><code>_track_histories_for_selection</code> builds the track→frame lookup once per save — each selected
+track's fallback record and its whole <code>{frame_id: record}</code> history — via
+<code>roi_utils.records_by_track_and_frame</code>, the same lookup <code>compute_roi_track_time_series</code> uses
+for its Track ID scope. It used to be rebuilt on every <code>(layer, frame)</code> pair inside the save
+loop, which cost 5.6 ms on a session with 30 tracked ROIs over 100 frames purely from
+rescanning every live record per frame; hoisting it out and sharing the lookup with the
+time-series function brought that under 0.1 ms. <code>_records_at_frame(tracks, frame_idx,
+follow_track=...)</code> then does the cheap per-frame dispatch: fallback-always when
+<code>follow_track</code> is False, <code>tracks[track][frame_idx]</code>-or-omit when True — the same "skip, don't
+fabricate" choice Time Analysis's Track ID scope makes for a gap in the plot.</p>
+<h3 id="schema-version">Schema version<a class="headerlink" href="#schema-version" title="Permanent link">&para;</a></h3>
+<p><code>ROI_TABLE_SCHEMA_VERSION</code> lives in <code>export_pipeline.py</code> beside <code>OPTARI_FILE_FORMAT_VERSION</code>. <code>CONFIG_SCHEMA_VERSION</code> versions the user's config file and a
+mismatch archives <code>~/.optari</code>.</p>
+<p><code>import_roi_table_from_xlsx()</code> rejects a file with no <code>optari_meta</code>
+sheet, a version mismatch, a missing fixed column, or a row with a blank <code>roi_group_uid</code>.
+Everything else is reconciled <strong>by name</strong>: unknown columns are dropped and absent ones filled
+with NaN.</p>
+<h3 id="restoring-to-the-viewer">Restoring to the viewer<a class="headerlink" href="#restoring-to-the-viewer" title="Permanent link">&para;</a></h3>
+<p>Restore is <strong>per row, not per group</strong>. A row records where the ROI was measured. Double-clicking restores one row. Selecting multiple rows and pressing <strong>Enter</strong> restores everything selected.</p>
+<p><code>_records_from_saved_rows</code> still collapses on <code>(roi_group_uid, frame)</code>, since one ROI can produce
+a row per layer, frame and channel. Without that, a restore → adjust → re-save
+cycle would produce rows that look like an unrelated ROI. A group already in the viewer keeps
+its <code>track_id</code>, so frames restored one at a time still belong together, and a
+<code>(roi_group_uid, frame)</code> already present is skipped rather than duplicated. <code>_saved_rows_match_current_context</code> requires the same scan, the same layer and in-range
+frames, and refuses the whole selection otherwise.</p>
+<h2 id="roi-presets">ROI presets<a class="headerlink" href="#roi-presets" title="Permanent link">&para;</a></h2>
+<p>A preset is a reusable <strong>template</strong>, not an ROI instance: a named <code>RoiGeometry</code> plus a
+<code>source_fov_m</code> and a description, stored as JSON under <code>presets/roi/</code>. It carries no
+identifier, so each placement creates a new one.</p>
+<p><code>source_fov_m</code> is not needed to interpret the geometry, that is FOV-independent already. It
+exists only for the placement policy in <code>RoiGeometry.repositioned()</code>: <strong>positions scale with
+the field of view, the shape does not</strong>, so a preset drawn at the centre of a 40 mm field
+lands at the centre of a 25 mm one but keeps its original physical size.</p>
+<p>Two placement modes, in <code>RoiController</code>:</p>
+<ul>
+<li><code>_place_roi_preset_static</code> applies the policy above.</li>
+<li><code>_place_roi_preset_auto</code> aligns the preset to a segmentation class named by the preset's
+  <code>tissue_class</code>. The anchor math itself is <code>_anchor_verts_to_mask</code>.</li>
+</ul>
+<p>With Scope <code>All Frames</code>, placing a preset goes through <code>expand_current_projection_to_all_frames</code>,
+which duplicates the selected frame's ROI onto the rest of the sequence as one
+group. For <code>static</code> mode it duplicates the anchor frame's vertices unchanged, exactly as copy/paste would. 
+For <code>auto</code> mode, <code>_place_roi_preset_auto</code>
+returns the segmentation layer and class id it resolved, and <code>_per_frame_auto_resolver</code> uses
+them to re-anchor independently on <strong>each frame's own mask</strong>. A frame the class isn't present
+on (including one the segmentation layer doesn't cover) returns <code>None</code> and is <strong>skipped</strong>.</p>
+<div class="admonition note">
+<p class="admonition-title"><code>roi_shapes.py</code> has different use:</p>
+<p><code>roi_verts_from_mask()</code> in <code>roi_shapes.py</code> is used by the segmentation dock: given a class
+mask and size parameters, it derives a <strong>new</strong> shape's geometry (largest-component
+isolation, centre-column anchoring, depth offset, contour extraction). It does not
+participate in persistence: <code>RoiGeometry</code> represents an ROI, <code>roi_shapes.py</code> constructs
+one. Its <code>shape_type</code> argument is named after napari's Shapes-layer argument
+(<code>shapes_layer.add(shape_type=...)</code>) and is the same concept as <code>ROIRecord.kind</code>.</p>
+</div>
+<h2 id="live-refresh">Live Refresh<a class="headerlink" href="#live-refresh" title="Permanent link">&para;</a></h2>
+<p>Every edit in the viewer flows through <code>RoiController.on_shapes_data_changed</code>, which syncs
+records, refreshes the shape labels and rebuilds the live table. It runs on every mouse-move
+of a drag, so its important to keep it efficient.</p>
+<p>Three guards try to reduce overhead:</p>
+<p><strong>napari emits <code>events.data</code> in pairs.</strong> An intent event fires before the layer is changed
+(<code>adding</code>, <code>changing</code>, <code>removing</code>) and a completion event after (<code>added</code>, <code>changed</code>,
+<code>removed</code>). We only act on the completion actions.</p>
+<p><strong>Several signals can report the same edit.</strong> <code>sync_records_from_shapes()</code> returns whether it
+actually changed anything, and the expensive refresh is skipped when it did not. This is what
+keeps the <code>set_data</code> fallback below from doubling the work on an add.</p>
+<p><strong>A geometry edit cannot change a label.</strong> <code>_refresh_shape_display()</code> writes edge colours, the
+five property arrays and the text spec, which are all derived from ids, sources and tissue classes, none
+of which are affected by drags (<code>source</code> and <code>tissue_class</code> are never mutated after construction). It is
+called only when <code>_projection_ids</code> actually changed.</p>
+<div class="admonition note">
+<p class="admonition-title"><code>set_data</code> is the copy/paste fallback</p>
+<p>Copy/pasting a ROI (<code>Shapes._paste_data()</code>) appends to the layer and emits <strong>only</strong> <code>set_data</code>, never
+<code>events.data</code>, so a pasted ROI would otherwise stay invisible to the records until the
+user moved it. <code>on_shapes_set_data</code> therefore watches that signal too, but <code>set_data</code>
+also fires on every redraw, so it does a shape-count comparison first and escalates only
+when the count disagrees with <code>_projection_ids</code>.</p>
+</div>
+<h2 id="mask-caching">Mask caching<a class="headerlink" href="#mask-caching" title="Permanent link">&para;</a></h2>
+<p>Rasterizing an ROI using <code>skimage.draw.polygon</code> is the expensive part of <code>compute_roi_stats</code>. The live table
+recomputes every ROI on every drag while only one of them has moved, so most of that work is
+repeated.</p>
+<p><code>_rasterize</code> is therefore an <code>lru_cache(maxsize=64)</code> keyed on everything a mask depends on:
+the vertex bytes, the vertex count, the shape kind, <code>sy</code>/<code>sx</code>, and the image shape. A moved or
+resized ROI changes its key and misses, every untouched ROI hits. Cached masks are marked <code>writeable = False</code>, because the
+same array is handed to several callers. <code>clear_mask_cache()</code> is called from <code>clear_roi_records()</code>
+on scan switch to release the memory.</p>
+<h2 id="rules">Rules<a class="headerlink" href="#rules" title="Permanent link">&para;</a></h2>
+<p>Things to keep in mind:</p>
+<ol>
+<li><code>self._roi_records</code> is the source of truth. Never write <code>shapes.data</code> directly. go through
+   <code>project_current_frame()</code>.</li>
+<li>Anything persisted uses PATATO metres. napari millimetres exist only inside the viewer.</li>
+<li>Every record in a group shares one <code>roi_group_uid</code>. Code that copies a record must pass it.</li>
+<li>Group by <code>roi_group_uid</code>, never <code>roi_id</code> or <code>track_id</code>.</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../data-and-integrations/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Data &amp; Integrations">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Data & Integrations
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../contributing/" class="md-footer__link md-footer__link--next" aria-label="Next: Contributing">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Contributing
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2026 Moritz Schillinger
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.indexes", "navigation.top", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link", "content.action.edit"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
