@@ -4,7 +4,7 @@
 
 The **Scan Browser** dock lists available scans in the selected folder.
 
-1. Open Study: Select a study folder. OPTARI discovers both iThera-native (`Scan_` folders containing `.msot` files) and compatible HDF5 files (`.hdf5`).
+1. Open Study: Select the study **folder** that contains the scans. OPTARI discovers both iThera-native (`Scan_` folders containing `.msot` files) and compatible HDF5 files (`.hdf5`) in it.
 2. Click a scan in the list to load it. If both an iThera and an HDF5 version of the same scan exist, OPTARI
    prefers the HDF5 one.
 3. Switch scans: The viewer, ROIs, and analysis docks update to the newly selected scan.
