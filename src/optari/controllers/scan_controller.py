@@ -262,25 +262,16 @@ class ScanController(TaskControllerBase):
         # Initialize viewer position to DEFAULT_FRAME_INDEX and DEFAULT_CHANNEL_INDEX
         try:
             self.go_to_frame(settings.general.DEFAULT_FRAME_INDEX)
-            self.viewer.dims.set_point(
-                1, settings.general.DEFAULT_CHANNEL_INDEX
-            )
-        except Exception:
-            logger.warning(
-                "failed to set initial viewer position. Setting to (0, 0)",
-                exc_info=True,
-            )
+        except ValueError as exc:  # a configured frame this scan does not have
+            logger.warning("%s, starting at frame 0 instead", exc)
             self.viewer.dims.set_point(0, 0)
-            self.viewer.dims.set_point(1, 0)
+        self.viewer.dims.set_point(1, settings.general.DEFAULT_CHANNEL_INDEX)
 
         # Populate ROIs after dims are initialized to avoid computing stats before the viewer is ready.
         self.init_shapes_from_scan()
 
         # Fit view to the newly loaded data (prevents "zoomed out" state).
-        try:
-            self.viewer.reset_view()
-        except Exception:
-            logger.info("failed to reset viewer view", exc_info=True)
+        self.viewer.reset_view()
 
         return True
 

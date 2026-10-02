@@ -75,50 +75,20 @@ class MeasureScope:
 
 
 def _scale_sy_sx(active_recon_layer) -> tuple[float, float]:
-    scale = getattr(active_recon_layer, "scale", (1.0, 1.0, 1.0))
+    scale = active_recon_layer.scale
     return float(scale[-2]), float(scale[-1])
 
 
-def _clamp_channel_idx(active_recon_layer, channel_idx: int) -> int:
-    data = np.asarray(active_recon_layer.data)
-    if data.ndim < 2:
-        return 0
-    n_channels = int(data.shape[1])
-    return int(np.clip(int(channel_idx), 0, max(0, n_channels - 1)))
-
-
 def _is_reconstructed_frame(active_recon_layer, frame_idx: int) -> bool:
-    frames = getattr(active_recon_layer, "metadata", {}).get("frames")
+    frames = active_recon_layer.metadata.get("frames")
     return frames is None or frame_idx in frames
 
 
 def _channel_value(active_recon_layer, channel_idx: int) -> object:
-    axis1_labels = active_recon_layer.metadata.get("axis1_labels")
-    if isinstance(axis1_labels, (list, tuple)) and 0 <= channel_idx < len(
-        axis1_labels
-    ):
-        channel_value = axis1_labels[channel_idx]
-    else:
-        wavelengths = active_recon_layer.metadata.get("wavelengths", None)
-        if isinstance(wavelengths, (list, tuple)) and 0 <= channel_idx < len(
-            wavelengths
-        ):
-            channel_value = wavelengths[channel_idx]
-        else:
-            channel_value = channel_idx
-
-    if isinstance(channel_value, np.generic):
-        channel_value = channel_value.item()
-    if isinstance(channel_value, (bytes, bytearray)):
-        channel_value = channel_value.decode("utf-8")
-    if isinstance(channel_value, float) and channel_value.is_integer():
-        channel_value = int(channel_value)
-    if isinstance(channel_value, str):
-        try:
-            channel_value = int(channel_value)
-        except ValueError:
-            pass
-    return channel_value
+    """The channel's label: a wavelength (nm) or a chromophore/parameter name."""
+    label = active_recon_layer.metadata["axis1_labels"][channel_idx]
+    # numpy scalars would land in the table as e.g. "np.int64(700)"
+    return label.item() if isinstance(label, np.generic) else label
 
 
 def slice_datetime(layer, frame_idx: int, channel_idx: int) -> str:
@@ -220,7 +190,7 @@ def layer_fov_m(active_recon_layer, image_shape) -> tuple[float, float]:
 def _layer_translate(active_recon_layer) -> tuple[float, float]:
     """A layer is placed at ``translate`` to align reconstructions that use
     different coordinate conventions (like DeepMB)."""
-    translate = getattr(active_recon_layer, "translate", (0.0, 0.0, 0.0))
+    translate = active_recon_layer.translate
     return float(translate[-2]), float(translate[-1])
 
 
@@ -429,17 +399,12 @@ def compute_roi_stats(
     # Serializing geometry is the expensive context field, and the live table
     # refreshes on every drag -> only compute the caller wants the column
     needs_geometry = "roi_geometry" in selected_feature_ids
-    empty = pd.DataFrame(columns=selected_feature_ids)
-    if active_recon_layer is None:
-        return empty
-
     frame_idx = int(frame_idx)
     if not _is_reconstructed_frame(active_recon_layer, frame_idx):
         # this frame was zero-padded → return empty stats
-        return empty
+        return pd.DataFrame(columns=selected_feature_ids)
 
-    channel_idx = _clamp_channel_idx(active_recon_layer, channel_idx)
-    img2d = np.asarray(active_recon_layer.data)[frame_idx, channel_idx]
+    img2d = active_recon_layer.data[frame_idx, channel_idx]
     layer_info = _LayerInfo.resolve(
         active_recon_layer, channel_idx, img2d.shape
     )
@@ -477,8 +442,7 @@ def _time_axis(
     active_recon_layer, channel_idx: int
 ) -> tuple[np.ndarray, np.ndarray]:
     """Resolve the frame indices to plot and the x-axis value for each."""
-    data = np.asarray(active_recon_layer.data)
-    n_frames = data.shape[0]
+    n_frames = active_recon_layer.data.shape[0]
 
     frames_meta = active_recon_layer.metadata.get("frames")
     frames = (
@@ -497,21 +461,14 @@ def _time_axis(
 
 
 def _time_series_setup(active_recon_layer, channel_idx: int):
-    """Shared setup for both time-series scopes: validate the layer, resolve
-    the channel and x-axis, and the per-layer constants.
-    Returns None if there's nothing plottable, so callers can early-return
+    """Shared setup for both time-series scopes: the layer's data, the frames and
+    x-axis values to plot, the image shape and the per-layer constants.
     """
-    if active_recon_layer is None:
-        return None
-    data = np.asarray(active_recon_layer.data)
-    if data.ndim < 3:
-        return None
-
-    channel_idx = _clamp_channel_idx(active_recon_layer, channel_idx)
+    data = active_recon_layer.data
     frames, x = _time_axis(active_recon_layer, channel_idx)
     img_shape = data.shape[-2:]
     layer_info = _LayerInfo.resolve(active_recon_layer, channel_idx, img_shape)
-    return data, channel_idx, frames, x, img_shape, layer_info
+    return data, frames, x, img_shape, layer_info
 
 
 def _measure_series(
@@ -570,10 +527,9 @@ def compute_roi_time_series(
     Used for the "Selected ROI" scope: whatever a shape looks like right now is used
     for the whole sequence.
     """
-    setup = _time_series_setup(active_recon_layer, channel_idx)
-    if setup is None:
-        return np.asarray([]), {}
-    data, channel_idx, frames, x, img_shape, layer_info = setup
+    data, frames, x, img_shape, layer_info = _time_series_setup(
+        active_recon_layer, channel_idx
+    )
 
     series: dict[int, np.ndarray] = {}
     # One mask per ROI, reused across every frame: geometry is fixed here, only the
@@ -611,10 +567,9 @@ def compute_roi_track_time_series(
     Returns the same ``(x, {key: y})`` shape as ``compute_roi_time_series``, here
     with a single entry, keyed by *track_id*
     """
-    setup = _time_series_setup(active_recon_layer, channel_idx)
-    if setup is None:
-        return np.asarray([]), {}
-    data, channel_idx, frames, x, img_shape, layer_info = setup
+    data, frames, x, img_shape, layer_info = _time_series_setup(
+        active_recon_layer, channel_idx
+    )
     sy, sx = layer_info.sy, layer_info.sx
     ty, tx = _layer_translate(active_recon_layer)
 
@@ -657,15 +612,11 @@ def extract_roi_pixels_for_slice(
 ):
     """Extract pixel values per ROI for the given frame/channel."""
 
-    if active_recon_layer is None:
-        return {}
-
     frame_idx = int(frame_idx)
     if not _is_reconstructed_frame(active_recon_layer, frame_idx):
         return {}
 
-    channel_idx = _clamp_channel_idx(active_recon_layer, channel_idx)
-    img2d = np.asarray(active_recon_layer.data)[frame_idx, channel_idx]
+    img2d = active_recon_layer.data[frame_idx, channel_idx]
 
     return {
         roi.roi_id: clamp.apply(img2d[mask])
@@ -684,13 +635,7 @@ def compute_roi_spectra(
 ):
     """Compute per-ROI mean intensity over channels for a fixed frame."""
 
-    if active_recon_layer is None:
-        return np.asarray([]), {}, None
-
-    data = np.asarray(active_recon_layer.data)
-    if data.ndim < 2:
-        return np.asarray([]), {}, None
-
+    data = active_recon_layer.data
     frame_idx = int(frame_idx)
     if not _is_reconstructed_frame(active_recon_layer, frame_idx):
         return np.asarray([]), {}, None
@@ -699,18 +644,14 @@ def compute_roi_spectra(
     x = np.arange(n_channels, dtype=float)
     x_tick_labels: list[str] | None = None
 
-    axis1_labels = getattr(active_recon_layer, "metadata", {}).get(
-        "axis1_labels", None
-    )
+    axis1_labels = active_recon_layer.metadata.get("axis1_labels")
     if (
         isinstance(axis1_labels, (list, tuple))
         and len(axis1_labels) == n_channels
     ):
         x_tick_labels = [str(label) for label in axis1_labels]
     else:
-        wavelengths = getattr(active_recon_layer, "metadata", {}).get(
-            "wavelengths", None
-        )
+        wavelengths = active_recon_layer.metadata.get("wavelengths")
         if (
             isinstance(wavelengths, (list, tuple))
             and len(wavelengths) == n_channels

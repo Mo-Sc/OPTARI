@@ -50,12 +50,6 @@ class MenuManager:
     @staticmethod
     def setup(controller: "OptariController") -> None:
         window = controller.viewer.window
-        if not hasattr(window, "main_menu"):
-            logger.warning(
-                "napari window exposes no main_menu; skipping OPTARI menu setup."
-            )
-            return
-
         MenuManager._apply_default_dock_visibility(controller)
         MenuManager._add_optari_menu(controller, window)
 
@@ -148,19 +142,13 @@ class MenuManager:
     @staticmethod
     def _prune_napari_menus(window) -> None:
         for attribute in HIDDEN_NAPARI_MENUS:
-            menu = getattr(window, attribute, None)
-            if menu is None:
-                logger.debug("napari window has no %s to hide.", attribute)
-                continue
-            menu.menuAction().setVisible(False)
+            getattr(window, attribute).menuAction().setVisible(False)
 
         for attribute, hidden_ids in (
             ("file_menu", HIDDEN_FILE_ENTRIES),
             ("view_menu", HIDDEN_VIEW_ENTRIES),
         ):
-            menu = getattr(window, attribute, None)
-            if menu is not None:
-                MenuManager._hide_entries(menu, hidden_ids)
+            MenuManager._hide_entries(getattr(window, attribute), hidden_ids)
 
     @staticmethod
     def _hide_entries(menu, hidden_ids: tuple[str, ...]) -> None:

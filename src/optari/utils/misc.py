@@ -16,12 +16,12 @@ def parse_float_input(text: str) -> float | None:
     Parse a float from text input. Returns None if parsing fails or input is
     empty.
     """
-    t = (text or "").strip()
-    if t == "":
+    text = text.strip()
+    if not text:
         return None
     try:
-        return float(t.replace(",", "."))
-    except Exception:
+        return float(text.replace(",", "."))
+    except ValueError:  # an unfinished entry such as "-" or "1e"
         return None
 
 

@@ -231,7 +231,7 @@ class AnalysisController(TaskControllerBase):
             )
 
         vb = plot.getViewBox()
-        vb.enableAutoRange(axis=getattr(vb, "YAxis", "y"), enable=True)
+        vb.enableAutoRange(axis=vb.YAxis, enable=True)
         vb.autoRange(padding=0.02)
 
         # Same source as the x values themselves (roi_utils._time_axis).

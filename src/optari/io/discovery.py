@@ -118,7 +118,7 @@ def discover_studies(
                 # outside the dataset the user picked.
                 if child.is_dir() and not child.is_symlink()
             )
-        except (PermissionError, OSError):
+        except OSError:
             logger.warning("could not list '%s', skipping", folder)
             return
         for child in children:

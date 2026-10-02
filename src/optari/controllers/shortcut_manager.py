@@ -1,5 +1,6 @@
 import logging
 import sys
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,6 @@ SHORTCUTS = {
 class ShortcutManager:
     """
     Manager for registering custom OPTARI keyboard shortcuts.
-    Automatically handles both Qt QPushButtons and magicgui PushButtons.
     """
 
     @classmethod
@@ -55,38 +55,18 @@ class ShortcutManager:
         cls,
         controller,
         shortcut_id: str,
-        button_getter: callable,
+        button_getter: Callable,
         action_name: str,
     ) -> None:
-        """
-        Bind keyboard shortcut to a UI button.
-        depending on the widget, buttons can be implemented as Qt QPushButtons or magicgui PushButtons.
-        (button.click() and isEnabled() vs button.clicked() and button.enabled)
-        """
-        viewer = controller.viewer
-        shortcut = SHORTCUTS.get(shortcut_id)
+        """Bind keyboard shortcut to a dock's QPushButton."""
+        shortcut = SHORTCUTS[shortcut_id]
 
-        @viewer.bind_key(shortcut, overwrite=True)
-        def trigger_button(v):
-
+        @controller.viewer.bind_key(shortcut, overwrite=True)
+        def trigger_button(viewer):
             logger.info("shortcut %s triggered", shortcut)
-
             button = button_getter(controller)
-
-            # Handles the API differences between magicgui and native Qt widgets
-            is_active = (
-                button.enabled
-                if hasattr(button, "enabled")
-                else button.isEnabled()
-            )
-
-            if is_active:
-                if hasattr(button, "click"):
-                    # Qt: .click()
-                    button.click()
-                else:
-                    # magicgui: .clicked())
-                    button.clicked()
+            if button.isEnabled():
+                button.click()
             else:
                 logger.warning(
                     "shortcut %s ignored: %s button is disabled",

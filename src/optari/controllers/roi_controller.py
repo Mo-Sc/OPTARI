@@ -95,12 +95,12 @@ def _roi_name_popup() -> tuple[str, str, str] | None:
     if dialog.exec() != QDialog.Accepted:
         return None
 
-    roi_id = (roi_id_edit.text() or "").strip()
+    roi_id = roi_id_edit.text().strip()
     if not roi_id:
         return None
 
-    description = (description_edit.text() or "").strip()
-    tissue_class = (tissue_class_edit.text() or "").strip() or "undefined"
+    description = description_edit.text().strip()
+    tissue_class = tissue_class_edit.text().strip() or "undefined"
     return roi_id, description, tissue_class
 
 
@@ -559,57 +559,38 @@ class RoiController(TaskControllerBase):
         Falls back to an empty table when there is no shapes layer or no active
         reconstruction layer to measure against.
         """
-        if self.optari_controller.shapes_layer is None:
-            self.optari_controller.roi.live_table.value = pd.DataFrame(
-                columns=visible_feature_columns()
-            )
-            return
-
-        if self.optari_controller.active_recon_layer is None:
-            cols = visible_feature_columns()
-            self.optari_controller.roi.live_table.value = pd.DataFrame(
-                columns=cols
-            )
+        live_cols = visible_feature_columns()
+        table = self.optari_controller.roi.live_table
+        shapes = self.optari_controller.shapes_layer
+        layer = self.optari_controller.active_recon_layer
+        if shapes is None or layer is None:
+            table.value = pd.DataFrame(columns=live_cols)
             return
 
         frame_channel = selected_frame_and_channel(self.viewer)
         if frame_channel is None:
             return
         frame_idx, channel_idx = frame_channel
-        live_cols = visible_feature_columns()
-
-        try:
-            df_live = compute_roi_stats(
-                self.current_records(),
-                self.optari_controller.active_recon_layer,
-                frame_idx,
-                channel_idx,
-                clamp=self.intensity_clamp,
-                feature_ids=live_cols,
-            )
-        except Exception:
-            logger.exception("update_live_table failed")
-            df_live = pd.DataFrame(columns=live_cols)
-
-        selected_rows = []
-        if self.optari_controller.shapes_layer is not None:
-            selected_rows = list(
-                self.optari_controller.shapes_layer.selected_data
-            )
+        df_live = compute_roi_stats(
+            self.current_records(),
+            layer,
+            frame_idx,
+            channel_idx,
+            clamp=self.intensity_clamp,
+            feature_ids=live_cols,
+        )
 
         self._syncing = True
         try:
-            self.optari_controller.roi.live_table.value = df_live
-            self._set_live_table_selection(selected_rows)
+            table.value = df_live
+            self._set_live_table_selection(list(shapes.selected_data))
         finally:
             self._syncing = False
 
-        # Color first table column to match each ROI color.
-        num_shapes = len(self.optari_controller.shapes_layer.data)
-        for row_idx in range(num_shapes):
-            item = self.optari_controller.roi.live_table.native.item(
-                row_idx, 0
-            )
+        # Color first table column to match each ROI color. A shape whose geometry
+        # cannot be measured has no row.
+        for row_idx in range(len(shapes.data)):
+            item = table.native.item(row_idx, 0)
             if item is not None:
                 item.setBackground(QColor(roi_color_for_index(row_idx)))
 
@@ -725,7 +706,7 @@ class RoiController(TaskControllerBase):
             return pd.DataFrame()
 
         frame_channel = selected_frame_and_channel(self.viewer)
-        if frame_channel is None or np.asarray(active_layer.data).ndim < 2:
+        if frame_channel is None:
             logger.info("Active layer has no frame/channel dimensions")
             return pd.DataFrame()
         frame_idx, channel_idx = frame_channel
@@ -749,11 +730,8 @@ class RoiController(TaskControllerBase):
 
         collected: list[pd.DataFrame] = []
         for layer in target_layers:
-            layer_data = np.asarray(layer.data)
-            if layer_data.ndim < 2:
-                continue
-
-            frames_meta = getattr(layer, "metadata", {}).get("frames")
+            layer_data = layer.data
+            frames_meta = layer.metadata.get("frames")
             frame_indices = (
                 [int(f) for f in frames_meta or range(layer_data.shape[0])]
                 if scope.all_frames

@@ -142,7 +142,7 @@ def _step_preset_name(steps: dict, label: str) -> str | None:
 def _load_named(store: PresetStore, name: str, label: str) -> dict:
     try:
         return store.load(name)
-    except (FileNotFoundError, ValueError, OSError) as exc:
+    except (ValueError, OSError) as exc:
         raise ValueError(
             f"Could not load {label} preset '{name}': {exc}"
         ) from exc
@@ -222,7 +222,7 @@ def build_plan(
     if name is not None:
         try:
             roi = RoiPresetStore(get_user_roi_presets_dir()).get(name)
-        except (FileNotFoundError, TypeError, ValueError, OSError) as exc:
+        except (TypeError, ValueError, OSError) as exc:
             raise ValueError(
                 f"Could not load ROI preset '{name}': {exc}"
             ) from exc

@@ -469,7 +469,7 @@ class SettingsDialog(QDialog):
 
         try:
             registry = load_model_registry()
-        except (OSError, ValueError, KeyError, json.JSONDecodeError) as exc:
+        except (OSError, ValueError, KeyError) as exc:
             logger.exception("Could not read the segmentation model registry.")
             self.status_label.setText(
                 f"Could not read the model registry: {exc}"
