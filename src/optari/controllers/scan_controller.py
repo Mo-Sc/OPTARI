@@ -289,7 +289,7 @@ class ScanController(TaskControllerBase):
         logger.info("acquisition start frame selection: frame %d", frame_id)
         return frame_id
 
-    def motion_scores(self) -> np.ndarray | None:
+    def motion_scores(self, *, compute: bool = True) -> np.ndarray | None:
         """Motion score per frame of the loaded scan (0 = stillest, 1 = most motion),
         or None without ultrasound.
 
