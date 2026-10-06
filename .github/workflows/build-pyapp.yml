@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*' # Runs on release tags (e.g., v0.8.0)
+  # Manual test builds of any branch, named after the branch instead of a tag.
+  workflow_dispatch:
 
 jobs:
   build-pyapp:

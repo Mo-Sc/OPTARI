@@ -118,28 +118,12 @@ class ScanController(TaskControllerBase):
             load_startup_logo(self.viewer)
 
     def on_browse_study_clicked(self) -> None:
-        """Prompt for a study folder or HDF5 scan file."""
-        dialog = QFileDialog(
-            None,
-            "Select study folder or HDF5 scan file",
-            str(Path.cwd()),
+        """Prompt for a study folder, the folder that contains the scans."""
+        folder = QFileDialog.getExistingDirectory(
+            None, "Select study folder", str(Path.cwd())
         )
-        dialog.setFileMode(QFileDialog.AnyFile)
-        dialog.setNameFilter("HDF5 scans (*.hdf5);;All files (*)")
-        if not dialog.exec():
-            return
-        selected = dialog.selectedFiles()
-        if not selected:
-            return
-        target = Path(selected[0])
-        if target.is_dir():
-            self.set_scan_folder(target)
-        elif target.is_file():
-            self.open_scan_file(target)
-
-    def open_scan_file(self, scan_path: Path) -> None:
-        """Discover a scan's study and select that scan in the browser."""
-        self.set_scan_folder(scan_path.parent, selected_scan=scan_path)
+        if folder:
+            self.set_scan_folder(Path(folder))
 
     def on_scan_selected(self, row: int) -> None:
         """Load the scan at *row* in the scan list, ignoring an out-of-range selection."""
@@ -148,25 +132,15 @@ class ScanController(TaskControllerBase):
             return
         self.load_scan(*scans[row])
 
-    def set_scan_folder(
-        self, folder: Path, *, selected_scan: Path | None = None
-    ) -> None:
-        """Discover scans in *folder* and select *selected_scan* or the first available scan."""
-        folder = Path(folder)
+    def set_scan_folder(self, folder: Path) -> None:
+        """Discover scans in *folder* and select the first one."""
         self.scans = discover_scans(folder)
 
         self.optari_controller.scan_browser.set_folder(folder)
         self.optari_controller.scan_browser.set_scans(list(self.scans.items()))
 
-        # Auto-select first scan if available.
         if self.scans:
-            selected_scan = selected_scan or next(iter(self.scans))
-            try:
-                row = list(self.scans).index(selected_scan)
-            except ValueError:
-                self.reset_scan_state()
-                return
-            self.optari_controller.scan_browser.scans_list.setCurrentRow(row)
+            self.optari_controller.scan_browser.scans_list.setCurrentRow(0)
         else:
             self.reset_scan_state()
 
