@@ -354,9 +354,7 @@ NO_CLAMP = IntensityClamp()
 
 def polygon_mask(verts_px, image_shape):
     """Rasterize a polygon (verts in pixel coords) to a boolean mask."""
-    ys = np.round(verts_px[:, 0]).astype(int)
-    xs = np.round(verts_px[:, 1]).astype(int)
-    rr, cc = polygon(ys, xs, image_shape)
+    rr, cc = polygon(verts_px[:, 0], verts_px[:, 1], image_shape)
     mask = np.zeros(image_shape, dtype=bool)
     mask[rr, cc] = True
     return mask

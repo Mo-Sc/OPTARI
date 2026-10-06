@@ -353,21 +353,21 @@ def roi_records_from_scan_rois(
     used_ids: set[int] = set()
     next_id = 0
     next_track = 0
+    frameless = []
     for key, roi in rois.items():
         try:
-            geometry = RoiGeometry(
-                verts_m=np.asarray(roi.points, dtype=float),
-                kind=getattr(roi, "shape_type", "polygon"),
-                source=getattr(roi, "roi_class", "PATATO"),
-                tissue_class=getattr(roi, "position", "undefined"),
-            )
-            frames = np.unique(
-                np.asarray(getattr(roi, "ax0_index", []), dtype=int)
-            )
-        except (AttributeError, TypeError, ValueError) as exc:
+            verts_m = np.asarray(roi.points, dtype=float)
+        except (TypeError, ValueError) as exc:
             raise ValueError(
                 f"stored ROI {key!r} has invalid geometry"
             ) from exc
+        geometry = RoiGeometry(
+            verts_m=verts_m,
+            kind=roi.shape_type,
+            source=roi.roi_class,
+            tissue_class=roi.position,
+        )
+        frames = np.unique(roi.ax0_index)
         # A frame this scan does not have means the ROI was drawn on another acquisition.
         if np.any((frames < 0) | (frames >= n_frames)):
             raise ValueError(
@@ -375,29 +375,20 @@ def roi_records_from_scan_rois(
                 f"but the scan has {n_frames}"
             )
         if not frames.size:
-            # No frame recorded at all: the ROI covers the whole acquisition.
+            # No frame recorded at all (e.g. iLabs .iROI files): the ROI covers the whole acquisition.
             frames = np.arange(n_frames, dtype=int)
+            frameless.append(key)
 
         # PATATO calls this "roi_group_id", in OPTARI it is `track_id`.
-        try:
-            persisted_track = int(getattr(roi, "roi_group_id", None))
-        except (TypeError, ValueError):
-            persisted_track = None
         track_id = (
-            persisted_track if persisted_track is not None else next_track
+            next_track if roi.roi_group_id is None else int(roi.roi_group_id)
         )
         next_track = max(next_track, track_id + 1)
-
-        try:
-            persisted_id = int(getattr(roi, "roi_id", None))
-        except (TypeError, ValueError):
-            persisted_id = None
+        persisted_id = None if roi.roi_id is None else int(roi.roi_id)
 
         # Every frame copy of one ROI shares the group's identity. a scan written
         # before uids existed gets a fresh one for the whole group, not per frame.
-        group_uid = (
-            str(getattr(roi, "roi_group_uid", "") or "") or new_roi_group_uid()
-        )
+        group_uid = str(roi.roi_group_uid or new_roi_group_uid())
         for frame_id in frames:
             roi_id = persisted_id if len(frames) == 1 else None
             if roi_id is None or roi_id in used_ids:
@@ -416,6 +407,13 @@ def roi_records_from_scan_rois(
                     fov_y_m=fov_y_m,
                 )
             )
+    if frameless:
+        logger.warning(
+            "%d stored ROI(s) have no frame assigned and are shown on all %d frames: %s",
+            len(frameless),
+            n_frames,
+            ", ".join(f"{name} #{number}" for name, number in frameless),
+        )
     return records
 
 

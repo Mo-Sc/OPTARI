@@ -96,6 +96,7 @@ def scan_metadata_rows(
         ("Device info", pa_data.get_device_info()),
         ("Clinical scan", pa_data.is_clinical()),
         ("Acquisition shape", getattr(pa_data, "shape", None)),
+        ("Acquisition start frame", pa_data.get_acquisition_start_frame()),
         ("Wavelengths", np.asarray(pa_data.get_wavelengths())),
         ("Sampling frequency", pa_data.get_sampling_frequency()),
         ("Time samples", pa_data.get_n_samples()),
