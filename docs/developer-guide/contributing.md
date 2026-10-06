@@ -15,7 +15,7 @@ pip install -e ".[test,docs,dev]"
 
 ### Test data
 
-The tests use two scans, recorded by the iThera MSOT Acuity Scanner, taken from [doi.org/10.5281/zenodo.22044239](https://doi.org/10.5281/zenodo.22044239). They can be downloaded [here](https://faubox.rrze.uni-erlangen.de/dl/fiUijv7djXiJw3MQyiNuMX/Study_19.zip).
+The tests use two scans, recorded by the iThera MSOT Acuity Scanner, taken from [doi.org/10.5281/zenodo.22044239](https://doi.org/10.5281/zenodo.22044239). They can be downloaded [here](https://faubox.rrze.uni-erlangen.de/dl/fiFghi4KSWjYHYxN5DEkM9/Study_19.zip).
 
 
 ```
