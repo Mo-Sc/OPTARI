@@ -254,13 +254,16 @@ class ScanController(TaskControllerBase):
 
         ``"motion"`` is the frame with the lowest ``motion_scores()``. A scan with no
         ultrasound (a raw time series) has nothing to score and falls back to frame 0.
-        Both the viewer and a batch run go through this, so "motion" means the same
+        ``"acquisition_start"`` is the ithera recording start frame
+        Both the viewer and a batch run go through this, so a selector means the same
         frame in either.
 
         Raises ValueError for a frame number the scan does not have.
         """
         if selector == "motion":
             frame_id = self._lowest_motion_frame()
+        elif selector == "acquisition_start":
+            frame_id = self._acquisition_start_frame()
         else:
             frame_id = int(selector)
             n_frames = (
@@ -271,6 +274,16 @@ class ScanController(TaskControllerBase):
                     f"frame {frame_id} is outside this scan ({n_frames} frames)"
                 )
         self.viewer.dims.set_point(0, frame_id)
+        return frame_id
+
+    def _acquisition_start_frame(self) -> int:
+        frame_id = self.optari_controller.pa_data.get_acquisition_start_frame()
+        if frame_id is None:
+            logger.info(
+                "scan records no acquisition start frame, using frame 0"
+            )
+            return 0
+        logger.info("acquisition start frame selection: frame %d", frame_id)
         return frame_id
 
     def motion_scores(self) -> np.ndarray | None:

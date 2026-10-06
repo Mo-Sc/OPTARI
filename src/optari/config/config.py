@@ -22,7 +22,7 @@ class GeneralConfig:
     US_FALLBACK_SCALE: tuple[float, float, float]
     DEFAULT_FRAME_INDEX: (
         int | str
-    )  # frame index or "motion" for motion-based selection
+    )  # frame index, "motion" for motion-based selection or "acquisition_start"
     DEFAULT_CHANNEL_INDEX: int
     DEFAULT_PLAYBACK_FPS: int
     OPERATOR: str
