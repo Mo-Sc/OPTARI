@@ -156,6 +156,7 @@ The anchor frame: where a `static` ROI's shape is drawn, and which frame the ove
 | Value | Meaning |
 | --- | --- |
 | `"motion"` (default) | That scan's lowest-motion frame. Requires ultrasound. A raw time series (eg. IPASC) has none and falls back to frame 0. |
+| `"acquisition_start"` | The frame where the operator pressed record in ithera scans, (shown as sweep 1 in iLabs). Scans that do not record it fall back to frame 0. |
 | an integer | That frame number. A scan without it fails. |
 
 ### `measure`

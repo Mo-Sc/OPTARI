@@ -173,6 +173,9 @@ class SettingsDialog(QDialog):
 
         self.frame_mode_combo = QComboBox()
         self.frame_mode_combo.addItem("Motion-based", userData="motion")
+        self.frame_mode_combo.addItem(
+            "Acquisition start", userData="acquisition_start"
+        )
         self.frame_mode_combo.addItem("Fixed index", userData="index")
         self.frame_index_spin = QSpinBox()
         self.frame_index_spin.setRange(0, 100000)
@@ -373,10 +376,14 @@ class SettingsDialog(QDialog):
         self.default_pa_layer_edit.setText(str(general["DEFAULT_PA_LAYER"]))
 
         frame_index = general["DEFAULT_FRAME_INDEX"]
-        is_motion = frame_index == "motion"
-        self.frame_mode_combo.setCurrentIndex(0 if is_motion else 1)
-        self.frame_index_spin.setValue(0 if is_motion else int(frame_index))
-        self.frame_index_spin.setEnabled(not is_motion)
+        is_fixed = frame_index not in ("motion", "acquisition_start")
+        self.frame_mode_combo.setCurrentIndex(
+            self.frame_mode_combo.findData(
+                "index" if is_fixed else frame_index
+            )
+        )
+        self.frame_index_spin.setValue(int(frame_index) if is_fixed else 0)
+        self.frame_index_spin.setEnabled(is_fixed)
 
         self.channel_index_spin.setValue(int(general["DEFAULT_CHANNEL_INDEX"]))
         self.playback_fps_spin.setValue(int(general["DEFAULT_PLAYBACK_FPS"]))
@@ -420,10 +427,11 @@ class SettingsDialog(QDialog):
         general["LOG_LEVEL"] = self.log_level_combo.currentText()
         general["GUI_LOG_LEVEL"] = self.gui_log_level_combo.currentText()
         general["DEFAULT_PA_LAYER"] = self.default_pa_layer_edit.text().strip()
+        frame_mode = self.frame_mode_combo.currentData()
         general["DEFAULT_FRAME_INDEX"] = (
-            "motion"
-            if self.frame_mode_combo.currentData() == "motion"
-            else self.frame_index_spin.value()
+            self.frame_index_spin.value()
+            if frame_mode == "index"
+            else frame_mode
         )
         general["DEFAULT_CHANNEL_INDEX"] = self.channel_index_spin.value()
         general["DEFAULT_PLAYBACK_FPS"] = self.playback_fps_spin.value()

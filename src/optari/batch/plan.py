@@ -169,10 +169,12 @@ def _measure_scope(spec: dict) -> MeasureScope:
 def _frame_selector(value) -> int | str:
     if isinstance(value, int) and not isinstance(value, bool):
         return value
-    if value in (None, "motion"):
+    if value is None:
         return "motion"
+    if value in ("motion", "acquisition_start"):
+        return value
     raise ValueError(
-        f"Invalid frame selector {value!r}. Use 'motion' or a frame number."
+        f"Invalid frame selector {value!r}. Use 'motion', 'acquisition_start' or a frame number."
     )
 
 

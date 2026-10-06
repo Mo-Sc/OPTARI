@@ -24,6 +24,9 @@ No Python, no terminal, no admin rights required.
    internet. **This can take a few minutes**.
 5. Once set up, OPTARI launches automatically. On later runs, just open the same `optari-v` file again.
 
+!!! tip
+    To try OPTARI without your own data, download and unzip the [test scans](../developer-guide/contributing.md#test-data) and open the `Study_19` folder.
+
 !!! note
     Pretrained segmentation models are downloaded automatically the first time you run segmentation (see
     [Segmentation](../user-guide/segmentation.md)) — this also requires an internet connection.

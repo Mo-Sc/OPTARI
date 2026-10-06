@@ -12,7 +12,7 @@ Full reference for `~/.optari/config/config.json`. All fields are required unles
 | `PA_FALLBACK_SCALE` | `[frame, z, x]` | Settings ▸ Viewer | Fallback mm/pixel scale for OA layers when FOV metadata is missing. |
 | `DEFAULT_US_LAYER` | string | *hidden* | Name of the default US layer (not implemented, no effect). |
 | `US_FALLBACK_SCALE` | `[frame, z, x]` | Settings ▸ Viewer | Fallback mm/pixel scale for US layers. |
-| `DEFAULT_FRAME_INDEX` | int or `"motion"` | Settings ▸ Viewer | Fixed starting frame index, or `"motion"` for automatic motion-based frame selection (see [Automatic Frame Selection](../user-guide/viewer-and-navigation.md#automatic-frame-selection)). |
+| `DEFAULT_FRAME_INDEX` | int, `"motion"` or `"acquisition_start"` | Settings ▸ Viewer | Fixed starting frame index, `"motion"` for automatic motion-based frame selection (see [Automatic Frame Selection](../user-guide/viewer-and-navigation.md#automatic-frame-selection)), or `"acquisition_start"` for the frame where recording started (ithera scans). |
 | `DEFAULT_CHANNEL_INDEX` | int | Settings ▸ Viewer | Default acquisition channel (as integer index). |
 | `DEFAULT_PLAYBACK_FPS` | int | Settings ▸ Viewer | Frame playback speed. |
 | `OPERATOR` | string | Settings ▸ General | Who is running the analysis. Will be recorded in the exported HDF5 and Excel files. |
