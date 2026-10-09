@@ -23,6 +23,28 @@ Alternatively, an administrator can lift the path limit for the whole computer. 
 New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
 ```
 
+## On Linux, OPTARI fails because the Qt platform plugin xcb can't be loaded
+
+The terminal shows `xcb-cursor0 or libxcb-cursor0 is needed to load the Qt xcb platform plugin`, or
+`Could not load the Qt platform plugin "xcb"`. This can be caused by a missing system library `libxcb-cursor0` required by Qt, which is not included in some Ubuntu installations.
+
+With administrator rights, install it system-wide:
+
+```bash
+sudo apt install libxcb-cursor0
+```
+
+Without administrator rights, install OPTARI from source into a conda environment
+and add the library there. Qt might not search the conda library folder on its own, so point the loader at it and
+reactivate the environment:
+
+```bash
+conda install -c conda-forge xcb-util-cursor
+conda env config vars set LD_LIBRARY_PATH=$CONDA_PREFIX/lib
+conda deactivate && conda activate <env name>
+```
+
+
 ## My `config.json` edits or settings changes aren't taking effect
 
 Configuration is loaded once at startup — restart OPTARI after editing any file under
