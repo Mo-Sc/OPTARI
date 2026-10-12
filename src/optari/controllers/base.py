@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -13,9 +14,11 @@ from napari.layers import Image
 from optari.config import settings
 from optari.patato_bridge import (
     LAYER_NAME_ATTR,
+    SETTINGS_ATTR,
     TRANSLATE_ATTR,
     scale_from_patato_obj,
 )
+from optari.utils.metadata import json_default
 from optari.utils.tasks import download_then, start_task
 
 if TYPE_CHECKING:
@@ -146,6 +149,9 @@ class TaskControllerBase:
             )
         # so an exported scan reopens with the same layers in the same place
         patato_obj.attributes[LAYER_NAME_ATTR] = name
+        patato_obj.attributes[SETTINGS_ATTR] = json.dumps(
+            metadata["settings"], default=json_default
+        )
         if translate is not None:
             patato_obj.attributes[TRANSLATE_ATTR] = [
                 float(t) for t in translate[-2:]
