@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import logging
 import re
-import xml.dom.minidom
 from dataclasses import dataclass
 from pathlib import Path
+from xml.etree import ElementTree
 
 import h5py
 from patato.io.attribute_tags import HDF5Tags, IPASCTags
@@ -68,14 +68,16 @@ def _read_internal_scan_name(path: Path, kind: str) -> str | None:
 
     try:
         if kind == "ithera":
-            # Parse only the relevant XML node rather than the whole scan.
+            # Stream the XML and stop at the scan's name
             msot = path / f"{path.name}.msot"
-            tree = xml.dom.minidom.parse(str(msot))
-            scan_nodes = tree.getElementsByTagName("ScanNode")
-            if scan_nodes:
-                name_nodes = scan_nodes[0].getElementsByTagName("Name")
-                if name_nodes and name_nodes[0].firstChild:
-                    return name_nodes[0].firstChild.nodeValue.strip()
+            in_scan_node = False
+            for event, element in ElementTree.iterparse(
+                msot, events=("start", "end")
+            ):
+                if event == "start" and element.tag == "ScanNode":
+                    in_scan_node = True
+                elif event == "end" and in_scan_node and element.tag == "Name":
+                    return (element.text or "").strip() or None
         else:
             reader = get_hdf5_reader(str(path))
             name = reader.get_scan_name()
