@@ -8,10 +8,10 @@
   },
   "source": null,
   "frame": "motion",
+  "all_frames": false,
   "measure": {
     "layers": "analysis",
-    "all_channels": true,
-    "all_frames": false
+    "all_channels": true
   },
   "outputs": {
     "xlsx": true,

@@ -30,6 +30,7 @@ class ROIContext:
     roi_group_uid: str
     src_layer: str
     kind: str
+    roi_source: str
     study_folder: str
     scan_folder: str
     scan_name: str
@@ -119,6 +120,8 @@ FEATURE_REGISTRY: dict[str, FeatureSpec] = {
     "filter_max": FeatureSpec(float, lambda c: _bound(c.clamp.maximum)),
     "src_layer": FeatureSpec(str, lambda c: str(c.src_layer)),
     "kind": FeatureSpec(str, lambda c: str(c.kind)),  # "shape_type" in napari
+    # who drew the ROI: OPTARI, or the vendor file it came from (e.g iAnnotation, iROIList)
+    "roi_source": FeatureSpec(str, lambda c: str(c.roi_source)),
     "study_folder": FeatureSpec(str, lambda c: str(c.study_folder)),
     "scan_folder": FeatureSpec(str, lambda c: str(c.scan_folder)),
     "scan_name": FeatureSpec(str, lambda c: str(c.scan_name)),
