@@ -147,6 +147,13 @@ def layer_colormap(group: str) -> str:
     )
 
 
+# What napari knows about a derived image but the PATATO data does not, stored with
+# the image so an exported scan reopens as it was: the layer's placement (y, x in mm,
+# e.g. DeepMB's offset) and its session name, which derived layers link to.
+TRANSLATE_ATTR = "optari_translate_mm"
+LAYER_NAME_ATTR = "optari_layer_name"
+
+
 def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
     """Build napari image layers from an open *pa_data* handle.
 
@@ -195,6 +202,11 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
     else:
         n_acq_frames = pa_data.shape[0]
 
+    def _translate(image_sequence, ndim: int) -> tuple[float, ...]:
+        return (0.0,) * (ndim - 2) + tuple(
+            image_sequence.da.attrs.get(TRANSLATE_ATTR, (0.0, 0.0))
+        )
+
     def _frame_list(image_sequence, n_frames: int) -> list[int]:
         frames_info = image_sequence.da.attrs.get(
             "frames", image_sequence.da.attrs.get("frame")
@@ -213,7 +225,9 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
             recon_raw, recon_frame_list, n_acq_frames
         )
 
-        layer_name = f"Recon: {recon_name}_{idx}"
+        layer_name = recon.da.attrs.get(
+            LAYER_NAME_ATTR, f"Recon: {recon_name}_{idx}"
+        )
         patato_objects[layer_name] = recon
         layers.append(
             (
@@ -222,6 +236,7 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
                     "colormap": layer_colormap(HDF5Tags.RECONSTRUCTION),
                     "name": layer_name,
                     "scale": scale_from_patato_obj(recon, _pa_fallback),
+                    "translate": _translate(recon, recon_img.ndim),
                     "opacity": 1.0,
                     "blending": "multiplicative",
                     "auto_contrast": True,
@@ -279,8 +294,11 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
                     data,
                     {
                         "colormap": layer_colormap(group_name),
-                        "name": f"{prefix}: {dataset_name}_{idx}",
+                        "name": image.da.attrs.get(
+                            LAYER_NAME_ATTR, f"{prefix}: {dataset_name}_{idx}"
+                        ),
                         "scale": scale_from_patato_obj(image, _pa_fallback),
+                        "translate": _translate(image, data.ndim),
                         "opacity": 1.0,
                         "blending": "multiplicative",
                         "auto_contrast": True,
