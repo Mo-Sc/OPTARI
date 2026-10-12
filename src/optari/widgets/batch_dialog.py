@@ -13,6 +13,7 @@ from pathlib import Path
 from qtpy.QtCore import Qt
 from qtpy.QtWidgets import (
     QAbstractItemView,
+    QApplication,
     QCheckBox,
     QDialog,
     QFileDialog,
@@ -307,6 +308,11 @@ class BatchDialog(QDialog):
             self._set_problems(["Pick a dataset folder and an output folder."])
             return
 
+        # Discovering a large dataset can take a while, so show a status message and change the cursor.
+        previous_status = self.status_label.text()
+        self.status_label.setText("Scanning dataset folder…")
+        self.status_label.repaint()
+        QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
             plan = build_plan(
                 root=Path(root),
@@ -317,6 +323,9 @@ class BatchDialog(QDialog):
             self.settings_view.setPlainText("")
             self._set_problems([str(exc)])
             return
+        finally:
+            QApplication.restoreOverrideCursor()
+            self.status_label.setText(previous_status)
 
         self._plan = plan
         self.settings_view.setPlainText(describe_plan(plan))
