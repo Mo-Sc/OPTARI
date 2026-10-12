@@ -11,7 +11,11 @@ import numpy as np
 from napari.layers import Image
 
 from optari.config import settings
-from optari.patato_bridge import scale_from_patato_obj
+from optari.patato_bridge import (
+    LAYER_NAME_ATTR,
+    TRANSLATE_ATTR,
+    scale_from_patato_obj,
+)
 from optari.utils.tasks import download_then, start_task
 
 if TYPE_CHECKING:
@@ -140,6 +144,12 @@ class TaskControllerBase:
                 if source_layer is not None
                 else None
             )
+        # so an exported scan reopens with the same layers in the same place
+        patato_obj.attributes[LAYER_NAME_ATTR] = name
+        if translate is not None:
+            patato_obj.attributes[TRANSLATE_ATTR] = [
+                float(t) for t in translate[-2:]
+            ]
         if name in self.viewer.layers and isinstance(
             self.viewer.layers[name], Image
         ):

@@ -495,6 +495,8 @@ class ReconstructionController(TaskControllerBase):
             "settings": settings,
         }
 
+        # reopened single-frame recon lands on its frame
+        reconstruction.attributes["frames"] = params.output_frames
         data = expand_to_acquisition_frames(
             display_data_from_patato_obj(reconstruction),
             params.output_frames,
