@@ -23,7 +23,9 @@ Alternatively, an administrator can lift the path limit for the whole computer. 
 New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
 ```
 
-## On Linux, OPTARI fails because the Qt platform plugin xcb can't be loaded
+## Linux
+
+### OPTARI fails because the Qt platform plugin xcb can't be loaded
 
 The terminal shows `xcb-cursor0 or libxcb-cursor0 is needed to load the Qt xcb platform plugin`, or
 `Could not load the Qt platform plugin "xcb"`. This can be caused by a missing system library `libxcb-cursor0` required by Qt, which is not included in some Ubuntu installations.
@@ -42,6 +44,25 @@ reactivate the environment:
 conda install -c conda-forge xcb-util-cursor
 conda env config vars set LD_LIBRARY_PATH=$CONDA_PREFIX/lib
 conda deactivate && conda activate <env name>
+```
+
+### Batch runs over SSH or on a server without a display fail
+
+`optari-batch` keeps napari's viewer hidden, but its canvas still needs OpenGL, and a plain SSH session has no
+display to provide it. Depending on the setup, the run aborts with the xcb error above, or it starts and every scan
+fails with `QOpenGLWidget: Failed to create context` and
+`AttributeError: 'NoneType' object has no attribute 'decode'` in `get_gl_extensions`.
+
+Run OPTARI under a virtual display instead (installation needs admin rights):
+
+```bash
+sudo apt install libxcb-cursor0 xvfb xauth
+```
+
+Then start the run through `xvfb-run`:
+
+```bash
+xvfb-run -a optari-batch <preset> <dataset folder> <output folder>
 ```
 
 

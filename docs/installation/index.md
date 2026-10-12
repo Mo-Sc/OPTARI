@@ -19,7 +19,7 @@ No Python, no terminal, no admin rights required.
       - **Windows**: click **More info** → **Run anyway**.
       - **macOS**: open **System Settings** → **Privacy & Security**, scroll to Security, then click
         **Open Anyway** next to the "optari was blocked" message.
-      - **Linux**: Run `chmod +x optari-v...` in the terminal to make the file executable. Also check this [FAQ](../user-guide/faq.md#on-linux-optari-aborts-because-the-qt-platform-plugin-xcb-cant-be-loaded).
+      - **Linux**: Run `chmod +x optari-v...` in the terminal to make the file executable. Also check this [FAQ](../user-guide/faq.md#optari-fails-because-the-qt-platform-plugin-xcb-cant-be-loaded).
 4. On first launch, OPTARI downloads its remaining dependencies — make sure your computer is connected to the
    internet. **This can take a few minutes**.
 5. Once set up, OPTARI launches automatically. On later runs, just open the same `optari-v` file again.

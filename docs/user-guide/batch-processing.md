@@ -114,4 +114,4 @@ Every output is written atomically, so only the scan in progress is lost. `--res
 The exit code is 0 when every scan succeeded, 1 when some failed, and 2 when the plan was refused and nothing ran. 
 
 !!! note "Machines without a display"
-    The run keeps napari's viewer hidden, but its canvas still needs OpenGL. On a server without a display, run it under a virtual one, e.g. `xvfb-run -a optari-batch ...`.
+    The run keeps napari's viewer hidden, but its canvas still needs OpenGL. On a server without a display, run it under a virtual one, e.g. `xvfb-run -a optari-batch ...`. See the [FAQ](faq.md#batch-runs-over-ssh-or-on-a-server-without-a-display-fail) for the setup.
