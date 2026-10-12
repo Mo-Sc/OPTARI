@@ -98,3 +98,20 @@ To retry only the failures, sort `batch_report.xlsx` by `status`, then run the s
 
 !!! warning "One run at a time"
     Batch mode uses the same single background-task slot as the docks. It refuses to start while another task is running, and the docks are disabled for the duration of a run.
+
+## Running from the terminal (research mode)
+
+A source install also has `optari-batch`, which runs a batch preset from the CLI e.g. to convert a large dataset on a remote machine:
+
+```bash
+optari-batch convert_to_hdf5 /data/MyStudy /data/MyStudy_optari
+```
+
+The first argument is the name of a saved batch preset, or a path to a preset `.json`. Then the dataset folder and the output folder, which is created if missing. The run does exactly what the Batch window would. The terminal prints the resolved plan and one line per scan, and the same `batch_report.xlsx` and log file land in the output folder.
+
+Every output is written atomically, so only the scan in progress is lost. `--resume` continues an interrupted run in the same output folder. It skips every scan whose export already exists and writes a new timestamped `batch_report_<time>.xlsx` next to the old report. This only works for plans without an ROI step, since their outputs are one file per scan. An ROI table would end up split across the two runs.
+
+The exit code is 0 when every scan succeeded, 1 when some failed, and 2 when the plan was refused and nothing ran. 
+
+!!! note "Machines without a display"
+    The run keeps napari's viewer hidden, but its canvas still needs OpenGL. On a server without a display, run it under a virtual one, e.g. `xvfb-run -a optari-batch ...`.

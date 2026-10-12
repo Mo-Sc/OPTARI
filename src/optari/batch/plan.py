@@ -91,6 +91,8 @@ class BatchPlan:
     frame: int | str = "motion"
     measure: MeasureScope = field(default_factory=MeasureScope)
     outputs: OutputSpec = field(default_factory=OutputSpec)
+    # A resumed run gets a report of its own, so the interrupted run's report survives.
+    report_name: str = BATCH_REPORT_NAME
 
     @property
     def table_path(self) -> Path:
@@ -100,7 +102,22 @@ class BatchPlan:
     @property
     def report_path(self) -> Path:
         """Where the run's per-scan status report is written (batch_report.xlsx)."""
-        return self.output_dir / BATCH_REPORT_NAME
+        return self.output_dir / self.report_name
+
+    def export_path(self, job: BatchJob, kind: str) -> Path:
+        """Where *job*'s ``"hdf5"`` or ``"ipasc"`` export goes.
+
+        Exports mirror the input layout, so a converted dataset can be reopened
+        exactly like the original: <out>/<format>/Study_X/Scan_Y.hdf5
+        """
+        # same suffix as the Scan Browser's export
+        suffix = "_ipasc" if kind == "ipasc" else ""
+        return (
+            self.output_dir
+            / kind
+            / job.study_path.name
+            / f"{job.scan_stem}{suffix}.hdf5"
+        )
 
     @property
     def roi_placement(self) -> str:
@@ -383,6 +400,26 @@ def _validate_output_dir(plan: BatchPlan) -> list[str]:
         probe.unlink()
     except OSError:
         return [f"Output folder is not writable: {output_dir}"]
+    return []
+
+
+def resume_plan(plan: BatchPlan) -> list[str]:
+    """Drop the scans an earlier run into the same folder already exported.
+
+    Only export-only plans can resume: their outputs are one atomically written file
+    per scan, so an existing file is a finished scan. An ROI table would be split
+    across two runs. Returns problems that rule out resuming, like ``validate_plan``.
+    """
+    kinds = [k for k in ("hdf5", "ipasc") if getattr(plan.outputs, k)]
+    if plan.roi is not None or not kinds:
+        return [
+            "Only plans with an hdf5/ipasc export and no ROI step can resume."
+        ]
+    plan.jobs = [
+        job
+        for job in plan.jobs
+        if not all(plan.export_path(job, kind).exists() for kind in kinds)
+    ]
     return []
 
 

@@ -57,6 +57,9 @@ dev = [
 [project.gui-scripts]
 optari = "optari.launcher:main"
 
+[project.scripts]
+optari-batch = "optari.batch.cli:main"
+
 [build-system]
 requires = ["setuptools>=68", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"

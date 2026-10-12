@@ -321,7 +321,7 @@ def test_source_and_overlay_layer_selection(tmp_path):
         runner._overlay_layer(ours)
 
     assert (
-        runner._export_path(job(3), "hdf5", "Scan_3.hdf5")
+        runner._export_path(job(3), "hdf5")
         == tmp_path / "hdf5" / "Study_1" / "Scan_3.hdf5"
     )
     assert (tmp_path / "hdf5" / "Study_1").is_dir()

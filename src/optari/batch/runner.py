@@ -377,12 +377,8 @@ class BatchRunner:
     def _write_outputs(
         self, job: BatchJob, frame_idx: int, source_layer
     ) -> None:
-        # Exports mirror the input layout, so a converted dataset can be reopened
-        # exactly like the original: <out>/<format>/Study_X/Scan_Y.hdf5
         if self.plan.outputs.hdf5:
-            destination = self._export_path(
-                job, "hdf5", f"{job.scan_stem}.hdf5"
-            )
+            destination = self._export_path(job, "hdf5")
             if not export_scan_to_hdf5(self.controller, destination):
                 raise BatchStepError(
                     f"HDF5 export failed (see log): {destination.name}", "hdf5"
@@ -390,10 +386,7 @@ class BatchRunner:
             self.report.note(job, hdf5_path=str(destination))
 
         if self.plan.outputs.ipasc:
-            # Same suffix the Scan Browser's IPASC export uses.
-            destination = self._export_path(
-                job, "ipasc", f"{job.scan_stem}_ipasc.hdf5"
-            )
+            destination = self._export_path(job, "ipasc")
             if not export_scan_to_ipasc(self.controller, destination):
                 raise BatchStepError(
                     f"IPASC export failed (see log): {destination.name}",
@@ -409,10 +402,8 @@ class BatchRunner:
                 ),
             )
 
-    def _export_path(self, job: BatchJob, kind: str, filename: str) -> Path:
-        destination = (
-            self.plan.output_dir / kind / job.study_path.name / filename
-        )
+    def _export_path(self, job: BatchJob, kind: str) -> Path:
+        destination = self.plan.export_path(job, kind)
         destination.parent.mkdir(parents=True, exist_ok=True)
         return destination
 
