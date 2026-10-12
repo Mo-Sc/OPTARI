@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 
 
-def _json_default(value):
+def json_default(value):
     if isinstance(value, np.ndarray):
         return value.tolist()
     if isinstance(value, np.generic):
@@ -36,11 +36,11 @@ def _format(value, details: bool = False) -> str:
     if isinstance(value, dict):
         if not details:
             return f"dict, size={len(value)}"
-        return json.dumps(value, indent=2, default=_json_default)
+        return json.dumps(value, indent=2, default=json_default)
     if isinstance(value, (list, tuple)):
         if not details:
             return f"{type(value).__name__}, size={len(value)}"
-        return json.dumps(value, indent=2, default=_json_default)
+        return json.dumps(value, indent=2, default=json_default)
     return type(value).__name__
 
 

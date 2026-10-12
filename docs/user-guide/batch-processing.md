@@ -41,7 +41,7 @@ A batch preset is a small JSON file in `~/.optari/config/presets/batch` that **n
 
 Every key is documented in [Presets](../configuration/presets.md#batch-presets-presetsbatch). In short: `steps` names what runs, `source` picks which reconstruction it runs on, `frame` picks the anchor frame for the overlay/report (`"motion"`, `"acquisition_start"` or a number), `all_frames` processes and measures every frame instead, `measure` says how wide to measure, and `outputs` says what to write.
 
-Edit a plan directly in the batch window: the JSON editor shows the selected preset, **Apply** re-checks it, and **Save Preset** writes it back under a name of your choosing. Nothing needs editing by hand in `~/.optari`.
+Edit a plan directly in the batch window: the JSON editor shows the selected preset, and **Save Preset** writes it back under a name of your choosing. Pressing **Validate** finds the scans and lists any problems. 
 
 Note that how an ROI is placed (`static` or `auto`) belongs to the **ROI preset**, not the batch plan, so an ROI behaves the same whether you place it from the dock or from a batch run.
 

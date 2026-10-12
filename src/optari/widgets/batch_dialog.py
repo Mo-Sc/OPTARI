@@ -92,14 +92,14 @@ class BatchDialog(QDialog):
 
         self.root_edit = QLineEdit()
         self.root_edit.setPlaceholderText("Folder holding Study_*/Scan_* data")
-        self.root_edit.editingFinished.connect(self.refresh_plan)
+        self.root_edit.textChanged.connect(self.discard_plan)
         form.addRow(
             "Dataset folder", _with_browse(self.root_edit, self.on_browse_root)
         )
 
         self.output_edit = QLineEdit()
         self.output_edit.setPlaceholderText("Empty folder for the results")
-        self.output_edit.editingFinished.connect(self.refresh_plan)
+        self.output_edit.textChanged.connect(self.discard_plan)
         form.addRow(
             "Output folder",
             _with_browse(self.output_edit, self.on_browse_output),
@@ -131,16 +131,12 @@ class BatchDialog(QDialog):
         self.preset_edit.setLineWrapMode(QPlainTextEdit.NoWrap)
         self.preset_edit.setMaximumHeight(240)
         self.preset_edit.setToolTip(
-            "Edit the plan here, then Apply. Save Preset writes it back to a file."
+            "Edit the plan here, then Validate. Save Preset writes it back to a file."
         )
-        self.preset_edit.textChanged.connect(self.on_preset_edited)
+        self.preset_edit.textChanged.connect(self.discard_plan)
         layout.addWidget(self.preset_edit)
 
-        self.apply_button = QPushButton("Apply")
-        self.apply_button.setToolTip("Re-read the edited plan above")
-        self.apply_button.clicked.connect(self.refresh_plan)
         actions = QHBoxLayout()
-        actions.addWidget(self.apply_button)
         actions.addWidget(self._preset_actions)
         actions.addStretch(1)
         layout.addLayout(actions)
@@ -189,6 +185,13 @@ class BatchDialog(QDialog):
         self.status_label.setWordWrap(True)
         row.addWidget(self.status_label, stretch=2)
 
+        self.validate_button = QPushButton("Validate")
+        self.validate_button.setToolTip(
+            "Find the scans and check the plan against them"
+        )
+        self.validate_button.clicked.connect(self.refresh_plan)
+        row.addWidget(self.validate_button)
+
         self.run_button = QPushButton("Run")
         self.run_button.clicked.connect(self.on_run_clicked)
         row.addWidget(self.run_button)
@@ -208,7 +211,7 @@ class BatchDialog(QDialog):
         """Load the selected preset into the editor."""
         preset_path = self.preset_combo.currentData()
         if preset_path is None:
-            self.refresh_plan()
+            self.discard_plan()
             return
         try:
             text = Path(preset_path).read_text()
@@ -220,11 +223,7 @@ class BatchDialog(QDialog):
             self.preset_edit.setPlainText(text)
         finally:
             self.preset_edit.blockSignals(False)
-        self.refresh_plan()
-
-    def on_preset_edited(self) -> None:
-        """The editor is ahead of the preview until Apply is pressed."""
-        self._set_problems(["Plan edited. Press Apply to check it."])
+        self.discard_plan()
 
     def on_save_preset_clicked(self) -> None:
         plan_dict = self._edited_preset()
@@ -277,19 +276,30 @@ class BatchDialog(QDialog):
         )
         if folder:
             self.root_edit.setText(folder)
-            self.refresh_plan()
 
     def on_browse_output(self) -> None:
         folder = QFileDialog.getExistingDirectory(self, "Select output folder")
         if folder:
             self.output_edit.setText(folder)
-            self.refresh_plan()
 
     def on_select_all_toggled(self, checked: bool) -> None:
         for row in range(self.scans_table.rowCount()):
             item = self.scans_table.item(row, INCLUDE_COLUMN)
             if item is not None:
                 item.setCheckState(Qt.Checked if checked else Qt.Unchecked)
+
+    def discard_plan(self) -> None:
+        """An input changed, so the checked plan no longer matches it."""
+        self._plan = None
+        self._row_for_key = {}
+        self.scans_table.setRowCount(0)
+        self.settings_view.setPlainText("")
+        self._set_problems(
+            [
+                "Choose a dataset folder, an output folder and a batch preset, "
+                "then press Validate."
+            ]
+        )
 
     def refresh_plan(self) -> None:
         """Rebuild the plan from the current inputs and report what is wrong with it."""
@@ -299,13 +309,15 @@ class BatchDialog(QDialog):
 
         root = self.root_edit.text().strip()
         output = self.output_edit.text().strip()
+        if not (root and output and self.preset_edit.toPlainText().strip()):
+            self.settings_view.setPlainText("")
+            self._set_problems(
+                ["Pick a dataset folder, an output folder and a batch preset."]
+            )
+            return
         batch_preset = self._edited_preset()
         if batch_preset is None:
             self.settings_view.setPlainText("")
-            return
-        if not root or not output:
-            self.settings_view.setPlainText("")
-            self._set_problems(["Pick a dataset folder and an output folder."])
             return
 
         # Discovering a large dataset can take a while, so show a status message and change the cursor.
@@ -488,6 +500,8 @@ class BatchDialog(QDialog):
             self.root_edit,
             self.output_edit,
             self.preset_combo,
+            self.preset_edit,
+            self.validate_button,
             self.select_all_box,
         ):
             widget.setEnabled(not running)

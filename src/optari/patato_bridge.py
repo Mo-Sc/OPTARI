@@ -149,9 +149,11 @@ def layer_colormap(group: str) -> str:
 
 # What napari knows about a derived image but the PATATO data does not, stored with
 # the image so an exported scan reopens as it was: the layer's placement (y, x in mm,
-# e.g. DeepMB's offset) and its session name, which derived layers link to.
+# e.g. DeepMB's offset), its session name, which derived layers link to, and the
+# settings it was made with (JSON), shown in the metadata viewer.
 TRANSLATE_ATTR = "optari_translate_mm"
 LAYER_NAME_ATTR = "optari_layer_name"
+SETTINGS_ATTR = "optari_settings"
 
 
 def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
@@ -207,6 +209,13 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
             image_sequence.da.attrs.get(TRANSLATE_ATTR, (0.0, 0.0))
         )
 
+    def _settings(image_sequence) -> dict:
+        # what OPTARI made the layer with, else the file's own attributes (vendor recons)
+        attrs = image_sequence.da.attrs
+        if SETTINGS_ATTR in attrs:
+            return json.loads(attrs[SETTINGS_ATTR])
+        return dict(attrs)
+
     def _frame_list(image_sequence, n_frames: int) -> list[int]:
         frames_info = image_sequence.da.attrs.get(
             "frames", image_sequence.da.attrs.get("frame")
@@ -249,6 +258,7 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
                         "timestamps": timestamps,
                         "acquisition_start": start,
                         "frames": recon_frame_list,
+                        "settings": _settings(recon),
                     },
                 },
             )
@@ -283,6 +293,7 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
                 "axis1_labels": axis1_labels,
                 "timestamps": timestamps,
                 "acquisition_start": start,
+                "settings": _settings(image),
             }
             if pa_kind == "unmixed":
                 metadata["chromophores"] = axis1_labels
