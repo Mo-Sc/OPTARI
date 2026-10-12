@@ -99,7 +99,7 @@ Which model/class to run, and how to place an ROI from the resulting mask (see
 
 An entire analysis applied to a whole dataset. Unlike the other categories a batch preset holds no processing settings of its own, and isntead it **references** the presets above. See the [Batch Processing](../user-guide/batch-processing.md).
 
-Batch presets are edited in their own window (**OPTARI → Batch Processing…**), which shows the JSON, an **Apply** button to re-check it, and **Save Preset** / **Remove Preset**.
+Batch presets are edited in their own window (**OPTARI → Batch Processing…**), which shows the JSON, **Save Preset** / **Remove Preset**, and a **Validate** button that checks the plan against the dataset.
 
 ```json title="clinical_muscle_roi.json"
 {
