@@ -235,8 +235,10 @@ class ScanController(TaskControllerBase):
         self.optari_controller.refresh_controller_uis()
 
         # Initialize viewer position to DEFAULT_FRAME_INDEX and DEFAULT_CHANNEL_INDEX
+        frame_selector = settings.general.DEFAULT_FRAME_INDEX
         try:
-            self.go_to_frame(settings.general.DEFAULT_FRAME_INDEX)
+            # "roi" needs the scan's ROIs, which are restored below
+            self.go_to_frame(0 if frame_selector == "roi" else frame_selector)
         except ValueError as exc:  # a configured frame this scan does not have
             logger.warning("%s, starting at frame 0 instead", exc)
             self.viewer.dims.set_point(0, 0)
@@ -244,6 +246,8 @@ class ScanController(TaskControllerBase):
 
         # Populate ROIs after dims are initialized to avoid computing stats before the viewer is ready.
         self.init_shapes_from_scan()
+        if frame_selector == "roi":
+            self.go_to_frame("roi")
         # Free when the default "motion" frame selection already scored the scan.
         self.optari_controller.analysis_ctrl.show_motion_scores(compute=False)
 
@@ -258,6 +262,8 @@ class ScanController(TaskControllerBase):
         ``"motion"`` is the frame with the lowest ``motion_scores()``. A scan with no
         ultrasound (a raw time series) has nothing to score and falls back to frame 0.
         ``"acquisition_start"`` is the ithera recording start frame
+        ``"roi"`` is the first frame holding one of the scan's ROIs, frame 0 without any.
+        It needs the scan's ROIs restored first.
         Both the viewer and a batch run go through this, so a selector means the same
         frame in either.
 
@@ -267,6 +273,8 @@ class ScanController(TaskControllerBase):
             frame_id = self._lowest_motion_frame()
         elif selector == "acquisition_start":
             frame_id = self._acquisition_start_frame()
+        elif selector == "roi":
+            frame_id = self._first_roi_frame()
         else:
             frame_id = int(selector)
             n_frames = (
@@ -278,6 +286,15 @@ class ScanController(TaskControllerBase):
                 )
         self.viewer.dims.set_point(0, frame_id)
         return frame_id
+
+    def _first_roi_frame(self) -> int:
+        frames = [
+            r.frame_id for r in self.optari_controller.roi_ctrl.roi_records
+        ]
+        if not frames:
+            logger.info("scan has no ROIs, using frame 0")
+            return 0
+        return min(frames)
 
     def _acquisition_start_frame(self) -> int:
         frame_id = self.optari_controller.pa_data.get_acquisition_start_frame()
