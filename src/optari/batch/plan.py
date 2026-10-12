@@ -184,10 +184,10 @@ def _frame_selector(value) -> int | str:
         return value
     if value is None:
         return "motion"
-    if value in ("motion", "acquisition_start"):
+    if value in ("motion", "acquisition_start", "roi"):
         return value
     raise ValueError(
-        f"Invalid frame selector {value!r}. Use 'motion', 'acquisition_start' or a frame number."
+        f"Invalid frame selector {value!r}. Use 'motion', 'acquisition_start', 'roi' or a frame number."
     )
 
 

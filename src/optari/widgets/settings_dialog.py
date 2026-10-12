@@ -176,6 +176,7 @@ class SettingsDialog(QDialog):
         self.frame_mode_combo.addItem(
             "Acquisition start", userData="acquisition_start"
         )
+        self.frame_mode_combo.addItem("First ROI frame", userData="roi")
         self.frame_mode_combo.addItem("Fixed index", userData="index")
         self.frame_index_spin = QSpinBox()
         self.frame_index_spin.setRange(0, 100000)
@@ -376,7 +377,7 @@ class SettingsDialog(QDialog):
         self.default_pa_layer_edit.setText(str(general["DEFAULT_PA_LAYER"]))
 
         frame_index = general["DEFAULT_FRAME_INDEX"]
-        is_fixed = frame_index not in ("motion", "acquisition_start")
+        is_fixed = frame_index not in ("motion", "acquisition_start", "roi")
         self.frame_mode_combo.setCurrentIndex(
             self.frame_mode_combo.findData(
                 "index" if is_fixed else frame_index
