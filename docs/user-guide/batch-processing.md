@@ -33,16 +33,20 @@ A batch preset is a small JSON file in `~/.optari/config/presets/batch` that **n
   },
   "source": null,
   "frame": "motion",
-  "measure": {"layers": "analysis", "all_channels": true, "all_frames": false},
+  "all_frames": false,
+  "measure": {"layers": "analysis", "all_channels": true},
   "outputs": {"xlsx": true, "hdf5": false, "overlay_png": true, "overlay_layer": null}
 }
 ```
 
-Every key is documented in [Presets](../configuration/presets.md#batch-presets-presetsbatch). In short: `steps` names what runs, `source` picks which reconstruction it runs on, `frame` picks the anchor frame for the overlay/report (`"motion"`, `"acquisition_start"` or a number), `measure` says how wide to measure, and `outputs` says what to write.
+Every key is documented in [Presets](../configuration/presets.md#batch-presets-presetsbatch). In short: `steps` names what runs, `source` picks which reconstruction it runs on, `frame` picks the anchor frame for the overlay/report (`"motion"`, `"acquisition_start"` or a number), `all_frames` processes and measures every frame instead, `measure` says how wide to measure, and `outputs` says what to write.
 
 Edit a plan directly in the batch window: the JSON editor shows the selected preset, **Apply** re-checks it, and **Save Preset** writes it back under a name of your choosing. Nothing needs editing by hand in `~/.optari`.
 
 Note that how an ROI is placed (`static` or `auto`) belongs to the **ROI preset**, not the batch plan, so an ROI behaves the same whether you place it from the dock or from a batch run.
+
+!!! tip "Measuring ROIs that come with the scans"
+    `"roi": "from_scan"` places nothing and measures the ROIs each scan already holds instead: ROIs drawn in iLabs (`.iannotation`, `.iROI`) and ROIs saved in an OPTARI HDF5 export. Each is measured on the frames it was drawn on, and the `roi_source` column tells vendor and OPTARI ROIs apart. Scans without ROIs simply add no rows. The shipped `from_scan_roi_intensities` preset does this on the iThera reconstruction.
 
 ## Choosing which reconstruction to analyse
 

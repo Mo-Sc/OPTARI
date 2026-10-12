@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import pandas as pd
 from napari.layers import Image
 from qtpy.QtCore import QTimer
 
@@ -295,8 +296,10 @@ class BatchRunner:
                 placement=self.plan.roi.placement,
                 all_frames=self.plan.measure.all_frames,
             )
+        if self.plan.measures:
             rows = self._measure(source_layer)
-            self.saved_table.add_measurements(rows)
+            if not rows.empty:
+                self.saved_table.add_measurements(rows)
             self.report.note(job, n_rows=len(rows))
 
         self._write_outputs(job, frame_idx, source_layer)
@@ -351,11 +354,19 @@ class BatchRunner:
 
     def _measure(self, source_layer):
         roi_ctrl = self.controller.roi_ctrl
-        selected_ids = roi_ctrl.selected_roi_ids()
-        if not selected_ids:
-            raise BatchStepError(
-                "ROI was placed but could not be selected for measuring", "roi"
-            )
+        if self.plan.roi_from_scan:
+            # every frame's copy of every stored ROI. With follow_track (implied by
+            # from_scan) each one is measured on its own frames only.
+            selected_ids = {record.roi_id for record in roi_ctrl.roi_records}
+            if not selected_ids:
+                return pd.DataFrame()  # a scan without ROIs just adds no rows
+        else:
+            selected_ids = roi_ctrl.selected_roi_ids()
+            if not selected_ids:
+                raise BatchStepError(
+                    "ROI was placed but could not be selected for measuring",
+                    "roi",
+                )
         # "all_pa" lets the scope pick up every PA layer in the scan; otherwise
         # measure only this run's own chain.
         layers = (

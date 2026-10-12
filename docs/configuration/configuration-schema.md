@@ -32,7 +32,7 @@ Full reference for `~/.optari/config/config.json`. All fields are required unles
 Available feature names:
 
 `roi_id`, `track_id`, `roi_group_uid`, `mean`, `median`, `std`, `p10`, `p90`, `iqr`, `min`, `max`, `snr`,
-`n_pixels`, `size_mm`, `intensity_filter`, `filter_min`, `filter_max`, `src_layer`, `kind`, `study_folder`, `scan_folder`, `scan_name`, `frame`, `channel`,
+`n_pixels`, `size_mm`, `intensity_filter`, `filter_min`, `filter_max`, `src_layer`, `kind`, `roi_source`, `study_folder`, `scan_folder`, `scan_name`, `frame`, `channel`,
 `roi_ts`, `scan_ts`, `roi_centroid`, `roi_geometry`, `filepath`.
 
 A fixed set of columns (`roi_id`, `track_id`, `roi_group_uid`, `study_folder`, `scan_folder`, `scan_name`,
@@ -40,7 +40,7 @@ A fixed set of columns (`roi_id`, `track_id`, `roi_group_uid`, `study_folder`, `
 
 OPTARI identifies an ROI at three scopes. `roi_id` is one shape on one frame, a per-session counter, and it is the number drawn on the shape in the viewer. `track_id` links the copies of one ROI across frames within a session. `roi_group_uid` is the group's unique identity.
 
-`src_layer` names the image layer an ROI was measured on. `roi_geometry` is a JSON dictionary holding the ROI
+`src_layer` names the image layer an ROI was measured on, and `roi_source` who drew the ROI: OPTARI, or the iLabs file it came from (`iAnnotation`, `iROIList`). `roi_geometry` is a JSON dictionary holding the ROI
 vertices in PATATO coordinates (metres, origin at the image centre) together with its shape kind, tissue class
 and source. It uses the same field of view-independent representation as [ROI presets](presets.md#roi-presets-presetsroi) and the HDF5 ROI export, so a saved ROI should stay anatomically correct if it is later restored onto a reconstruction with a different FOV. It is
 exported by default but hidden from the tables unless enabled here.

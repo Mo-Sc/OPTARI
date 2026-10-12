@@ -112,10 +112,10 @@ Batch presets are edited in their own window (**OPTARI → Batch Processing…**
   },
   "source": null,
   "frame": "motion",
+  "all_frames": false,
   "measure": {
     "layers": "analysis",
-    "all_channels": true,
-    "all_frames": false
+    "all_channels": true
   },
   "outputs": {
     "xlsx": true,
@@ -135,7 +135,7 @@ Each entry is a **preset name only**. Omit a step to skip it.
 | `reconstruction` | `presets/reconstruction/` | Runs first. Omit to work on a reconstruction already in the file. |
 | `segmentation` | `presets/segmentation/` | Required by an ROI preset whose `placement` is `auto`. |
 | `unmixing` | `presets/unmixing/` | Wavelengths resolve per scan, so a scan missing them fails on its own. |
-| `roi` | `presets/roi/` | The ROI placed and measured. Its `placement` decides static or auto. |
+| `roi` | `presets/roi/` | The ROI placed and measured. Its `placement` decides static or auto. The value `"from_scan"` places nothing and measures the ROIs the scan already holds (e.g. iLabs `.iannotation`/`.iROI`, or saved in an earlier OPTARI export), each on the frames it was drawn on. It implies `all_frames`. |
 
 An empty `"steps": {}` with `outputs.hdf5` on is a pure vendor-to-OPTARI-HDF5 converter.
 
@@ -151,13 +151,17 @@ A layer-name **prefix** picking the one reconstruction the run analyses. One bat
 
 ### `frame`
 
-The anchor frame: where a `static` ROI's shape is drawn, and which frame the overlay PNG and the report's `analysis_frame` column come from. It does **not** decide how many frames get analysed, which is selected by `measure.all_frames` below.
+The anchor frame: where a `static` ROI's shape is drawn, and which frame the overlay PNG and the report's `analysis_frame` column come from. It does **not** decide how many frames get analysed, which is selected by `all_frames` below.
 
 | Value | Meaning |
 | --- | --- |
 | `"motion"` (default) | That scan's lowest-motion frame. Requires ultrasound. A raw time series (eg. IPASC) has none and falls back to frame 0. |
 | `"acquisition_start"` | The frame where the operator pressed record in ithera scans, (shown as sweep 1 in iLabs). Scans that do not record it fall back to frame 0. |
 | an integer | That frame number. A scan without it fails. |
+
+### `all_frames`
+
+`false` (default) runs every step and the measurement on the `frame` above only. `true` runs reconstruction, segmentation, unmixing and measurement on every frame. The ROI is placed on each frame (re-anchored per frame for `auto` placement) and measured there. `frame` still picks the overlay/report anchor. `"roi": "from_scan"` always implies `true`.
 
 ### `measure`
 
@@ -167,7 +171,6 @@ How wide the measurement reaches. Mirrors the **Include all …** boxes in the A
 | --- | --- | --- |
 | `layers` | `"analysis"` (default), `"all_pa"` | `analysis` measures the `source` reconstruction plus what this run unmixed from it. `all_pa` measures every OA layer in the scan, including reconstructions the plan did not make. |
 | `all_channels` | `true` (default), `false` | Every wavelength of the reconstruction, or just the default one. Derived layers (unmixed, sO₂, THb) are always measured on every channel. |
-| `all_frames` | `false` (default), `true` | Every frame, overriding `frame` above. Reconstruction, segmentation and measurement all run over every frame instead of just the anchor frame. The ROI is placed on each frame (re-anchored per frame for `auto` placement) and measured there. `frame` still picks the overlay/report anchor. |
 
 ### `outputs`
 

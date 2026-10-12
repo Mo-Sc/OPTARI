@@ -98,7 +98,9 @@ def test_hdf5_export_round_trip(ithera_scan, tmp_path):
     UnmixingController._set_export_frame_attrs(unmixed, export_attrs)
 
     destination = tmp_path / "Scan_2.hdf5"
-    controller = controller_with(ithera_scan, [roi], {"Unmixed: iThera": unmixed})
+    controller = controller_with(
+        ithera_scan, [roi], {"Unmixed: iThera": unmixed}
+    )
     assert export_scan_to_hdf5(controller, destination)
     assert not export_scan_to_hdf5(controller, destination)  # never overwrites
 
@@ -128,7 +130,12 @@ def test_hdf5_export_round_trip(ithera_scan, tmp_path):
         unmixed_data[FRAME - 1].any() == False
     )  # frames that were not unmixed stay empty
 
-    (restored,) = roi_records_from_scan_rois(reopened, *FOV)
+    # the scan also carries an iLabs annotation
+    (restored,) = [
+        r
+        for r in roi_records_from_scan_rois(reopened, *FOV)
+        if r.source.startswith("OPTARI")
+    ]
     np.testing.assert_allclose(restored.verts, roi.verts, atol=1e-6)
     assert (restored.frame_id, restored.kind, restored.tissue_class) == (
         FRAME,

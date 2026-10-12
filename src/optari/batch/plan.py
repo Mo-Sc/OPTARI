@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 BATCH_TABLE_NAME = "batch_roi_table.xlsx"
 BATCH_REPORT_NAME = "batch_report.xlsx"
 MEASURE_LAYER_MODES = ("analysis", "all_pa")
+ROI_FROM_SCAN = "from_scan"
 
 
 @dataclass(frozen=True)
@@ -85,6 +86,8 @@ class BatchPlan:
     unmixing: dict | None = None
     segmentation: dict | None = None
     roi: RoiPreset | None = None
+    # Measure the scan's own ROIs instead of placing one, each on its own frames.
+    roi_from_scan: bool = False
     # Layer-name prefix picking the reconstruction everything downstream runs on.
     # None means the reconstruction step's own output, or the scan's default PA layer.
     source: str | None = None
@@ -103,6 +106,11 @@ class BatchPlan:
         return self.output_dir / BATCH_REPORT_NAME
 
     @property
+    def measures(self) -> bool:
+        """Whether this plan measures ROIs at all."""
+        return self.roi is not None or self.roi_from_scan
+
+    @property
     def roi_placement(self) -> str:
         """How the ROI preset asks to be placed. Owned by the preset, not the plan."""
         return self.roi.placement if self.roi is not None else "static"
@@ -119,6 +127,8 @@ class BatchPlan:
             names.append("unmixing")
         if self.roi is not None:
             names.append(f"roi ({self.roi_placement})")
+        if self.roi_from_scan:
+            names.append("roi (from scan)")
         return names
 
 
@@ -148,13 +158,16 @@ def _load_named(store: PresetStore, name: str, label: str) -> dict:
         ) from exc
 
 
-def _measure_scope(spec: dict) -> MeasureScope:
+def _measure_scope(spec: dict, all_frames: bool) -> MeasureScope:
+    if "all_frames" in spec:
+        raise ValueError(
+            "'all_frames' moved out of 'measure' to the top level of the batch preset."
+        )
     mode = str(spec.get("layers", "analysis"))
     if mode not in MEASURE_LAYER_MODES:
         raise ValueError(
             f"Invalid measure.layers '{mode}'. Use one of {MEASURE_LAYER_MODES}."
         )
-    all_frames = bool(spec.get("all_frames", False))
     return MeasureScope(
         # "analysis" narrows to this run's own chain, which the runner passes explicitly.
         all_layers=mode == "all_pa",
@@ -221,7 +234,8 @@ def build_plan(
 
     roi = None
     name = _step_preset_name(steps, "roi")
-    if name is not None:
+    roi_from_scan = name == ROI_FROM_SCAN
+    if name is not None and not roi_from_scan:
         try:
             roi = RoiPresetStore(get_user_roi_presets_dir()).get(name)
         except (TypeError, ValueError, OSError) as exc:
@@ -238,9 +252,14 @@ def build_plan(
         unmixing=unmixing,
         segmentation=segmentation,
         roi=roi,
+        roi_from_scan=roi_from_scan,
         source=(batch_preset.get("source") or None),
         frame=_frame_selector(batch_preset.get("frame")),
-        measure=_measure_scope(batch_preset.get("measure") or {}),
+        # the scan's ROIs sit on their own frames, so steps and measurement need them all
+        measure=_measure_scope(
+            batch_preset.get("measure") or {},
+            bool(batch_preset.get("all_frames", False)) or roi_from_scan,
+        ),
         outputs=OutputSpec(
             xlsx=bool(outputs_spec.get("xlsx", True)),
             hdf5=bool(outputs_spec.get("hdf5", False)),
@@ -280,7 +299,7 @@ def plan_warnings(plan: BatchPlan) -> list[str]:
     """Things worth saying out loud that are not reasons to refuse the run."""
     if plan.source or plan.reconstruction is not None:
         return []
-    if plan.unmixing is None and plan.roi is None:
+    if plan.unmixing is None and not plan.measures:
         return []
     return [
         "No reconstruction step and no 'source', so the scan's default PA layer will "
@@ -410,9 +429,13 @@ def describe_plan(plan: BatchPlan) -> str:
             f"ROI:        {plan.roi.name} ({plan.roi_placement}, "
             f"tissue class '{plan.roi.geometry.tissue_class}')"
         )
+    if plan.roi_from_scan:
+        lines.append(
+            "ROI:        the scan's own, each on the frames it is drawn on"
+        )
 
     # Nothing is analysed or measured without an ROI, so saying how would be noise.
-    if plan.roi is not None:
+    if plan.measures:
         if plan.source:
             source = f"layer starting with '{plan.source}'"
         elif plan.reconstruction is not None:

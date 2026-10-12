@@ -268,6 +268,7 @@ def _roi_context(
         roi_group_uid=roi.roi_group_uid,
         src_layer=layer_info.name,
         kind=roi.kind,
+        roi_source=roi.source,
         study_folder=layer_info.study_folder,
         scan_folder=layer_info.scan_folder,
         scan_name=layer_info.scan_name,

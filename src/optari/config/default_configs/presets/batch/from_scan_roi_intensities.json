@@ -1,0 +1,17 @@
+{
+  "description": "Measure the ROIs stored in each scan (e.g. drawn in iLabs) on the iThera reconstruction, each on the frames it is drawn on.",
+  "steps": {
+    "roi": "from_scan"
+  },
+  "source": "Recon: iThera",
+  "frame": "acquisition_start",
+  "measure": {
+    "layers": "analysis",
+    "all_channels": true
+  },
+  "outputs": {
+    "xlsx": true,
+    "hdf5": false,
+    "overlay_png": false
+  }
+}
