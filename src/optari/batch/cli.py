@@ -4,7 +4,8 @@ The runner drives the same controllers as the GUI, so the CLI keeps a hidden nap
 viewer and runs the unchanged :class:`BatchRunner` in a Qt event loop. A run from here
 and one from the Batch dialog do the same.
 
-Exit codes: 0 all scans done, 1 some scans failed, 2 the plan was refused.
+Exit codes: 0 all scans done (or the run was declined), 1 some scans failed,
+2 the plan was refused.
 """
 
 import argparse
@@ -45,7 +46,14 @@ def main() -> None:
     parser.add_argument(
         "--resume",
         action="store_true",
-        help="skip scans an interrupted export-only run already exported",
+        help="skip scans an interrupted run already exported, and write this "
+        "run's ROI table and report under new names next to the old ones",
+    )
+    parser.add_argument(
+        "-y",
+        "--yes",
+        action="store_true",
+        help="start without asking for confirmation, for unattended runs",
     )
     args = parser.parse_args()
     configure_logging()
@@ -63,13 +71,17 @@ def main() -> None:
     problems = []
     # an empty dataset is validate_plan's to report, not a finished run
     if args.resume and plan.jobs:
-        # the interrupted run's report stays, this one gets its own
         stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        plan.report_name = f"batch_report_{stamp}.xlsx"
+        plan.run_suffix = f"_{stamp}"
+        n_scans = len(plan.jobs)
         problems += resume_plan(plan)
         if not problems and not plan.jobs:
             print("All scans are already exported.")
             sys.exit(0)
+        print(
+            f"Resuming: skipping {n_scans - len(plan.jobs)} of {n_scans} scan(s) "
+            "that are already exported."
+        )
     problems += validate_plan(plan)
     print(describe_plan(plan))
     for warning in plan_warnings(plan):
@@ -77,6 +89,12 @@ def main() -> None:
     if problems:
         print("\n".join(f"✗ {p}" for p in problems), file=sys.stderr)
         sys.exit(2)
+    answer = (
+        "y" if args.yes else input(f"Run {len(plan.jobs)} scan(s)? [y/N] ")
+    )
+    if answer.strip().lower() not in ("y", "yes"):
+        print("Not started.")
+        sys.exit(0)
 
     from napari import Viewer
     from qtpy.QtCore import Qt

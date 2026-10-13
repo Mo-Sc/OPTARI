@@ -32,8 +32,6 @@ from optari.utils.setup import (
 
 logger = logging.getLogger(__name__)
 
-BATCH_TABLE_NAME = "batch_roi_table.xlsx"
-BATCH_REPORT_NAME = "batch_report.xlsx"
 MEASURE_LAYER_MODES = ("analysis", "all_pa")
 ROI_FROM_SCAN = "from_scan"
 
@@ -94,18 +92,19 @@ class BatchPlan:
     frame: int | str = "motion"
     measure: MeasureScope = field(default_factory=MeasureScope)
     outputs: OutputSpec = field(default_factory=OutputSpec)
-    # A resumed run gets a report of its own, so the interrupted run's report survives.
-    report_name: str = BATCH_REPORT_NAME
+    # A resumed run writes table and report under names of its own, so the
+    # interrupted run's survive next to them.
+    run_suffix: str = ""
 
     @property
     def table_path(self) -> Path:
         """Where the run's ROI measurements are written (batch_roi_table.xlsx)."""
-        return self.output_dir / BATCH_TABLE_NAME
+        return self.output_dir / f"batch_roi_table{self.run_suffix}.xlsx"
 
     @property
     def report_path(self) -> Path:
         """Where the run's per-scan status report is written (batch_report.xlsx)."""
-        return self.output_dir / self.report_name
+        return self.output_dir / f"batch_report{self.run_suffix}.xlsx"
 
     def export_path(self, job: BatchJob, kind: str) -> Path:
         """Where *job*'s ``"hdf5"`` or ``"ipasc"`` export goes.
@@ -425,14 +424,14 @@ def _validate_output_dir(plan: BatchPlan) -> list[str]:
 def resume_plan(plan: BatchPlan) -> list[str]:
     """Drop the scans an earlier run into the same folder already exported.
 
-    Only export-only plans can resume: their outputs are one atomically written file
-    per scan, so an existing file is a finished scan. An ROI table would be split
-    across two runs. Returns problems that rule out resuming, like ``validate_plan``.
+    Exports are written atomically and after a scan's measurements are saved, so an
+    existing export marks a finished scan. Returns problems that rule out resuming,
+    like ``validate_plan``.
     """
     kinds = [k for k in ("hdf5", "ipasc") if getattr(plan.outputs, k)]
-    if plan.measures or not kinds:
+    if not kinds:
         return [
-            "Only plans with an hdf5/ipasc export and no ROI step can resume."
+            "Resuming needs an hdf5 or ipasc export to recognise finished scans."
         ]
     plan.jobs = [
         job
