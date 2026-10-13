@@ -23,7 +23,9 @@ Alternatively, an administrator can lift the path limit for the whole computer. 
 New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
 ```
 
-## On Linux, OPTARI fails because the Qt platform plugin xcb can't be loaded
+## Linux
+
+### OPTARI fails because the Qt platform plugin xcb can't be loaded
 
 The terminal shows `xcb-cursor0 or libxcb-cursor0 is needed to load the Qt xcb platform plugin`, or
 `Could not load the Qt platform plugin "xcb"`. This can be caused by a missing system library `libxcb-cursor0` required by Qt, which is not included in some Ubuntu installations.
