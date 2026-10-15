@@ -27,8 +27,13 @@ class RoiPreset:
 
     ``placement`` is how the ROI wants to be positioned: ``static`` at its saved
     coordinates, or ``auto`` anchored onto the segmentation class named by
-    ``geometry.tissue_class``. It lives here rather than at each call site so that
-    placing a preset means the same thing in the dock and in a batch run.
+    ``geometry.tissue_class`` (shown as its location in the UI). It lives here rather
+    than at each call site so that placing a preset means the same thing in the dock
+    and in a batch run.
+
+    ``top_margin_mm`` is how far below the class's top edge (at the image centre) an
+    ``auto`` preset's top is placed, horizontally centred. The save dialog prefills it
+    with where the ROI sits when saved, and the user can change it.
     """
 
     name: str
@@ -37,13 +42,15 @@ class RoiPreset:
     geometry: RoiGeometry
     source_fov_m: tuple[float, float]
     placement: str = "static"
+    top_margin_mm: float = 0.0
 
     def __post_init__(self) -> None:
-        """Coerce *source_fov_m* to floats and reject a non-positive FOV or unknown *placement*."""
+        """Coerce *source_fov_m* and *top_margin_mm* to floats and reject a non-positive FOV or unknown *placement*."""
         self.source_fov_m = (
             float(self.source_fov_m[0]),
             float(self.source_fov_m[1]),
         )
+        self.top_margin_mm = float(self.top_margin_mm)
         if min(self.source_fov_m) <= 0:
             raise ValueError("ROI preset source FOV must be positive")
         if self.placement not in PLACEMENT_MODES:
@@ -63,6 +70,7 @@ class RoiPreset:
             geometry=RoiGeometry.from_dict(data.get("geometry", {})),
             source_fov_m=data["source_fov_m"],
             placement=str(data.get("placement", "static")),
+            top_margin_mm=data.get("top_margin_mm", 0.0),
         )
 
     def to_dict(self) -> dict:
@@ -72,6 +80,7 @@ class RoiPreset:
             "created": self.created,
             "source_fov_m": list(self.source_fov_m),
             "placement": self.placement,
+            "top_margin_mm": self.top_margin_mm,
             "geometry": self.geometry.to_dict(),
         }
 
@@ -98,6 +107,7 @@ class RoiPresetStore(PresetStore):
         geometry: RoiGeometry,
         source_fov_m: tuple[float, float],
         placement: str = "static",
+        top_margin_mm: float = 0.0,
     ) -> Path:
         """Build a preset from the given fields, stamp it with the current time, and save it to disk."""
         preset = RoiPreset(
@@ -107,5 +117,6 @@ class RoiPresetStore(PresetStore):
             geometry=geometry,
             source_fov_m=source_fov_m,
             placement=placement,
+            top_margin_mm=top_margin_mm,
         )
         return self.save(name, preset.to_dict())

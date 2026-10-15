@@ -7,7 +7,7 @@ Presets aren't part of the Settings dialog. Instead, each category is managed fr
 
 ## ROI presets (`presets/roi/`)
 
-A saved ROI template. The `geometry` block is the same representation OPTARI uses for the saved analysis table and for HDF5 export: vertices in PATATO coordinates, metres, origin at the image centre, so the shape does not depend on the field of view it was drawn on. `tissue_class` can be used for automatic placement, by setting it to the respective class in an available segmentation map.
+A saved ROI template. The `geometry` block is the same representation OPTARI uses for the saved analysis table and for HDF5 export: vertices in PATATO coordinates, metres, origin at the image centre, so the shape does not depend on the field of view it was drawn on. `tissue_class` is the preset's location (shown as **Location** in the Annotation dock): the segmentation class an `auto` preset is anchored to.
 
 `source_fov_m` records the field of view the template was drawn on, in metres. It is needed to re-place the template proportionally when it is applied to a scan with a different field of view,
 
@@ -17,6 +17,8 @@ A saved ROI template. The `geometry` block is the same representation OPTARI use
 | --- | --- |
 | `static` | Put it at its saved coordinates, scaled to the scan's field of view. |
 | `auto` | Anchor it onto the segmentation class named by `geometry.tissue_class`. Needs a segmentation map. |
+
+`top_margin_mm` is how far below the class's top edge (at the image's horizontal centre) an `auto` preset's top is placed, horizontally centred. The Save Preset popup prefills it with where the ROI sits when saved, and it can be edited there. `0` places the ROI's top right on the class's top edge.
 
 Placing an `auto` preset on a scan without a matching segmentation fails with an error, both in the Annotation dock and in a batch run.
 

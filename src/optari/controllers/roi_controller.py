@@ -13,8 +13,10 @@ from napari.layers import Labels
 from qtpy.QtCore import QSignalBlocker
 from qtpy.QtGui import QColor
 from qtpy.QtWidgets import (
+    QComboBox,
     QDialog,
     QDialogButtonBox,
+    QDoubleSpinBox,
     QFormLayout,
     QLineEdit,
     QMessageBox,
@@ -71,21 +73,54 @@ def _layer_holds(record: ROIRecord, verts: np.ndarray, kind: str) -> bool:
     )
 
 
-def _roi_name_popup() -> tuple[str, str, str] | None:
+def _roi_name_popup(
+    margins_by_location: dict[str, float], current_location: str
+) -> tuple[str, str, str | None, float] | None:
+    """Ask for a preset's name, description, optional location and its top margin.
+
+    *margins_by_location* maps each location on offer to the ROI's measured margin
+    below that class's top edge, which prefills the margin when it's picked.
+    """
     dialog = QDialog()
     dialog.setWindowTitle("Save ROI")
 
     form = QFormLayout(dialog)
     roi_id_edit = QLineEdit()
     description_edit = QLineEdit()
-    tissue_class_edit = QLineEdit()
-    tissue_class_edit.setPlaceholderText("undefined")
-    tissue_class_edit.setToolTip(
-        'Segmentation class name to auto-place this preset in, e.g. "muscle"'
+    location_combo = QComboBox()
+    location_combo.addItem("None (static)", userData=None)
+    for name in margins_by_location:
+        location_combo.addItem(name, userData=name)
+    location_combo.setEnabled(bool(margins_by_location))
+    location_combo.setToolTip(
+        "Segmentation class this preset is placed in, centred horizontally"
+        if margins_by_location
+        else "Run segmentation first to place this preset by location"
     )
+    margin_spin = QDoubleSpinBox()
+    margin_spin.setRange(-100.0, 100.0)
+    margin_spin.setDecimals(2)
+    margin_spin.setSuffix(" mm")
+    margin_spin.setToolTip(
+        "How far below the location's top edge (at the image centre) the ROI's top "
+        "is placed. Prefilled with where the ROI is now"
+    )
+
+    def on_location_changed() -> None:
+        location = location_combo.currentData()
+        margin_spin.setEnabled(location is not None)
+        margin_spin.setValue(margins_by_location.get(location, 0.0))
+
+    location_combo.currentIndexChanged.connect(on_location_changed)
+    location_combo.setCurrentIndex(
+        max(location_combo.findData(current_location), 0)
+    )
+    on_location_changed()
+
     form.addRow("ROI Name:", roi_id_edit)
     form.addRow("Description (optional):", description_edit)
-    form.addRow("Tissue class (optional):", tissue_class_edit)
+    form.addRow("Location:", location_combo)
+    form.addRow("Top margin:", margin_spin)
 
     buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
     buttons.accepted.connect(dialog.accept)
@@ -98,10 +133,12 @@ def _roi_name_popup() -> tuple[str, str, str] | None:
     roi_id = roi_id_edit.text().strip()
     if not roi_id:
         return None
-
-    description = description_edit.text().strip()
-    tissue_class = tissue_class_edit.text().strip() or "undefined"
-    return roi_id, description, tissue_class
+    return (
+        roi_id,
+        description_edit.text().strip(),
+        location_combo.currentData(),
+        margin_spin.value() if margin_spin.isEnabled() else 0.0,
+    )
 
 
 class RoiController(TaskControllerBase):
@@ -157,10 +194,21 @@ class RoiController(TaskControllerBase):
         self._next_track_id += 1
         return record
 
-    def add_shape(self, verts: np.ndarray, shape_type: str) -> None:
-        """Add an ROI to the current frame and select it, which also enables Save."""
+    def add_shape(
+        self,
+        verts: np.ndarray,
+        shape_type: str,
+        tissue_class: str = "undefined",
+    ) -> None:
+        """Add an ROI to the current frame and select it, which also enables Save.
+
+        *tissue_class* labels the ROI's location, e.g. the class it was placed in from a
+        segmentation mask, and is exported with it.
+        """
         shapes = self.optari_controller.shapes_layer
         shapes.add(verts, shape_type=shape_type)
+        self.sync_records_from_shapes()
+        self._roi_records[self._projection_ids[-1]].tissue_class = tissue_class
         shapes.selected_data = {len(shapes.data) - 1}
 
     def restore_roi_records(self, records: list[ROIRecord]) -> None:
@@ -458,7 +506,7 @@ class RoiController(TaskControllerBase):
             ),
             # ROI presets
             (
-                ann.roi_presets_list.itemClicked,
+                ann.roi_presets_list.currentItemChanged,
                 self.on_roi_preset_item_selected,
             ),
             (
@@ -986,9 +1034,9 @@ class RoiController(TaskControllerBase):
     def on_save_roi_preset_clicked(self, event=None) -> None:
         """Save the first selected ROI as a named preset.
 
-        Prompts for a name, description and tissue class, and records the current
-        placement-mode combo value with it so reusing the preset reproduces how it
-        was placed here.
+        Prompts for a name, description, location and top margin. A location makes
+        the preset placed in that segmentation class, horizontally centred, with its top
+        the given margin below the class's top edge.
         """
         if self.optari_controller.shapes_layer is None:
             return
@@ -1001,18 +1049,33 @@ class RoiController(TaskControllerBase):
             )
             return
 
-        roi_idx = int(selected[0])
-        verts = np.asarray(
-            self.optari_controller.shapes_layer.data[roi_idx], dtype=float
-        )
-        shape_type = str(
-            self.optari_controller.shapes_layer.shape_type[roi_idx]
-        )
+        self.sync_records_from_shapes()
+        record = self.current_records()[int(selected[0])]
+        verts = record.verts[:, -2:]
 
-        metadata = _roi_name_popup()
+        # Offer the classes this frame's mask can anchor to (present at the image
+        # centre), each with the ROI's current margin below its top edge.
+        # Background (id 0) is no location.
+        margins_by_location = {}
+        mask_result = (
+            self.optari_controller.segmentation_ctrl.active_seg_mask_2d()
+        )
+        if mask_result is not None:
+            seg, seg_layer = mask_result
+            class_names = (seg_layer.metadata or {}).get("class_names", {})
+            for class_id in set(map(int, np.unique(seg))) - {0}:
+                try:
+                    anchor = self._class_anchor_mm(seg == class_id, seg_layer)
+                except ValueError:
+                    continue
+                margins_by_location[str(class_names.get(class_id, class_id))] = (
+                    float(verts[:, 0].min() - anchor[0])
+                )
+
+        metadata = _roi_name_popup(margins_by_location, record.tissue_class)
         if metadata is None:
             return
-        roi_id, description, tissue_class = metadata
+        roi_id, description, location, top_margin_mm = metadata
 
         fov_m = self.optari_controller.scan_ctrl.get_fov()
         if fov_m is None:
@@ -1021,22 +1084,18 @@ class RoiController(TaskControllerBase):
             )
             return
         geometry = RoiGeometry(
-            verts_m=napari_to_patato(verts[:, -2:], *fov_m),
-            kind=shape_type,
-            tissue_class=str(tissue_class or "undefined"),
+            verts_m=napari_to_patato(verts, *fov_m),
+            kind=record.kind,
+            tissue_class=location or "undefined",
         )
         try:
             preset_path = self._roi_preset_store.save_preset(
                 name=roi_id,
-                description=str(description or ""),
+                description=description,
                 geometry=geometry,
                 source_fov_m=fov_m,
-                # Save how it is currently being placed, so reusing the preset (here or
-                # in a batch run) reproduces what the user just set up.
-                placement=str(
-                    self.optari_controller.annotation.roi_placement_mode_combo.currentData()
-                    or "static"
-                ),
+                placement="static" if location is None else "auto",
+                top_margin_mm=top_margin_mm,
             )
         except (TypeError, ValueError, OSError) as exc:
             self.optari_controller.annotation.roi_presets_description_label.setText(
@@ -1127,45 +1186,64 @@ class RoiController(TaskControllerBase):
 
         try:
             verts_shifted = RoiController._anchor_verts_to_mask(
-                verts, seg == class_id, seg_layer
+                verts, seg == class_id, seg_layer, preset.top_margin_mm
             )
         except ValueError as exc:
             raise ValueError(f"Class '{target_class_name}': {exc}") from exc
 
-        controller.roi_ctrl.add_shape(verts_shifted, preset.geometry.kind)
+        controller.roi_ctrl.add_shape(
+            verts_shifted, preset.geometry.kind, target_class_name
+        )
         return seg_layer, class_id
 
     @staticmethod
-    def _anchor_verts_to_mask(
-        verts: np.ndarray, class_mask: np.ndarray, seg_layer: Labels
+    def _class_anchor_mm(
+        class_mask: np.ndarray, seg_layer: Labels
     ) -> np.ndarray:
-        """Shift `verts` so their top-center sits on `class_mask`'s top-center.
+        """World (y, x) mm of *class_mask*'s top edge at the image's horizontal centre.
 
         Raises ValueError (message safe to show the user) if the class isn't
         present in `class_mask` at all, or not at the image's horizontal centre.
         """
         if not np.any(class_mask):
             raise ValueError("not present in this frame")
-        y_min = float(np.min(verts[:, 0]))
-        x_min = float(np.min(verts[:, 1]))
-        x_max = float(np.max(verts[:, 1]))
-        source_center_x = 0.5 * (x_min + x_max)
-
         # isolate the largest connected component before anchoring
         # TODO: necessary? If we always do that as mask postprocessing anyways
         top_row, center_col = class_top_at_center_column(class_mask)
+        return np.asarray(seg_layer.translate[-2:], dtype=float) + np.asarray(
+            [top_row, center_col], dtype=float
+        ) * np.asarray(seg_layer.scale[-2:], dtype=float)
 
-        sy = float(seg_layer.scale[-2])
-        sx = float(seg_layer.scale[-1])
-        ty = float(seg_layer.translate[-2])
-        tx = float(seg_layer.translate[-1])
+    @staticmethod
+    def _top_center(verts: np.ndarray) -> np.ndarray:
+        """(y, x) of the top edge's midpoint of *verts*' bounding box."""
+        return np.asarray(
+            [verts[:, 0].min(), 0.5 * (verts[:, 1].min() + verts[:, 1].max())]
+        )
 
-        dy = ty + float(top_row) * sy - y_min
-        dx = tx + float(center_col) * sx - source_center_x
-        return verts + np.asarray([dy, dx], dtype=float)
+    @staticmethod
+    def _anchor_verts_to_mask(
+        verts: np.ndarray,
+        class_mask: np.ndarray,
+        seg_layer: Labels,
+        top_margin_mm: float = 0.0,
+    ) -> np.ndarray:
+        """Shift `verts` so their top-center sits *top_margin_mm* below `class_mask`'s top-center.
+
+        Raises ValueError like `_class_anchor_mm`.
+        """
+        return (
+            verts
+            + RoiController._class_anchor_mm(class_mask, seg_layer)
+            + [top_margin_mm, 0.0]
+            - RoiController._top_center(verts)
+        )
 
     def _per_frame_auto_resolver(
-        self, seg_layer: Labels, class_id: int
+        self,
+        seg_layer: Labels,
+        class_id: int,
+        top_margin_mm: float,
     ) -> Callable[[int, np.ndarray], np.ndarray | None]:
         """Per-frame geometry for auto placement across All Frames: re-anchors
         onto each frame's own segmentation mask, skipping (returning None for)
@@ -1181,7 +1259,10 @@ class RoiController(TaskControllerBase):
                 return None
             try:
                 return self._anchor_verts_to_mask(
-                    source_verts, seg_data[frame_id, 0] == class_id, seg_layer
+                    source_verts,
+                    seg_data[frame_id, 0] == class_id,
+                    seg_layer,
+                    top_margin_mm,
                 )
             except ValueError:
                 return None
@@ -1229,7 +1310,8 @@ class RoiController(TaskControllerBase):
         resolver = None
         if placement == "auto":
             resolver = self._per_frame_auto_resolver(
-                *self._place_roi_preset_auto(self.optari_controller, preset)
+                *self._place_roi_preset_auto(self.optari_controller, preset),
+                preset.top_margin_mm,
             )
         else:
             self._place_roi_preset_static(self.optari_controller, preset)
@@ -1240,15 +1322,26 @@ class RoiController(TaskControllerBase):
             self.expand_current_projection_to_all_frames(resolver)
 
     def on_place_roi_clicked(self, event=None) -> None:
-        """Place the preset currently selected in the presets list, using the dock's placement mode and scope."""
+        """Place the preset currently selected in the presets list, using the dock's placement and scope."""
         self._place_selected_roi_preset()
 
     def on_roi_preset_item_clicked(self, item) -> None:
         """Place the double-clicked preset."""
         self._place_selected_roi_preset()
 
-    def on_roi_preset_item_selected(self, item) -> None:
-        """Preselect the placement mode for *item*'s preset, and show its description and tissue class."""
+    def on_roi_preset_item_selected(self, item, previous=None) -> None:
+        """Preselect the placement for *item*'s preset, and show its description and location.
+
+        Runs only when the selection changes, so a placement the user picked by hand
+        survives clicking or double-clicking the same preset again.
+        """
+        combo = self.optari_controller.annotation.roi_placement_mode_combo
+        location_item = combo.model().item(combo.findData("auto"))
+        if item is None:
+            location_item.setText("Location")
+            location_item.setEnabled(False)
+            combo.setCurrentIndex(combo.findData("static"))
+            return
         try:
             preset = self._roi_preset_store.get(item.text())
         except (TypeError, ValueError, OSError) as exc:
@@ -1257,21 +1350,21 @@ class RoiController(TaskControllerBase):
             )
             return
 
-        # Preselect what the preset asks for. Auto placement without a matching
-        # segmentation then fails with a message instead of quietly going static.
-        combo = self.optari_controller.annotation.roi_placement_mode_combo
+        location = preset.geometry.tissue_class
+        has_location = location != "undefined"
+        location_item.setText(location if has_location else "Location")
+        location_item.setEnabled(has_location)
+        # Anchored placement without a matching segmentation then fails with a
+        # message instead of quietly going static.
         combo.setCurrentIndex(combo.findData(preset.placement))
 
-        desc = str(preset.description or "")
-        tissue_class = preset.geometry.tissue_class
-
-        desc = (
-            f"{desc} (tissue class: {tissue_class})"
-            if desc
-            else f"(tissue class: {tissue_class})"
-        )
+        parts = [preset.description]
+        if has_location:
+            parts.append(
+                f"(location: {location}, top margin {preset.top_margin_mm:.2f} mm)"
+            )
         self.optari_controller.annotation.roi_presets_description_label.setText(
-            desc
+            " ".join(filter(None, parts))
         )
 
     def initialize_ui(self) -> None:
