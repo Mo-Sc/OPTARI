@@ -1,6 +1,6 @@
 # Keyboard Shortcuts
 
-Using keyboard shortcuts can significantly speed up your analysis workflow. This is a short list containing some of the most useful shortcuts for traditional MSOT analysis, like navigating the viewer and annotating ROIs. A complete list of built-in napari shortcuts can be found and modified by clicking **`napari` ➔ `Preferences` ➔ `Shortcuts`**.
+Using keyboard shortcuts can significantly speed up your analysis workflow. This is a short list containing some of the most useful shortcuts for traditional OA analysis, like navigating the viewer and annotating ROIs. A complete list of built-in napari shortcuts can be found and modified by clicking **`napari` ➔ `Preferences` ➔ `Shortcuts`**.
 
 ## Navigation & Layer Control
 

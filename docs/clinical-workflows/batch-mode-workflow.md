@@ -1,4 +1,4 @@
-# Batch Mode Workflow
+# Batch Mode
 
 !!! info "Coming soon"
-    This workflow is not yet available TODO.
+    This workflow video is not yet available.
