@@ -44,7 +44,7 @@ The tests are headless, so they dont cover publishing layers into the viewer, th
 | `test_roi_geometry.py` | PATATO ↔ napari coordinate transforms, `RoiGeometry` round trips, FOV repositioning, ROI presets |
 | `test_roi_measurement.py` | ROI statistics on synthetic images with known values, intensity clamping, layer translate, time series, spectra, ROI shapes from masks |
 | `test_roi_table.py` | Saved Analysis table: stamping, autosave, XLSX export/import, de-duplication, rejected files |
-| `test_scan_loading.py` | Study discovery, format detection, layer building from iThera and HDF5 scans, motion-based frame selection |
+| `test_scan_loading.py` | Study discovery, format detection, layer building from iThera and HDF5 scans, spectral and frame-to-frame motion scores and frame selection |
 | `test_processing.py` | Backprojection, unmixing (THb, sO2), segmentation, automatic ROI placement, parameter resolution from presets |
 | `test_export.py` | OPTARI HDF5 round trip with ROIs and derived images, IPASC export, batch report |
 | `test_batch.py` | Batch preset → plan resolution, plan validation, the per-scan run loop, source and overlay layer selection |

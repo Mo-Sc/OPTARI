@@ -172,12 +172,23 @@ class SettingsDialog(QDialog):
         form.addRow("Default PA layer", self.default_pa_layer_edit)
 
         self.frame_mode_combo = QComboBox()
-        self.frame_mode_combo.addItem("Motion-based", userData="motion")
+        self.frame_mode_combo.addItem(
+            "Motion (Spectral)", userData="spectral_motion"
+        )
+        self.frame_mode_combo.addItem(
+            "Motion (Frame-to-Frame)", userData="frame_motion"
+        )
         self.frame_mode_combo.addItem(
             "Acquisition start", userData="acquisition_start"
         )
         self.frame_mode_combo.addItem("First ROI frame", userData="roi")
         self.frame_mode_combo.addItem("Fixed index", userData="index")
+        self.frame_mode_combo.setToolTip(
+            "Motion (Spectral): least tissue motion during the frame's wavelength set, "
+            "(important for unmixing). Falls back to frame-to-frame for a scan with "
+            "one wavelength. Motion (Frame-to-Frame): least change from the previous "
+            "and next frame."
+        )
         self.frame_index_spin = QSpinBox()
         self.frame_index_spin.setRange(0, 100000)
         self.frame_mode_combo.currentIndexChanged.connect(
@@ -377,7 +388,12 @@ class SettingsDialog(QDialog):
         self.default_pa_layer_edit.setText(str(general["DEFAULT_PA_LAYER"]))
 
         frame_index = general["DEFAULT_FRAME_INDEX"]
-        is_fixed = frame_index not in ("motion", "acquisition_start", "roi")
+        is_fixed = frame_index not in (
+            "spectral_motion",
+            "frame_motion",
+            "acquisition_start",
+            "roi",
+        )
         self.frame_mode_combo.setCurrentIndex(
             self.frame_mode_combo.findData(
                 "index" if is_fixed else frame_index

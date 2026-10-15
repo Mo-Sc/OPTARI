@@ -26,7 +26,7 @@ from optari.io.export_pipeline import (
     ipasc_export_report,
 )
 from optari.utils.misc import roi_color_for_index
-from optari.utils.motion import k_motion_scores_optimized
+from optari.utils.motion import frame_motion_scores, spectral_motion_scores
 from optari.utils.setup import load_startup_logo
 from optari.controllers.base import TaskControllerBase
 from optari.controllers.viewer_export_controller import ViewerExportController
@@ -248,7 +248,7 @@ class ScanController(TaskControllerBase):
         self.init_shapes_from_scan()
         if frame_selector == "roi":
             self.go_to_frame("roi")
-        # Free when the default "motion" frame selection already scored the scan.
+        # Free when a motion-based default frame selection already scored the scan.
         self.optari_controller.analysis_ctrl.show_motion_scores(compute=False)
 
         # Fit view to the newly loaded data (prevents "zoomed out" state).
@@ -259,8 +259,10 @@ class ScanController(TaskControllerBase):
     def go_to_frame(self, selector: int | str) -> int:
         """Show the frame *selector* means for the loaded scan, and return it.
 
-        ``"motion"`` is the frame with the lowest ``motion_scores()``. A scan with no
-        ultrasound (a raw time series) has nothing to score and falls back to frame 0.
+        ``"spectral_motion"`` and ``"frame_motion"`` are the frame with the lowest score
+        of that kind in ``motion_scores()``. A scan without spectral motion (one image per
+        wav set) uses frame-to-frame motion instead. A scan with no ultrasound (a raw time
+        series) has nothing to score and falls back to frame 0.
         ``"acquisition_start"`` is the ithera recording start frame
         ``"roi"`` is the first frame holding one of the scan's ROIs, frame 0 without any.
         It needs the scan's ROIs restored first.
@@ -269,8 +271,8 @@ class ScanController(TaskControllerBase):
 
         Raises ValueError for a frame number the scan does not have.
         """
-        if selector == "motion":
-            frame_id = self._lowest_motion_frame()
+        if selector in ("spectral_motion", "frame_motion"):
+            frame_id = self._lowest_motion_frame(selector)
         elif selector == "acquisition_start":
             frame_id = self._acquisition_start_frame()
         elif selector == "roi":
@@ -306,13 +308,16 @@ class ScanController(TaskControllerBase):
         logger.info("acquisition start frame selection: frame %d", frame_id)
         return frame_id
 
-    def motion_scores(self, *, compute: bool = True) -> np.ndarray | None:
-        """Motion score per frame of the loaded scan (0 = stillest, 1 = most motion),
-        or None without ultrasound.
+    def motion_scores(
+        self, *, compute: bool = True
+    ) -> dict[str, np.ndarray | None] | None:
+        """Motion scores per frame of the loaded scan (0 = stillest, 1 = most motion),
+        keyed ``"spectral_motion"`` and ``"frame_motion"``, or None without ultrasound.
 
-        Computed on first use and cached on the US layer, so frame selection and the
-        Motion dock share one computation. With ``compute=False`` only cached scores
-        are returned, which lets a caller show them without paying for scoring.
+        Spectral motion is None for a scan with one image per wav set. Both kinds are
+        computed together on first use and cached on the US layer.
+        With ``compute=False`` only cached scores are returned, which lets a
+        caller show them without paying for scoring.
         """
         us_layer = self.optari_controller.active_us_layer
         if us_layer is None:
@@ -320,21 +325,30 @@ class ScanController(TaskControllerBase):
         if "motion_scores" not in us_layer.metadata:
             if not compute:
                 return None
-            us_layer.metadata["motion_scores"] = k_motion_scores_optimized(
-                np.asarray(us_layer.data)
-            )
+            us_data = np.asarray(us_layer.data)
+            us_layer.metadata["motion_scores"] = {
+                "spectral_motion": spectral_motion_scores(us_data),
+                "frame_motion": frame_motion_scores(us_data),
+            }
         return us_layer.metadata["motion_scores"]
 
-    def _lowest_motion_frame(self) -> int:
+    def _lowest_motion_frame(self, kind: str) -> int:
         scores = self.motion_scores()
         if scores is None:
             logger.info("no ultrasound to score motion on, using frame 0")
             return 0
-        frame_id = int(np.argmin(scores))
+        if scores[kind] is None:
+            logger.warning(
+                "scan has one ultrasound image per wavelength set, so no spectral "
+                "motion: selecting by frame-to-frame motion instead"
+            )
+            kind = "frame_motion"
+        frame_id = int(np.argmin(scores[kind]))
         logger.info(
-            "motion-based frame selection: frame %d, score %.4f",
+            "%s frame selection: frame %d, score %.4f",
+            kind,
             frame_id,
-            scores[frame_id],
+            scores[kind][frame_id],
         )
         return frame_id
 

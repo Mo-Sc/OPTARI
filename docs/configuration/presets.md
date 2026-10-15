@@ -113,7 +113,7 @@ Batch presets are edited in their own window (**OPTARI → Batch Processing…**
     "roi": "clinical_ellipse_10x2mm_Muskel1"
   },
   "source": null,
-  "frame": "motion",
+  "frame": "spectral_motion",
   "all_frames": false,
   "measure": {
     "layers": "analysis",
@@ -157,7 +157,8 @@ The anchor frame: where a `static` ROI's shape is drawn, and which frame the ove
 
 | Value | Meaning |
 | --- | --- |
-| `"motion"` (default) | That scan's lowest-motion frame. Requires ultrasound. A raw time series (eg. IPASC) has none and falls back to frame 0. |
+| `"spectral_motion"` (default) | That scan's frame with the least motion during its set of wavelength (relevant for unmixing). A single-wavelength scan falls back to `"frame_motion"`. Requires ultrasound. A raw time series (eg. IPASC) has none and falls back to frame 0. |
+| `"frame_motion"` | That scan's frame that differs least from its previous and next frame. |
 | `"acquisition_start"` | The frame where the operator pressed record in ithera scans, (shown as sweep 1 in iLabs). Scans that do not record it fall back to frame 0. |
 | `"roi"` | The first frame holding one of the scan's ROIs, so the overlay shows them. Meant for `"roi": "from_scan"`, where every scan's ROIs can sit on a different frame. Scans without ROIs fall back to frame 0. |
 | an integer | That frame number. A scan without it fails. |

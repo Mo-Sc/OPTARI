@@ -60,7 +60,7 @@ def test_shipped_presets_resolve_against_the_dataset(tmp_path):
     assert plan.unmixing["SPECTRA"] == ["Hb", "HbO2"]
     assert plan.segmentation["model_id"] == "c_unet_gastrocnemius-transverse"
     assert (
-        plan.roi.geometry.tissue_class == "Muskel1" and plan.frame == "motion"
+        plan.roi.geometry.tissue_class == "Muskel1" and plan.frame == "spectral_motion"
     )
     assert plan.measure == MeasureScope(
         all_layers=False,
