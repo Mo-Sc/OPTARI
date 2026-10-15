@@ -11,8 +11,13 @@ from math import ceil
 import numpy as np
 import patato as pat
 from qtpy.QtCore import Qt
+from skimage.transform import downscale_local_mean
 
-from patato.io.attribute_tags import HDF5Tags, UnmixingAttributeTags
+from patato.io.attribute_tags import (
+    HDF5Tags,
+    ReconAttributeTags,
+    UnmixingAttributeTags,
+)
 from patato.unmixing.spectra import SPECTRA_NAMES
 from optari.controllers.base import TaskControllerBase
 from optari.utils.tasks import BackgroundStep
@@ -103,6 +108,8 @@ class UnmixParams:
     wavelengths: list[int]
     chromophores: list[str]
     output_frames: list[int]
+    # where the output layers sit in the viewer, see UnmixParams.build
+    translate: tuple[float, ...]
     reduce_factor: int = 1
     suffix: str = ""
     generate_thb: bool = False
@@ -188,6 +195,14 @@ class UnmixParams:
             source_layer_name=active_layer.name,
             source_layer_metadata=dict(active_layer.metadata),
             source_frame_count=int(np.asarray(active_layer.data).shape[0]),
+            # A coarse pixel averages a reduce_factor-wide block of the source's pixels
+            # and belongs at the block's centre, (reduce_factor - 1) / 2 source pixels
+            # past its first pixel.
+            translate=tuple(active_layer.translate[:-2])
+            + tuple(
+                np.asarray(active_layer.translate[-2:])
+                + (reduce_factor - 1) / 2 * np.asarray(active_layer.scale[-2:])
+            ),
             wavelengths=wavelengths,
             chromophores=chromophores,
             output_frames=output_frames,
@@ -234,6 +249,46 @@ class UnmixParams:
         )
 
 
+def _block_average(recon, factor: int):
+    """Average *factor*-wide pixel blocks of *recon* into a coarser Reconstruction.
+
+    Done here rather than by PATATO's unmixer (causes misalignment).
+    Blocks are tiled from the image's top-left corner as the viewer shows it, which
+    UnmixParams.build's translate relies on. downscale_local_mean would pad a partial
+    edge block with zeros, so it is cropped off first and the FOV shrinks with it.
+    """
+    data = np.asarray(recon.raw_data)  # (frames, wavelengths, z, y, x)
+    z, y, x = data.shape[2:]
+    fz, fy, fx = (min(factor, n) for n in (z, y, x))
+    # z is shown flipped (display_data_from_patato_obj), so its partial block is cut at
+    # the start: the viewer's bottom edge, like x's at the right edge.
+    cropped = data[:, :, z % fz :, : y - y % fy, : x - x % fx]
+    coarse = downscale_local_mean(cropped, (1, 1, fz, fy, fx)).astype(
+        np.float32
+    )
+    attributes = dict(recon.attributes)
+    fov_tags = (
+        ReconAttributeTags.X_FIELD_OF_VIEW,
+        ReconAttributeTags.Y_FIELD_OF_VIEW,
+        ReconAttributeTags.Z_FIELD_OF_VIEW,
+    )
+    n_pixel_tags = (
+        ReconAttributeTags.X_NUMBER_OF_PIXELS,
+        ReconAttributeTags.Y_NUMBER_OF_PIXELS,
+        ReconAttributeTags.Z_NUMBER_OF_PIXELS,
+    )
+    for fov_tag, n_tag, axis in zip(fov_tags, n_pixel_tags, (-1, -2, -3)):
+        attributes[fov_tag] *= cropped.shape[axis] / data.shape[axis]
+        attributes[n_tag] = coarse.shape[axis]
+    return pat.Reconstruction(
+        coarse,
+        recon.ax_1_labels,
+        field_of_view=[attributes[tag] for tag in fov_tags],
+        attributes=attributes,
+        hdf5_sub_name=recon.hdf5_sub_name,
+    )
+
+
 def _unmix_frames(
     recon_for_run,
     pa_data,
@@ -259,7 +314,6 @@ def _unmix_frames(
     unmixer = pat.SpectralUnmixer(
         chromophores=chromophores,
         wavelengths=np.array(wavelengths, dtype=float),
-        rescaling_factor=reduce_factor,
         algorithm_id=suffix,
     )
     thb_calc = pat.THbCalculator(algorithm_id=suffix) if generate_thb else None
@@ -272,6 +326,8 @@ def _unmix_frames(
     unmixed_chunks, thb_chunks, so2_chunks = [], [], []
     for start in range(0, int(recon_for_run.shape[0]), chunk_frames):
         frames = recon_for_run[start : start + chunk_frames]
+        if reduce_factor > 1:
+            frames = _block_average(frames, reduce_factor)
         unmixed_chunk, _, _ = unmixer.run(frames, pa_data)
         unmixed_chunks.append(unmixed_chunk)
         if thb_calc is not None:
@@ -649,6 +705,7 @@ class UnmixingController(TaskControllerBase):
             metadata=metadata,
             patato_obj=image,
             colormap=colormap,
+            translate=params.translate,
         )
         self.optari_controller.derived_patato_objects[name] = image
         return name
