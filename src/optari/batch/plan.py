@@ -89,7 +89,7 @@ class BatchPlan:
     # Layer-name prefix picking the reconstruction everything downstream runs on.
     # None means the reconstruction step's own output, or the scan's default PA layer.
     source: str | None = None
-    frame: int | str = "motion"
+    frame: int | str = "spectral_motion"
     measure: MeasureScope = field(default_factory=MeasureScope)
     outputs: OutputSpec = field(default_factory=OutputSpec)
     # A resumed run writes table and report under names of its own, so the
@@ -120,6 +120,11 @@ class BatchPlan:
             / job.study_path.name
             / f"{job.scan_stem}{suffix}.hdf5"
         )
+
+    @property
+    def measures(self) -> bool:
+        """Whether this plan measures ROIs at all."""
+        return self.roi is not None or self.roi_from_scan
 
     @property
     def measures(self) -> bool:
@@ -199,11 +204,12 @@ def _frame_selector(value) -> int | str:
     if isinstance(value, int) and not isinstance(value, bool):
         return value
     if value is None:
-        return "motion"
-    if value in ("motion", "acquisition_start", "roi"):
+        return "spectral_motion"
+    if value in ("spectral_motion", "frame_motion", "acquisition_start", "roi"):
         return value
     raise ValueError(
-        f"Invalid frame selector {value!r}. Use 'motion', 'acquisition_start', 'roi' or a frame number."
+        f"Invalid frame selector {value!r}. Use 'spectral_motion', 'frame_motion', "
+        "'acquisition_start', 'roi' or a frame number."
     )
 
 

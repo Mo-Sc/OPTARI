@@ -32,14 +32,14 @@ A batch preset is a small JSON file in `~/.optari/config/presets/batch` that **n
     "roi": "clinical_ellipse_10x2mm_Muskel1"
   },
   "source": null,
-  "frame": "motion",
+  "frame": "spectral_motion",
   "all_frames": false,
   "measure": {"layers": "analysis", "all_channels": true},
   "outputs": {"xlsx": true, "hdf5": false, "overlay_png": true, "overlay_layer": null}
 }
 ```
 
-Every key is documented in [Presets](../configuration/presets.md#batch-presets-presetsbatch). In short: `steps` names what runs, `source` picks which reconstruction it runs on, `frame` picks the anchor frame for the overlay/report (`"motion"`, `"acquisition_start"` or a number), `all_frames` processes and measures every frame instead, `measure` says how wide to measure, and `outputs` says what to write.
+Every key is documented in [Presets](../configuration/presets.md#batch-presets-presetsbatch). In short: `steps` names what runs, `source` picks which reconstruction it runs on, `frame` picks the anchor frame for the overlay/report (`"spectral_motion"`, `"frame_motion"`, `"acquisition_start"` or a number), `all_frames` processes and measures every frame instead, `measure` says how wide to measure, and `outputs` says what to write.
 
 Edit a plan directly in the batch window: the JSON editor shows the selected preset, and **Save Preset** writes it back under a name of your choosing. Pressing **Validate** finds the scans and lists any problems. 
 
@@ -98,7 +98,7 @@ To retry only the failures, sort `batch_report.xlsx` by `status`, then run the s
     A plan with no steps and `hdf5` or `ipasc` enabled is a pure format converter: it reads each vendor scan and writes it out again, with no analysis at all. That is what the shipped `convert_to_hdf5` preset does; switch on `ipasc` instead (or as well) for the interoperable format.
 
 !!! note "Raw time series (IPASC) datasets"
-    An IPASC file holds the raw acoustic signal and no ultrasound, so on such a dataset a plan needs a `reconstruction` step before anything can be measured, and cannot run `segmentation` (that needs ultrasound). `frame: "motion"` also needs ultrasound and falls back to frame 0; give a frame number instead.
+    An IPASC file holds the raw acoustic signal and no ultrasound, so on such a dataset a plan needs a `reconstruction` step before anything can be measured, and cannot run `segmentation` (that needs ultrasound). Motion-based `frame` selection also needs ultrasound and falls back to frame 0; give a frame number instead.
 
 !!! warning "One run at a time"
     Batch mode uses the same single background-task slot as the docks. It refuses to start while another task is running, and the docks are disabled for the duration of a run.

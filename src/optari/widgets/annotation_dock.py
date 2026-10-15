@@ -97,19 +97,20 @@ def create_annotation_dock() -> AnnotationDock:
     roi_presets_layout.addWidget(roi_presets_description_label)
 
     roi_placement_mode_combo = QComboBox()
-    roi_placement_mode_combo.addItem("static", userData="static")
-    roi_placement_mode_combo.addItem("auto", userData="auto")
+    roi_placement_mode_combo.addItem("Static", userData="static")
+    roi_placement_mode_combo.addItem("Location", userData="auto")
+    roi_placement_mode_combo.model().item(1).setEnabled(False)
     roi_placement_mode_combo.setToolTip(
-        "Static: uses the preset's saved coordinates. Auto: places it inside the matching "
-        "segmentation class, and reports an error if there is none. With Scope All Frames, "
-        "Auto anchors on each frame's own segmentation, skipping frames the class "
-        "isn't present on"
+        "Static: uses the preset's saved coordinates. Location: anchors it to that "
+        "segmentation class, and reports an error if "
+        "the class is missing. With Scope All Frames, it anchors on each frame's own "
+        "segmentation, skipping frames the class isn't present on"
     )
 
     placement_row = QWidget()
     placement_layout = QHBoxLayout(placement_row)
     placement_layout.setContentsMargins(0, 0, 0, 0)
-    placement_layout.addWidget(QLabel("Placement mode"))
+    placement_layout.addWidget(QLabel("Placement"))
     placement_layout.addWidget(roi_placement_mode_combo)
     roi_presets_layout.addWidget(placement_row)
 

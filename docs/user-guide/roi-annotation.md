@@ -82,19 +82,23 @@ To place the same ROI consistently across multiple frames, scans, or clinical st
 
 - **Place a ROI:** Select a ROI preset from the list by clicking on it. Additional information about that ROI will be shown (if available). To place the ROI on the viewer, double-click the list entry, or click the **Apply Preset** button.
 - **Scope:** `Selected Frame` will place the ROI only on the currently selected frame in the viewer. `All Frames` will duplicate the ROI across all the frames in the selected layer.
-- **Create a Preset:** Select a ROI shape in the viewer and click the **Save Preset** button. A popup will ask you for a ROI name, and optional description and tissue class attributes.
+- **Create a Preset:** Select a ROI shape in the viewer and click the **Save Preset** button. A popup will ask you for a ROI name, an optional description, an optional **Location** and its **Top margin**. The Location list offers the classes of the [Segmentation](segmentation.md) mask on the current frame, preselecting the ROI's own location if it has one. Leave it at `None (static)` so the preset is always placed at its saved coordinates. See [Placement](#placement) for the top margin.
 
 The ROI Presets library is constantly synced with [`.json` files](../configuration/presets.md#roi-presets-presetsroi). This file can be used to share ROI shapes across computers or institutions.
 
 !!! note
     When a ROI preset is applied across multiple frames using the Scope `All Frames` setting, these ROIs belong to the same track. When adding one of these ROIs to the Saved Analysis table with `Include all frames` checked and `Track ID` selected, they will all be saved on the record they actually have on each frame, **even if they were moved or modified**. That same track can then be plotted in [Time Analysis](temporal-and-spectral-analysis.md#time-analysis) with Scope set to `Track ID`, measuring each frame on its own record instead of a single fixed one.
 
-### Placement Mode
+### Placement
 
-By default, ROI placement is set to `static`, meaning the ROI will be placed at the exact coordinates defined in the preset. 
+The **Placement** list offers `Static` and, for a preset saved with a location, that location (e.g. `Muskel1`). Selecting a preset preselects how it was saved, and you can switch it before placing.
 
-However, if it is set to `automatic`, OPTARI will try to automatically place the ROI in the tissue that is defined as the `position` attribute in the preset, ignoring the coordinates. This requires the scan to have a [**Segmentation**](segmentation.md) layer that contains a class with the same name as the one set in the position attribute. If no Segmentation layer or no corresponding tissue class is found, placement fails with an error. Switch the mode to `static` to place it at its saved coordinates instead.
+`Static` places the ROI at the exact coordinates defined in the preset.
 
-With Scope set to `All Frames`, `automatic` placement re-anchors independently on **each frame's own segmentation mask** rather than copying the first frame's position everywhere: a frame the tissue class isn't present on is skipped.
+Choosing the location places the ROI in that tissue instead, ignoring the saved coordinates. It is centred horizontally, and its top sits below the tissue's top edge (measured at the image centre, minus the preset's **top margin** ). The margin is set in the Save Preset popup. An ROI generated in the [Segmentation](segmentation.md#automatic-roi-placement) dock keeps its margin. Set it to 0 to place the ROI right at the tissue's top edge. 
+
+Placement by location requires the scan to have a [**Segmentation**](segmentation.md) layer that contains the location's class. If no Segmentation layer or no corresponding class is found, placement fails with an error. Switch to `Static` to place it at its saved coordinates instead.
+
+With Scope set to `All Frames`, placement by location re-anchors independently on **each frame's own segmentation mask** rather than copying the first frame's position everywhere: a frame the class isn't present on is skipped.
 
 

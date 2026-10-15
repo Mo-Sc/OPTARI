@@ -90,17 +90,18 @@ class AnalysisController(TaskControllerBase):
         self.show_motion_scores(compute=True)
 
     def show_motion_scores(self, *, compute: bool) -> None:
-        """Plot the motion score per frame of the loaded scan, or say why there is none.
+        """Plot both motion scores per frame of the loaded scan, or say why there are none.
 
         Without *compute* only already cached scores are plotted, so a scan load can
-        refresh the dock for free when the "motion" default frame scored it anyway.
+        refresh the dock for free when a motion-based default frame scored it anyway.
         """
         dock = self.optari_controller.motion
         scores = self.optari_controller.scan_ctrl.motion_scores(
             compute=compute
         )
         if scores is None:
-            dock.curve.setData([], [])
+            dock.spectral_curve.setData([], [])
+            dock.frame_curve.setData([], [])
             dock.stillest.setData([], [])
             dock.frame_line.hide()
             if self.optari_controller.pa_data is None:
@@ -115,12 +116,29 @@ class AnalysisController(TaskControllerBase):
                 )
             return
 
-        stillest = int(np.argmin(scores))
-        dock.curve.setData(np.arange(len(scores)), scores)
-        dock.stillest.setData([stillest], [scores[stillest]])
+        spectral, frame = scores["spectral_motion"], scores["frame_motion"]
+        stillest_frame = int(np.argmin(frame))
+        dock.frame_curve.setData(np.arange(len(frame)), frame)
+        if spectral is None:
+            dock.spectral_curve.setData([], [])
+            dock.stillest.setData([stillest_frame], [frame[stillest_frame]])
+            dock.status_label.setText(
+                "One image per wavelength set, so no spectral motion. Lowest "
+                f"frame-to-frame motion: frame {stillest_frame} (green)."
+            )
+        else:
+            stillest_spectral = int(np.argmin(spectral))
+            dock.spectral_curve.setData(np.arange(len(spectral)), spectral)
+            dock.stillest.setData(
+                [stillest_spectral, stillest_frame],
+                [spectral[stillest_spectral], frame[stillest_frame]],
+            )
+            dock.status_label.setText(
+                f"Lowest motion: frame {stillest_spectral} spectral, frame "
+                f"{stillest_frame} frame-to-frame (green)."
+            )
         dock.frame_line.show()
         self.update_frame_lines()
-        dock.status_label.setText(f"Lowest motion: frame {stillest} (green).")
 
     def update_frame_lines(self) -> None:
         """Move the Motion and Temporal frame lines to the viewer's current frame."""

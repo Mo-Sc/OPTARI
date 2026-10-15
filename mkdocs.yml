@@ -85,11 +85,12 @@ nav:
       - Exporting Data: user-guide/exporting-data.md
       - Keyboard Shortcuts: user-guide/keyboard-shortcuts.md
       - FAQ: user-guide/faq.md
-  - Sample Workflow:
+  - Sample Workflows:
       - Manual ROI Workflow: clinical-workflows/manual-roi-workflow.md
       - Segmentation + Unmixing Workflow: clinical-workflows/segmentation-unmixing-workflow.md
       - Tracking Intensity over Time: clinical-workflows/time-tracking-workflow.md
-      - Batch Mode Workflow: clinical-workflows/batch-mode-workflow.md
+      - Batch Mode: clinical-workflows/batch-mode-workflow.md
+      - Motion Correction: clinical-workflows/motion-correction-workflow.md
   - Configuration:
       - Overview: configuration/index.md
       - Configuration Schema: configuration/configuration-schema.md

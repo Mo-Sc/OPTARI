@@ -364,7 +364,6 @@ class SegmentationController(TaskControllerBase):
             return
         self.set_active_segmentation_model(str(model_id))
         self.populate_segmentation_controls()
-        dock.roi_class_id_combo.clear()
         self._pending_roi_class_id = None
         dock.status_label.setText(
             f"Model: {dock.segmentation_model_combo.currentText()}"
@@ -441,9 +440,14 @@ class SegmentationController(TaskControllerBase):
         self.populate_segmentation_controls(
             set(settings["selected_class_ids"])
         )
-        dock.roi_class_id_combo.clear()
-        # Inference repopulates this combo; keep a preset's class until then.
+        # Select the preset's class in the existing mask if it has it, and keep it
+        # pending so the next run's mask preselects it too.
         self._pending_roi_class_id = settings["roi_class_id"]
+        roi_class_index = dock.roi_class_id_combo.findData(
+            settings["roi_class_id"]
+        )
+        if roi_class_index >= 0:
+            dock.roi_class_id_combo.setCurrentIndex(roi_class_index)
 
         dock.roi_shape_combo.setCurrentIndex(shape_index)
         dock.roi_width_edit.setText(
@@ -610,7 +614,10 @@ class SegmentationController(TaskControllerBase):
             seg_dock.status_label.setText(str(exc))
             return
 
-        self.optari_controller.roi_ctrl.add_shape(verts, shape_type)
+        class_names = (seg_layer.metadata or {}).get("class_names", {})
+        self.optari_controller.roi_ctrl.add_shape(
+            verts, shape_type, str(class_names.get(int(class_id), class_id))
+        )
         seg_dock.status_label.setText(
             f"ROI generated from class {class_id} in frame {frame_idx}"
         )

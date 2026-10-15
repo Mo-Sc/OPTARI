@@ -39,7 +39,7 @@ At the top of the **Segmentation** dock, you can also choose between different p
 
 ## Auto ROI using the ROI Library
 
-Segmentation-based placement can also be combined with the ROI Library ([See Placement Mode](roi-annotation.md#placement-mode)). If a class in the segmentation mask matches a saved ROI preset's position attribute, it will be automatically placed in the corresponding tissue. If a segmentation mask is available for all scans and **Scope** in the Annotation dock is set to `All Scans`, the ROI will be dynamically placed using each frame's segmentation mask.
+Segmentation-based placement can also be combined with the ROI Library ([See Placement](roi-annotation.md#placement)). Save an ROI generated above as a preset with its **Location**, and it will be placed in that tissue with the same top margin. If a segmentation mask is available for all frames and **Scope** in the Annotation dock is set to `All Frames`, the ROI will be dynamically placed using each frame's segmentation mask.
 
 ![Auto ROI using Library](../assets/screenshots/ss_autoroilib.png)
 

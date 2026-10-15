@@ -6,7 +6,7 @@
     "roi": "clinical_ellipse_10x2mm_Muskel1"
   },
   "source": "Recon: iThera",
-  "frame": "motion",
+  "frame": "spectral_motion",
   "all_frames": false,
   "measure": {
     "layers": "analysis",

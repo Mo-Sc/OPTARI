@@ -16,7 +16,9 @@ class MotionDock:
     refresh_button: QPushButton
     status_label: QLabel
     plot: pg.PlotWidget
-    curve: pg.PlotDataItem
+    spectral_curve: pg.PlotDataItem
+    frame_curve: pg.PlotDataItem
+    # Lowest point of each plotted curve
     stillest: pg.ScatterPlotItem
     # Follows the viewer's frame; dragging it moves the viewer to that frame.
     frame_line: pg.InfiniteLine
@@ -30,14 +32,34 @@ def create_motion_dock() -> MotionDock:
         layout, status_text="Click 'Refresh' to score motion per frame."
     )
     refresh_button.setToolTip(
-        "Score inter-wavelength motion for every frame of the scan's ultrasound"
+        "Score spectral and frame-to-frame motion for every frame of the scan's ultrasound"
     )
 
     plot = pg.PlotWidget()
     plot.showGrid(x=True, y=True)
     plot.setLabel("bottom", "Frame")
     plot.setLabel("left", "Motion score (0 = stillest)")
-    curve = plot.plot(pen=pg.mkPen(width=2), symbol="o", symbolSize=5)
+    plot.setToolTip(
+        "Spectral: Movement during a frame's wavelength set, which corrupts "
+        "unmixing. Frame-to-frame: the image changed from the previous and next frame. "
+        "Each is scaled to 0-1 within the scan, so it shows where "
+        "motion happens, but are not comparable between scans."
+    )
+    plot.addLegend()
+    spectral_curve = plot.plot(
+        pen=pg.mkPen((100, 180, 255), width=2),
+        symbol="o",
+        symbolSize=5,
+        symbolBrush=(100, 180, 255),
+        name="Spectral",
+    )
+    frame_curve = plot.plot(
+        pen=pg.mkPen((255, 160, 60), width=2),
+        symbol="o",
+        symbolSize=5,
+        symbolBrush=(255, 160, 60),
+        name="Frame-to-frame",
+    )
     stillest = pg.ScatterPlotItem(
         size=12, brush=pg.mkBrush("g"), pen=pg.mkPen("w")
     )
@@ -53,7 +75,8 @@ def create_motion_dock() -> MotionDock:
         refresh_button=refresh_button,
         status_label=status_label,
         plot=plot,
-        curve=curve,
+        spectral_curve=spectral_curve,
+        frame_curve=frame_curve,
         stillest=stillest,
         frame_line=frame_line,
     )

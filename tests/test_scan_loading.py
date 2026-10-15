@@ -16,7 +16,7 @@ from optari.patato_bridge import (
     display_data_from_patato_obj,
     fov_from_objects,
 )
-from optari.utils.motion import k_motion_scores_optimized
+from optari.utils.motion import spectral_motion_scores
 from tests.conftest import HDF5_SCAN, ITHERA_SCAN, STUDY_DIR, needs_study
 
 pytestmark = needs_study
@@ -131,14 +131,14 @@ def test_motion_frame_selection(hdf5_scan, ithera_scan):
         2, 0
     ]  # all wavelengths of frame 2 see the same image: no motion
     assert (
-        int(np.argmin(k_motion_scores_optimized(us, mask_transducer=0))) == 2
+        int(np.argmin(spectral_motion_scores(us, mask_transducer=0))) == 2
     )
 
     # Regression values for the shipped test scans.
     def lowest_motion_frame(scan):
         return int(
             np.argmin(
-                k_motion_scores_optimized(
+                spectral_motion_scores(
                     display_data_from_patato_obj(scan.get_ultrasound())
                 )
             )

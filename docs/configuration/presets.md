@@ -7,7 +7,7 @@ Presets aren't part of the Settings dialog. Instead, each category is managed fr
 
 ## ROI presets (`presets/roi/`)
 
-A saved ROI template. The `geometry` block is the same representation OPTARI uses for the saved analysis table and for HDF5 export: vertices in PATATO coordinates, metres, origin at the image centre, so the shape does not depend on the field of view it was drawn on. `tissue_class` can be used for automatic placement, by setting it to the respective class in an available segmentation map.
+A saved ROI template. The `geometry` block is the same representation OPTARI uses for the saved analysis table and for HDF5 export: vertices in PATATO coordinates, metres, origin at the image centre, so the shape does not depend on the field of view it was drawn on. `tissue_class` is the preset's location (shown as **Location** in the Annotation dock): the segmentation class an `auto` preset is anchored to.
 
 `source_fov_m` records the field of view the template was drawn on, in metres. It is needed to re-place the template proportionally when it is applied to a scan with a different field of view,
 
@@ -17,6 +17,8 @@ A saved ROI template. The `geometry` block is the same representation OPTARI use
 | --- | --- |
 | `static` | Put it at its saved coordinates, scaled to the scan's field of view. |
 | `auto` | Anchor it onto the segmentation class named by `geometry.tissue_class`. Needs a segmentation map. |
+
+`top_margin_mm` is how far below the class's top edge (at the image's horizontal centre) an `auto` preset's top is placed, horizontally centred. The Save Preset popup prefills it with where the ROI sits when saved, and it can be edited there. `0` places the ROI's top right on the class's top edge.
 
 Placing an `auto` preset on a scan without a matching segmentation fails with an error, both in the Annotation dock and in a batch run.
 
@@ -111,7 +113,7 @@ Batch presets are edited in their own window (**OPTARI → Batch Processing…**
     "roi": "clinical_ellipse_10x2mm_Muskel1"
   },
   "source": null,
-  "frame": "motion",
+  "frame": "spectral_motion",
   "all_frames": false,
   "measure": {
     "layers": "analysis",
@@ -155,7 +157,8 @@ The anchor frame: where a `static` ROI's shape is drawn, and which frame the ove
 
 | Value | Meaning |
 | --- | --- |
-| `"motion"` (default) | That scan's lowest-motion frame. Requires ultrasound. A raw time series (eg. IPASC) has none and falls back to frame 0. |
+| `"spectral_motion"` (default) | That scan's frame with the least motion during its set of wavelength (relevant for unmixing). A single-wavelength scan falls back to `"frame_motion"`. Requires ultrasound. A raw time series (eg. IPASC) has none and falls back to frame 0. |
+| `"frame_motion"` | That scan's frame that differs least from its previous and next frame. |
 | `"acquisition_start"` | The frame where the operator pressed record in ithera scans, (shown as sweep 1 in iLabs). Scans that do not record it fall back to frame 0. |
 | `"roi"` | The first frame holding one of the scan's ROIs, so the overlay shows them. Meant for `"roi": "from_scan"`, where every scan's ROIs can sit on a different frame. Scans without ROIs fall back to frame 0. |
 | an integer | That frame number. A scan without it fails. |

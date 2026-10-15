@@ -77,10 +77,8 @@ def roi_verts_from_mask(
     Raises ValueError when the shape does not fit the class.
     """
     if shape_type == "polygon":
-        verts_px = _polygon_verts_px(class_mask, config, sy, sx)
-    else:
-        verts_px = _box_verts_px(class_mask, config, sy, sx)
-    return verts_px * (sy, sx) + (ty, tx)
+        return _polygon_verts_px(class_mask, config, sy, sx) * (sy, sx) + (ty, tx)
+    return _box_verts_mm(class_mask, config, sy, sx, ty, tx)
 
 
 def _pixel_bounds(
@@ -88,15 +86,11 @@ def _pixel_bounds(
     config: ROIPlacementConfig,
     sy: float,
     sx: float,
-    use_center_anchor: bool,
 ) -> tuple[int, int, int, int, np.ndarray]:
-    """
-    Shared geometry logic to calculate the pixel bounding box for any ROI.
+    """Pixel bounding box the polygon's outline is trimmed to, anchored to the
+    component's highest point.
 
     sy, sx: Scale factors for Y and X dimensions.
-    use_center_anchor:
-        If True (Box shapes), anchors Y to the top of the class at the image center.
-        If False (Polygon), anchors Y to the absolute highest point of the component.
 
     Returns: (x0, x1, y0, y1, largest_component_mask)
     """
@@ -110,12 +104,7 @@ def _pixel_bounds(
     # 2. Establish Reference Points based on conventions
     center_x = w // 2
 
-    if use_center_anchor:
-        # Anchor Y to the top of the class at the horizontal center
-        top_y, _ = _top_at_center_column(largest_mask)
-    else:
-        # Anchor Y to the absolute highest point of the component
-        top_y = int(np.where(largest_mask.any(axis=1))[0][0])
+    top_y = int(np.where(largest_mask.any(axis=1))[0][0])
 
     largest_mask = largest_mask.astype(
         np.uint8
@@ -146,28 +135,38 @@ def _pixel_bounds(
     return x0, x1, y0, y1, largest_mask
 
 
-def _box_verts_px(
-    class_mask: np.ndarray, config: ROIPlacementConfig, sy: float, sx: float
+def _box_verts_mm(
+    class_mask: np.ndarray,
+    config: ROIPlacementConfig,
+    sy: float,
+    sx: float,
+    ty: float,
+    tx: float,
 ) -> np.ndarray:
-    """Rectangle/ellipse corners (pixels) anchored to the class's top at the centre column.
+    """Rectangle/ellipse corners (world mm) centred on the class's top at the centre column.
 
+    Exact millimetres rather than whole pixels, so the box has the requested size and
+    margin, and sits where an ROI preset anchored with the same margin would.
     Raises if top margin plus height reach below the class at that column.
     """
-    x0, x1, y0, y1, largest_mask = _pixel_bounds(
-        class_mask, config, sy, sx, use_center_anchor=True
-    )
+    largest_mask = largest_component(class_mask)
+    top_row, center_col = _top_at_center_column(largest_mask)
+    bottom_row = np.flatnonzero(largest_mask[:, center_col])[-1] + 1
 
-    # The box must not reach below the class at the centre column (non-empty: the
-    # anchor above was found there). The top margin counts against the depth too.
-    hit_rows = np.flatnonzero(largest_mask[:, largest_mask.shape[1] // 2])
-    class_depth = hit_rows[-1] - hit_rows[0] + 1
-    needed_depth = y1 - hit_rows[0]
-    if needed_depth > class_depth:
+    needed_depth = float(config.depth_mm or 0.0) + float(config.height_mm)
+    class_depth = (bottom_row - top_row) * sy
+    if needed_depth > class_depth + 1e-9:
         raise ValueError(
-            f"ROI top margin plus height ({needed_depth}px) exceeds class depth "
-            f"({class_depth}px)."
+            f"ROI top margin plus height ({needed_depth:.2f} mm) exceeds class depth "
+            f"({class_depth:.2f} mm)."
         )
-    return np.asarray([[y0, x0], [y0, x1], [y1, x1], [y1, x0]], dtype=float)
+    y0 = ty + top_row * sy + float(config.depth_mm or 0.0)
+    y1 = y0 + float(config.height_mm)
+    cx = tx + center_col * sx
+    half_w = 0.5 * float(config.width_mm)
+    return np.asarray(
+        [[y0, cx - half_w], [y0, cx + half_w], [y1, cx + half_w], [y1, cx - half_w]]
+    )
 
 
 def _polygon_verts_px(
@@ -178,9 +177,7 @@ def _polygon_verts_px(
 
     TODO: holes in the mask are currently ignored. Find a good way of handling them if needed.
     """
-    x0, x1, y0, y1, largest_mask = _pixel_bounds(
-        class_mask, config, sy, sx, use_center_anchor=False
-    )
+    x0, x1, y0, y1, largest_mask = _pixel_bounds(class_mask, config, sy, sx)
 
     # Trim the mask down to the calculated boundaries
     trimmed_mask = np.zeros_like(largest_mask)

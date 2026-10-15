@@ -26,8 +26,16 @@ The **Scan Browser** dock lists available scans in the selected folder.
 ## Automatic frame selection
 
 By default, OPTARI scores every US frame for motion, using an algorithm that combines structural similarity and
-zero-mean normalized cross-correlation. When a new scan is loaded, it automatically selects the frame with lowest motion. This is an attempt to reduce operator variability in frame selection. It can be turned off in
-[`config.json`](../configuration/configuration-schema.md) (`general.DEFAULT_FRAME_INDEX`). The calculated motion score for every frame can be inspected using the Motion widget, where the stillest frame is marked in green.
+zero-mean normalized cross-correlation. When a new scan is loaded, it automatically selects the frame with lowest motion. This is an attempt to reduce operator variability in frame selection. The default frame is set in **Settings ▸ Viewer** or
+[`config.json`](../configuration/configuration-schema.md) (`general.DEFAULT_FRAME_INDEX`), with two kinds of motion to choose from:
+
+- **Motion (Spectral)** (default) compares the US images of the wavelengths within each frame. Tissue moving during the wavelength set misaligns the spectra and corrupts unmixing, so this picks the frame best suited for spectral analysis.
+
+- **Motion (frame-to-frame)** compares each frame with the previous and the next one, e.g. to pick a frame between breaths.
+
+Both scores ignore the top 60 pixel rows of the US image, so the transducer and coupling area don't count as motion. This can be differ, depending on the transducer size.
+
+The Motion widget plots both scores for every frame, with the frame with the least motion marked in green. Each score is scaled to 0–1 within the scan, so it shows where motion happens, but not how much, so the two lines should not be compared with each other or between scans.
 
 ## Grid mode
 

@@ -36,4 +36,4 @@ Most buttons, checkboxes, and other controls have a **tooltip**. Hover over one 
 9. [Keyboard Shortcuts](keyboard-shortcuts.md) — the full shortcut reference.
 10. [FAQ](faq.md) — common questions about everyday usage.
 
-For examples of how we used OPTARI in clinical OA studies, see [Sample Workflow](../clinical-workflows/manual-roi-workflow.md).
+For examples of how we used OPTARI in clinical OA studies, see [Sample Workflows](../clinical-workflows/manual-roi-workflow.md).

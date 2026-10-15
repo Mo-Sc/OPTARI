@@ -291,7 +291,12 @@ Two placement modes, in `RoiController`:
 
 - `_place_roi_preset_static` applies the policy above.
 - `_place_roi_preset_auto` aligns the preset to a segmentation class named by the preset's
-  `tissue_class`. The anchor math itself is `_anchor_verts_to_mask`.
+  `tissue_class`, horizontally centred and `top_margin_mm` below the class's top edge. The anchor
+  math itself is `_anchor_verts_to_mask`. Saving a preset measures that margin with the same
+  `_class_anchor_mm`, so save and placement agree on where the anchor is. The box shapes of
+  `roi_verts_from_mask` use the same anchor in exact mm, so a generated box saved as a preset is
+  placed back exactly where it was generated. `add_shape` labels ROIs generated from the mask or
+  placed by location with that `tissue_class`.
 
 With Scope `All Frames`, placing a preset goes through `expand_current_projection_to_all_frames`,
 which duplicates the selected frame's ROI onto the rest of the sequence as one

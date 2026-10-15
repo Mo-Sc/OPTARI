@@ -22,7 +22,7 @@ visualization, then adds a multi-patient study workflow, ROI annotation, automat
   Read the [publication]() <!-- TODO: link to publication once available --> and start with [Installation](installation/index.md). Download the [test scans](developer-guide/contributing.md#test-data).
 
 - :material-hospital-box: **Using OPTARI:**
-  Read the [User Guide](user-guide/index.md) and see [Sample Workflow](clinical-workflows/manual-roi-workflow.md) examples.
+  Read the [User Guide](user-guide/index.md) and see [Sample Workflows](clinical-workflows/manual-roi-workflow.md) examples.
 
 - :material-cog: **Configuration:**
   Learn how to [customize](configuration/index.md) OPTARI and configure reconstruction, unmixing and segmentation adapters.
