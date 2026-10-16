@@ -7,7 +7,7 @@ from pathlib import Path
 from optari.utils.setup import archive_config_dir, get_user_config_file
 from optari.utils.files import atomic_destination
 
-CONFIG_SCHEMA_VERSION = 5  # adapt in default config.json as well
+CONFIG_SCHEMA_VERSION = 6  # adapt in default config.json as well
 
 
 @dataclass(frozen=True)

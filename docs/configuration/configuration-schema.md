@@ -64,7 +64,6 @@ exported by default but hidden from the tables unless enabled here.
 `config.json` contains a `schema_version` field.  If OPTARI detects that your existing configuration was written by
 an incompatible older version, it automatically:
 
-1. Renames your existing `~/.optari` folder to a timestamped backup, `~/.optari_old_<timestamp>`.
-2. Creates a fresh `~/.optari` from the packaged defaults.
-
-Your previous settings, presets, downloaded models, and logs remain intact in the backup folder.
+1. Renames your existing `~/.optari/config` folder to a timestamped backup, `~/.optari/config_old_<timestamp>`.
+2. Creates a fresh `~/.optari/config` from the packaged defaults, including the default presets. 
+3. Your previous settings and all your presets (including your own ROI, batch, segmentation, reconstruction and unmixing presets) are kept in the backup folder and can be modified and copied back.
