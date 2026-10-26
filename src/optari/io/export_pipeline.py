@@ -37,9 +37,7 @@ logger = logging.getLogger(__name__)
 OPTARI_FILE_FORMAT_VERSION = 2  # increment if the HDF5 file format changes in a way that breaks backward compatibility
 OPTARI_SOURCE_URL = "https://github.com/Mo-Sc/OPTARI"
 OPTARI_DOCS_URL = "https://mo-sc.github.io/OPTARI/"
-OPTARI_PUBLICATION_DOI = (
-    "DOI pending publication"  # TODO: fill in once published
-)
+OPTARI_PUBLICATION_DOI = "10.48550/arXiv.2610.32468"
 
 # Bump only when the meaning of saved-table columns changes (units, semantics).
 # Columns being added or removed can be handled without a schema version bump.

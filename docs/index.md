@@ -19,7 +19,7 @@ visualization, then adds a multi-patient study workflow, ROI annotation, automat
 <div class="grid cards" markdown>
 
 - :material-download: **First Time:**
-  Read the [publication]() <!-- TODO: link to publication once available --> and start with [Installation](installation/index.md). Download the [test scans](developer-guide/contributing.md#test-data).
+  Read the [publication](https://doi.org/10.48550/arXiv.2610.32468) and start with [Installation](installation/index.md). Download the [test scans](developer-guide/contributing.md#test-data).
 
 - :material-hospital-box: **Using OPTARI:**
   Read the [User Guide](user-guide/index.md) and see [Sample Workflows](clinical-workflows/manual-roi-workflow.md) examples.
