@@ -8,10 +8,10 @@ OPTARI is distributed under the [BSD-3-Clause license](https://github.com/Mo-Sc/
 
 If OPTARI is useful in your research, please cite the paper:
 
-!!! quote "Citation (unpublished)"
+!!! quote "Citation"
     Schillinger, M., Bader, M., Buehler, A., Wachter, F., Knieling, F., Ntziachristos, V., Breininger, K. *OPTARI: An open-source software
-    framework for clinical translation of optoacoustic imaging.* — citation details to be added once
-    published.
+    framework for clinical translation of optoacoustic imaging.* arXiv preprint arXiv:2610.32468 (2026).
+    [doi:10.48550/arXiv.2610.32468](https://doi.org/10.48550/arXiv.2610.32468)
 
 ## Third-Party Citations
 

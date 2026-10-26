@@ -72,15 +72,17 @@ If OPTARI is useful in your research, please cite the accompanying paper:
 
 > Schillinger, M., Bader, M., Buehler, A., Wachter, F., Knieling, F., Ntziachristos, V., & Breininger, K. (2026).
 > OPTARI: An open-source software framework for clinical translation of optoacoustic imaging.
-> *Publication details will be added once available.*
+> *arXiv preprint arXiv:2610.32468.* [doi:10.48550/arXiv.2610.32468](https://doi.org/10.48550/arXiv.2610.32468)
 
 ```bibtex
-@unpublished{Schillinger2026-optari,
-  title  = {{OPTARI}: An open-source software framework for clinical translation of optoacoustic imaging},
-  author = {Schillinger, Moritz and Bader, Maximilian and Buehler, Adrian and Wachter, Felix and
-            Knieling, Ferdinand and Ntziachristos, Vasilis and Breininger, Katharina},
-  year   = {2026},
-  note   = {Publication details will be added once available}
+@misc{Schillinger2026-optari,
+  title         = {{OPTARI}: An open-source software framework for clinical translation of optoacoustic imaging},
+  author        = {Schillinger, Moritz and Bader, Maximilian and Buehler, Adrian and Wachter, Felix and
+                   Knieling, Ferdinand and Ntziachristos, Vasilis and Breininger, Katharina},
+  year          = {2026},
+  eprint        = {2610.32468},
+  archivePrefix = {arXiv},
+  doi           = {10.48550/arXiv.2610.32468}
 }
 ```
 
