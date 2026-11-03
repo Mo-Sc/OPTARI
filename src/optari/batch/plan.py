@@ -450,6 +450,10 @@ def resume_plan(plan: BatchPlan) -> list[str]:
     existing export marks a finished scan. Returns problems that rule out resuming,
     like ``validate_plan``.
     """
+    # Saving into a scan leaves no new file to recognise it by, even next to an IPASC
+    # export, and running a finished scan again would add its layers a second time.
+    if plan.outputs.hdf5_in_place:
+        return ["Resuming is not possible for a plan that saves into the scan files."]
     kinds = [k for k in ("hdf5", "ipasc") if getattr(plan.outputs, k)]
     if not kinds:
         return [

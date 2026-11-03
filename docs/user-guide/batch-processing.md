@@ -116,7 +116,7 @@ optari-batch convert_to_hdf5 /data/MyStudy /data/MyStudy_optari
 
 The first argument is the name of a saved batch preset, or a path to a preset `.json`. Then the dataset folder and the output folder, which is created if missing. The run does exactly what the Batch window would. The terminal prints the resolved plan and asks for confirmation before anything starts, then prints one line per scan. The same `batch_report.xlsx` and log file land in the output folder. Pass `--yes` (`-y`) to skip the question, e.g. in a script.
 
-Every output is written atomically, so only the scan in progress is lost. `--resume` continues an interrupted run in the same output folder. It skips every scan whose export already exists, so it needs a plan with `hdf5` or `ipasc` output, and says how many it skips before asking to start. The resumed run writes its own `batch_roi_table_<time>.xlsx` and `batch_report_<time>.xlsx` next to the interrupted run's.
+Every output is written atomically, so only the scan in progress is lost. `--resume` continues an interrupted run in the same output folder. It skips every scan whose export already exists, so it needs a plan with `hdf5` or `ipasc` output, and says how many it skips before asking to start. A plan with `"hdf5": "in_place"` cannot be resumed, since saving into a scan leaves no new file behind. The resumed run writes its own `batch_roi_table_<time>.xlsx` and `batch_report_<time>.xlsx` next to the interrupted run's.
 
 The exit code is 0 when every scan succeeded or you answered no, 1 when some failed, and 2 when the plan was refused and nothing ran.
 

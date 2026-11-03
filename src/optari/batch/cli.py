@@ -121,6 +121,8 @@ def main() -> None:
     )
     # Qt's loop would swallow KeyboardInterrupt. Killing outright is safe: every output
     # is written atomically, so only the scan in progress is lost, and --resume picks up.
+    # The exception is "hdf5": "in_place", where a kill during the write can leave that
+    # scan's file unreadable.
     signal.signal(signal.SIGINT, signal.SIG_DFL)
     runner.start()
     app.exec_()
