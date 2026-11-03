@@ -10,7 +10,8 @@ Click the metadata button in the **Info** dock to open the metadata viewer for t
 | Clinical | Clinical metadata (patient ID, notes, or any other free-form field), if the scan has any. |
 
 Double-clicking a cell in the Layer, Scan, or IPASC tabs shows its full content. The **Clinical** tab is
-editable: use **Add Row**/**Remove Row** and click **Save** to update it. Saved clinical metadata carries
+editable: use **Add Row**/**Remove Row** and click **Save** to update it. To add many fields at once, copy a
+JSON string such as `{"patient_id": "P01", "age": 54}` and click **Paste JSON**. Saved clinical metadata carries
 over the next time you export the scan to HDF5 (see [Exporting Data](exporting-data.md)).
 
 ![Metadata Viewer](../assets/screenshots/ss_metadata.png)
