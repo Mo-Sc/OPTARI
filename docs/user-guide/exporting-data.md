@@ -8,9 +8,15 @@ Depending on the type of data that should be exported (scan data, tabular measur
 Exports the loaded scan together with any drawn ROIs and derived layers (new reconstructions, unmixed chromophore maps, SO₂/THb)
 into an HDF5 file that uses a custom, PATATO-inspired format carrying IPASC-conform metadata. This way, you can also convert proprietary vendor data (e.g. iThera `.msot`) into an open, shareable format by importing the scan into OPTARI and exporting it again. OPTARI cannot write back into the proprietary vendor format.
 
-From the **Scan Browser** dock, click **Export HDF5** and choose a destination.
+From the **Scan Browser** dock, click **Save HDF5** and choose a new file as the destination.
 
 ROIs from other tools (e.g. annotations made in the vendor software) are always written exactly as stored in the scan. If you edit one in OPTARI, the edited shape is saved as an OPTARI ROI next to the original, and removing one in OPTARI does not remove it from the export.
+
+## Saving into the Loaded Scan
+
+Once a scan is an OPTARI HDF5 file, click **Save HDF5** and choose the loaded file itself. OPTARI then writes the session's new data into that file instead of into a copy. Saving never deletes layers, so stored layers stay in the file, even if they were removed from the viewer.
+
+OPTARI can only write into HDF5 files it created. Choosing any other existing file is refused.
 
 ## IPASC Export
 
@@ -21,9 +27,6 @@ Click **Export IPASC** to write the scan's raw time series as a native
     The IPASC format covers **raw time series data only**. Reconstructions, ultrasound, unmixed layers and ROIs are **not** included. Use the HDF5 export above to keep them.
 
 
-!!! warning
-    Both HDF5 exports always write to a **new** file. OPTARI never changes the source file, and if a file with the
-    same name already exists at the destination, the export fails.
 
 ## Saved Analysis Table Import/Export (XLSX)
 

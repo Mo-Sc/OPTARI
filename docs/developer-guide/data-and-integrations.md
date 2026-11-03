@@ -15,6 +15,11 @@ OPTARI does not implement its own file I/O. Everything goes through a custom [PA
 An IPASC file contains raw time series only, so it opens with no layers in the viewer until you run a
 reconstruction.
 
+## Provenance
+
+The file-level `file_origin` attribute records when the file was created. Every image OPTARI adds also carries its
+own `file_origin`, since saving into the loaded scan can add layers from later sessions to the same file.
+
 ## Notes on the IPASC format
 
 The [IPASC data format](https://www.ipasc.science) is two things:

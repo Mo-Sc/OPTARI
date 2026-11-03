@@ -37,9 +37,13 @@ Handles conversion between PATATO objects and napari layers/coordinates. No cont
 reads a PATATO array or writes an HDF5 attribute directly outside `patato_bridge.py` and
 `io/export_pipeline.py`.
 
-!!! note "Export always creates a new file"
-    Exporting a hdf5 always creates a new file and cannot append to an existing file.
-    Therefore the export has to have a different filename or location.
+!!! note "Export creates a new file, unless it is the loaded scan"
+    `export_scan_to_hdf5` always creates a new file. When the destination chosen for **Save HDF5** is the loaded
+    scan file itself (confirmed through the file dialog's overwrite prompt), `ScanController` calls
+    `save_scan_into_source` instead. It opens the loaded OPTARI HDF5 read-write and runs the same `_write_rois` and
+    `_write_derived_data` on it, so only `derived_patato_objects` are added and nothing is deleted. h5py
+    cannot reopen a file read-write that this process holds read-only, and the loaded layers read lazily through
+    that handle, so the scan is closed before writing and `ScanController` reloads it afterwards.
 
 !!! note "Export always overwrites"
     `pa_data.save_hdf5()` already copies whatever the *source* file had (ROIs, segmentation, clinical metadata) into the export, but a live optari edit this session (a new/edited ROI shape, a run segmentation, an edited clinical metadata field) is never part of `pa_data`'s reader, so it can't be part of that automatic copy. `_write_rois` and `_write_derived_data` (`io/export_pipeline.py`) run *after* `save_hdf5()` and explicitly delete+rewrite those datasets from the current state. In the common case (nothing changed since load) this rewrites identical data.
