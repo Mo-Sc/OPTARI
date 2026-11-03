@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from qtpy.QtCore import Qt
 from qtpy.QtWidgets import (
     QAbstractItemView,
+    QApplication,
     QDialog,
     QDialogButtonBox,
     QHBoxLayout,
+    QMessageBox,
     QPlainTextEdit,
     QPushButton,
     QTableWidget,
@@ -82,11 +85,17 @@ class LayerMetadataDialog(QDialog):
 
         add_button = QPushButton("Add Row")
         remove_button = QPushButton("Remove Row")
+        paste_button = QPushButton("Paste JSON")
+        paste_button.setToolTip(
+            "Add the fields of a JSON object on the clipboard, updating existing ones"
+        )
         add_button.clicked.connect(self._add_clinical_row)
         remove_button.clicked.connect(self._remove_clinical_row)
+        paste_button.clicked.connect(self._paste_clinical_json)
         button_row = QHBoxLayout()
         button_row.addWidget(add_button)
         button_row.addWidget(remove_button)
+        button_row.addWidget(paste_button)
         button_row.addStretch()
 
         tab = QWidget()
@@ -105,6 +114,40 @@ class LayerMetadataDialog(QDialog):
         row = self._clinical_table.currentRow()
         if row >= 0:
             self._clinical_table.removeRow(row)
+
+    def _paste_clinical_json(self) -> None:
+        """Merge a JSON object from the clipboard into the table, applied on Save like any edit."""
+        try:
+            pasted = json.loads(QApplication.clipboard().text())
+        except json.JSONDecodeError as exc:
+            QMessageBox.warning(
+                self, "Paste JSON", f"The clipboard holds no valid JSON: {exc}"
+            )
+            return
+        if not isinstance(pasted, dict) or not all(k.strip() for k in pasted):
+            QMessageBox.warning(
+                self,
+                "Paste JSON",
+                'Paste a JSON object with non-empty keys, e.g. {"patient_id": "P01"}.',
+            )
+            return
+
+        table = self._clinical_table
+        rows = {
+            table.item(row, 0).text().strip(): row
+            for row in range(table.rowCount())
+        }
+        for key, value in pasted.items():
+            row = rows.get(key.strip())
+            if row is None:
+                self._add_clinical_row()
+                row = table.rowCount() - 1
+                table.item(row, 0).setText(key.strip())
+            # Clinical metadata is stored as strings. Nested values stay JSON rather
+            # than being flattened, so nothing is lost or reshaped.
+            table.item(row, 1).setText(
+                value if isinstance(value, str) else json.dumps(value)
+            )
 
     def _on_save(self) -> None:
         if self._clinical_table is not None:

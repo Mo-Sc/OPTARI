@@ -181,7 +181,7 @@ How wide the measurement reaches. Mirrors the **Include all …** boxes in the A
 | Key | Values | Meaning |
 | --- | --- | --- |
 | `xlsx` | `true` (default), `false` | Write `batch_roi_table.xlsx`, the measurement table. |
-| `hdf5` | `false` (default), `true` | Write each scan to `hdf5/<Study>/<Scan>.hdf5`. |
+| `hdf5` | `false` (default), `true`, `"in_place"` | `true` writes each scan to `hdf5/<Study>/<Scan>.hdf5`. `"in_place"` instead saves the run's ROIs and new layers into each scan file itself, which must be an OPTARI HDF5 (see [Saving into the Loaded Scan](../user-guide/exporting-data.md#saving-into-the-loaded-scan)). |
 | `ipasc` | `false` (default), `true` | Write each scan's raw time series to `ipasc/<Study>/<Scan>_ipasc.hdf5` (see [Exporting Data](../user-guide/exporting-data.md#ipasc-export)). |
 | `overlay_png` | `true` (default), `false` | Write one viewer screenshot per scan to `overlays/`. |
 | `overlay_layer` | `null` (default), a layer-name prefix | Which layer the overlay shows. `null` uses the last one the run produced (sO₂ if unmixing made it, else Unmixed, else the reconstruction). A prefix matching nothing fails that scan. |

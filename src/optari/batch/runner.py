@@ -32,7 +32,12 @@ from optari.batch.report import BatchReport
 from optari.controllers.reconstruction_controller import ReconParams
 from optari.controllers.segmentation_controller import SegmentParams
 from optari.controllers.unmixing_controller import UnmixParams
-from optari.io.export_pipeline import export_scan_to_hdf5, export_scan_to_ipasc
+from optari.io.export_pipeline import (
+    can_save_into_scan,
+    export_scan_to_hdf5,
+    export_scan_to_ipasc,
+    save_scan_into_source,
+)
 from optari.io.utils import save_viewer_screenshot
 from optari.roi.roi_table import SavedRoiTable
 from optari.roi.roi_utils import NO_CLAMP
@@ -412,6 +417,20 @@ class BatchRunner:
                     self._write_overlay(job, frame_idx, source_layer)
                 ),
             )
+
+        # Last, since it closes the scan the overlay and the exports read from.
+        if self.plan.outputs.hdf5_in_place:
+            if not can_save_into_scan(self.controller):
+                raise BatchStepError("not an HDF5 file OPTARI created", "hdf5")
+            saved = save_scan_into_source(self.controller)
+            # No layer may stay on screen reading from the closed handle.
+            self.controller.scan_ctrl.reset_scan_state()
+            if not saved:
+                raise BatchStepError(
+                    f"Saving into the scan failed (see log): {job.scan_path.name}",
+                    "hdf5",
+                )
+            self.report.note(job, hdf5_path=str(job.scan_path))
 
     def _export_path(self, job: BatchJob, kind: str) -> Path:
         destination = self.plan.export_path(job, kind)
