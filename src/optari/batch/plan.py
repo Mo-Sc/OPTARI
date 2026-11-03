@@ -68,6 +68,8 @@ class OutputSpec:
 
     xlsx: bool = True
     hdf5: bool = False
+    # "hdf5": "in_place" writes into the scan files themselves instead of copies.
+    hdf5_in_place: bool = False
     ipasc: bool = False
     overlay_png: bool = True
     # Layer-name prefix for the overlay. None means the last layer the run produced.
@@ -245,6 +247,12 @@ def build_plan(
             ) from exc
 
     outputs_spec = batch_preset.get("outputs") or {}
+    # Strict, since a mistyped "in_place" must not quietly turn into copies.
+    hdf5 = outputs_spec.get("hdf5", False)
+    if hdf5 not in (True, False, "in_place"):
+        raise ValueError(
+            f"Invalid outputs.hdf5 {hdf5!r}. Use true, false or \"in_place\"."
+        )
     return BatchPlan(
         jobs=jobs,
         output_dir=Path(output_dir),
@@ -263,7 +271,8 @@ def build_plan(
         ),
         outputs=OutputSpec(
             xlsx=bool(outputs_spec.get("xlsx", True)),
-            hdf5=bool(outputs_spec.get("hdf5", False)),
+            hdf5=hdf5 is True,
+            hdf5_in_place=hdf5 == "in_place",
             ipasc=bool(outputs_spec.get("ipasc", False)),
             overlay_png=bool(outputs_spec.get("overlay_png", True)),
             overlay_layer=outputs_spec.get("overlay_layer") or None,
@@ -288,6 +297,13 @@ def validate_plan(plan: BatchPlan) -> list[str]:
         problems.append(
             "The plan has no analysis steps and no file export, so it would do nothing."
         )
+    if plan.outputs.hdf5_in_place:
+        others = [job for job in plan.jobs if job.scan_info.kind != "hdf5"]
+        if others:
+            problems.append(
+                f"Saving into the scan files needs HDF5 scans, but {len(others)} "
+                f"scan(s) are not, e.g. {others[0].scan_path}."
+            )
 
     problems += _validate_reconstruction(plan)
     problems += _validate_segmentation(plan)
@@ -467,6 +483,7 @@ def describe_plan(plan: BatchPlan) -> str:
         for name, on in (
             ("xlsx", plan.outputs.xlsx),
             ("hdf5", plan.outputs.hdf5),
+            ("hdf5 (into the scan files)", plan.outputs.hdf5_in_place),
             ("ipasc", plan.outputs.ipasc),
             ("overlay png", plan.outputs.overlay_png),
         )

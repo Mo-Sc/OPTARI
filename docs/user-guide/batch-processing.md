@@ -97,6 +97,9 @@ To retry only the failures, sort `batch_report.xlsx` by `status`, then run the s
 !!! tip "Converting vendor data in bulk"
     A plan with no steps and `hdf5` or `ipasc` enabled is a pure format converter: it reads each vendor scan and writes it out again, with no analysis at all. That is what the shipped `convert_to_hdf5` preset does; switch on `ipasc` instead (or as well) for the interoperable format.
 
+!!! warning "Saving into the scan files"
+    With `"hdf5": "in_place"` a run adds its reconstructions, unmixed layers and ROIs to the existing OPTARI HDF5 files instead of writing copies.
+
 !!! note "Raw time series (IPASC) datasets"
     An IPASC file holds the raw acoustic signal and no ultrasound, so on such a dataset a plan needs a `reconstruction` step before anything can be measured, and cannot run `segmentation` (that needs ultrasound). Motion-based `frame` selection also needs ultrasound and falls back to frame 0; give a frame number instead.
 
