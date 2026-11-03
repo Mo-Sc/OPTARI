@@ -72,9 +72,10 @@ def create_scan_browser_dock() -> ScanBrowserDock:
     export_row_layout = QHBoxLayout(export_row)
     export_row_layout.setContentsMargins(0, 0, 0, 0)
 
-    hdf5_button = QPushButton("Export HDF5")
+    hdf5_button = QPushButton("Save HDF5")
     hdf5_button.setToolTip(
-        "Export the loaded scan, ROIs, and derived layers as HDF5 (requires a loaded scan)"
+        "Save the loaded scan, ROIs, and derived layers as HDF5. Choose a new file for a "
+        "copy, or the loaded OPTARI HDF5 file itself to update it in place"
     )
     ipasc_button = QPushButton("Export IPASC")
     ipasc_button.setToolTip("Export the raw time series as a IPASC HDF5 file.")

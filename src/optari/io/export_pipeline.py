@@ -3,8 +3,10 @@
 export_scan_to_hdf5() writes the scan through PATATO's own save_hdf5(), then reopens
 the file to rewrite the ROI and derived-data datasets (segmentation mask, derived PA
 images, clinical metadata) so in-session OPTARI edits are captured, not just what was
-already in the source file. No controller reads a PATATO array or writes an HDF5
-attribute directly outside this module and patato_bridge.py.
+already in the source file. save_scan_into_source() writes the same additions into an
+OPTARI HDF5 in place, without copying what it already holds. No controller reads a
+PATATO array or writes an HDF5 attribute directly outside this module and
+patato_bridge.py.
 """
 
 from __future__ import annotations
@@ -177,6 +179,38 @@ def export_scan_to_hdf5(controller, destination: Path) -> bool:
     return True
 
 
+def can_save_into_scan(controller) -> bool:
+    """Whether the loaded scan is an HDF5 file OPTARI wrote, the only kind it writes into."""
+    if controller.scan_info.kind != "hdf5":
+        return False
+    origin = controller.pa_data.get_file_origin()
+    return origin is not None and origin.get("tool") == "OPTARI"
+
+
+def save_scan_into_source(controller) -> bool:
+    """Write the session's ROIs and new layers into the loaded scan file itself.
+
+    Stored images stay as they are and only the new layers are added, so nothing is
+    duplicated. A stored layer removed from the viewer stays in the file.
+    Unlike export this is not atomic.
+    """
+    path = controller.path
+    controller.pa_data.close()
+    controller.pa_data = None
+    try:
+        scan = pat.PAData.from_hdf5(str(path), mode="r+")
+        try:
+            _write_rois(controller, scan)
+            _write_derived_data(controller, scan)
+        finally:
+            scan.close()
+    except Exception:
+        logger.exception("Failed to save into %s", path.name)
+        return False
+    logger.info("saved into %s", path)
+    return True
+
+
 def export_scan_to_ipasc(controller, destination: Path) -> bool:
     """Export the raw time series of the loaded scan as a native IPASC file."""
     if controller.pa_data is None:
@@ -282,10 +316,13 @@ def _write_rois(controller, destination_pa_data) -> None:
     if not records:
         return
 
+    # Read from the destination, which holds the same arrays: when saving into the
+    # scan file, the session's own handle is already closed.
     fov_x_m, fov_y_m = controller.scan_ctrl.get_fov()
-    z_values = controller.pa_data.scan_reader.get_scanner_z_position()
-    run_values = controller.pa_data.scan_reader.get_run_numbers()
-    rep_values = controller.pa_data.scan_reader.get_repetition_numbers()
+    reader = destination_pa_data.scan_reader
+    z_values = reader.get_scanner_z_position()
+    run_values = reader.get_run_numbers()
+    rep_values = reader.get_repetition_numbers()
 
     for record in records:
         frame_idx = int(record.frame_id)
@@ -317,8 +354,12 @@ def _write_derived_data(controller, destination_pa_data) -> None:
     """Write runtime-only OPTARI additions: derived PA images, the segmentation mask, and clinical metadata.
 
     replaces any existing derived data, segmentation mask, and clinical metadata in the export.
+    Each new image carries its own origin, since a file saved into several times holds
+    layers from different sessions while the file-level origin records only its creation.
     """
+    origin = json.dumps(file_origin())
     for image in controller.derived_patato_objects.values():
+        image.attributes[HDF5Tags.FILE_ORIGIN] = origin
         destination_pa_data.scan_writer.add_image(image)
     if controller.derived_patato_objects:
         logger.info(

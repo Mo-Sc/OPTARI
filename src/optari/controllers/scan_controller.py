@@ -21,9 +21,11 @@ from optari.patato_bridge import (
     roi_records_from_scan_rois,
 )
 from optari.io.export_pipeline import (
+    can_save_into_scan,
     export_scan_to_hdf5,
     export_scan_to_ipasc,
     ipasc_export_report,
+    save_scan_into_source,
 )
 from optari.utils.misc import roi_color_for_index
 from optari.utils.motion import frame_motion_scores, spectral_motion_scores
@@ -396,13 +398,42 @@ class ScanController(TaskControllerBase):
         roi_ctrl.refresh_ui()
 
     def on_hdf5_export_clicked(self, event=None) -> None:
-        """Prompt for a destination and export the current scan to HDF5."""
+        """Prompt for a destination: a new file gets a copy, the loaded scan file is updated.
+
+        The dialog's own overwrite prompt is the confirmation for updating the scan.
+        """
+        controller = self.optari_controller
         destination = self._choose_export_path()
         if destination is None:
             return
 
-        if export_scan_to_hdf5(self.optari_controller, destination):
-            show_info(f"Exported scan to {destination.name}")
+        path, scan_info = controller.path, controller.scan_info
+        if not (destination.exists() and destination.samefile(path)):
+            if export_scan_to_hdf5(controller, destination):
+                show_info(f"Exported scan to {destination.name}")
+            else:
+                # e.g. an existing file other than the loaded scan, which is never replaced
+                show_warning(f"Not saved to {destination.name}, see the log")
+            return
+
+        if not can_save_into_scan(controller):
+            show_warning(
+                "OPTARI only writes into HDF5 files it created. Choose a new file "
+                "to save a copy."
+            )
+            return
+
+        step = self.viewer.dims.current_step
+        saved = save_scan_into_source(controller)
+        # The scan handle is closed either way, and the reload shows what the file now holds.
+        if not self.load_scan(path, scan_info):
+            show_warning(f"{path.name} could not be reopened, see the log")
+            return
+        self.viewer.dims.current_step = step
+        if saved:
+            show_info(f"Saved into {path.name}")
+        else:
+            show_warning(f"Saving into {path.name} failed, see the log")
 
     def on_ipasc_export_clicked(self, event=None) -> None:
         """Prompt for a destination and export the current scan's raw time series as IPASC."""
@@ -420,7 +451,7 @@ class ScanController(TaskControllerBase):
         )
 
     def _choose_export_path(
-        self, title: str = "Export scan as HDF5", suffix: str = ""
+        self, title: str = "Save scan as HDF5", suffix: str = ""
     ) -> Path | None:
         scan_path = self.optari_controller.path
         default_name = (
