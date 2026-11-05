@@ -26,6 +26,8 @@ Any dock can be shown or hidden from **OPTARI → Docks**.
 Reconstruction, unmixing, ROI, and segmentation presets are not edited here. Each has its own
 **Save Preset** / **Remove Preset** controls in its own dock. See [Presets](presets.md).
 
+OPTARI also asks for the operator and analysis ID at every start, (pre-filled with the saved values).
+
 ## Editing settings from file
 
 OPTARI's settings and presets are stored in the `~/.optari/` folder as human-readable JSON. This folder is created on first launch and filled with defaults. The full reference can be found in

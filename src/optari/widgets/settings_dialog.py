@@ -611,3 +611,27 @@ class SettingsDialog(QDialog):
             data, f"Defaults restored. {WHEN_APPLIED}", "Not restored"
         ):
             self._load_into_widgets(self._data)
+
+
+def identification_dialog(parent: QWidget) -> None:
+    """Ask at launch for the operator and analysis ID
+    This is carried into exported files so should be correct
+    """
+    dialog = QDialog(parent)
+    dialog.setWindowTitle("Start OPTARI")
+    form = QFormLayout(dialog)
+    operator = QLineEdit(settings.general.OPERATOR)
+    analysis_id = QLineEdit(settings.general.ANALYSIS_ID)
+    form.addRow("Operator", operator)
+    form.addRow("Analysis ID", analysis_id)
+    buttons = QDialogButtonBox(QDialogButtonBox.Ok)
+    buttons.accepted.connect(dialog.accept)
+    form.addRow(buttons)
+    if not dialog.exec():
+        return
+
+    data = read_user_config_dict()
+    data["general"]["OPERATOR"] = operator.text().strip()
+    data["general"]["ANALYSIS_ID"] = analysis_id.text().strip()
+    write_user_config_dict(data)
+    settings.apply_live(data)

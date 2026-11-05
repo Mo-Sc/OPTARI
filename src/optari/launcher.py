@@ -14,6 +14,7 @@ from .utils.logging import configure_logging
 from .utils.setup import configure_napari, load_startup_logo
 from optari.config import settings
 from optari.controllers.optari_controller import OptariController
+from optari.widgets.settings_dialog import identification_dialog
 
 from . import __version__
 
@@ -48,6 +49,7 @@ def main() -> None:
         load_startup_logo(viewer)
 
         controller = OptariController(viewer)
+        identification_dialog(viewer.window._qt_window)
 
         run()
 
