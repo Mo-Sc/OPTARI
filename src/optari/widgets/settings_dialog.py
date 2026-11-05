@@ -34,6 +34,7 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
+from optari.config import settings
 from optari.config.config import read_user_config_dict, write_user_config_dict
 from optari.roi.roi_features import FEATURE_REGISTRY
 from optari.segmentation.segmenter import load_model_registry
@@ -63,6 +64,11 @@ COLOR_MAP_KEYS: list[tuple[str, str]] = [
 
 SCALE_AXES = ("frame", "z", "x")
 
+WHEN_APPLIED = (
+    "Operator, analysis ID, histogram bins, ROI table columns, ROI colors and labels apply "
+    "from their next update. Everything else needs a restart."
+)
+
 
 def _available_colormaps() -> list[str]:
     from napari.utils.colormaps import AVAILABLE_COLORMAPS
@@ -85,8 +91,8 @@ def _open_path(path: Path) -> None:
 class SettingsDialog(QDialog):
     """Editor for the application settings in ``~/.optari/config/config.json``.
 
-    Only changes config.json. Presets are changed in the respective docks.
-    Requires restart to take effect.
+    Only changes config.json and the settings ``OptariConfig.apply_live`` takes over.
+    Presets are changed in the respective docks.
     """
 
     def __init__(self, parent, dock_labels: list[str]):
@@ -577,6 +583,7 @@ class SettingsDialog(QDialog):
         except (ValueError, TypeError, KeyError, OSError) as exc:
             self.status_label.setText(f"{failure_prefix}: {exc}")
             return False
+        settings.apply_live(data)
         self._data = data
         self.status_label.setText(success_message)
         return True
@@ -584,7 +591,7 @@ class SettingsDialog(QDialog):
     def on_save_clicked(self) -> None:
         data = self._collect_from_widgets(copy.deepcopy(self._data))
         self._write_config(
-            data, "Settings saved. Restart OPTARI to apply.", "Not saved"
+            data, f"Settings saved. {WHEN_APPLIED}", "Not saved"
         )
 
     def on_restore_defaults_clicked(self) -> None:
@@ -601,6 +608,6 @@ class SettingsDialog(QDialog):
             get_default_config_file().read_text(encoding="utf-8")
         )
         if self._write_config(
-            data, "Defaults restored. Restart OPTARI to apply.", "Not restored"
+            data, f"Defaults restored. {WHEN_APPLIED}", "Not restored"
         ):
             self._load_into_widgets(self._data)

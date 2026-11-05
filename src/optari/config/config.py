@@ -1,6 +1,6 @@
 """OptariConfig: dataclass schema for the user's ~/.optari/config/config.json."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import json
 from pathlib import Path
 
@@ -68,11 +68,11 @@ class ExportConfig:
     padding: int
 
 
-@dataclass(frozen=True)
+@dataclass
 class OptariConfig:
-    """Top-level config, loaded once at startup into the module-level ``settings``.
+    """Top-level config, loaded at startup into the module-level ``settings``.
 
-    Mirrors ``~/.optari/config/config.json``: one section per settings category.
+    Modules import that object by name, so it is updated in place, see ``apply_live``. Mirrors ``~/.optari/config/config.json``: one section per settings category.
     """
 
     schema_version: int
@@ -96,6 +96,16 @@ class OptariConfig:
             data = json.loads(config_path.read_text())
 
         return _config_from_dict(data)
+
+    def apply_live(self, data: dict) -> None:
+        """Take over the settings that change no measurement, the rest is read at launch."""
+        new = _config_from_dict(data)
+        self.annotation, self.analysis = new.annotation, new.analysis
+        self.general = replace(
+            self.general,
+            OPERATOR=new.general.OPERATOR,
+            ANALYSIS_ID=new.general.ANALYSIS_ID,
+        )
 
 
 def _config_from_dict(data: dict) -> OptariConfig:
