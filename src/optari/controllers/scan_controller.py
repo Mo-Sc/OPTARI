@@ -12,6 +12,7 @@ import patato as pat
 from napari.layers import Image
 from napari.utils.notifications import show_info, show_warning
 from patato.io.ithera.read_ithera import iTheraMSOT
+from qtpy.QtCore import QSettings
 from qtpy.QtWidgets import QFileDialog
 
 from optari.io.discovery import ScanInfo, discover_scans
@@ -66,6 +67,7 @@ class ScanController(TaskControllerBase):
         return [
             (dock.browse_button.clicked, self.on_browse_study_clicked),
             (dock.scans_list.currentRowChanged, self.on_scan_selected),
+            (dock.scans_list.itemChanged, dock.save_checked_scans),
             (dock.hdf5_button.clicked, self.on_hdf5_export_clicked),
             (dock.ipasc_button.clicked, self.on_ipasc_export_clicked),
             (dock.export_layer_button.clicked, self._export_view_handler),
@@ -121,10 +123,15 @@ class ScanController(TaskControllerBase):
 
     def on_browse_study_clicked(self) -> None:
         """Prompt for a study folder, the folder that contains the scans."""
+        store = QSettings("OPTARI", "OPTARI")
         folder = QFileDialog.getExistingDirectory(
-            None, "Select study folder", str(Path.cwd())
+            None,
+            "Select study folder",
+            store.value("last_study_parent", str(Path.cwd())),
         )
         if folder:
+            # The parent folder, for quickly accessing next study folders
+            store.setValue("last_study_parent", str(Path(folder).parent))
             self.set_scan_folder(Path(folder))
 
     def on_scan_selected(self, row: int) -> None:

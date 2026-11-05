@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
 
-from qtpy.QtCore import Qt
+from qtpy.QtCore import QSettings, Qt
 from qtpy.QtWidgets import (
     QAbstractItemView,
     QHBoxLayout,
@@ -34,6 +35,7 @@ class ScanBrowserDock:
 
     def set_scans(self, scan_items: list[tuple[Path, ScanInfo]]) -> None:
         self.scans_list.clear()
+        checked = _read_checked_scans().get(self.folder_lineedit.text(), [])
         for path, info in scan_items:
             display = (
                 f"{path.name} ({info.internal_name})"
@@ -42,8 +44,28 @@ class ScanBrowserDock:
             )
             item = QListWidgetItem(display)
             item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-            item.setCheckState(Qt.Unchecked)
+            item.setCheckState(
+                Qt.Checked if display in checked else Qt.Unchecked
+            )
             self.scans_list.addItem(item)
+
+    def save_checked_scans(self) -> None:
+        """Save the checked scans for the current study folder."""
+        items = map(self.scans_list.item, range(self.scans_list.count()))
+        studies = _read_checked_scans()
+        studies[self.folder_lineedit.text()] = [
+            item.text() for item in items if item.checkState() == Qt.Checked
+        ]
+        QSettings("OPTARI", "OPTARI").setValue(
+            "checked_scans", json.dumps(studies)
+        )
+
+
+def _read_checked_scans() -> dict[str, list[str]]:
+    """Checked scans by study folder."""
+    return json.loads(
+        QSettings("OPTARI", "OPTARI").value("checked_scans", "{}")
+    )
 
 
 def create_scan_browser_dock() -> ScanBrowserDock:
