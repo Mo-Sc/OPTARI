@@ -8,6 +8,7 @@ The **Scan Browser** dock lists available scans in the selected folder.
 2. Click a scan in the list to load it. If both an iThera and an HDF5 version of the same scan exist, OPTARI
    prefers the HDF5 one.
 3. Switch scans: The viewer, ROIs, and analysis docks update to the newly selected scan.
+4. Mark scans: The checkboxes next to the scans can be used for bookkeeping and are remembered for each study folder on a computer.
 
 ![Scan Browser](../assets/screenshots/ss_scanbrowser.png)
 

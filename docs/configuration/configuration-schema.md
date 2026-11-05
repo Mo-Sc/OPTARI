@@ -1,6 +1,6 @@
 # Configuration Schema
 
-Full reference for `~/.optari/config/config.json`. All fields are required unless noted, and every edit needs an app restart.
+Full reference for `~/.optari/config/config.json`. All fields are required unless noted, and every edit to the file needs an app restart.
 
 ## `general`
 

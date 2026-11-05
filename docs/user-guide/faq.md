@@ -68,8 +68,9 @@ xvfb-run -a optari-batch <preset> <dataset folder> <output folder>
 
 ## My `config.json` edits or settings changes aren't taking effect
 
-Configuration is loaded once at startup — restart OPTARI after editing any file under
-`~/.optari/config/`. See [Configuration](../configuration/index.md).
+Configuration is loaded at startup, so restart OPTARI after editing any file under
+`~/.optari/config/`. The Settings dialog applies only a few settings without a restart, see
+[Configuration](../configuration/index.md).
 
 ## Deleting an ROI with the keyboard isn't working
 

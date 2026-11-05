@@ -21,15 +21,17 @@ Any dock can be shown or hidden from **OPTARI → Docks**.
 | Paths | Where your config, presets, models, and log file are stored (read-only) |
 
 !!! note
-    Settings are read once at startup, so changes take effect after you **restart OPTARI**.
+    Changes to operator, analysis ID, histogram bins, ROI table columns, and ROI colors and labels are applied right away. All other setting changes take effect after you **restart OPTARI**.
 
 Reconstruction, unmixing, ROI, and segmentation presets are not edited here. Each has its own
 **Save Preset** / **Remove Preset** controls in its own dock. See [Presets](presets.md).
 
+OPTARI also asks for the operator and analysis ID at every start, (pre-filled with the saved values).
+
 ## Editing settings from file
 
 OPTARI's settings and presets are stored in the `~/.optari/` folder as human-readable JSON. This folder is created on first launch and filled with defaults. The full reference can be found in
-[Configuration Schema](configuration-schema.md). The same restart-required rule applies.
+[Configuration Schema](configuration-schema.md). Edits to these files always need a restart.
 
 ```
 ~/.optari/
