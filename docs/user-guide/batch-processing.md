@@ -86,7 +86,7 @@ When the run ends a summary dialog appears, listing any failures, and the per-sc
 
 HDF5 and IPASC exports mirror the input layout, so a converted dataset opens exactly like the original. Overlays stay in one flat folder, since flipping through them in order is the point.
 
-`batch_roi_table.xlsx` is the main deliverable and is identical in shape to the [Saved Analysis export](exporting-data.md#saved-analysis-table-importexport-xlsx), so it imports back into the ROI dock and combines with tables from other sessions. Both it and the report are rewritten after **every** scan, so a run interrupted after four hours keeps everything measured so far.
+`batch_roi_table.xlsx` is the main deliverable and is identical in shape to the [Saved Analysis export](exporting-data.md#saved-analysis-table-importexport-xlsx), so it imports back into the ROI dock and combines with tables from other sessions. While the run is going, measurements are appended to `batch_roi_table.csv` after **every** scan, and the report is rewritten. The XLSX is written once at the end and the CSV removed.
 
 ## When a scan fails
 

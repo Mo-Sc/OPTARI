@@ -27,7 +27,7 @@ from optari.config import settings
 from optari.controllers.base import TaskControllerBase
 from optari.io.export_pipeline import (
     export_roi_table_to_xlsx,
-    import_roi_table_from_xlsx,
+    import_roi_table,
 )
 from optari.roi.roi_features import FEATURE_REGISTRY
 from optari.roi.roi_geometry import RoiGeometry, napari_to_patato
@@ -155,7 +155,7 @@ class RoiController(TaskControllerBase):
         """
         super().__init__(parent_controller)
         self.saved_table = SavedRoiTable(
-            new_session_file(get_user_autosave_dir(), "roi_table", ".xlsx")
+            new_session_file(get_user_autosave_dir(), "roi_table", ".csv")
         )
         self._syncing = False
         self._roi_records: dict[int, ROIRecord] = {}
@@ -883,7 +883,11 @@ class RoiController(TaskControllerBase):
 
     def on_xlsx_export_clicked(self, event=None) -> None:
         """Prompt for a destination and export the Saved Analysis table to XLSX."""
-        filename = export_roi_table_to_xlsx(self.saved_table.rows)
+        try:
+            filename = export_roi_table_to_xlsx(self.saved_table.rows)
+        except ValueError as exc:  # more rows than an Excel sheet holds
+            QMessageBox.warning(None, "Export failed", str(exc))
+            return
         if filename is None:
             return
 
@@ -893,7 +897,7 @@ class RoiController(TaskControllerBase):
     def on_import_clicked(self, event=None) -> None:
         """Append a previously exported table to the saved table."""
         try:
-            imported = import_roi_table_from_xlsx()
+            imported = import_roi_table()
         except ValueError as exc:
             QMessageBox.warning(None, "Import failed", str(exc))
             return

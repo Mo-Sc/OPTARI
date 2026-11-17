@@ -121,6 +121,11 @@ class BatchPlan:
         return self.output_dir / BATCH_TABLE_NAME
 
     @property
+    def table_csv_path(self) -> Path:
+        """Where measurements are appended during the run (batch_roi_table.csv)."""
+        return self.table_path.with_suffix(".csv")
+
+    @property
     def report_path(self) -> Path:
         """Where the run's per-scan status report is written (batch_report.xlsx)."""
         return self.output_dir / BATCH_REPORT_NAME
@@ -439,7 +444,7 @@ def _validate_output_dir(plan: BatchPlan) -> list[str]:
     # Refusing beats overwriting: a previous run's table is somebody's analysis.
     existing = [
         path.name
-        for path in (plan.table_path, plan.report_path)
+        for path in (plan.table_path, plan.table_csv_path, plan.report_path)
         if path.exists()
     ]
     if existing:

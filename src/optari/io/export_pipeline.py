@@ -67,8 +67,39 @@ def default_roi_table_filename() -> str:
     )
 
 
+# One row of an Excel sheet is the header.
+XLSX_MAX_ROWS = 1_048_575
+
+
+def append_roi_table_csv(rows: pd.DataFrame, path: Path) -> None:
+    """Append *rows* to the CSV form of the ROI table, creating it with its header first.
+    """
+    new = not path.exists()
+    with path.open("a", encoding="utf-8", newline="") as file:
+        if new:
+            meta = file_origin(
+                roi_table_schema_version=ROI_TABLE_SCHEMA_VERSION
+            )
+            file.write(f"# {json.dumps(meta)}\n")
+        rows.to_csv(file, header=new, index=False)
+
+
+def write_roi_table_csv(rows: pd.DataFrame, path: Path) -> None:
+    """Rewrite the CSV ROI table with *rows*, atomically (after a delete)."""
+    with atomic_destination(path) as temporary:
+        append_roi_table_csv(rows, temporary)
+
+
 def export_roi_table_to_xlsx(df_saved, path=None) -> str | None:
-    """Write the ROI table as an XLSX file, prompting for a path if *path* is None."""
+    """Write the ROI table as an XLSX file, prompting for a path if *path* is None.
+
+    Raises ValueError for a table larger than one Excel sheet.
+    """
+    if len(df_saved) > XLSX_MAX_ROWS:
+        raise ValueError(
+            f"{len(df_saved)} rows do not fit in an Excel sheet "
+            f"({XLSX_MAX_ROWS} at most). The CSV form holds them all."
+        )
 
     if path is not None:
         filename = str(path)
@@ -99,8 +130,8 @@ def export_roi_table_to_xlsx(df_saved, path=None) -> str | None:
     return filename
 
 
-def import_roi_table_from_xlsx(path=None) -> tuple[pd.DataFrame, str] | None:
-    """Read a previously exported ROI table, prompting for a file if *path* is None."""
+def import_roi_table(path=None) -> tuple[pd.DataFrame, str] | None:
+    """Read an exported ROI table (XLSX) or a CSV backup, prompting if *path* is None."""
     if path is not None:
         filename = str(path)
     else:
@@ -108,16 +139,22 @@ def import_roi_table_from_xlsx(path=None) -> tuple[pd.DataFrame, str] | None:
             None,
             "Import ROI Analysis Table",
             "",
-            "Excel Files (*.xlsx)",
+            "ROI tables (*.xlsx *.csv)",
         )
         if not filename:
             return None
 
     path = Path(filename)
 
+    # Folder names identify the scan when restoring: "001" must not come back as 1
+    text_columns = {"study_folder": str, "scan_folder": str, "scan_name": str}
     try:
-        meta_df = pd.read_excel(path, sheet_name=ROI_TABLE_META_SHEET)
-        meta = dict(zip(meta_df["key"], meta_df["value"]))
+        if path.suffix.lower() == ".csv":
+            with path.open(encoding="utf-8") as file:
+                meta = json.loads(file.readline().removeprefix("# "))
+        else:
+            meta_df = pd.read_excel(path, sheet_name=ROI_TABLE_META_SHEET)
+            meta = dict(zip(meta_df["key"], meta_df["value"]))
     except (ValueError, KeyError) as exc:
         raise ValueError(
             f"'{Path(path).name}' is not a OPTARI ROI table."
@@ -130,10 +167,12 @@ def import_roi_table_from_xlsx(path=None) -> tuple[pd.DataFrame, str] | None:
             f"this OPTARI version, which expects version {ROI_TABLE_SCHEMA_VERSION}."
         )
 
-    df = pd.read_excel(
-        path,
-        sheet_name=ROI_TABLE_SHEET,
-        dtype={"study_folder": str, "scan_folder": str, "scan_name": str},
+    df = (
+        pd.read_csv(path, skiprows=1, dtype=text_columns)
+        if path.suffix.lower() == ".csv"
+        else pd.read_excel(
+            path, sheet_name=ROI_TABLE_SHEET, dtype=text_columns
+        )
     )
 
     missing_required = [

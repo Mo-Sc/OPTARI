@@ -35,6 +35,7 @@ from optari.controllers.segmentation_controller import SegmentParams
 from optari.controllers.unmixing_controller import UnmixParams
 from optari.io.export_pipeline import (
     can_save_into_scan,
+    export_roi_table_to_xlsx,
     export_scan_to_hdf5,
     export_scan_to_ipasc,
     save_scan_into_source,
@@ -110,8 +111,9 @@ class BatchRunner:
         self.viewer = controller.viewer
         self.plan = plan
         self.report = BatchReport(plan.report_path, plan_source=plan.preset)
+        # Appended after every scan, so an interrupted run keeps what it measured
         self.saved_table = SavedRoiTable(
-            plan.table_path if plan.outputs.xlsx else None
+            plan.table_csv_path if plan.outputs.xlsx else None
         )
         self._on_progress = on_progress or (lambda job, status: None)
         self._on_finished = on_finished or (lambda: None)
@@ -186,12 +188,28 @@ class BatchRunner:
         )
 
     def _finish(self) -> None:
+        if self.plan.outputs.xlsx and not self.saved_table.is_empty:
+            self._write_table_xlsx()
         self._worker = None
         self.controller.batch_running = False
         self.controller.set_active_task(None)
         logger.info("batch run finished: %s", self.report.summary())
         self._resources.close()
         self._on_finished()
+
+    def _write_table_xlsx(self) -> None:
+        """The run's table as XLSX, once, replacing the CSV it was collected in."""
+        try:
+            export_roi_table_to_xlsx(
+                self.saved_table.rows, self.plan.table_path
+            )
+        except (ValueError, OSError):
+            # e.g. more rows than an Excel sheet holds: the CSV is the result then
+            logger.exception(
+                "measurements stay in %s", self.plan.table_csv_path.name
+            )
+            return
+        self.plan.table_csv_path.unlink()
 
     # ============ the plan ============
     def _run(self):

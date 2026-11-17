@@ -195,7 +195,7 @@ class UnmixParams:
             recon_for_run=recon_for_run,
             source_layer_name=active_layer.name,
             source_layer_metadata=dict(active_layer.metadata),
-            source_frame_count=int(np.asarray(active_layer.data).shape[0]),
+            source_frame_count=int(active_layer.data.shape[0]),
             # A coarse pixel averages a reduce_factor-wide block of the source's pixels
             # and belongs at the block's centre, (reduce_factor - 1) / 2 source pixels
             # past its first pixel.

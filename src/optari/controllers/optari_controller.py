@@ -404,11 +404,11 @@ class OptariController:
         if self.active_recon_layer is None:
             return channel_idx
 
-        data = np.asarray(self.active_recon_layer.data)
-        if data.ndim < 2:
+        shape = self.active_recon_layer.data.shape
+        if len(shape) < 2:
             return 0
 
-        n_channels = data.shape[1]
+        n_channels = shape[1]
         return int(np.clip(channel_idx, 0, max(0, n_channels - 1)))
 
     def _snap_dims_to_active_layer(self) -> bool:

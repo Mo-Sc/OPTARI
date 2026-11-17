@@ -75,17 +75,26 @@ def _segment_frames(
     filtered = [
         np.where(np.isin(r.seg, list(selected_ids)), r.seg, 0) for r in results
     ]
-    mask_3d = np.stack(filtered)
-    # Repeat across channel dimension for correct napari display;
-    # segmenter output is (nframes, H, W) but napari expects (nframes, n_channels, H, W)
-    mask = np.repeat(mask_3d[:, np.newaxis], n_channels, axis=1)
+    mask_3d = np.stack(filtered).astype(MASK_DTYPE)
     if frame_idx is not None:
-        full_mask = np.zeros(us_shape, dtype=MASK_DTYPE)
-        full_mask[frame_idx] = mask[0]
-        mask = full_mask
+        full_mask = np.zeros((us_shape[0], *mask_3d.shape[1:]), MASK_DTYPE)
+        full_mask[frame_idx] = mask_3d[0]
+        mask_3d = full_mask
+    mask = _over_channels(mask_3d, n_channels)
 
     blank_positions = [i for i, r in enumerate(results) if r.blank]
     return mask, class_names, blank_positions
+
+
+def _over_channels(mask_3d: np.ndarray, n_channels: int) -> np.ndarray:
+    """(frames, H, W) mask as the (frames, channels, H, W) napari shows on every channel.
+
+    A read-only broadcast view, not a copy per wavelength
+    """
+    return np.broadcast_to(
+        mask_3d[:, np.newaxis],
+        (mask_3d.shape[0], n_channels, *mask_3d.shape[1:]),
+    )
 
 
 @dataclass
@@ -348,8 +357,7 @@ class SegmentationController(TaskControllerBase):
         if restored is None:
             return
 
-        n_channels = int(np.asarray(us_layer.data).shape[1])
-        mask = np.repeat(restored["mask"][:, np.newaxis], n_channels, axis=1)
+        mask = _over_channels(restored["mask"], int(us_layer.data.shape[1]))
         class_names = restored["class_names"]
         self._seg_layer = self.viewer.add_labels(
             mask,
@@ -754,7 +762,7 @@ class SegmentationController(TaskControllerBase):
         """Offer only the classes the output mask actually contains."""
         seg_dock = self.optari_controller.segmentation
         seg_dock.roi_class_id_combo.clear()
-        for class_id in sorted(int(c) for c in np.unique(mask)):
+        for class_id in sorted(int(c) for c in np.unique(mask[:, 0])):
             seg_dock.roi_class_id_combo.addItem(
                 f"{class_id}: {class_names.get(class_id, str(class_id))}",
                 userData=class_id,

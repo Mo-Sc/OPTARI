@@ -124,13 +124,60 @@ def display_data_from_patato_obj(image_sequence) -> np.ndarray:
     return np.flip(np.array(image_sequence.da[:, :, :, 0, :]), axis=-2)
 
 
+class PaddedFrames:
+    """*data* held for some acquisition *frames*, read as an array over all of them.
+
+    PA layers span every acquisition frame so they share the frame slider with the
+    ultrasound. Here only the computed frames are kept and the others read as zeros. napari, the
+    measurement code and ``np.asarray`` see an ordinary (frames, channels, y, x) array.
+    """
+
+    def __init__(self, data: np.ndarray, frames: list[int], n_frames: int):
+        self.held = data
+        self.shape = (n_frames, *data.shape[1:])
+        self.dtype = data.dtype
+        self.ndim = data.ndim
+        self.size = int(np.prod(self.shape))
+        self._position = np.full(n_frames, -1)
+        self._position[list(frames)] = np.arange(len(frames))
+
+    def __len__(self) -> int:
+        return self.shape[0]
+
+    def __getitem__(self, key):
+        key = key if isinstance(key, tuple) else (key,)
+        if key[0] is Ellipsis:
+            return np.asarray(self)[key]
+        frame_key, rest = key[0], key[1:]
+        if isinstance(frame_key, (int, np.integer)):
+            position = self._position[frame_key]
+            if position < 0:
+                # a read-only view of one zero, no allocation for a missing frame
+                return np.broadcast_to(
+                    np.zeros((), self.dtype), self.shape[1:]
+                )[rest]
+            return self.held[position][rest]
+        # Frame by frame with the rest of the key applied first: napari asks for one
+        # plane through a frame slice, which must not cost a whole frame of channels.
+        frames = np.arange(self.shape[0])[frame_key]
+        parts = [self[(int(f), *rest)] for f in frames]
+        if not parts:  # an empty selection, which numpy allows
+            return np.zeros((0, *self[(0, *rest)].shape), self.dtype)
+        return np.stack(parts)
+
+    def __array__(self, dtype=None, copy=None) -> np.ndarray:
+        out = self[:]
+        return out if dtype is None else out.astype(dtype)
+
+
 def expand_to_acquisition_frames(
     data: np.ndarray, frames: list[int], n_acq_frames: int
-) -> np.ndarray:
+) -> "np.ndarray | PaddedFrames":
     """Place per-output-frame *data* at its *frames* on the acquisition frame axis.
 
-    Frames that were not processed stay zero, so every PA layer shares the frame slider
-    with the ultrasound. Data that already spans the acquisition is returned unchanged.
+    Frames that were not processed read as zero, so every PA layer shares the frame
+    slider with the ultrasound. Data that already spans the acquisition is returned
+    unchanged.
     """
     if data.shape[0] == n_acq_frames:
         return data
@@ -142,9 +189,7 @@ def expand_to_acquisition_frames(
             f"frame indices {frames} do not match {data.shape[0]} image frame(s) "
             f"within {n_acq_frames} acquisition frame(s)"
         )
-    expanded = np.zeros((n_acq_frames, *data.shape[1:]), dtype=data.dtype)
-    expanded[frames] = data
-    return expanded
+    return PaddedFrames(data, frames, n_acq_frames)
 
 
 # ---------------------------------------------------------------------------

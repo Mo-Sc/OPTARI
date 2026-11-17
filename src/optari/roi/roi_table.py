@@ -2,7 +2,7 @@
 
 - **Saving never overwrites.** Re-measuring an ROI appends a second set of rows under
   the same ``roi_group_uid``, separated by ``roi_ts``. TODO: should this be kept or cause error/delete prompt?
-- **Every change writes to disk.** Each change to the saved table autosaves
+- **Every change writes to disk.** New rows are appended to a CSV, a delete rewrites it
 - **Re-importing the same file adds nothing.** Identical rows are skipped, so analysis sheets can be combined
 
 All the Qt stuff is in the controller
@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from optari.io.export_pipeline import export_roi_table_to_xlsx
+from optari.io.export_pipeline import append_roi_table_csv, write_roi_table_csv
 from optari.roi.roi_utils import saved_export_columns, saved_table_columns
 
 logger = logging.getLogger(__name__)
@@ -88,7 +88,7 @@ class SavedRoiTable:
             self._rows.get("roi_group_uid", [])
         )
         self._rows = self._appended(rows)
-        self._autosave()
+        self._save(rows)
         return remeasured
 
     def delete_at(self, positions: list[int]) -> int:
@@ -99,7 +99,7 @@ class SavedRoiTable:
         # view is ever sorted or filtered.
         labels = self._rows.index[positions]
         self._rows = self._rows.drop(labels).reset_index(drop=True)
-        self._autosave()
+        self._save()
         return len(positions)
 
     def merge_imported(self, rows: pd.DataFrame) -> tuple[int, int]:
@@ -109,11 +109,12 @@ class SavedRoiTable:
         from several sessions or machines combine in one table. ``roi_group_uid`` keeps
         every row attributable to the ROI it was measured from.
         """
+        n_before = len(self._rows)
         combined = self._appended(rows)
         # A measurement is identified by what was measured where and when.
         duplicates = combined[MEASUREMENT_KEY].astype(str).duplicated()
         self._rows = combined[~duplicates].reset_index(drop=True)
-        self._autosave()
+        self._save(self._rows.iloc[n_before:])
 
         skipped = int(duplicates.sum())
         return len(rows) - skipped, skipped
@@ -125,14 +126,20 @@ class SavedRoiTable:
             return rows.reset_index(drop=True)
         return pd.concat([self._rows, rows], ignore_index=True)
 
-    def _autosave(self) -> None:
-        """Write the table to disk, overwriting it on every change.
+    def _save(self, appended: pd.DataFrame | None = None) -> None:
+        """Mirror the table to its CSV: append *appended*, or rewrite it after a delete.
+
+        An emptied table leaves the file as it was: the session's only backup must
+        not go with a select-all and Delete.
         """
         if self._autosave_path is None or self._rows.empty:
             return
         path = self._autosave_path
         try:
-            export_roi_table_to_xlsx(self._rows, path)
+            if appended is None:
+                write_roi_table_csv(self._rows, path)
+            else:
+                append_roi_table_csv(appended, path)
         except OSError:
             # A failing backup must never discard the ROI data just saved.
             logger.exception("could not autosave the ROI table to %s", path)

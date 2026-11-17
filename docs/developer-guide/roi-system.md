@@ -222,7 +222,7 @@ visibility settings only affect what is displayed.
 
 - **Saving never overwrites.** `add_measurements` appends and returns the
   `roi_group_uid`s that already had earlier measurements.
-- **Every change reaches disk.** Each change autosaves.
+- **Every change reaches disk.** New rows are appended to a CSV (`append_roi_table_csv`). XLSX is written only on export and at the end of a batch run, since Excel files cannot be appended to and rewriting one grows with the table.
 - **Re-importing a file adds nothing.** `merge_imported` skips rows already present.
 
 

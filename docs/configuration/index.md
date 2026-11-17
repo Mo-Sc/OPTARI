@@ -43,7 +43,7 @@ OPTARI's settings and presets are stored in the `~/.optari/` folder as human-rea
 │       ├── unmixing/*.json
 │       ├── roi/*.json
 │       └── segmentation/*.json
-├── autosave/                        # one roi_table_<date>T<time>_<pid>.xlsx backup per session, newest 20 kept
+├── autosave/                        # one roi_table_<date>T<time>_<pid>.csv backup per session, newest 20 kept
 ├── logs/                            # one optari_<date>T<time>_<pid>.log per session, newest 20 kept
 └── models/                          # downloaded segmentation model weights
 ```
