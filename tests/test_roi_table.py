@@ -33,7 +33,10 @@ def measured_rows(image_layer):
         for i in range(2)
     ]
     return pd.concat(
-        [compute_roi_stats(rois, layer, 0, c) for c in range(2)],
+        [
+            compute_roi_stats(rois, layer, 0, c, scan_fov_m=(0.005, 0.005))
+            for c in range(2)
+        ],
         ignore_index=True,
     )
 

@@ -234,7 +234,29 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
         return [int(f) for f in np.atleast_1d(frames_info)]
 
     # --- reconstructions ---
+    us_fov = _fov_m(us_obj) if "US" in patato_objects else None
     for (recon_name, idx), recon in pa_data.get_scan_reconstructions().items():
+        recon_fov = _fov_m(recon)
+        # A vendor reconstruction is drawn at translate 0 over the ultrasound, and its
+        # ROIs are stored in the ultrasound's frame. Both hold only when the two cover
+        # the same field of view, true for every supported device. OPTARI's own
+        # reconstructions (DeepMB: 40 x 33 mm) carry their placement and are exempt.
+        if (
+            us_fov is not None
+            and recon_fov is not None
+            and LAYER_NAME_ATTR not in recon.da.attrs
+        ):
+            pixel_m = (
+                max(scale_from_patato_obj(recon, _pa_fallback)[1:]) / 1000
+            )
+            if not np.allclose(recon_fov, us_fov, rtol=0, atol=pixel_m):
+                raise ValueError(
+                    f"reconstruction '{recon_name}' covers "
+                    f"{np.multiply(recon_fov, 1000).round(1).tolist()} mm, the "
+                    f"ultrasound {np.multiply(us_fov, 1000).round(1).tolist()} mm. "
+                    "OPTARI aligns both at the top-left corner, so it cannot "
+                    "display this scan correctly."
+                )
         recon_raw = display_data_from_patato_obj(recon)
         recon_frame_list = _frame_list(recon, recon_raw.shape[0])
         recon_img = expand_to_acquisition_frames(
@@ -333,11 +355,18 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
 
 
 def fov_from_objects(patato_objects: dict) -> "tuple[float, float] | None":
-    """Return ``(fov_x_m, fov_y_m)`` from the first object with valid FOV.
+    """The scan's ``(fov_x_m, fov_y_m)``, the frame ROIs are stored in.
 
-    Returns ``None`` if no object exposes usable FOV metadata.
+    The ultrasound's, which every vendor reconstruction matches (checked in
+    ``build_napari_layers``). A scan without ultrasound (IPASC) falls back to the
+    first object with a usable FOV. ``None`` if no object records one.
     """
-    for obj in patato_objects.values():
+    candidates = (
+        [patato_objects["US"]]
+        if "US" in patato_objects
+        else patato_objects.values()
+    )
+    for obj in candidates:
         fov = _fov_m(obj)
         if fov is not None and min(fov) > 0:
             return fov

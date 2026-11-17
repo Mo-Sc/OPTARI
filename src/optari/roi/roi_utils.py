@@ -170,18 +170,6 @@ def _roi_mask(
         return None
 
 
-def layer_fov_m(active_recon_layer, image_shape) -> tuple[float, float]:
-    """Return the layer's ``(fov_x_m, fov_y_m)``, derived from its own grid.
-
-    ``scale_from_patato_obj`` sets the scale to ``fov / n_pixels``, so the napari
-    extent ``shape * scale`` is the FOV. Deriving it here rather
-    than reading scan metadata also covers layers reconstructed or unmixed at
-    runtime, and layers that fell back to a configured default scale.
-    """
-    sy, sx = _scale_sy_sx(active_recon_layer)
-    return image_shape[1] * sx / 1000.0, image_shape[0] * sy / 1000.0
-
-
 def _layer_translate(active_recon_layer) -> tuple[float, float]:
     """A layer is placed at ``translate`` to align reconstructions that use
     different coordinate conventions (like DeepMB)."""
@@ -228,15 +216,12 @@ class _LayerInfo:
     channel_value: object
     sy: float
     sx: float
-    fov_x_m: float
-    fov_y_m: float
 
     @classmethod
-    def resolve(cls, layer, channel_idx: int, image_shape) -> "_LayerInfo":
+    def resolve(cls, layer, channel_idx: int) -> "_LayerInfo":
         """Resolve *layer*'s per-call constants once, from its metadata and scale."""
         filepath = str(layer.metadata.get("filepath", "") or "")
         sy, sx = _scale_sy_sx(layer)
-        fov_x_m, fov_y_m = layer_fov_m(layer, image_shape)
         return cls(
             name=str(layer.name),
             filepath=filepath,
@@ -246,8 +231,6 @@ class _LayerInfo:
             channel_value=_channel_value(layer, channel_idx),
             sy=sy,
             sx=sx,
-            fov_x_m=fov_x_m,
-            fov_y_m=fov_y_m,
         )
 
 
@@ -384,10 +367,16 @@ def compute_roi_stats(
     frame_idx: int,
     channel_idx: int,
     *,
+    scan_fov_m: tuple[float, float],
     clamp: IntensityClamp = NO_CLAMP,
     feature_ids: list[str] | None = None,
 ):
-    """Compute ROI statistics for all shapes for a specific frame/channel."""
+    """Compute ROI statistics for all shapes for a specific frame/channel.
+
+    ``roi_geometry`` is converted with *scan_fov_m*, never the measured layer's own
+    extent: ROI vertices are in the scan frame, and a layer with another FOV or a
+    translate (DeepMB) would otherwise store the same ROI at a different position.
+    """
 
     selected_feature_ids = _resolve_feature_ids(feature_ids)
     # Serializing geometry is the expensive context field, and the live table
@@ -399,9 +388,7 @@ def compute_roi_stats(
         return pd.DataFrame(columns=selected_feature_ids)
 
     img2d = active_recon_layer.data[frame_idx, channel_idx]
-    layer_info = _LayerInfo.resolve(
-        active_recon_layer, channel_idx, img2d.shape
-    )
+    layer_info = _LayerInfo.resolve(active_recon_layer, channel_idx)
     scan_ts = slice_datetime(active_recon_layer, frame_idx, channel_idx)
 
     rows = []
@@ -415,9 +402,7 @@ def compute_roi_stats(
             vals_raw=vals_raw,
             clamp=clamp,
             roi_geometry=(
-                RoiGeometry.from_record(
-                    roi, layer_info.fov_x_m, layer_info.fov_y_m
-                ).to_json()
+                RoiGeometry.from_record(roi, *scan_fov_m).to_json()
                 if needs_geometry
                 else ""
             ),
@@ -461,7 +446,7 @@ def _time_series_setup(active_recon_layer, channel_idx: int):
     data = active_recon_layer.data
     frames, x = time_axis(active_recon_layer, channel_idx)
     img_shape = data.shape[-2:]
-    layer_info = _LayerInfo.resolve(active_recon_layer, channel_idx, img_shape)
+    layer_info = _LayerInfo.resolve(active_recon_layer, channel_idx)
     return data, frames, x, img_shape, layer_info
 
 

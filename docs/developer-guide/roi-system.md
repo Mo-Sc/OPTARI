@@ -115,7 +115,10 @@ other stored ROI untouched.
 ## `RoiGeometry`
 
 Everything OPTARI writes to disk uses `RoiGeometry` (`roi_geometry.py`): vertices in
-**PATATO coordinates**, metres, origin at the image centre.
+**PATATO coordinates**, metres, origin at the image centre. Every conversion uses the
+**scan** FOV (`ScanController.get_fov()`, the ultrasound's), never the extent of the layer
+an ROI was measured on, so one ROI has one `roi_geometry` on every layer, DeepMB and
+reduced-resolution unmixing included, and it equals the ROI in an HDF5 export.
 
 ### Why not napari mm?
 
@@ -272,8 +275,9 @@ Restore is **per row, not per group**. A row records where the ROI was measured.
 a row per layer, frame and channel. Without that, a restore → adjust → re-save
 cycle would produce rows that look like an unrelated ROI. A group already in the viewer keeps
 its `track_id`, so frames restored one at a time still belong together, and a
-`(roi_group_uid, frame)` already present is skipped rather than duplicated. `_saved_rows_match_current_context` requires the same scan, the same layer and in-range
-frames, and refuses the whole selection otherwise.
+`(roi_group_uid, frame)` already present is skipped rather than duplicated. `_saved_rows_match_current_context` requires the same scan, identified by `study_folder`
+and `scan_folder` (the scanner's internal name repeats across patients), and in-range
+frames, and refuses the whole selection otherwise. Any layer of that scan will do.
 
 ## ROI presets
 

@@ -128,7 +128,11 @@ def import_roi_table_from_xlsx(path=None) -> tuple[pd.DataFrame, str] | None:
             f"this OPTARI version, which expects version {ROI_TABLE_SCHEMA_VERSION}."
         )
 
-    df = pd.read_excel(path, sheet_name=ROI_TABLE_SHEET)
+    df = pd.read_excel(
+        path,
+        sheet_name=ROI_TABLE_SHEET,
+        dtype={"study_folder": str, "scan_folder": str, "scan_name": str},
+    )
 
     missing_required = [
         c for c in SAVED_FIXED_SOURCE_COLUMNS if c not in df.columns

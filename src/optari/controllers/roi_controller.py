@@ -40,7 +40,6 @@ from optari.roi.roi_utils import (
     MeasureScope,
     clear_mask_cache,
     compute_roi_stats,
-    layer_fov_m,
     records_by_track_and_frame,
     visible_feature_columns,
 )
@@ -618,6 +617,7 @@ class RoiController(TaskControllerBase):
             layer,
             frame_idx,
             channel_idx,
+            scan_fov_m=self.optari_controller.scan_ctrl.get_fov(),
             clamp=self.intensity_clamp,
             feature_ids=live_cols,
         )
@@ -769,6 +769,7 @@ class RoiController(TaskControllerBase):
             target_layers = [active_layer]
 
         tracks = self._track_histories_for_selection(selected_ids)
+        scan_fov_m = self.optari_controller.scan_ctrl.get_fov()
 
         collected: list[pd.DataFrame] = []
         for layer in target_layers:
@@ -803,6 +804,7 @@ class RoiController(TaskControllerBase):
                         layer,
                         f_idx,
                         c_idx,
+                        scan_fov_m=scan_fov_m,
                         clamp=clamp,
                     )
                     if not measured.empty:
@@ -926,24 +928,32 @@ class RoiController(TaskControllerBase):
     def _saved_rows_match_current_context(
         self, rows: pd.DataFrame
     ) -> str | None:
-        """Refuse restoring a ROI row unless the exact scan, layer and frames the rows were measured on are loaded."""
-        layer = self.optari_controller.active_recon_layer
-        if layer is None:
-            return "Select an image layer before restoring an ROI."
+        """Refuse restoring a ROI row unless the scan the rows were measured on is loaded.
 
-        scans = set(rows["scan_name"].astype(str))
-        current_scan = str(layer.metadata.get("scan_name", ""))
-        if scans != {current_scan}:
-            return (
-                f"That ROI was measured on scan '{', '.join(sorted(scans))}', "
-                f"but '{current_scan}' is loaded."
+        Identified by study and scan folder: the scanner's internal scan name repeats
+        across patients with protocol-style names, and a restored ROI keeps its
+        ``roi_group_uid``, so restoring onto the wrong patient would mislabel every
+        measurement made with it. Any layer of the scan will do, ``roi_geometry`` is in
+        scan coordinates.
+        """
+        path = self.optari_controller.path
+        if path is None:
+            return "Load the scan the ROI was measured on before restoring it."
+
+        saved = set(
+            zip(
+                rows["study_folder"].astype(str),
+                rows["scan_folder"].astype(str),
             )
-
-        layers = set(rows["src_layer"].astype(str))
-        if layers != {str(layer.name)}:
+        )
+        current = (path.parent.name, path.stem)
+        if saved != {current}:
+            names = ", ".join(
+                f"{study}/{scan}" for study, scan in sorted(saved)
+            )
             return (
-                f"That ROI was measured on layer '{', '.join(sorted(layers))}', "
-                f"but '{layer.name}' is selected."
+                f"That ROI was measured on {names}, "
+                f"but {current[0]}/{current[1]} is loaded."
             )
 
         n_frames = self._n_frames()
@@ -962,8 +972,8 @@ class RoiController(TaskControllerBase):
         measurements it came from, and with a group restored incrementally across
         several separate actions (see ``track_ids`` below).
         """
-        layer = self.optari_controller.active_recon_layer
-        fov_x_m, fov_y_m = layer_fov_m(layer, layer.data.shape[-2:])
+        # The frame the rows were saved in, whichever layer they were measured on
+        fov_x_m, fov_y_m = self.optari_controller.scan_ctrl.get_fov()
         # Restoring one frame of a track must not block restoring its other frames,
         # so an ROI already in the viewer is identified by group *and* frame.
         present = {

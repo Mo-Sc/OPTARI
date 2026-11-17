@@ -18,6 +18,7 @@ from optari.roi.roi_utils import (
 )
 
 SCALE = 0.1  # mm per pixel
+SCAN_FOV = (0.04, 0.04)  # m, only enters roi_geometry
 
 
 def block_image(value=5.0, n_frames=1, n_channels=1):
@@ -45,7 +46,11 @@ def rectangle_over_block(roi_id=0, track_id=0, frame_id=0):
 def test_rectangle_stats_are_exact(image_layer):
     layer = image_layer(block_image(), SCALE)
     rows = compute_roi_stats(
-        [rectangle_over_block()], layer, frame_idx=0, channel_idx=0
+        [rectangle_over_block()],
+        layer,
+        frame_idx=0,
+        channel_idx=0,
+        scan_fov_m=SCAN_FOV,
     )
 
     assert len(rows) == 1
@@ -82,7 +87,9 @@ def test_ellipse_area_is_close_to_analytic(image_layer):
         kind="ellipse",
         verts=np.array([[5.0, 4.0], [5.0, 14.0], [9.0, 14.0], [9.0, 4.0]]),
     )
-    rows = compute_roi_stats([ellipse], layer, frame_idx=0, channel_idx=0)
+    rows = compute_roi_stats(
+        [ellipse], layer, frame_idx=0, channel_idx=0, scan_fov_m=SCAN_FOV
+    )
 
     assert rows.iloc[0]["n_pixels"] == pytest.approx(np.pi * 50 * 20, rel=0.03)
     assert rows.iloc[0]["size_mm"] == pytest.approx(np.pi * 5 * 2, rel=0.03)
@@ -96,12 +103,24 @@ def test_clamp_clip_keeps_pixels_exclude_drops_them(image_layer):
     layer = image_layer(data, SCALE)
     roi = [rectangle_over_block()]
 
-    unclamped = compute_roi_stats(roi, layer, 0, 0).iloc[0]
+    unclamped = compute_roi_stats(roi, layer, 0, 0, scan_fov_m=SCAN_FOV).iloc[
+        0
+    ]
     clipped = compute_roi_stats(
-        roi, layer, 0, 0, clamp=IntensityClamp(maximum=4, mode="clip")
+        roi,
+        layer,
+        0,
+        0,
+        scan_fov_m=SCAN_FOV,
+        clamp=IntensityClamp(maximum=4, mode="clip"),
     ).iloc[0]
     excluded = compute_roi_stats(
-        roi, layer, 0, 0, clamp=IntensityClamp(maximum=4, mode="exclude")
+        roi,
+        layer,
+        0,
+        0,
+        scan_fov_m=SCAN_FOV,
+        clamp=IntensityClamp(maximum=4, mode="exclude"),
     ).iloc[0]
 
     assert unclamped["mean"] == pytest.approx(4.5)
@@ -144,11 +163,16 @@ def test_layer_translate_shifts_mask(image_layer):
     shifted_roi = rectangle_over_block()
     shifted_roi.verts += (1.0, 2.0)
 
-    assert compute_roi_stats([shifted_roi], layer, 0, 0).iloc[0]["mean"] == 5
     assert (
-        compute_roi_stats([rectangle_over_block()], layer, 0, 0).iloc[0][
-            "mean"
-        ]
+        compute_roi_stats(
+            [shifted_roi], layer, 0, 0, scan_fov_m=SCAN_FOV
+        ).iloc[0]["mean"]
+        == 5
+    )
+    assert (
+        compute_roi_stats(
+            [rectangle_over_block()], layer, 0, 0, scan_fov_m=SCAN_FOV
+        ).iloc[0]["mean"]
         < 5
     )
 
