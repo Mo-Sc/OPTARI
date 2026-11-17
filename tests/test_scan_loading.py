@@ -127,12 +127,10 @@ def test_ithera_scan_builds_the_same_layer_structure(ithera_scan, hdf5_scan):
 def test_motion_frame_selection(hdf5_scan, ithera_scan):
     rng = np.random.default_rng(0)
     us = rng.normal(size=(5, 3, 64, 64))
-    us[2] = us[
-        2, 0
-    ]  # all wavelengths of frame 2 see the same image: no motion
-    assert (
-        int(np.argmin(spectral_motion_scores(us, mask_transducer=0))) == 2
-    )
+    # all wavelengths of frame 2 see one image: nothing to compare
+    us[2] = us[2, 0]
+    scores = spectral_motion_scores(us, mask_transducer=0)
+    assert np.isnan(scores).tolist() == [False, False, True, False, False]
 
     # Regression values for the shipped test scans.
     def lowest_motion_frame(scan):

@@ -47,7 +47,7 @@ class UiManager:
         controller.time_analysis = add(
             create_time_analysis_dock(), "Temporal", "bottom"
         )
-        controller.motion = add(create_motion_dock(), "Motion", "bottom")
+        controller.motion = add(create_motion_dock(), "Frame QC", "bottom")
         controller.histograms = add(
             create_histogram_dock(), "Histogram", "bottom"
         )

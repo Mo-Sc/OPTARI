@@ -20,6 +20,9 @@ class MotionDock:
     frame_curve: pg.PlotDataItem
     # Lowest point of each plotted curve
     stillest: pg.ScatterPlotItem
+    # Frames whose motion stands out, shaded behind the curves in their colour
+    spectral_standout: pg.BarGraphItem
+    frame_standout: pg.BarGraphItem
     # Follows the viewer's frame; dragging it moves the viewer to that frame.
     frame_line: pg.InfiniteLine
 
@@ -43,7 +46,9 @@ def create_motion_dock() -> MotionDock:
         "Spectral: Movement during a frame's wavelength set, which corrupts "
         "unmixing. Frame-to-frame: the image changed from the previous and next frame. "
         "Each is scaled to 0-1 within the scan, so it shows where "
-        "motion happens, but are not comparable between scans."
+        "motion happens, but are not comparable between scans. Shaded: frames whose "
+        "motion stands out from the rest of the scan. Gaps in the spectral curve: "
+        "wavelength sets without a US refresh, which cannot be scored."
     )
     plot.addLegend()
     spectral_curve = plot.plot(
@@ -64,6 +69,15 @@ def create_motion_dock() -> MotionDock:
         size=12, brush=pg.mkBrush("g"), pen=pg.mkPen("w")
     )
     plot.addItem(stillest)
+    spectral_standout, frame_standout = (
+        pg.BarGraphItem(
+            x=[], height=[], width=1, brush=pg.mkBrush(*rgb, 60), pen=None
+        )
+        for rgb in ((100, 180, 255), (255, 160, 60))
+    )
+    for standout in (spectral_standout, frame_standout):
+        standout.setZValue(-10)
+        plot.addItem(standout)
     frame_line = pg.InfiniteLine(angle=90, movable=True, pen=pg.mkPen("y"))
     frame_line.setToolTip("Current frame, drag to move the viewer")
     frame_line.hide()
@@ -78,5 +92,7 @@ def create_motion_dock() -> MotionDock:
         spectral_curve=spectral_curve,
         frame_curve=frame_curve,
         stillest=stillest,
+        spectral_standout=spectral_standout,
+        frame_standout=frame_standout,
         frame_line=frame_line,
     )

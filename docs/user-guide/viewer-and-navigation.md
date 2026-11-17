@@ -30,13 +30,14 @@ By default, OPTARI scores every US frame for motion, using an algorithm that com
 zero-mean normalized cross-correlation. When a new scan is loaded, it automatically selects the frame with lowest motion. This is an attempt to reduce operator variability in frame selection. The default frame is set in **Settings ▸ Viewer** or
 [`config.json`](../configuration/configuration-schema.md) (`general.DEFAULT_FRAME_INDEX`), with two kinds of motion to choose from:
 
-- **Motion (Spectral)** (default) compares the US images of the wavelengths within each frame. Tissue moving during the wavelength set misaligns the spectra and corrupts unmixing, so this picks the frame best suited for spectral analysis.
+- **Motion (Spectral)** (default) compares the US images of the wavelengths within each frame. Tissue moving during the wavelength set misaligns the spectra and corrupts unmixing, so this picks the frame best suited for spectral analysis. Identical US frames are seen as duplicates and are not scored (show as gaps in the Frame QC plot)
+
 
 - **Motion (frame-to-frame)** compares each frame with the previous and the next one, e.g. to pick a frame between breaths.
 
 Both scores ignore the top 60 pixel rows of the US image, so the transducer and coupling area don't count as motion. This can be differ, depending on the transducer size.
 
-The Motion widget plots both scores for every frame, with the frame with the least motion marked in green. Each score is scaled to 0–1 within the scan, so it shows where motion happens, but not how much, so the two lines should not be compared with each other or between scans.
+The Frame QC widget plots both scores for every frame, with the frame with the least motion marked in green. Each score is scaled to 0–1 within the scan, so it shows where motion happens, but not how much, so the two lines should not be compared with each other or between scans.Frames whose motion stands out from the rest of the scan are shaded in the colour of their curve: those above the median plus 4x MAD.
 
 ## Grid mode
 

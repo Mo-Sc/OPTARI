@@ -352,7 +352,8 @@ class ScanController(TaskControllerBase):
                 "motion: selecting by frame-to-frame motion instead"
             )
             kind = "frame_motion"
-        frame_id = int(np.argmin(scores[kind]))
+        # Spectral motion leaves frames it could not score NaN.
+        frame_id = int(np.nanargmin(scores[kind]))
         logger.info(
             "%s frame selection: frame %d, score %.4f",
             kind,

@@ -17,6 +17,7 @@ from optari.roi.roi_utils import (
     time_axis,
 )
 from optari.utils.misc import roi_color_for_index
+from optari.utils.motion import standout_frames
 from optari.controllers.base import TaskControllerBase
 from optari.config import settings
 from optari.utils.viewer import selected_frame_and_channel
@@ -103,6 +104,8 @@ class AnalysisController(TaskControllerBase):
             dock.spectral_curve.setData([], [])
             dock.frame_curve.setData([], [])
             dock.stillest.setData([], [])
+            dock.spectral_standout.setOpts(x=[], height=[])
+            dock.frame_standout.setOpts(x=[], height=[])
             dock.frame_line.hide()
             if self.optari_controller.pa_data is None:
                 dock.status_label.setText("Load a scan to score its motion.")
@@ -119,23 +122,39 @@ class AnalysisController(TaskControllerBase):
         spectral, frame = scores["spectral_motion"], scores["frame_motion"]
         stillest_frame = int(np.argmin(frame))
         dock.frame_curve.setData(np.arange(len(frame)), frame)
+        frame_out = np.flatnonzero(standout_frames(frame))
+        dock.frame_standout.setOpts(
+            x=frame_out, height=np.ones(len(frame_out))
+        )
         if spectral is None:
             dock.spectral_curve.setData([], [])
+            dock.spectral_standout.setOpts(x=[], height=[])
             dock.stillest.setData([stillest_frame], [frame[stillest_frame]])
             dock.status_label.setText(
                 "One image per wavelength set, so no spectral motion. Lowest "
-                f"frame-to-frame motion: frame {stillest_frame} (green)."
+                f"frame-to-frame motion: frame {stillest_frame} (green). "
+                f"{len(frame_out)} frame(s) with unusual motion shaded."
             )
         else:
-            stillest_spectral = int(np.argmin(spectral))
-            dock.spectral_curve.setData(np.arange(len(spectral)), spectral)
+            stillest_spectral = int(np.nanargmin(spectral))
+            # NaN: wavelength sets without a US refresh, drawn as gaps
+            dock.spectral_curve.setData(
+                np.arange(len(spectral)), spectral, connect="finite"
+            )
+            spectral_out = np.flatnonzero(standout_frames(spectral))
+            dock.spectral_standout.setOpts(
+                x=spectral_out, height=np.ones(len(spectral_out))
+            )
             dock.stillest.setData(
                 [stillest_spectral, stillest_frame],
                 [spectral[stillest_spectral], frame[stillest_frame]],
             )
             dock.status_label.setText(
                 f"Lowest motion: frame {stillest_spectral} spectral, frame "
-                f"{stillest_frame} frame-to-frame (green)."
+                f"{stillest_frame} frame-to-frame (green). Unusual motion shaded: "
+                f"{len(spectral_out)} spectral, {len(frame_out)} frame-to-frame. "
+                f"{int(np.isnan(spectral).sum())} wavelength set(s) without a US "
+                "refresh are not scored."
             )
         dock.frame_line.show()
         self.update_frame_lines()
