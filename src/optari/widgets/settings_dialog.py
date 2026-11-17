@@ -76,6 +76,23 @@ def _available_colormaps() -> list[str]:
     return sorted(AVAILABLE_COLORMAPS)
 
 
+def _resolvable_colormap(name: str) -> bool:
+    """Whether napari resolves *name*, built-in or matplotlib.
+
+    The colormap combos are editable, and an unknown name would only fail at the next
+    scan load, inside ``viewer.add_image``.
+    """
+    from napari.utils.colormaps import ensure_colormap
+
+    if not name:
+        return False  # napari would quietly fall back to black
+    try:
+        ensure_colormap(name)
+    except KeyError:
+        return False
+    return True
+
+
 def _color_icon(color: str) -> QIcon:
     pixmap = QPixmap(16, 16)
     pixmap.fill(QColor(color))
@@ -488,9 +505,10 @@ class SettingsDialog(QDialog):
             for row in range(self.roi_colors_list.count())
         ]
 
-        data["segmentation"][
-            "default_model"
-        ] = self.default_model_combo.currentText()
+        if self.default_model_combo.currentText():
+            data["segmentation"][
+                "default_model"
+            ] = self.default_model_combo.currentText()
         return data
 
     # ============ models tab ============
@@ -578,6 +596,17 @@ class SettingsDialog(QDialog):
         self, data: dict, success_message: str, failure_prefix: str
     ) -> bool:
         """Validate and write *data*, reporting the outcome in the status label."""
+        unknown = [
+            name
+            for name in data["general"]["LAYER_COLOR_MAPS"].values()
+            if not _resolvable_colormap(name)
+        ]
+        if unknown:
+            self.status_label.setText(
+                f"{failure_prefix}: unknown colormap(s) "
+                f"{', '.join(map(repr, unknown))}"
+            )
+            return False
         try:
             write_user_config_dict(data)
         except (ValueError, TypeError, KeyError, OSError) as exc:

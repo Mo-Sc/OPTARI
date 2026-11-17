@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from pathlib import Path
 import re
 
-import cv2
+import imageio.v3 as iio
 from napari.layers import Image
 from napari.viewer import Viewer
 
@@ -46,4 +46,6 @@ def save_viewer_screenshot(
     """
     with colorbars_visible(viewer, include_colorbars):
         image = viewer.screenshot(canvas_only=True)[..., :3]
-    cv2.imwrite(str(destination), cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
+    # Not cv2.imwrite, which returns False instead of raising and has a history of
+    # failing on non-ASCII paths on Windows (user folders with umlauts).
+    iio.imwrite(destination, image)

@@ -214,7 +214,7 @@ class BatchDialog(QDialog):
             self.discard_plan()
             return
         try:
-            text = Path(preset_path).read_text()
+            text = Path(preset_path).read_text(encoding="utf-8")
         except OSError as exc:
             self.status_label.setText(f"Could not read preset: {exc}")
             return

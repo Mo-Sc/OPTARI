@@ -22,7 +22,7 @@ from qtpy.QtWidgets import (
 from optari.roi.roi_features import numeric_feature_ids
 from .dock_helpers import (
     create_frame_scope_controls,
-    create_range_edits,
+    create_number_edit,
     create_right_dock_shell,
 )
 
@@ -133,7 +133,8 @@ def create_annotation_dock() -> AnnotationDock:
         "(mutually exclusive with ROI Exclusion)"
     )
     roi_clip_form = QFormLayout(roi_clipping_box)
-    roi_clip_min_edit, roi_clip_max_edit = create_range_edits()
+    roi_clip_min_edit = create_number_edit(placeholder="(unset)")
+    roi_clip_max_edit = create_number_edit(placeholder="(unset)")
     roi_clip_form.addRow("Min. Intensity", roi_clip_min_edit)
     roi_clip_form.addRow("Max. Intensity", roi_clip_max_edit)
 
@@ -145,7 +146,8 @@ def create_annotation_dock() -> AnnotationDock:
         "(mutually exclusive with ROI Clipping)"
     )
     roi_exclude_form = QFormLayout(roi_exclusion_box)
-    roi_exclude_min_edit, roi_exclude_max_edit = create_range_edits()
+    roi_exclude_min_edit = create_number_edit(placeholder="(unset)")
+    roi_exclude_max_edit = create_number_edit(placeholder="(unset)")
     roi_exclude_form.addRow("Min. Intensity", roi_exclude_min_edit)
     roi_exclude_form.addRow("Max. Intensity", roi_exclude_max_edit)
 

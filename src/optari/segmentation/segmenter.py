@@ -71,7 +71,9 @@ class SegmentationModelConfig:
 def load_model_registry() -> dict[str, SegmentationModelConfig]:
     """Load model configs and return a mapping of model_id -> config."""
 
-    model_config = json.loads(get_user_seg_models_config_file().read_text())
+    model_config = json.loads(
+        get_user_seg_models_config_file().read_text(encoding="utf-8")
+    )
     models: dict[str, SegmentationModelConfig] = {}
     for item in model_config["models"]:
         model_id = str(item["id"])

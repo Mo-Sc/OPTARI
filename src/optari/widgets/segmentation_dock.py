@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from qtpy.QtGui import QDoubleValidator
 from qtpy.QtWidgets import (
     QHBoxLayout,
     QComboBox,
@@ -18,6 +17,7 @@ from qtpy.QtWidgets import (
 
 from .dock_helpers import (
     create_frame_scope_controls,
+    create_number_edit,
     create_preset_controls,
     create_right_dock_shell,
 )
@@ -92,14 +92,10 @@ def create_segmentation_dock() -> SegmentationDock:
     roi_shape_combo.addItem("Rectangle", userData="rectangle")
     roi_shape_combo.addItem("Polygon", userData="polygon")
     roi_shape_combo.setCurrentIndex(0)
-    roi_width_edit = QLineEdit()
-    roi_height_edit = QLineEdit()
-    roi_top_margin_edit = QLineEdit()
-
-    for edit in (roi_width_edit, roi_height_edit, roi_top_margin_edit):
-        edit.setValidator(QDoubleValidator(0.0, 9999.0, 2))
-        edit.setClearButtonEnabled(True)
-        edit.setPlaceholderText("mm")
+    roi_width_edit = create_number_edit(placeholder="mm", signed=False)
+    roi_height_edit = create_number_edit(placeholder="mm", signed=False)
+    # ROI presets allow a negative margin, an ROI starting above the tissue edge
+    roi_top_margin_edit = create_number_edit(placeholder="mm")
     roi_top_margin_edit.setToolTip(
         "Offset from the top of the detected tissue region (not a size)"
     )

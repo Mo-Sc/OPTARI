@@ -145,6 +145,11 @@ class ViewerExportController:
                         writer = cv2.VideoWriter(
                             str(tmp_path), fourcc, fps, (width, height)
                         )
+                        if not writer.isOpened():
+                            raise OSError(
+                                f"Cannot write video to {filename.parent}: "
+                                "codec mp4v unavailable or path not writable"
+                            )
                     writer.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
                     frames_written += 1
         finally:

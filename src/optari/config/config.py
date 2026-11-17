@@ -86,14 +86,14 @@ class OptariConfig:
     def load_from_user_dir(cls) -> "OptariConfig":
         """Loads the user's config.json and safely parses it into the dataclasses."""
         config_path = get_user_config_file()
-        data = json.loads(config_path.read_text())
+        data = json.loads(config_path.read_text(encoding="utf-8"))
 
         schema_version = data.get("schema_version")
 
         if schema_version != CONFIG_SCHEMA_VERSION:
             archive_config_dir(config_path.parent)
             config_path = get_user_config_file()
-            data = json.loads(config_path.read_text())
+            data = json.loads(config_path.read_text(encoding="utf-8"))
 
         return _config_from_dict(data)
 

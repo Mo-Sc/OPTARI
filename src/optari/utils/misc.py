@@ -1,3 +1,4 @@
+import math
 import os
 import tempfile
 from collections.abc import Iterator
@@ -12,17 +13,16 @@ DOWNLOAD_CHUNK_BYTES = 512 * 1024
 
 
 def parse_float_input(text: str) -> float | None:
+    """Parse a number typed with a decimal point or comma (see ``create_number_edit``).
+
+    None for an empty, unfinished ("-", "1e") or non-finite entry.
     """
-    Parse a float from text input. Returns None if parsing fails or input is
-    empty.
-    """
-    text = text.strip()
-    if not text:
-        return None
     try:
-        return float(text.replace(",", "."))
-    except ValueError:  # an unfinished entry such as "-" or "1e"
+        value = float(text.strip().replace(",", "."))
+    except ValueError:
         return None
+    # "nan" or "inf" as a filter bound would silently drop or keep every pixel
+    return value if math.isfinite(value) else None
 
 
 def roi_color_for_index(index: int) -> str:

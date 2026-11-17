@@ -23,6 +23,7 @@ from optari.segmentation.segmenter import (
 from optari.segmentation.segmentation_presets import (
     validate_segmentation_settings,
 )
+from optari.utils.misc import parse_float_input
 from optari.utils.viewer import selected_frame_idx
 from optari.utils.tasks import BackgroundStep
 from optari.controllers.base import TaskControllerBase
@@ -474,12 +475,10 @@ class SegmentationController(TaskControllerBase):
 
     @staticmethod
     def _parse_roi_value(text: str, label: str) -> float | None:
-        if not text.strip():
-            return None
-        try:
-            return float(text)
-        except ValueError as exc:
-            raise ValueError(f"{label} must be a number.") from exc
+        value = parse_float_input(text)
+        if value is None and text.strip():
+            raise ValueError(f"{label} must be a number.")
+        return value
 
     def on_save_preset_clicked(self) -> None:
         """Save the current segmentation and ROI settings as a new user preset."""

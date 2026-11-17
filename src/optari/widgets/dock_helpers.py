@@ -4,8 +4,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from qtpy.QtCore import QLocale, Qt
-from qtpy.QtGui import QDoubleValidator
+from qtpy.QtCore import QRegularExpression, Qt
+from qtpy.QtGui import QRegularExpressionValidator
 from qtpy.QtWidgets import (
     QButtonGroup,
     QComboBox,
@@ -198,30 +198,25 @@ def create_bottom_single_plot_container() -> QWidget:
     return plot_container
 
 
-def create_range_edits(
-    *,
-    placeholder: str = "(unset)",
-    minimum: float | None = None,
-    maximum: float | None = None,
-    decimals: int = 6,
-) -> tuple[QLineEdit, QLineEdit]:
-    """Create a pair of min/max numeric edits with consistent validation and UX."""
+def create_number_edit(
+    *, placeholder: str = "", signed: bool = True
+) -> QLineEdit:
+    """A line edit for a decimal number, read with ``parse_float_input``.
 
-    def _new_numeric_edit() -> QLineEdit:
-        edit = QLineEdit()
-        validator = QDoubleValidator()
-        validator.setLocale(QLocale.c())
-        validator.setDecimals(decimals)
-        if minimum is not None:
-            validator.setBottom(minimum)
-        if maximum is not None:
-            validator.setTop(maximum)
-        edit.setValidator(validator)
-        edit.setPlaceholderText(placeholder)
-        edit.setClearButtonEnabled(True)
-        return edit
-
-    return _new_numeric_edit(), _new_numeric_edit()
+    Point and comma are both accepted as the decimal separator, whatever the system
+    locale: QDoubleValidator follows the locale, so on a German system it accepts
+    only "2,5", which float() rejects, and with the C locale the comma key does nothing.
+    """
+    sign = "-?" if signed else ""
+    edit = QLineEdit()
+    edit.setValidator(
+        QRegularExpressionValidator(
+            QRegularExpression(rf"^{sign}\d*([.,]\d*)?([eE][-+]?\d*)?$")
+        )
+    )
+    edit.setPlaceholderText(placeholder)
+    edit.setClearButtonEnabled(True)
+    return edit
 
 
 # helpers for lists of checkboxes (chromophores, wavelengths, segmentation classes)
