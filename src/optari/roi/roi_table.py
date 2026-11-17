@@ -130,13 +130,14 @@ class SavedRoiTable:
         """Mirror the table to its CSV: append *appended*, or rewrite it after a delete.
 
         An emptied table leaves the file as it was: the session's only backup must
-        not go with a select-all and Delete.
+        not go with a select-all and Delete. The next save then rewrites it, since
+        appending would bring the deleted rows back on import.
         """
         if self._autosave_path is None or self._rows.empty:
             return
         path = self._autosave_path
         try:
-            if appended is None:
+            if appended is None or len(appended) == len(self._rows):
                 write_roi_table_csv(self._rows, path)
             else:
                 append_roi_table_csv(appended, path)

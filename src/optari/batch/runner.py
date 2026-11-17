@@ -209,7 +209,8 @@ class BatchRunner:
                 "measurements stay in %s", self.plan.table_csv_path.name
             )
             return
-        self.plan.table_csv_path.unlink()
+        # Missing when every append failed (logged by SavedRoiTable)
+        self.plan.table_csv_path.unlink(missing_ok=True)
 
     # ============ the plan ============
     def _run(self):
