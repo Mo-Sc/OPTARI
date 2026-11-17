@@ -29,6 +29,7 @@ from optari.io.export_pipeline import (
     export_roi_table_to_xlsx,
     import_roi_table,
 )
+from optari.patato_bridge import pa_layers
 from optari.roi.roi_features import FEATURE_REGISTRY
 from optari.roi.roi_geometry import RoiGeometry, napari_to_patato
 from optari.roi.roi_presets import RoiPresetStore
@@ -55,7 +56,6 @@ from optari.utils.viewer import selected_frame_and_channel, selected_frame_idx
 if TYPE_CHECKING:
     from optari.controllers.optari_controller import OptariController
 
-from napari.layers import Image
 from napari.utils.notifications import show_error, show_info
 
 logger = logging.getLogger(__name__)
@@ -635,7 +635,7 @@ class RoiController(TaskControllerBase):
             layer,
             frame_idx,
             channel_idx,
-            scan_fov_m=self.optari_controller.scan_ctrl.get_fov(),
+            scan_fov_m=self.optari_controller.scan_fov,
             clamp=self.intensity_clamp,
             feature_ids=["roi_id", *(c for c in live_cols if c != "roi_id")],
         )
@@ -787,17 +787,12 @@ class RoiController(TaskControllerBase):
         if layers is not None:
             target_layers = layers
         elif scope.all_layers:
-            target_layers = [
-                layer
-                for layer in self.viewer.layers
-                if isinstance(layer, Image)
-                and layer.metadata.get("type") == "pa"
-            ]
+            target_layers = pa_layers(self.viewer.layers)
         else:
             target_layers = [active_layer]
 
         tracks = self._track_histories_for_selection(selected_ids)
-        scan_fov_m = self.optari_controller.scan_ctrl.get_fov()
+        scan_fov_m = self.optari_controller.scan_fov
 
         collected: list[pd.DataFrame] = []
         for layer in target_layers:
@@ -1013,7 +1008,7 @@ class RoiController(TaskControllerBase):
         several separate actions (see ``track_ids`` below).
         """
         # The frame the rows were saved in, whichever layer they were measured on
-        fov_x_m, fov_y_m = self.optari_controller.scan_ctrl.get_fov()
+        fov_x_m, fov_y_m = self.optari_controller.scan_fov
         # Restoring one frame of a track must not block restoring its other frames,
         # so an ROI already in the viewer is identified by group *and* frame.
         present = {
@@ -1120,7 +1115,7 @@ class RoiController(TaskControllerBase):
             return
         roi_id, description, location, top_margin_mm = metadata
 
-        fov_m = self.optari_controller.scan_ctrl.get_fov()
+        fov_m = self.optari_controller.scan_fov
         if fov_m is None:
             self.optari_controller.annotation.roi_presets_description_label.setText(
                 "Could not save ROI preset: current scan has no valid FOV."
@@ -1172,7 +1167,7 @@ class RoiController(TaskControllerBase):
     @staticmethod
     def _place_roi_preset_static(controller, preset) -> None:
         """Place a preset while preserving its physical size across FOVs."""
-        target_fov = controller.scan_ctrl.get_fov()
+        target_fov = controller.scan_fov
         if target_fov is None:
             raise ValueError("Current scan has no valid FOV.")
 
@@ -1222,7 +1217,7 @@ class RoiController(TaskControllerBase):
             )
         class_id = class_name_to_id[target_class_name]
 
-        target_fov = controller.scan_ctrl.get_fov()
+        target_fov = controller.scan_fov
         if target_fov is None:
             raise ValueError("Current scan has no valid FOV.")
         verts = preset.geometry.verts_mm(*target_fov)

@@ -25,7 +25,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pandas as pd
-from napari.layers import Image
 from qtpy.QtCore import QTimer
 
 from optari.batch.plan import BatchJob, BatchPlan
@@ -42,6 +41,7 @@ from optari.io.export_pipeline import (
     scan_export,
 )
 from optari.io.utils import save_viewer_screenshot
+from optari.patato_bridge import pa_layers
 from optari.roi.roi_table import SavedRoiTable
 from optari.roi.roi_utils import NO_CLAMP
 from optari.utils.logging import run_log_file
@@ -334,13 +334,6 @@ class BatchRunner:
         yield from self._write_outputs(job, frame_idx, source_layer)
 
     # ============ per-scan work ============
-    def _pa_layers(self) -> list:
-        return [
-            layer
-            for layer in self.viewer.layers
-            if isinstance(layer, Image) and layer.metadata.get("type") == "pa"
-        ]
-
     def _select_source_layer(self, produced_recon: str | None):
         """The one reconstruction this run analyses, and make it the active layer.
 
@@ -349,13 +342,13 @@ class BatchRunner:
         later looks like the one a user would have produced by hand.
         """
         wanted = self.plan.source or produced_recon
-        pa_layers = self._pa_layers()
+        candidates = pa_layers(self.viewer.layers)
         if wanted:
             layer = next(
-                (l for l in pa_layers if l.name.startswith(wanted)), None
+                (l for l in candidates if l.name.startswith(wanted)), None
             )
             if layer is None:
-                available = ", ".join(l.name for l in pa_layers) or "none"
+                available = ", ".join(l.name for l in candidates) or "none"
                 raise BatchStepError(
                     f"no reconstruction layer starting with '{wanted}' (scan has: {available})",
                     "source",
@@ -377,7 +370,7 @@ class BatchRunner:
         """The source reconstruction plus everything unmixed from it."""
         return [source_layer] + [
             layer
-            for layer in self._pa_layers()
+            for layer in pa_layers(self.viewer.layers)
             if layer.metadata.get("source_layer") == source_layer.name
         ]
 

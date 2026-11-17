@@ -481,12 +481,6 @@ class AnalysisController(TaskControllerBase):
         layout = self.optari_controller.spectrum.plots_container.layout()
 
         n_plotted = 0
-        axis1_name = str(
-            self.optari_controller.active_recon_layer.metadata.get(
-                "axis1_name", "Channel"
-            )
-        )
-        x_label = "Channel" if axis1_name.lower() == "channel" else axis1_name
         colors = self.optari_controller.roi_ctrl.colors_by_roi_id()
         for roi_id, y in series.items():
             if y.size == 0 or np.all(np.isnan(y)):
@@ -497,7 +491,7 @@ class AnalysisController(TaskControllerBase):
             plot = pg.PlotWidget()
             plot.setTitle(f"ROI {roi_id}")
             plot.showGrid(x=True, y=True)
-            plot.setLabel("bottom", x_label)
+            plot.setLabel("bottom", "Channel")
             plot.setLabel("left", "Mean intensity")
             plot.plot(
                 x,

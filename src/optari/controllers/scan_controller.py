@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import patato as pat
-from napari.layers import Image
 from napari.utils.notifications import show_info, show_warning
 from patato.io.ithera.read_ithera import iTheraMSOT
 from qtpy.QtCore import QSettings
@@ -110,6 +109,7 @@ class ScanController(TaskControllerBase):
         self.optari_controller.scan_info = None
         self.optari_controller.patato_objects = {}
         self.optari_controller.derived_patato_objects = {}
+        self.optari_controller.scan_fov = None
         self.optari_controller.clinical_metadata_edits = None
 
     def reset_scan_state(self, restore_startup_logo: bool = True) -> None:
@@ -173,59 +173,46 @@ class ScanController(TaskControllerBase):
         logger.info("loading scan: %s", scan_path)
 
         self.reset_scan_state(restore_startup_logo=False)
-
-        if not scan_path.exists():
-            logger.warning("scan not found: %s", scan_path)
-            load_startup_logo(self.viewer)
-            self.optari_controller.refresh_all()
-            return False
-
         try:
-            if scan_info.kind == "ithera":
-                self.optari_controller.pa_data = pat.PAData(
-                    iTheraMSOT(str(scan_path))
-                )
-            else:
-                # PATATO's reader factory tells the PATATO and IPASC layouts apart itself.
-                self.optari_controller.pa_data = pat.PAData.from_hdf5(
-                    str(scan_path), mode="r"
-                )
+            layers = self._open_scan(scan_path, scan_info)
         except Exception:
-            logger.exception("failed to open scan '%s'", scan_path)
-            load_startup_logo(self.viewer)
-            self.optari_controller.refresh_all()
-            return False
-        # Only now, so a failed load leaves no path for exports and dialogs to act on.
-        self.optari_controller.path = scan_path
-        self.optari_controller.scan_info = scan_info
-
-        try:
-            layers = self.layers_from_pa_data()
-        except Exception:
-            logger.exception("failed to load '%s'", scan_path)
+            logger.exception("failed to load scan '%s'", scan_path)
+            # Leaves no path behind for exports and dialogs to act on
             self.close_current_scan()
             load_startup_logo(self.viewer)
             self.optari_controller.refresh_all()
             return False
 
+        self._add_layers(layers)
+        self._position_viewer()
+        return True
+
+    def _open_scan(self, scan_path: Path, scan_info: ScanInfo) -> list[tuple]:
+        """Open the scan, build its image layers' data and resolve its FOV."""
+        if not scan_path.exists():
+            raise FileNotFoundError(f"scan not found: {scan_path}")
+        controller = self.optari_controller
+        controller.path = scan_path
+        controller.scan_info = scan_info
+        if scan_info.kind == "ithera":
+            controller.pa_data = pat.PAData(iTheraMSOT(str(scan_path)))
+        else:
+            # PATATO's reader factory tells the PATATO and IPASC layouts apart itself.
+            controller.pa_data = pat.PAData.from_hdf5(str(scan_path), mode="r")
+        layers, controller.patato_objects = build_napari_layers(
+            controller.pa_data, str(scan_path), scan_info.internal_name
+        )
+        controller.scan_fov = fov_from_objects(controller.patato_objects)
+        return layers
+
+    def _add_layers(self, layers: list[tuple]) -> None:
+        """Add the image, segmentation and ROI layers and select the default PA layer."""
         for data, kw in layers:
-            kw["metadata"] = {
-                "filepath": str(scan_path),
-                "scan_name": scan_info.internal_name,
-                **kw["metadata"],
-            }
             self.viewer.add_image(
                 data, units=self.image_units, **kw
             ).colorbar.visible = True
-
-        # Set the active US layer if available.
-        self.optari_controller.active_us_layer = next(
-            (
-                l
-                for l in self.viewer.layers
-                if isinstance(l, Image) and l.metadata.get("type") == "us"
-            ),
-            None,
+        self.optari_controller.active_us_layer = (
+            self.viewer.layers["US"] if "US" in self.viewer.layers else None
         )
         # Before the ROIs layer, so the ROI outlines are drawn above the mask.
         self.optari_controller.segmentation_ctrl.restore_from_scan(
@@ -254,7 +241,8 @@ class ScanController(TaskControllerBase):
         self.optari_controller.resolve_active_recon_layer()
         self.optari_controller.refresh_controller_uis()
 
-        # Initialize viewer position to DEFAULT_FRAME_INDEX and DEFAULT_CHANNEL_INDEX
+    def _position_viewer(self) -> None:
+        """Go to the configured frame and channel, restore the scan's ROIs, fit the view."""
         frame_selector = settings.general.DEFAULT_FRAME_INDEX
         try:
             # "roi" needs the scan's ROIs, which are restored below
@@ -273,8 +261,6 @@ class ScanController(TaskControllerBase):
 
         # Fit view to the newly loaded data (prevents "zoomed out" state).
         self.viewer.reset_view()
-
-        return True
 
     def go_to_frame(self, selector: int | str) -> int:
         """Show the frame *selector* means for the loaded scan, and return it.
@@ -376,21 +362,10 @@ class ScanController(TaskControllerBase):
         )
         return frame_id
 
-    def layers_from_pa_data(self) -> list[tuple]:
-        """Build napari LayerData tuples from the open ``controller.pa_data`` handle."""
-        layers, self.optari_controller.patato_objects = build_napari_layers(
-            self.optari_controller.pa_data
-        )
-        return layers
-
-    def get_fov(self) -> "tuple[float, float] | None":
-        """Return ``(fov_x_m, fov_y_m)`` from stored PATATO objects, or ``None``."""
-        return fov_from_objects(self.optari_controller.patato_objects)
-
     def init_shapes_from_scan(self) -> None:
         """Fill the freshly created ROIs layer with the ROIs stored in the scan."""
         roi_ctrl = self.optari_controller.roi_ctrl
-        fov = self.get_fov()
+        fov = self.optari_controller.scan_fov
         if fov is not None:
             try:
                 # Projects the current frame into the layer, with ids and properties.

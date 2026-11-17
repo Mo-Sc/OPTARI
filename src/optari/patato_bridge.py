@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 
 import numpy as np
 
+from napari.layers import Image
 from patato.io.attribute_tags import HDF5Tags  # type: ignore[import]
 import patato as pat  # type: ignore[import]
 
@@ -223,8 +224,69 @@ LAYER_NAME_ATTR = "optari_layer_name"
 SETTINGS_ATTR = "optari_settings"
 
 
-def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
+def pa_layer_metadata(
+    *,
+    pa_kind: str,
+    channel_labels: list,
+    frames: list[int],
+    scan_timestamps: np.ndarray,
+    acquisition_start: datetime | None,
+    settings: dict,
+    filepath: str,
+    scan_name: str | None,
+    source_layer: str | None = None,
+    parameter: str | None = None,
+) -> dict:
+    """The metadata of a PA image layer, loaded or computed.
+
+    *pa_kind* is ``"recon"`` (channels are wavelengths), ``"unmixed"`` (chromophores)
+    or ``"unmixed_param"`` (one *parameter*, thb or so2). *scan_timestamps* are the
+    scan's ``(frames, wavelengths)`` times.
+    """
+    metadata = {
+        "type": "pa",
+        "pa_kind": pa_kind,
+        "axis1_labels": channel_labels,
+        "frames": frames,
+        "timestamps": (
+            scan_timestamps
+            if pa_kind == "recon"
+            else sweep_start_timestamps(scan_timestamps, len(channel_labels))
+        ),
+        "acquisition_start": acquisition_start,
+        "settings": settings,
+        # They belong to the whole scan, but a layer without them drops out of the
+        # measurement table's scan columns
+        "filepath": filepath,
+        "scan_name": scan_name,
+    }
+    if pa_kind == "recon":
+        metadata["wavelengths"] = channel_labels
+    if pa_kind == "unmixed":
+        metadata["chromophores"] = channel_labels
+    if source_layer is not None:
+        metadata["source_layer"] = source_layer
+    if parameter is not None:
+        metadata["parameter"] = parameter
+    return metadata
+
+
+def is_pa_layer(layer) -> bool:
+    """True for a reconstruction or a layer derived from one."""
+    return isinstance(layer, Image) and layer.metadata.get("type") == "pa"
+
+
+def pa_layers(layers) -> list[Image]:
+    """The PA image layers among *layers*, in layer order."""
+    return [layer for layer in layers if is_pa_layer(layer)]
+
+
+def build_napari_layers(
+    pa_data: "pat.PAData", filepath: str, scan_name: str | None
+) -> tuple[list[tuple], dict]:
     """Build napari image layers from an open *pa_data* handle.
+
+    *filepath* and *scan_name* (the vendor's internal name) are stamped on every layer.
 
     Returns
     -------
@@ -272,6 +334,8 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
                 "metadata": {
                     "type": "us",
                     "timestamps": timestamps,
+                    "filepath": filepath,
+                    "scan_name": scan_name,
                 },
             },
         )
@@ -347,17 +411,16 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
                 "opacity": 1.0,
                 "blending": "multiplicative",
                 "auto_contrast": True,
-                "metadata": {
-                    "type": "pa",
-                    "pa_kind": "recon",
-                    "wavelengths": wavelengths,
-                    "axis1_name": "Channel",
-                    "axis1_labels": wavelengths,
-                    "timestamps": timestamps,
-                    "acquisition_start": start,
-                    "frames": recon_frame_list,
-                    "settings": _settings(recon),
-                },
+                "metadata": pa_layer_metadata(
+                    pa_kind="recon",
+                    channel_labels=wavelengths,
+                    frames=recon_frame_list,
+                    scan_timestamps=timestamps,
+                    acquisition_start=start,
+                    settings=_settings(recon),
+                    filepath=filepath,
+                    scan_name=scan_name,
+                ),
             },
         )
 
@@ -375,30 +438,23 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
             frame_list = _frame_list(image, raw.shape[0])
             data = expand_to_acquisition_frames(raw, frame_list, n_acq_frames)
 
-            axis1_labels = list(
-                map(str, np.asarray(image.ax_1_labels).tolist())
+            source_layer = image.da.attrs.get(
+                "source_layer", f"Recon: {dataset_name}_{idx}"
             )
-            source_layer = image.da.attrs.get("source_layer")
-            if source_layer is None:
-                source_layer = f"Recon: {dataset_name}_{idx}"
-            metadata = {
-                "type": "pa",
-                "pa_kind": pa_kind,
-                "source_layer": str(source_layer),
-                "frames": frame_list,
-                "axis1_name": "Channel",
-                "axis1_labels": axis1_labels,
-                "timestamps": sweep_start_timestamps(
-                    timestamps, len(axis1_labels)
+            metadata = pa_layer_metadata(
+                pa_kind=pa_kind,
+                channel_labels=list(
+                    map(str, np.asarray(image.ax_1_labels).tolist())
                 ),
-                "acquisition_start": start,
-                "settings": _settings(image),
-            }
-            if pa_kind == "unmixed":
-                metadata["chromophores"] = axis1_labels
-            if parameter is not None:
-                metadata["parameter"] = parameter
-
+                frames=frame_list,
+                scan_timestamps=timestamps,
+                acquisition_start=start,
+                settings=_settings(image),
+                filepath=filepath,
+                scan_name=scan_name,
+                source_layer=str(source_layer),
+                parameter=parameter,
+            )
             add_layer(
                 data,
                 {

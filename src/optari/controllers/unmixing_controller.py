@@ -25,7 +25,7 @@ from optari.patato_bridge import (
     display_data_from_patato_obj,
     expand_to_acquisition_frames,
     layer_colormap,
-    sweep_start_timestamps,
+    pa_layer_metadata,
 )
 from optari.utils.presets import PresetStore
 from optari.utils.setup import get_user_unmixing_presets_dir
@@ -514,62 +514,25 @@ class UnmixingController(TaskControllerBase):
             dock.generate_thb_checkbox.setChecked(False)
 
     @staticmethod
-    def _set_export_frame_attrs(
+    def _set_export_attrs(
         image_sequence,
-        export_attrs: dict,
-    ) -> None:
-        """Apply export attributes to PATATO output objects."""
-        for key, value in export_attrs.items():
-            image_sequence.attributes[key] = value
-
-    @staticmethod
-    def _build_output_metadata(
         *,
         source_layer_name: str,
         output_frames: list[int],
-        axis1_labels: list[str],
-        filepath,
-        timestamps,
-        acquisition_start,
+        channel_labels: list[str],
         pa_kind: str,
-        scan_name: str | None = None,
         frame_mode: str,
         parameter: str | None = None,
-        include_chromophores: bool = False,
-        settings: dict,
-    ) -> tuple[dict, dict]:
-        """Build synchronized layer metadata and HDF5 export attributes."""
-        layer_metadata = {
-            "type": "pa",
-            "pa_kind": pa_kind,
-            "source_layer": source_layer_name,
-            "frames": output_frames,
-            "axis1_name": "Channel",
-            "axis1_labels": axis1_labels,
-            "filepath": filepath,
-            # Belongs to the whole scan, not the layer, so it has to ride along every
-            # derived layer or it drops out of the measurement table.
-            "scan_name": scan_name,
-            "timestamps": timestamps,
-            "acquisition_start": acquisition_start,
-        }
-        if include_chromophores:
-            layer_metadata["chromophores"] = axis1_labels
+    ) -> None:
+        """Attributes the HDF5 export writes with an unmixing output, and a reload reads back."""
+        attrs = image_sequence.attributes
+        attrs["frames"] = np.asarray(output_frames, dtype=int)
+        attrs["source_layer"] = str(source_layer_name)
+        attrs["axis1_labels"] = [str(label) for label in channel_labels]
+        attrs["pa_kind"] = str(pa_kind)
+        attrs["source_frame_mode"] = str(frame_mode)
         if parameter is not None:
-            layer_metadata["parameter"] = parameter
-        layer_metadata["settings"] = settings
-
-        export_attrs = {
-            "frames": np.asarray(output_frames, dtype=int),
-            "source_layer": str(source_layer_name),
-            "axis1_labels": [str(label) for label in axis1_labels],
-            "pa_kind": str(pa_kind),
-            "source_frame_mode": str(frame_mode),
-        }
-        if parameter is not None:
-            export_attrs["parameter"] = str(parameter)
-
-        return layer_metadata, export_attrs
+            attrs["parameter"] = str(parameter)
 
     # ============ run: params -> prepare -> publish ============
     def _params_from_ui(self) -> UnmixParams:
@@ -627,32 +590,34 @@ class UnmixingController(TaskControllerBase):
         params: UnmixParams,
         *,
         prefix,
-        axis1_labels,
+        channel_labels,
         pa_kind,
         colormap,
         parameter=None,
-        include_chromophores=False,
     ) -> str:
         """Add one unmixing output as a layer and register it for export."""
-        metadata, export_attrs = self._build_output_metadata(
+        source = params.source_layer_metadata
+        metadata = pa_layer_metadata(
+            pa_kind=pa_kind,
+            channel_labels=channel_labels,
+            frames=params.output_frames,
+            scan_timestamps=source["timestamps"],
+            acquisition_start=source.get("acquisition_start"),
+            settings=params.settings,
+            filepath=source.get("filepath"),
+            scan_name=source.get("scan_name"),
+            source_layer=params.source_layer_name,
+            parameter=parameter,
+        )
+        self._set_export_attrs(
+            image,
             source_layer_name=params.source_layer_name,
             output_frames=params.output_frames,
-            axis1_labels=axis1_labels,
-            filepath=params.source_layer_metadata.get("filepath"),
-            scan_name=params.source_layer_metadata.get("scan_name"),
-            timestamps=sweep_start_timestamps(
-                params.source_layer_metadata["timestamps"], len(axis1_labels)
-            ),
-            acquisition_start=params.source_layer_metadata.get(
-                "acquisition_start"
-            ),
+            channel_labels=channel_labels,
             pa_kind=pa_kind,
             frame_mode=params.frame_mode,
             parameter=parameter,
-            include_chromophores=include_chromophores,
-            settings=params.settings,
         )
-        self._set_export_frame_attrs(image, export_attrs)
         name = f"{prefix}: {params.name_stem}"
         self._add_or_update_image_layer(
             name=name,
@@ -679,10 +644,9 @@ class UnmixingController(TaskControllerBase):
                 params,
                 prefix="Unmixed",
                 # Channel labels are used by downstream spectrum displays.
-                axis1_labels=list(map(str, unmixed.ax_1_labels)),
+                channel_labels=list(map(str, unmixed.ax_1_labels)),
                 pa_kind="unmixed",
                 colormap=layer_colormap(HDF5Tags.UNMIXED),
-                include_chromophores=True,
             )
         ]
         if thb is not None:
@@ -691,7 +655,7 @@ class UnmixingController(TaskControllerBase):
                     thb,
                     params,
                     prefix="THb",
-                    axis1_labels=["thb"],
+                    channel_labels=["thb"],
                     pa_kind="unmixed_param",
                     colormap=layer_colormap(HDF5Tags.THB),
                     parameter="thb",
@@ -703,7 +667,7 @@ class UnmixingController(TaskControllerBase):
                     so2,
                     params,
                     prefix="sO2",
-                    axis1_labels=["so2"],
+                    channel_labels=["so2"],
                     pa_kind="unmixed_param",
                     colormap=layer_colormap(HDF5Tags.SO2),
                     parameter="so2",

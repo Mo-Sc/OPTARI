@@ -240,7 +240,7 @@ def scan_export(controller) -> ScanExport:
             [r for r in roi_ctrl.roi_records if r.source.startswith("OPTARI")]
         ),
         replace_stored_rois=roi_ctrl.stored_rois_restored,
-        fov=controller.scan_ctrl.get_fov(),
+        fov=controller.scan_fov,
         derived=dict(controller.derived_patato_objects),
         segmentation=(
             None

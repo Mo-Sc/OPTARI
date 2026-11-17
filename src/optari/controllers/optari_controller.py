@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from napari.qt.threading import GeneratorWorker
     from qtpy.QtWidgets import QDockWidget
 
+from optari.patato_bridge import is_pa_layer, pa_layers
 from optari.roi.roi_utils import slice_datetime
 from optari.utils.viewer import selected_frame_and_channel
 from optari.widgets.info_dock import InfoDock
@@ -55,6 +56,9 @@ class OptariController:
         self.pa_data: pat.PAData | None = None
         self.patato_objects: dict[str, pat.ImageSequence] = {}
         self.derived_patato_objects: dict[str, pat.ImageSequence] = {}
+        # (fov_x_m, fov_y_m) the scan's ROIs are stored in, resolved once at load so
+        # removing a layer cannot change it
+        self.scan_fov: tuple[float, float] | None = None
         self.clinical_metadata_edits: dict[str, str] | None = None
 
         self.shapes_layer: Shapes | None = None
@@ -284,7 +288,7 @@ class OptariController:
             if layer.name == default_pa:
                 self.viewer.layers.selection.select_only(layer)
                 return
-            if first_pa is None and layer.metadata.get("type") == "pa":
+            if first_pa is None and is_pa_layer(layer):
                 first_pa = layer
 
         if first_pa is not None:
@@ -312,10 +316,7 @@ class OptariController:
         selected_layer = selection.active
 
         # only change active layer if selected layer is a PA image layer
-        if (
-            isinstance(selected_layer, Image)
-            and selected_layer.metadata.get("type") == "pa"
-        ):
+        if is_pa_layer(selected_layer):
             # No-op if nothing changed (avoids duplicate work/logging).
             if self.active_recon_layer is selected_layer:
                 return
@@ -323,12 +324,8 @@ class OptariController:
             self.active_recon_layer = selected_layer
             logger.info("active layer set to %s", self.active_recon_layer.name)
             # show only the active PA layer. blending and auto contrast are set when PA layers are created
-            for layer in self.viewer.layers:
-                if (
-                    isinstance(layer, Image)
-                    and layer.metadata.get("type") == "pa"
-                ):
-                    layer.visible = layer is self.active_recon_layer
+            for layer in pa_layers(self.viewer.layers):
+                layer.visible = layer is self.active_recon_layer
 
     # ============ viewer events ============
     def on_layer_removed(self, event) -> None:
@@ -468,8 +465,7 @@ class OptariController:
         frame_idx, channel_idx = frame_channel
 
         # Every PA layer labels its channel axis, dims are snapped to its channels.
-        axis1_name = self.active_recon_layer.metadata["axis1_name"]
-        axis1_value = str(
+        channel = str(
             self.active_recon_layer.metadata["axis1_labels"][channel_idx]
         )
 
@@ -483,7 +479,7 @@ class OptariController:
 
         self.viewer.dims.axis_labels = (
             frame_label,
-            f"{axis1_name}: {axis1_value}",
+            f"Channel: {channel}",
             "z",
             "x",
         )
@@ -500,7 +496,7 @@ class OptariController:
                 ("Study", study_str),
                 ("Scan", scan_display),
                 ("Layer", self.active_recon_layer.name),
-                ("Frame", f"{frame_idx} | {axis1_name}: {axis1_value}"),
+                ("Frame", f"{frame_idx} | Channel: {channel}"),
                 ("Timestamp", f"{ts} ({ts_delta:.2f} s)"),
             ]
         )

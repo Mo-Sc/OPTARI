@@ -51,7 +51,7 @@ def controller_with(pa_data, records=(), derived=None, restored=True):
             roi_records=list(records),
             stored_rois_restored=restored,
         ),
-        scan_ctrl=SimpleNamespace(get_fov=lambda: FOV),
+        scan_fov=FOV,
         derived_patato_objects=derived or {},
         segmentation_ctrl=SimpleNamespace(
             seg_layer=None
@@ -85,19 +85,14 @@ def test_hdf5_export_round_trip(ithera_scan, tmp_path):
             4,
         )
     )
-    _, export_attrs = UnmixingController._build_output_metadata(
+    UnmixingController._set_export_attrs(
+        unmixed,
         source_layer_name="Recon: iThera BP-40mm(res:100μm)_0",
         output_frames=[FRAME],
-        axis1_labels=["Hb", "HbO2"],
-        filepath=str(ITHERA_SCAN),
-        timestamps=None,
-        acquisition_start=None,
+        channel_labels=["Hb", "HbO2"],
         pa_kind="unmixed",
         frame_mode="current",
-        include_chromophores=True,
-        settings={},
     )
-    UnmixingController._set_export_frame_attrs(unmixed, export_attrs)
 
     destination = tmp_path / "Scan_2.hdf5"
     controller = controller_with(
@@ -117,7 +112,7 @@ def test_hdf5_export_round_trip(ithera_scan, tmp_path):
     assert scan_type(destination) == "hdf5"
 
     reopened = pat.PAData.from_hdf5(str(destination), mode="r")
-    layers, _ = build_napari_layers(reopened)
+    layers, _ = build_napari_layers(reopened, str(destination), None)
     names = [kw["name"] for _, kw in layers]
     assert names[:2] == ["US", "Recon: iThera BP-40mm(res:100μm)_0"] and names[
         2
@@ -173,7 +168,7 @@ def test_ipasc_export_reloads_as_raw_scan(ithera_scan, tmp_path):
     )
     assert reopened.shape == (26, 13)
     # Raw time series only: no ultrasound and nothing reconstructed yet.
-    assert build_napari_layers(reopened)[0] == []
+    assert build_napari_layers(reopened, str(destination), None)[0] == []
     np.testing.assert_array_equal(
         reopened[FRAME : FRAME + 1].get_time_series().raw_data,
         ithera_scan[FRAME : FRAME + 1].get_time_series().raw_data,

@@ -22,6 +22,8 @@ from optari.patato_bridge import (
     display_data_from_patato_obj,
     layer_colormap,
     expand_to_acquisition_frames,
+    fov_from_objects,
+    pa_layer_metadata,
 )
 from optari.utils.presets import PresetStore
 from optari.utils.setup import (
@@ -432,19 +434,16 @@ class ReconstructionController(TaskControllerBase):
                 "suffix": params.suffix,
             }
         )
-        layer_metadata = {
-            "type": "pa",
-            "pa_kind": "recon",
-            "wavelengths": wavelengths,
-            "axis1_name": "Channel",
-            "axis1_labels": wavelengths,
-            "filepath": str(params.scan_path),
-            "scan_name": params.scan_name,
-            "timestamps": params.timestamps,
-            "acquisition_start": params.acquisition_start,
-            "frames": params.output_frames,
-            "settings": settings,
-        }
+        layer_metadata = pa_layer_metadata(
+            pa_kind="recon",
+            channel_labels=wavelengths,
+            frames=params.output_frames,
+            scan_timestamps=params.timestamps,
+            acquisition_start=params.acquisition_start,
+            settings=settings,
+            filepath=str(params.scan_path),
+            scan_name=params.scan_name,
+        )
 
         # reopened single-frame recon lands on its frame
         reconstruction.attributes["frames"] = params.output_frames
@@ -470,10 +469,12 @@ class ReconstructionController(TaskControllerBase):
             colormap=layer_colormap(HDF5Tags.RECONSTRUCTION),
             translate=translate,
         )
-        self.optari_controller.patato_objects[layer_name] = reconstruction
-        self.optari_controller.derived_patato_objects[layer_name] = (
-            reconstruction
-        )
+        controller = self.optari_controller
+        controller.patato_objects[layer_name] = reconstruction
+        controller.derived_patato_objects[layer_name] = reconstruction
+        # A raw time series scan (IPASC) has no FOV until its first reconstruction
+        if controller.scan_fov is None:
+            controller.scan_fov = fov_from_objects(controller.patato_objects)
         self.optari_controller.ensure_shapes_layer_on_top()
 
         logger.info("reconstruction complete: %s", layer_name)
