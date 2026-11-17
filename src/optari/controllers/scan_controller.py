@@ -32,7 +32,11 @@ from optari.io.export_pipeline import (
 )
 from optari.utils.misc import roi_color_for_index
 from optari.utils.tasks import BackgroundStep, start_task
-from optari.utils.motion import frame_motion_scores, spectral_motion_scores
+from optari.utils.motion import (
+    frame_motion_scores,
+    spectral_motion_scores,
+    transducer_mask_rows,
+)
 from optari.utils.setup import load_startup_logo
 from optari.controllers.base import TaskControllerBase
 from optari.controllers.viewer_export_controller import ViewerExportController
@@ -342,9 +346,12 @@ class ScanController(TaskControllerBase):
             if not compute:
                 return None
             us_data = np.asarray(us_layer.data)
+            rows = transducer_mask_rows(
+                float(us_layer.scale[-2]), us_data.shape[-2]
+            )
             us_layer.metadata["motion_scores"] = {
-                "spectral_motion": spectral_motion_scores(us_data),
-                "frame_motion": frame_motion_scores(us_data),
+                "spectral_motion": spectral_motion_scores(us_data, rows),
+                "frame_motion": frame_motion_scores(us_data, rows),
             }
         return us_layer.metadata["motion_scores"]
 

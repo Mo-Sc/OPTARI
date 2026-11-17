@@ -35,7 +35,7 @@ zero-mean normalized cross-correlation. When a new scan is loaded, it automatica
 
 - **Motion (frame-to-frame)** compares each frame with the previous and the next one, e.g. to pick a frame between breaths.
 
-Both scores ignore the top 60 pixel rows of the US image, so the transducer and coupling area don't count as motion. This can be differ, depending on the transducer size.
+Both scores ignore the top 11.4 mm of the US image (60 pixel rows on the iThera 40 mm ultrasound), so the transducer and coupling area don't count as motion. A probe with a thicker coupling stand-off may need more, set in `TRANSDUCER_MASK_MM` (`utils/motion.py`).
 
 The Frame QC widget plots both scores for every frame, with the frame with the least motion marked in green. Each score is scaled to 0–1 within the scan, so it shows where motion happens, but not how much, so the two lines should not be compared with each other or between scans.Frames whose motion stands out from the rest of the scan are shaded in the colour of their curve: those above the median plus 4x MAD.
 

@@ -24,14 +24,11 @@ class ROIPlacementConfig:
 
 def largest_component(mask: np.ndarray) -> np.ndarray:
     """Boolean mask of *mask*'s largest connected component."""
-    mask_u8 = mask.astype(np.uint8)
-    if mask_u8.max() == 1:
-        mask_u8 *= 255  # cv2's connectivity analysis expects a 0/255 image
-    if mask_u8.shape[0] == 0 or mask_u8.shape[1] == 0:
+    if mask.shape[0] == 0 or mask.shape[1] == 0:
         raise ValueError("Empty mask")
-
+    # cv2 counts every non-zero pixel as foreground, a 0/1 image is fine
     num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(
-        mask_u8, connectivity=8
+        mask.astype(np.uint8), connectivity=8
     )
     if num_labels < 2:
         raise ValueError("Selected class is empty or not found.")

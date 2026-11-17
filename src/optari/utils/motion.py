@@ -2,6 +2,23 @@ import numpy as np
 from itertools import combinations
 from skimage.metrics import structural_similarity as ssim
 
+# Depth of the band at the top of the ultrasound left out of motion scoring
+TRANSDUCER_MASK_MM = 11.4 # iThera 40 mm / 210 px ultrasound (0.19 mm/px),
+
+
+def transducer_mask_rows(pixel_mm: float, n_rows: int) -> int:
+    """Rows of an ultrasound image with *pixel_mm* row spacing that ``TRANSDUCER_MASK_MM`` covers.
+
+    Raises ValueError when that leaves nothing to score, rather than scoring nothing.
+    """
+    rows = round(TRANSDUCER_MASK_MM / pixel_mm)
+    if rows >= n_rows:
+        raise ValueError(
+            f"the {TRANSDUCER_MASK_MM} mm transducer mask covers the whole "
+            f"{n_rows * pixel_mm:.1f} mm ultrasound image"
+        )
+    return rows
+
 
 def _min_max_scale(arr: np.ndarray) -> np.ndarray:
     """Scale to 0-1, leaving NaN (unscored) entries NaN."""
@@ -11,7 +28,7 @@ def _min_max_scale(arr: np.ndarray) -> np.ndarray:
 
 
 def spectral_motion_scores(
-    us_data: np.ndarray, mask_transducer: int = 60
+    us_data: np.ndarray, mask_transducer: int
 ) -> np.ndarray | None:
     """
     adapted from:
@@ -33,7 +50,7 @@ def spectral_motion_scores(
     wavelength, or a scanner repeating one US image per wavelength set).
 
     Input shape: (n_frames, n_wavelengths, height, width)
-    mask_transducer: int, number of pixels to mask out from the top of the image (transducer)
+    mask_transducer: rows to leave out at the top of the image, see ``transducer_mask_rows``
     """
     n_frames = us_data.shape[0]
 
@@ -89,7 +106,7 @@ def spectral_motion_scores(
 
 
 def frame_motion_scores(
-    us_data: np.ndarray, mask_transducer: int = 60
+    us_data: np.ndarray, mask_transducer: int
 ) -> np.ndarray:
     """Motion *between* frames: how much each frame's ultrasound differs from the
     previous and the next frame, e.g. from breathing or probe movement.

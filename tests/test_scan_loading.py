@@ -137,7 +137,8 @@ def test_motion_frame_selection(hdf5_scan, ithera_scan):
         return int(
             np.argmin(
                 spectral_motion_scores(
-                    display_data_from_patato_obj(scan.get_ultrasound())
+                    display_data_from_patato_obj(scan.get_ultrasound()),
+                    60,  # TRANSDUCER_MASK_MM at these scans' 0.19 mm/px
                 )
             )
         )

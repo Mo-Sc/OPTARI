@@ -181,6 +181,12 @@ class UKErUSSegAdapter(ModelAdapterBase):
             FileNotFoundError: The model weights have not been downloaded yet.
         """
         super().__init__(model_config)
+        # Optional in the registry, but postprocess() needs it for this adapter
+        if model_config.postprocessing_config is None:
+            raise ValueError(
+                f"Model '{model_config.model_id}' needs a postprocessing_config "
+                "in segmentation_models.json"
+            )
 
         self.input_shape = (
             model_config.input_height,

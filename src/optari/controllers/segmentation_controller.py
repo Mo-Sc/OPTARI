@@ -166,6 +166,10 @@ class SegmentationController(TaskControllerBase):
         """Load the model registry and initialize segmentation state."""
         super().__init__(parent_controller)
         self._segmentation_model_registry = load_model_registry()
+        if not self._segmentation_model_registry:
+            raise ValueError(
+                "segmentation_models.json lists no models, so segmentation cannot run"
+            )
         default_model_id = settings.segmentation.default_model
         if default_model_id not in self._segmentation_model_registry:
             logger.warning(
