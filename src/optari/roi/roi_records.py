@@ -51,16 +51,3 @@ class ROIRecord:
     source: str = OPTARI_SOURCE_TAG
     tissue_class: str = "undefined"
     roi_group_uid: str = field(default_factory=new_roi_group_uid)
-
-    def __post_init__(self) -> None:
-        """Coerce fields to their declared types. An empty *roi_group_uid* mints a fresh one."""
-        self.roi_id = int(self.roi_id)
-        self.track_id = int(self.track_id)
-        self.roi_group_uid = (
-            str(self.roi_group_uid or "") or new_roi_group_uid()
-        )
-        self.frame_id = int(self.frame_id)
-        self.verts = np.asarray(self.verts, dtype=float).copy()
-        self.kind = str(self.kind)
-        self.source = str(self.source or OPTARI_SOURCE_TAG)
-        self.tissue_class = str(self.tissue_class or "undefined")

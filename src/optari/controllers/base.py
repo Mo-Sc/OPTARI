@@ -200,35 +200,27 @@ class TaskControllerBase:
         metadata: dict,
         patato_obj,
         colormap: str,
-        translate: tuple[float, ...] | None = None,
+        translate_yx: tuple[float, float],
     ) -> None:
         """Create or update a PATATO-derived napari image layer.
 
-        `translate` places the layer absolutely in the viewer (mm, data axis order).
-        When omitted, the layer inherits the active recon layer's position so that
-        derived outputs stay aligned with the recon they were computed from.
+        `translate_yx` is the layer's napari translate on the image axes (mm):
+        where pixel 0's centre sits in the viewer.
         """
 
         scale = scale_from_patato_obj(
             patato_obj,
             settings.general.PA_FALLBACK_SCALE,
         )
-        if translate is None:
-            source_layer = self.optari_controller.active_recon_layer
-            translate = (
-                tuple(source_layer.translate)
-                if source_layer is not None
-                else None
-            )
+        translate = (0.0,) * (data.ndim - 2) + tuple(translate_yx)
         # so an exported scan reopens with the same layers in the same place
         patato_obj.attributes[LAYER_NAME_ATTR] = name
         patato_obj.attributes[SETTINGS_ATTR] = json.dumps(
             metadata["settings"], default=json_default
         )
-        if translate is not None:
-            patato_obj.attributes[TRANSLATE_ATTR] = [
-                float(t) for t in translate[-2:]
-            ]
+        patato_obj.attributes[TRANSLATE_ATTR] = [
+            float(t) for t in translate_yx
+        ]
         if name in self.viewer.layers and isinstance(
             self.viewer.layers[name], Image
         ):
@@ -236,8 +228,7 @@ class TaskControllerBase:
             layer = self.viewer.layers[name]
             layer.data = data
             layer.scale = scale
-            if translate is not None:
-                layer.translate = translate
+            layer.translate = translate
             layer.metadata = metadata
             layer.colormap = colormap
             layer.units = self.image_units
@@ -246,6 +237,7 @@ class TaskControllerBase:
             image_kwargs = {
                 "name": name,
                 "scale": scale,
+                "translate": translate,
                 "colormap": colormap,
                 "metadata": metadata,
                 "opacity": 1.0,
@@ -253,8 +245,6 @@ class TaskControllerBase:
                 "auto_contrast": True,
                 "units": self.image_units,
             }
-            if translate is not None:
-                image_kwargs["translate"] = translate
             layer = self.viewer.add_image(data, **image_kwargs)
 
         layer.colorbar.visible = True

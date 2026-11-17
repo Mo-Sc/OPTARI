@@ -11,7 +11,7 @@ from optari.controllers.reconstruction_controller import (
     ReconParams,
     _reconstruct_frames,
 )
-from optari.controllers.roi_controller import RoiController
+from optari.roi.roi_placement import anchor_verts_to_mask
 from optari.controllers.unmixing_controller import (
     UnmixParams,
     _unmix_frames,
@@ -246,7 +246,9 @@ def test_auto_roi_anchors_to_segmented_muscle(segmentation, roi_presets):
     )
 
     verts = preset.geometry.verts_mm(0.04, 0.04)
-    anchored = RoiController._anchor_verts_to_mask(verts, muscle, seg_layer)
+    anchored = anchor_verts_to_mask(
+        verts, muscle, seg_layer.scale[-2:], seg_layer.translate[-2:]
+    )
     top_row, centre_col = class_top_at_center_column(muscle)
 
     np.testing.assert_allclose(
@@ -259,6 +261,9 @@ def test_auto_roi_anchors_to_segmented_muscle(segmentation, roi_presets):
     assert muscle[int(anchored[:, 0].min() / (40 / 210)), centre_col]
 
     with pytest.raises(ValueError, match="not present"):
-        RoiController._anchor_verts_to_mask(
-            verts, np.zeros_like(muscle), seg_layer
+        anchor_verts_to_mask(
+            verts,
+            np.zeros_like(muscle),
+            seg_layer.scale[-2:],
+            seg_layer.translate[-2:],
         )

@@ -78,7 +78,7 @@ class AnalysisController(TaskControllerBase):
         ]
 
     def on_time_analysis_scope_changed(self, checked: bool) -> None:
-        """When the user switches between "Selected ROI" and "Track ID" scopes,
+        """When the user switches between the "Selected ROI" and "Track ID" scopes,
         refresh the track-id combo, show only tracks that exist in the current
         ROI records.
         """
@@ -236,7 +236,8 @@ class AnalysisController(TaskControllerBase):
         self, channel_idx: int, feature_id: str
     ):
         """(x, series) for whichever Time Analysis scope is selected. "Selected
-        ROI" measures each shape's own record on every frame. "Track ID" follows
+        ROI" measures every ROI shown on this frame, with its current outline, on
+        every frame. "Track ID" follows
         one tracked ROI, measuring each frame on that frame's own record."""
         roi_ctrl = self.optari_controller.roi_ctrl
         annotation = self.optari_controller.annotation

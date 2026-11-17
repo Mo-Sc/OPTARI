@@ -60,6 +60,8 @@ Add **`roi_ts`** when you want a single measurement rather than a region's whole
 
 ROI feature describes a property of the ROI or a statistical measure by which the intensities in the ROI are summarized. A list of included features can be found in the [Configuration Schema](../configuration/configuration-schema.md). Which features appear in the Live Analysis table can be [configured](../configuration/configuration-schema.md#annotation).
 
+A pixel counts as part of an ROI when its **centre** lies inside the outline, so `size_mm` of an area ROI is the number of such pixels times the pixel area. The same outline therefore covers a slightly different pixel set on layers with different resolutions (e.g. a reconstruction and a resolution-reduced unmixing).
+
 !!! note
     This selection only affects what's **displayed in the table**. It's an option to visually declutter the table. Saving or exporting a measurement always computes and stores the **full feature set**, regardless of which columns are currently visible.
 
@@ -95,7 +97,7 @@ The **Placement** list offers `Static` and, for a preset saved with a location, 
 
 `Static` places the ROI at the exact coordinates defined in the preset.
 
-Choosing the location places the ROI in that tissue instead, ignoring the saved coordinates. It is centred horizontally, and its top sits below the tissue's top edge (measured at the image centre, minus the preset's **top margin** ). The margin is set in the Save Preset popup. An ROI generated in the [Segmentation](segmentation.md#automatic-roi-placement) dock keeps its margin. Set it to 0 to place the ROI right at the tissue's top edge. 
+Choosing the location places the ROI in that tissue instead, ignoring the saved coordinates. It is centred horizontally, and its top sits the preset's **top margin** below the tissue's top edge, measured at the image centre. The margin is set in the Save Preset popup. An ROI generated in the [Segmentation](segmentation.md#automatic-roi-placement) dock keeps its margin. Set it to 0 to place the ROI right at the tissue's top edge. 
 
 Placement by location requires the scan to have a [**Segmentation**](segmentation.md) layer that contains the location's class. If no Segmentation layer or no corresponding class is found, placement fails with an error. Switch to `Static` to place it at its saved coordinates instead.
 

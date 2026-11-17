@@ -51,7 +51,7 @@ def class_top_at_center_column(mask: np.ndarray) -> tuple[int, int]:
     image's horizontal centre.
 
     used below by the box-shaped ROI generators, and by ROI preset auto-placement
-    (``RoiController._place_roi_preset_auto``) to align a saved preset the same way.
+    (``roi_placement.anchor_verts_to_mask``) to align a saved preset the same way.
     """
     return _top_at_center_column(largest_component(mask))
 

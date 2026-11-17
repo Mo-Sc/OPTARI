@@ -63,6 +63,21 @@ def scale_from_patato_obj(obj, fallback: tuple) -> tuple:
     return (fallback[0], fov_y_m / ny * 1000, fov_x_m / nx * 1000)
 
 
+def layer_translate(
+    scale: tuple, ndim: int, edge_mm=(0.0, 0.0)
+) -> tuple[float, ...]:
+    """napari translate for an image whose top-left outer pixel edge sits at *edge_mm*.
+
+    Every image OPTARI shows has its field of view spanning the outer pixel edges:
+    iThera's vendor recons and ultrasound, DeepMB, and PATATO's own reconstructions
+    since the fork's 2026-11-17 grid change. napari puts pixel centres at
+    ``translate + index * scale``, so the first centre sits half a pixel inside the edge.
+    """
+    return (0.0,) * (ndim - 2) + tuple(
+        float(e + s / 2) for e, s in zip(edge_mm, scale[-2:])
+    )
+
+
 # ---------------------------------------------------------------------------
 # Acquisition time
 # ---------------------------------------------------------------------------
@@ -216,8 +231,9 @@ def layer_colormap(group: str) -> str:
 
 
 # What napari knows about a derived image but the PATATO data does not, stored with
-# the image so an exported scan reopens as it was: the layer's placement (y, x in mm,
-# e.g. DeepMB's offset), its session name, which derived layers link to, and the
+# the image so an exported scan reopens as it was: the layer's napari translate (y, x in
+# mm, pixel 0's centre, including e.g. DeepMB's offset), its session name, which
+# derived layers link to, and the
 # settings it was made with (JSON), shown in the metadata viewer.
 TRANSLATE_ATTR = "optari_translate_mm"
 LAYER_NAME_ATTR = "optari_layer_name"
@@ -323,13 +339,15 @@ def build_napari_layers(
         us_img = display_data_from_patato_obj(us_obj)
         n_acq_frames = us_img.shape[0]
         patato_objects["US"] = us_obj
+        us_scale = scale_from_patato_obj(us_obj, _us_fallback)
 
         add_layer(
             us_img,
             {
                 "colormap": layer_colormap(HDF5Tags.ULTRASOUND),
                 "name": "US",
-                "scale": scale_from_patato_obj(us_obj, _us_fallback),
+                "scale": us_scale,
+                "translate": layer_translate(us_scale, us_img.ndim),
                 "opacity": 1.0,
                 "metadata": {
                     "type": "us",
@@ -342,10 +360,14 @@ def build_napari_layers(
     else:
         n_acq_frames = pa_data.shape[0]
 
-    def _translate(image_sequence, ndim: int) -> tuple[float, ...]:
-        return (0.0,) * (ndim - 2) + tuple(
-            image_sequence.da.attrs.get(TRANSLATE_ATTR, (0.0, 0.0))
-        )
+    def _placement(image_sequence, ndim: int) -> dict:
+        scale = scale_from_patato_obj(image_sequence, _pa_fallback)
+        attrs = image_sequence.da.attrs
+        if TRANSLATE_ATTR in attrs:  # made by OPTARI, placed as it was
+            translate = (0.0,) * (ndim - 2) + tuple(attrs[TRANSLATE_ATTR])
+        else:  # vendor recon: its FOV starts at the scan's top-left
+            translate = layer_translate(scale, ndim)
+        return {"scale": scale, "translate": translate}
 
     def _settings(image_sequence) -> dict:
         # what OPTARI made the layer with, else the file's own attributes (vendor recons)
@@ -368,7 +390,8 @@ def build_napari_layers(
     us_fov = _fov_m(us_obj) if "US" in patato_objects else None
     for (recon_name, idx), recon in pa_data.get_scan_reconstructions().items():
         recon_fov = _fov_m(recon)
-        # A vendor reconstruction is drawn at translate 0 over the ultrasound, and its
+        # A vendor reconstruction is drawn with its FOV edge at world 0, like the
+        # ultrasound, and its
         # ROIs are stored in the ultrasound's frame. Both hold only when the two cover
         # the same field of view, true for every supported device. OPTARI's own
         # reconstructions (DeepMB: 40 x 33 mm) carry their placement and are exempt.
@@ -406,8 +429,7 @@ def build_napari_layers(
             {
                 "colormap": layer_colormap(HDF5Tags.RECONSTRUCTION),
                 "name": layer_name,
-                "scale": scale_from_patato_obj(recon, _pa_fallback),
-                "translate": _translate(recon, recon_img.ndim),
+                **_placement(recon, recon_img.ndim),
                 "opacity": 1.0,
                 "blending": "multiplicative",
                 "auto_contrast": True,
@@ -462,8 +484,7 @@ def build_napari_layers(
                     "name": image.da.attrs.get(
                         LAYER_NAME_ATTR, f"{prefix}: {dataset_name}_{idx}"
                     ),
-                    "scale": scale_from_patato_obj(image, _pa_fallback),
-                    "translate": _translate(image, data.ndim),
+                    **_placement(image, data.ndim),
                     "opacity": 1.0,
                     "blending": "multiplicative",
                     "auto_contrast": True,

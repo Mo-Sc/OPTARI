@@ -106,8 +106,8 @@ class UnmixParams:
     wavelengths: list[int]
     chromophores: list[str]
     output_frames: list[int]
-    # where the output layers sit in the viewer, see UnmixParams.build
-    translate: tuple[float, ...]
+    # napari translate of the output layers on the image axes (mm), see UnmixParams.build
+    translate_yx: tuple[float, float]
     reduce_factor: int = 1
     suffix: str = ""
     generate_thb: bool = False
@@ -196,10 +196,11 @@ class UnmixParams:
             # A coarse pixel averages a reduce_factor-wide block of the source's pixels
             # and belongs at the block's centre, (reduce_factor - 1) / 2 source pixels
             # past its first pixel.
-            translate=tuple(active_layer.translate[:-2])
-            + tuple(
-                np.asarray(active_layer.translate[-2:])
-                + (reduce_factor - 1) / 2 * np.asarray(active_layer.scale[-2:])
+            translate_yx=tuple(
+                float(t + (reduce_factor - 1) / 2 * s)
+                for t, s in zip(
+                    active_layer.translate[-2:], active_layer.scale[-2:]
+                )
             ),
             wavelengths=wavelengths,
             chromophores=chromophores,
@@ -629,7 +630,7 @@ class UnmixingController(TaskControllerBase):
             metadata=metadata,
             patato_obj=image,
             colormap=colormap,
-            translate=params.translate,
+            translate_yx=params.translate_yx,
         )
         self.optari_controller.derived_patato_objects[name] = image
         return name

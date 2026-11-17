@@ -12,16 +12,16 @@ So we have 3 coordinate systems in OPTARI:
 ``world mm``
     What ``ROIRecord.verts`` always holds. The Shapes layer is never translated, so
     world millimetres are the shared physical frame every layer is registered into.
-    Scan-loaded layers sit at translate 0, which makes world mm *identical* to the
-    scan frame.
+    Scan-loaded layers have their outer pixel edge at world 0, which makes world mm
+    *identical* to the scan frame.
 ``PATATO metres``
     What this module stores. Scan-anchored, like PATATO. origin at the image centre,
     derived from world mm and the scan's field of view.
 ``layer pixels``
-    Indices into a layer's array. A runtime-derived layer may sit at a nonzero
-    ``translate`` (like deepmb) to register it against the others,
-    so converting world mm to *that* layer's pixels means subtracting its
-    translate first.
+    Indices into a layer's array, pixel centres at integers. Every layer's translate
+    holds half a pixel (its field of view spans the outer pixel edges, see
+    ``patato_bridge.layer_translate``), plus any placement offset (like DeepMB's),
+    so converting world mm to a layer's pixels means subtracting its translate first.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from optari import OPTARI_SOURCE_TAG
-from optari.roi.roi_records import ROIRecord
+from optari.roi.roi_records import ROIRecord, new_roi_group_uid
 
 
 def patato_to_napari(
@@ -125,7 +125,7 @@ class RoiGeometry:
             roi_id=roi_id,
             track_id=track_id,
             frame_id=frame_id,
-            roi_group_uid=roi_group_uid,
+            roi_group_uid=roi_group_uid or new_roi_group_uid(),
             verts=self.verts_mm(fov_x_m, fov_y_m),
             kind=self.kind,
             source=self.source,

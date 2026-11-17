@@ -23,8 +23,11 @@ from optari.patato_bridge import (
     layer_colormap,
     expand_to_acquisition_frames,
     fov_from_objects,
+    layer_translate,
     pa_layer_metadata,
+    scale_from_patato_obj,
 )
+from optari.config import settings
 from optari.utils.presets import PresetStore
 from optari.utils.setup import (
     get_user_reconstruction_presets_dir,
@@ -419,9 +422,9 @@ class ReconstructionController(TaskControllerBase):
         reconstruction, new_settings = result
 
         wavelengths = [int(w) for w in reconstruction.ax_1_labels]
-        settings = dict(params.settings)
-        settings.update(new_settings)
-        settings.update(
+        run_settings = dict(params.settings)
+        run_settings.update(new_settings)
+        run_settings.update(
             {
                 ReconAttributeTags.RECONSTRUCTION_ALGORITHM: params.algorithm_name,
                 ReconAttributeTags.SPEED_OF_SOUND: params.speed_of_sound,
@@ -440,7 +443,7 @@ class ReconstructionController(TaskControllerBase):
             frames=params.output_frames,
             scan_timestamps=params.timestamps,
             acquisition_start=params.acquisition_start,
-            settings=settings,
+            settings=run_settings,
             filepath=str(params.scan_path),
             scan_name=params.scan_name,
         )
@@ -453,21 +456,22 @@ class ReconstructionController(TaskControllerBase):
             params.source_frame_count,
         )
 
-        # absolute placement: a recon comes from the raw time series, so it must not
-        # inherit (and re-apply) the offset of whichever layer is currently active
-        translate = (0.0,) * (data.ndim - 2) + (
-            params.offset_z_mm,
-            params.offset_x_mm,
-        )
-
         layer_name = params.layer_name
+        # absolute placement: a recon comes from the raw time series, so it must not
+        # inherit (and re-apply) the offset of whichever layer is currently active.
+        # The preset offset is where the FOV's outer edge sits.
+        scale = scale_from_patato_obj(
+            reconstruction, settings.general.PA_FALLBACK_SCALE
+        )
         self._add_or_update_image_layer(
             layer_name,
             data,
             layer_metadata,
             reconstruction,
             colormap=layer_colormap(HDF5Tags.RECONSTRUCTION),
-            translate=translate,
+            translate_yx=layer_translate(
+                scale, 2, (params.offset_z_mm, params.offset_x_mm)
+            ),
         )
         controller = self.optari_controller
         controller.patato_objects[layer_name] = reconstruction

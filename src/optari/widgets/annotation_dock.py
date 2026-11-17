@@ -198,11 +198,11 @@ def create_annotation_dock() -> AnnotationDock:
     save_scope_track_radio = QRadioButton("Track ID")
     save_scope_selected_radio.setChecked(True)
     save_scope_selected_radio.setToolTip(
-        "Measure every frame in the sequence using exactly the ROI you selected."
+        "Measure every frame with the selected ROI's outline as it is on this frame."
     )
     save_scope_track_radio.setToolTip(
-        "Measure each frame using that frame's own ROI, if this ROI belongs to"
-        " a tracked group. A frame the track has no record on is skipped."
+        "Measure each frame with the selected ROI's own copy on that frame, e.g. a"
+        " preset placed on all frames. A frame without one is skipped."
     )
     save_scope_group = QButtonGroup(save_roi_box)
     save_scope_group.setExclusive(True)
@@ -233,13 +233,13 @@ def create_annotation_dock() -> AnnotationDock:
     )
     time_analysis_layout.addRow("Feature", time_analysis_feature_combo)
 
-    # Scope: "Selected ROI" measures each visible shape's own record on every frame
+    # Scope: "Selected ROI" measures each ROI shown on this frame, with its current outline, on every frame
     # "Track ID" follows one tracked ROI's own record per frame instead, leaving a gap where it has no record on a frame.
     time_analysis_selected_radio = QRadioButton("Selected ROI")
     time_analysis_track_radio = QRadioButton("Track ID")
     time_analysis_selected_radio.setChecked(True)
     time_analysis_selected_radio.setToolTip(
-        "Every ROI currently shown on the viewed frame is reused for every frame in the sequence."
+        "Every ROI shown on this frame, each with its current outline on every frame."
     )
     time_analysis_track_radio.setToolTip(
         "Follow one tracked ROI across frames, measuring each frame on"

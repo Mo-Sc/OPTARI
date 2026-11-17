@@ -5,7 +5,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from optari.controllers.roi_controller import RoiController, _layer_holds
+from optari.controllers.roi_controller import RoiController
+from optari.roi.roi_store import layer_holds
 from optari.roi.roi_records import ROIRecord
 from optari.roi.roi_shapes import ROIPlacementConfig, roi_verts_from_mask
 from optari.roi.roi_utils import (
@@ -74,7 +75,7 @@ def test_rectangle_stats_are_exact(image_layer):
     # napari keeps shape vertices as float32, where 3.9 mm is not exact: that
     # rounding must not count as an edit (which would turn a vendor ROI into OPTARI's)
     record = rectangle_over_block()
-    assert _layer_holds(record, record.verts.astype(np.float32), "rectangle")
+    assert layer_holds(record, record.verts.astype(np.float32), "rectangle")
 
 
 def test_ellipse_area_is_close_to_analytic(image_layer):

@@ -96,14 +96,17 @@ class ROIRecord:
 ```
 
 Records are **frame-owned**: there is one per (shape, frame), not one shape with a list of
-frames. `RoiController` holds them in `self._roi_records: dict[int, ROIRecord]`, keyed by
-`roi_id`, and this dict is the single source of truth. The napari Shapes layer is a
-projection of it:
+frames. They live in a `RoiStore` (`roi_store.py`), held by `RoiController` as `self.store`:
+`store.records: dict[int, ROIRecord]`, keyed by `roi_id`, is the single source of truth.
+`RoiStore` is free of Qt and napari, so the record bookkeeping can be tested on plain arrays.
+The napari Shapes layer is a projection of it:
 
 - `project_current_frame()` writes the current frame's records into `shapes.data`, and
-  records the display order in `self._projection_ids` (display index → `roi_id`).
-- `sync_records_from_shapes()` reads user edits back. Ids are matched positionally, since
-  napari appends new shapes at the end and in-place edits keep their position.
+  `store.projection_ids` holds the display order (shape index → `roi_id`).
+- `sync_records_from_shapes()` hands the layer's data to `store.sync()`, which reads user
+  edits back. Ids are matched positionally, since napari appends new shapes at the end and
+  in-place edits keep their position. After a removal, the remaining shapes are matched to
+  the old records by geometry (`layer_holds`).
 
 `source` is the provenance tag, `OPTARI_v<version>` for anything OPTARI drew, or the
 originating `roi_class` for ROIs loaded from a scan. Editing a loaded ROI sets it to
@@ -116,20 +119,21 @@ other stored ROI untouched.
 
 Everything OPTARI writes to disk uses `RoiGeometry` (`roi_geometry.py`): vertices in
 **PATATO coordinates**, metres, origin at the image centre. Every conversion uses the
-**scan** FOV (`ScanController.get_fov()`, the ultrasound's), never the extent of the layer
+**scan** FOV (`OptariController.scan_fov`, the ultrasound's, resolved once when the scan is
+loaded, or from the first reconstruction of a raw IPASC scan), never the extent of the layer
 an ROI was measured on, so one ROI has one `roi_geometry` on every layer, DeepMB and
 reduced-resolution unmixing included, and it equals the ROI in an HDF5 export.
 
 ### Why not napari mm?
 
-napari coordinates are millimetres relative to the field of view corner. The same
+napari coordinates are millimetres relative to the field of view's top-left edge. The same
 physical point therefore has different napari coordinates on two reconstructions with
 different fields of view.
 
 
 | | Origin | Axes | Units |
 |---|---|---|---|
-| napari | top-left of the FOV | y down, x right | mm |
+| napari | top-left edge of the FOV | y down, x right | mm |
 | PATATO | image centre | y up, x right | m |
 
 `patato_to_napari()` and `napari_to_patato()` are the only two places for that and
@@ -141,10 +145,20 @@ every conversion in the codebase goes through them.
 |---|---|---|
 | **world mm** | `ROIRecord.verts`, always | the viewer's shared physical space |
 | **PATATO metres** | `RoiGeometry.verts_m`, everything persisted | the scan's FOV centre |
-| **layer pixels** | mask indices | one layer's own array |
+| **layer pixels** | mask indices, pixel centres at integers | one layer's own array |
 
-A layer can be placed at a nonzero `translate`, its own offset within world space. The Shapes layer carrying ROIs is never translated, so ROI vertices are always world mm, and
-scan-loaded layers sit at translate 0.
+The Shapes layer carrying ROIs is never translated, so ROI vertices are always world mm.
+Image layers follow napari's convention: pixel `i`'s centre sits at
+`translate + i * scale`, and the pixel covers half a pixel either side. Every source's field
+of view spans its outer pixel edges, so a scan-loaded layer's translate is half a pixel
+(`patato_bridge.layer_translate`) and its FOV edge sits at world 0. A layer placed elsewhere
+(DeepMB's offset) adds that to its translate. World mm → layer pixels is therefore
+`(verts - translate) / scale`, done only in `iter_roi_masks`, and a pixel belongs to an ROI
+when its centre lies inside the outline.
+
+!!! warning "Speed of sound moves PA images in depth"
+    PA depth is measured from detectors that sit above the field of view, so the speed of
+    sound shifts a reconstruction against the ultrasound.
 
 `roi_centroid` is left in **world** mm on purpose. It is an informative column only, never
 round-tripped back into a shape.
@@ -196,7 +210,11 @@ FEATURE_REGISTRY: dict[str, FeatureSpec] = {
 }
 ```
 
-`compute_roi_stats()` builds one context per ROI and evaluates only the requested specs.
+`roi_stat_rows()` builds one context per ROI on one layer, frame and channel, evaluates only
+the requested specs and yields a plain dict per ROI. `compute_roi_stats()` wraps it in a
+DataFrame for the live table. `measure_rois()` is the Qt-free loop behind Save ROI Data: it
+collects rows over every layer, frame and channel the save scope reaches and builds one
+DataFrame at the end, which keeps a save over all frames and channels fast.
 Three column sets are derived from the registry, in `roi_utils.py`:
 
 - `visible_feature_columns()` — what the user enabled in settings; also the live table's columns.
@@ -234,7 +252,8 @@ always fully identifiable: the three identifiers, `study_folder`, `scan_folder`,
 ### Saving across frames
 
 With **include all frames** checked, a second, explicit choice — the same Scope
-naming as Time Analysis — decides which record `on_save_clicked` measures each target frame on:
+naming as Time Analysis — decides which record `measure_rois` measures each target frame on
+(`MeasureScope.follow_track`):
 
 - **Selected ROI** (default) — the record the user selected, unchanged on every frame.
   The one predictable choice regardless of tracking history, and what an ROI drawn once on a
@@ -245,16 +264,13 @@ naming as Time Analysis — decides which record `on_save_clicked` measures each
   real measurement or a fabricated stand-in must not depend on invisible tracking history the
   checkbox alone can't convey.
 
-`_track_histories_for_selection` builds the track→frame lookup once per save — each selected
-track's fallback record and its whole `{frame_id: record}` history — via
-`roi_utils.records_by_track_and_frame`, the same lookup `compute_roi_track_time_series` uses
-for its Track ID scope. It used to be rebuilt on every `(layer, frame)` pair inside the save
-loop, which cost 5.6 ms on a session with 30 tracked ROIs over 100 frames purely from
-rescanning every live record per frame; hoisting it out and sharing the lookup with the
-time-series function brought that under 0.1 ms. `_records_at_frame(tracks, frame_idx,
-follow_track=...)` then does the cheap per-frame dispatch: fallback-always when
-`follow_track` is False, `tracks[track][frame_idx]`-or-omit when True — the same "skip, don't
-fabricate" choice Time Analysis's Track ID scope makes for a gap in the plot.
+`measure_rois` builds the track→frame lookup once per save, with each selected track's
+selected record and its whole `{frame_id: record}` history, via
+`records_by_track_and_frame`, the same lookup `compute_roi_track_time_series` uses for its
+Track ID scope. Rebuilding it per `(layer, frame)` pair would rescan every live record per
+frame. Per frame it then picks the selected record when `follow_track` is False, and
+`history[frame]` or nothing when True: the same "skip, don't fabricate" choice Time
+Analysis's Track ID scope makes for a gap in the plot.
 
 
 ### Schema version
@@ -262,8 +278,8 @@ fabricate" choice Time Analysis's Track ID scope makes for a gap in the plot.
 `ROI_TABLE_SCHEMA_VERSION` lives in `export_pipeline.py` beside `OPTARI_FILE_FORMAT_VERSION`. `CONFIG_SCHEMA_VERSION` versions the user's config file and a
 mismatch archives `~/.optari`.
 
-`import_roi_table_from_xlsx()` rejects a file with no `optari_meta`
-sheet, a version mismatch, a missing fixed column, or a row with a blank `roi_group_uid`.
+`import_roi_table()` reads an exported XLSX or the CSV backup. It rejects a file without
+OPTARI's metadata (the `optari_meta` sheet, or the CSV's first-line header), a version mismatch, a missing fixed column, or a row with a blank `roi_group_uid`.
 Everything else is reconciled **by name**: unknown columns are dropped and absent ones filled
 with NaN.
 
@@ -291,24 +307,31 @@ the field of view, the shape does not**, so a preset drawn at the centre of a 40
 lands at the centre of a 25 mm one but keeps its original physical size.
 
 
-Two placement modes, in `RoiController`:
+`RoiController.place_preset` is the one entry point, for the dock and for batch runs. The
+geometry lives in `roi_placement.py`, plain functions in world mm that raise `ValueError` with
+a message safe to show the user:
 
-- `_place_roi_preset_static` applies the policy above.
-- `_place_roi_preset_auto` aligns the preset to a segmentation class named by the preset's
+- `static_preset_verts` applies the policy above.
+- `auto_preset_verts` aligns the preset to a segmentation class named by the preset's
   `tissue_class`, horizontally centred and `top_margin_mm` below the class's top edge. The anchor
-  math itself is `_anchor_verts_to_mask`. Saving a preset measures that margin with the same
-  `_class_anchor_mm`, so save and placement agree on where the anchor is. The box shapes of
+  math itself is `anchor_verts_to_mask`. Saving a preset measures that margin with the same
+  `class_anchor_mm`, so save and placement agree on where the anchor is. The box shapes of
   `roi_verts_from_mask` use the same anchor in exact mm, so a generated box saved as a preset is
   placed back exactly where it was generated. `add_shape` labels ROIs generated from the mask or
   placed by location with that `tissue_class`.
 
-With Scope `All Frames`, placing a preset goes through `expand_current_projection_to_all_frames`,
-which duplicates the selected frame's ROI onto the rest of the sequence as one
-group. For `static` mode it duplicates the anchor frame's vertices unchanged, exactly as copy/paste would. 
-For `auto` mode, `_place_roi_preset_auto`
-returns the segmentation layer and class id it resolved, and `_per_frame_auto_resolver` uses
-them to re-anchor independently on **each frame's own mask**. A frame the class isn't present
-on (including one the segmentation layer doesn't cover) returns `None` and is **skipped**.
+With Scope `All Frames`, placing a preset goes through `expand_current_projection_to_all_frames`
+(`RoiStore.expand_last_to_all_frames`), which duplicates the placed ROI onto the rest of the
+sequence as one group and leaves the placed ROI selected. For `static` mode it duplicates the
+anchor frame's vertices unchanged, exactly as copy/paste would. For `auto` mode,
+`per_frame_auto_resolver` re-anchors independently on **each frame's own mask**. A frame the
+class isn't present on (including one the segmentation layer doesn't cover) returns `None` and
+is **skipped**.
+
+!!! note "The anchor is the centre of the class's top pixel"
+    `class_anchor_mm` returns `translate + top_row * scale`, the centre of the class's top
+    pixel, not its top edge, so a margin of 0 puts the ROI half a segmentation pixel (about
+    0.1 mm on the ultrasound) inside the class.
 
 !!! note "`roi_shapes.py` has different use:"
     `roi_verts_from_mask()` in `roi_shapes.py` is used by the segmentation dock: given a class
@@ -338,14 +361,14 @@ keeps the `set_data` fallback below from doubling the work on an add.
 **A geometry edit cannot change a label.** `_refresh_shape_display()` writes edge colours, the
 five property arrays and the text spec, which are all derived from ids, sources and tissue classes, none
 of which are affected by drags (`source` and `tissue_class` are never mutated after construction). It is
-called only when `_projection_ids` actually changed.
+called only when `store.projection_ids` actually changed.
 
 !!! note "`set_data` is the copy/paste fallback"
     Copy/pasting a ROI (`Shapes._paste_data()`) appends to the layer and emits **only** `set_data`, never
     `events.data`, so a pasted ROI would otherwise stay invisible to the records until the
     user moved it. `on_shapes_set_data` therefore watches that signal too, but `set_data`
     also fires on every redraw, so it does a shape-count comparison first and escalates only
-    when the count disagrees with `_projection_ids`.
+    when the count disagrees with `store.projection_ids`.
 
 ## Mask caching
 
@@ -363,7 +386,7 @@ on scan switch to release the memory.
 
 Things to keep in mind:
 
-1. `self._roi_records` is the source of truth. Never write `shapes.data` directly. go through
+1. `RoiStore.records` is the source of truth. Never write `shapes.data` directly, go through
    `project_current_frame()`.
 2. Anything persisted uses PATATO metres. napari millimetres exist only inside the viewer.
 3. Every record in a group shares one `roi_group_uid`. Code that copies a record must pass it.
