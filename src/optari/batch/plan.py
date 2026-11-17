@@ -313,9 +313,15 @@ def validate_plan(plan: BatchPlan) -> list[str]:
         problems.append(
             "No scans found. Pick a folder holding Study_*/Scan_* data."
         )
-    if not plan.step_names and not (plan.outputs.hdf5 or plan.outputs.ipasc):
+    outputs = plan.outputs
+    if not plan.step_names and not (
+        outputs.hdf5
+        or outputs.hdf5_in_place
+        or outputs.ipasc
+        or outputs.overlay_png
+    ):
         problems.append(
-            "The plan has no analysis steps and no file export, so it would do nothing."
+            "The plan has no analysis steps and no output, so it would do nothing."
         )
     keys = Counter(job.key for job in plan.jobs)
     clashes = sorted(key for key, count in keys.items() if count > 1)
@@ -454,7 +460,7 @@ def describe_plan(plan: BatchPlan) -> str:
     """The resolved settings, as shown in the batch window before the run."""
     lines = [
         f"Scans:      {len(plan.jobs)} in {len({job.study_path for job in plan.jobs})} study folder(s)",
-        f"Steps:      {' -> '.join(plan.step_names) or 'none (conversion only)'}",
+        f"Steps:      {' -> '.join(plan.step_names) or 'none'}",
         f"Frame:      {plan.frame}",
     ]
     if plan.reconstruction is not None:

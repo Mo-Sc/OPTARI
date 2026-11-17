@@ -21,7 +21,7 @@ Batch mode runs presets, it does not create them. Set up and save the presets yo
 
 ## The batch preset
 
-A batch preset is a small JSON file in `~/.optari/config/presets/batch` that **names** the presets above rather than copying them. A step is a preset name and nothing else, so every setting has exactly one home and one thing to cite. Three are shipped: `clinical_muscle_roi`, `existing_recon_roi` and `convert_to_hdf5`.
+A batch preset is a small JSON file in `~/.optari/config/presets/batch` that **names** the presets above rather than copying them. A step is a preset name and nothing else, so every setting has exactly one home and one thing to cite. 5 are included: `clinical_muscle_roi`, `existing_recon_roi`, `from_scan_roi_intensities`, `convert_to_hdf5` and `export_png`.
 
 ```json
 {
@@ -96,6 +96,9 @@ To retry only the failures, sort `batch_report.xlsx` by `status`, then run the s
 
 !!! tip "Converting vendor data in bulk"
     A plan with no steps and `hdf5` or `ipasc` enabled is a pure format converter: it reads each vendor scan and writes it out again, with no analysis at all. That is what the shipped `convert_to_hdf5` preset does; switch on `ipasc` instead (or as well) for the interoperable format.
+
+!!! tip "Quick visual overview of a dataset"
+    The included `export_png` preset shows the default PA layer over the ultrasound on each scan's frame with the least frame-to-frame motion, which is a fast way to look through a whole study before analysing it. Set `source` to pick another stored reconstruction, or `frame` to another selector.
 
 !!! warning "Saving into the scan files"
     With `"hdf5": "in_place"` a run adds its reconstructions, unmixed layers and ROIs to the existing OPTARI HDF5 files instead of writing copies.
