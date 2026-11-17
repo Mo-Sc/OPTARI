@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -27,8 +28,10 @@ from optari.io.export_pipeline import (
     export_scan_to_ipasc,
     ipasc_export_report,
     save_scan_into_source,
+    scan_export,
 )
 from optari.utils.misc import roi_color_for_index
+from optari.utils.tasks import BackgroundStep, start_task
 from optari.utils.motion import frame_motion_scores, spectral_motion_scores
 from optari.utils.setup import load_startup_logo
 from optari.controllers.base import TaskControllerBase
@@ -108,7 +111,7 @@ class ScanController(TaskControllerBase):
     def reset_scan_state(self, restore_startup_logo: bool = True) -> None:
         """Clear current scan state and remove all viewer layers."""
         self.close_current_scan()
-        self.optari_controller.segmentation_ctrl.teardown()
+        self.optari_controller.segmentation_ctrl.clear_scan_state()
         self.optari_controller.active_recon_layer = None
         self.optari_controller.active_us_layer = None
         self.optari_controller.shapes_layer = None
@@ -417,13 +420,21 @@ class ScanController(TaskControllerBase):
         if destination is None:
             return
 
-        path, scan_info = controller.path, controller.scan_info
-        if not (destination.exists() and destination.samefile(path)):
-            if export_scan_to_hdf5(controller, destination):
-                show_info(f"Exported scan to {destination.name}")
-            else:
-                # e.g. an existing file other than the loaded scan, which is never replaced
-                show_warning(f"Not saved to {destination.name}, see the log")
+        export = scan_export(controller)
+        if not (destination.exists() and destination.samefile(export.path)):
+            # An existing file other than the loaded scan is refused by the export.
+            start_task(
+                controller,
+                BackgroundStep(
+                    partial(export_scan_to_hdf5, export, destination),
+                    total=0,
+                    desc=f"Exporting {destination.name}",
+                ),
+                on_result=lambda _: show_info(
+                    f"Exported scan to {destination.name}"
+                ),
+                on_error=show_warning,
+            )
             return
 
         if not can_save_into_scan(controller):
@@ -433,17 +444,29 @@ class ScanController(TaskControllerBase):
             )
             return
 
+        path, scan_info = export.path, controller.scan_info
         step = self.viewer.dims.current_step
-        saved = save_scan_into_source(controller)
-        # The scan handle is closed either way, and the reload shows what the file now holds.
-        if not self.load_scan(path, scan_info):
-            show_warning(f"{path.name} could not be reopened, see the log")
-            return
-        self.viewer.dims.current_step = step
-        if saved:
-            show_info(f"Saved into {path.name}")
-        else:
-            show_warning(f"Saving into {path.name} failed, see the log")
+        # Releases the read handle, which HDF5 would not let a writer share.
+        self.reset_scan_state(restore_startup_logo=False)
+
+        def reopen(notify: Callable[[str], None], message: str) -> None:
+            # Whatever happened to the save, the reload shows what the file now holds.
+            if not self.load_scan(path, scan_info):
+                show_warning(f"{path.name} could not be reopened, see the log")
+                return
+            self.viewer.dims.current_step = step
+            notify(message)
+
+        start_task(
+            controller,
+            BackgroundStep(
+                partial(save_scan_into_source, export),
+                total=0,
+                desc=f"Saving into {path.name}",
+            ),
+            on_result=lambda _: reopen(show_info, f"Saved into {path.name}"),
+            on_error=lambda message: reopen(show_warning, message),
+        )
 
     def on_ipasc_export_clicked(self, event=None) -> None:
         """Prompt for a destination and export the current scan's raw time series as IPASC."""
@@ -453,11 +476,24 @@ class ScanController(TaskControllerBase):
         if destination is None:
             return
 
-        if not export_scan_to_ipasc(self.optari_controller, destination):
-            return
-        show_info(
-            f"Exported raw time series to {destination.name}. "
-            + ipasc_export_report(destination)
+        pa_data = self.optari_controller.pa_data
+
+        def export_and_report():
+            yield from export_scan_to_ipasc(pa_data, destination)
+            # reads the whole file back, so it belongs in the worker too
+            return ipasc_export_report(destination)
+
+        start_task(
+            self.optari_controller,
+            BackgroundStep(
+                export_and_report,
+                total=0,
+                desc=f"Exporting {destination.name}",
+            ),
+            on_result=lambda report: show_info(
+                f"Exported raw time series to {destination.name}. {report}"
+            ),
+            on_error=show_warning,
         )
 
     def _choose_export_path(

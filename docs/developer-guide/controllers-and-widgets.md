@@ -41,9 +41,15 @@ reads a PATATO array or writes an HDF5 attribute directly outside `patato_bridge
     `export_scan_to_hdf5` always creates a new file. When the destination chosen for **Save HDF5** is the loaded
     scan file itself (confirmed through the file dialog's overwrite prompt), `ScanController` calls
     `save_scan_into_source` instead. It opens the loaded OPTARI HDF5 read-write and runs the same `_write_rois` and
-    `_write_derived_data` on it, so only `derived_patato_objects` are added and nothing is deleted. h5py
-    cannot reopen a file read-write that this process holds read-only, and the loaded layers read lazily through
-    that handle, so the scan is closed before writing and `ScanController` reloads it afterwards.
+    `_write_derived_data` on it, so the session's `derived_patato_objects` are added, each replacing a stored
+    dataset of the same layer name, and nothing else is deleted. h5py cannot reopen a file read-write that this
+    process holds read-only, so `ScanController` resets the scan before writing and reloads it afterwards.
+
+!!! note "Exports run in the background"
+    `export_scan_to_hdf5`, `save_scan_into_source` and `export_scan_to_ipasc` are generators run as background
+    steps (`start_task` in the GUI, a yielded `BackgroundStep` in batch mode). They never read the viewer or a
+    controller: `scan_export(controller)` copies what they write (OPTARI ROIs, derived images, segmentation mask,
+    clinical metadata edits) on the main thread first, so ROIs edited during a running export do not leak into it.
 
 !!! note "Export always overwrites"
     `pa_data.save_hdf5()` already copies whatever the *source* file had (ROIs, segmentation, clinical metadata) into the export, but a live optari edit this session (a new/edited ROI shape, a run segmentation, an edited clinical metadata field) is never part of `pa_data`'s reader, so it can't be part of that automatic copy. `_write_rois` and `_write_derived_data` (`io/export_pipeline.py`) run *after* `save_hdf5()` and explicitly delete+rewrite those datasets from the current state. In the common case (nothing changed since load) this rewrites identical data.

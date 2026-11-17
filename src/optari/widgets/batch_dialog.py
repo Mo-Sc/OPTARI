@@ -345,6 +345,7 @@ class BatchDialog(QDialog):
         self._set_problems(validate_plan(plan), warnings=plan_warnings(plan))
 
     def _fill_scans_table(self, plan) -> None:
+        self._row_for_key = {}
         self.scans_table.setRowCount(len(plan.jobs))
         for row, job in enumerate(plan.jobs):
             include = QTableWidgetItem()
@@ -396,8 +397,6 @@ class BatchDialog(QDialog):
         if not jobs:
             self.status_label.setText("No scans selected.")
             return
-        self._plan.jobs = jobs
-        self._fill_scans_table(self._plan)
 
         confirm = QMessageBox.question(
             self,
@@ -407,6 +406,9 @@ class BatchDialog(QDialog):
         )
         if confirm != QMessageBox.Yes:
             return
+        # Only now: answering No must leave the unchecked scans in the plan.
+        self._plan.jobs = jobs
+        self._fill_scans_table(self._plan)
 
         self._set_running(True)
         self.progress_bar.setRange(0, len(jobs))
@@ -434,7 +436,7 @@ class BatchDialog(QDialog):
             )
         if status == "running":
             self.status_label.setText(
-                f"Processing {job.study_path.name} / {job.scan_path.name}"
+                f"Processing {job.study_rel.as_posix()} / {job.scan_path.name}"
             )
             return
         # The report already counts finished scans, the bar just mirrors it.

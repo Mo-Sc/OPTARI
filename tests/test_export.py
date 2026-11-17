@@ -25,6 +25,7 @@ from optari.io.export_pipeline import (
     ROI_TABLE_META_SHEET,
     export_scan_to_hdf5,
     export_scan_to_ipasc,
+    scan_export,
 )
 from optari.patato_bridge import (
     build_napari_layers,
@@ -44,6 +45,7 @@ def controller_with(pa_data, records=(), derived=None, restored=True):
     """The slice of OptariController that the export pipeline reads."""
     return SimpleNamespace(
         pa_data=pa_data,
+        path=None,
         roi_ctrl=SimpleNamespace(
             sync_records_from_shapes=lambda: True,
             roi_records=list(records),
@@ -101,8 +103,10 @@ def test_hdf5_export_round_trip(ithera_scan, tmp_path):
     controller = controller_with(
         ithera_scan, [roi], {"Unmixed: iThera": unmixed}
     )
-    assert export_scan_to_hdf5(controller, destination)
-    assert not export_scan_to_hdf5(controller, destination)  # never overwrites
+    export = scan_export(controller)
+    run_to_end(export_scan_to_hdf5(export, destination))
+    with pytest.raises(FileExistsError):  # never overwrites
+        run_to_end(export_scan_to_hdf5(export, destination))
 
     with h5py.File(destination) as file:
         origin = json.loads(file.attrs[HDF5Tags.FILE_ORIGIN])
@@ -152,7 +156,7 @@ def test_hdf5_export_round_trip(ithera_scan, tmp_path):
 
 def test_ipasc_export_reloads_as_raw_scan(ithera_scan, tmp_path):
     destination = tmp_path / "Scan_2_ipasc.hdf5"
-    assert export_scan_to_ipasc(controller_with(ithera_scan), destination)
+    run_to_end(export_scan_to_ipasc(ithera_scan, destination))
     assert scan_type(destination) == "ipasc"
 
     reopened = pat.PAData.from_hdf5(str(destination), mode="r")

@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 
 
 def _segment_frames(
-    segmenter,
+    load_segmenter: Callable[[], object],
     us_data: np.ndarray,
     selected_ids: set[int],
     n_channels: int,
@@ -56,13 +56,15 @@ def _segment_frames(
 ) -> Generator[None, None, tuple[np.ndarray, dict[int, str], list[int]]]:
     """Segment *us_data* one frame at a time, yielding once per finished frame.
 
-    Runs in a worker thread, so it must not touch Qt or napari. Each frame is a separate
-    ONNX session.run, so yielding per frame costs nothing. Class filtering, the channel
-    repeat and frame padding happen here too, off the main thread.
+    Runs in a worker thread, so it must not touch Qt or napari. The model is loaded
+    here too, since building an ONNX session on a GPU provider takes seconds. Each
+    frame is a separate session.run, so yielding per frame costs nothing. Class
+    filtering, the channel repeat and frame padding happen here too.
 
     Returns the mask, the class names and the positions in *us_data* of blank frames, which
     got an empty mask
     """
+    segmenter = load_segmenter()
     results = []
     for i in range(us_data.shape[0]):
         results.extend(segmenter.predict(us_data[i : i + 1]))
@@ -241,6 +243,11 @@ class SegmentationController(TaskControllerBase):
         """Release cached segmentation model to free memory."""
         self._segmenter = None
         self._segmenter_model_id = None
+        self._seg_layer = None
+
+    def clear_scan_state(self) -> None:
+        """Forget the scan's segmentation layer. The model session stays loaded, so the
+        next scan (or batch job) does not rebuild it."""
         self._seg_layer = None
 
     def refresh_ui(self) -> None:
@@ -682,7 +689,7 @@ class SegmentationController(TaskControllerBase):
         return BackgroundStep(
             func=partial(
                 _segment_frames,
-                self.get_segmenter(params.model_id),
+                partial(self.get_segmenter, params.model_id),
                 params.us_data,
                 params.class_ids,
                 params.n_channels,

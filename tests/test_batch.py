@@ -226,7 +226,7 @@ def test_runner_isolates_failures_and_honours_cancel():
         scan_ctrl=ScanCtrl(),
     )
     runner = make_runner(plan, controller)
-    runner._write_outputs = lambda job, frame_idx, layer: None
+    runner._write_outputs = lambda job, frame_idx, layer: iter(())
     drive(runner._run())
     statuses = runner.report.rows.set_index("scan")["status"].to_dict()
     assert statuses == {
@@ -250,7 +250,7 @@ def test_runner_isolates_failures_and_honours_cancel():
     )
 
     runner = make_runner(plan, controller)
-    runner._write_outputs = lambda job, frame_idx, layer: None
+    runner._write_outputs = lambda job, frame_idx, layer: iter(())
     drive(runner._run(), cancel_after=3, runner=runner)
     assert runner.report.rows["status"].tolist() == [
         "failed",

@@ -105,13 +105,20 @@ class TaskControllerBase:
                 dock.status_label.setText(str(exc))
                 return
             dock.status_label.setText(f"{step.desc}…")
+
+            def finished(result) -> None:
+                # Replaced on success. If publish raises, napari reports the error and
+                # the label must not keep saying the step is still running.
+                dock.status_label.setText("Failed, see the log")
+                dock.status_label.setText(
+                    f"Finished: {self.publish(result, params)}"
+                )
+
             start_task(
                 self.optari_controller,
                 step,
-                on_result=lambda result: dock.status_label.setText(
-                    f"Finished: {self.publish(result, params)}"
-                ),
-                status_label=dock.status_label,
+                on_result=finished,
+                on_error=dock.status_label.setText,
             )
 
         weights = self.weights_to_fetch(params)

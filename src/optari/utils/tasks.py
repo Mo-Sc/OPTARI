@@ -67,6 +67,7 @@ def run_background_task(
     on_result: Callable,
     on_error: Callable[[str], None],
     on_done: Callable[[], None],
+    register: Callable[[GeneratorWorker], None],
     on_cancel: Callable[[], None] | None = None,
 ) -> GeneratorWorker:
     """Run *func* in a worker thread
@@ -78,9 +79,15 @@ def run_background_task(
     A cancel routes to *on_cancel* and a genuine failure to *on_error*. They default to
     the same thing, which is all a single dock needs, but a caller driving a queue has to
     tell "the user stopped everything" apart from "this one item failed, carry on".
+
+    *register* receives the worker before anything else happens (it gates the UI).
     """
 
     worker = create_worker(_guarded(func), _ignore_errors=True)
+    # Setting up the progress bar processes pending events, among them the `finished`
+    # of a task whose result started this one. That task must already find this one
+    # registered, or it opens the gate in between.
+    register(worker)
 
     progress_bar = cancelable_progress(total=total, desc=desc)
     # napari only calls cancel_callback when iterating the bar, which this manually
@@ -112,24 +119,31 @@ def start_task(
     step: BackgroundStep,
     *,
     on_result: Callable,
-    status_label: QLabel,
+    on_error: Callable[[str], None],
 ) -> None:
     """Run *step* as the application's single background task.
 
     Registering the worker gates the UI (run buttons, scan browser) for its duration,
     and clearing it on finish is what releases the gate, so the two are bound together
-    here rather than left to each call site to remember.
+    here rather than left to each call site to remember. When *on_result* starts the
+    next task (download, then run), the gate passes to it and stays closed; whenever
+    it does not, for whatever reason, the gate opens.
     """
+
+    def release() -> None:
+        if optari_controller.active_task is worker:
+            optari_controller.set_active_task(None)
+
     worker = run_background_task(
         optari_controller.viewer,
         step.func,
         total=step.total,
         desc=step.desc,
         on_result=on_result,
-        on_error=status_label.setText,
-        on_done=lambda: optari_controller.set_active_task(None),
+        on_error=on_error,
+        on_done=release,
+        register=optari_controller.set_active_task,
     )
-    optari_controller.set_active_task(worker)
 
 
 def download_then(
@@ -141,46 +155,43 @@ def download_then(
 ) -> None:
     """Ensure *model_path* exists, downloading it as a background task if not, then run
     *then*. Runs *then* immediately when the file is already present.
+
+    Connecting is a task of its own, since a slow server would otherwise freeze the
+    window, and it yields the size the download's progress bar needs.
     """
     if model_path.is_file():
         then()
         return
 
-    try:
-        response, total_size = open_download(url, model_path.name)
-    except (OSError, requests.RequestException) as exc:
-        # Network/DNS/timeout failures must not escape the Qt slot — that would leave the
-        # user with no feedback
-        logger.exception("could not start download of %s", model_path.name)
-        status_label.setText(f"Download failed: {exc}")
-        return
+    def connect():
+        opened = open_download(url, model_path.name)
+        yield  # where a cancel during the request takes effect
+        return opened
 
-    succeeded = False
-
-    def on_result(_) -> None:
-        nonlocal succeeded
-        succeeded = True
-        then()
-
-    def on_done() -> None:
-        # then() has already registered the follow-up task on success.
-        # only release the gate here when there is no follow-up, i.e. after a cancel or an error.
-        if not succeeded:
-            optari_controller.set_active_task(None)
+    def download(opened: tuple[requests.Response, int]) -> None:
+        response, total_size = opened
+        logger.info(
+            "downloading model '%s' (%s bytes)",
+            model_path.name,
+            total_size or "unknown",
+        )
+        start_task(
+            optari_controller,
+            BackgroundStep(
+                partial(download_chunks, response, model_path),
+                total=total_size,
+                desc=f"Downloading {model_path.name}",
+            ),
+            on_result=lambda _: then(),
+            on_error=status_label.setText,
+        )
 
     status_label.setText("Preparing…")
-    logger.info(
-        "downloading model '%s' (%s bytes)",
-        model_path.name,
-        total_size or "unknown",
-    )
-    worker = run_background_task(
-        optari_controller.viewer,
-        partial(download_chunks, response, model_path),
-        total=total_size,
-        desc=f"Downloading {model_path.name}",
-        on_result=on_result,
+    start_task(
+        optari_controller,
+        BackgroundStep(
+            connect, total=0, desc=f"Connecting for {model_path.name}"
+        ),
+        on_result=download,
         on_error=status_label.setText,
-        on_done=on_done,
     )
-    optari_controller.set_active_task(worker)

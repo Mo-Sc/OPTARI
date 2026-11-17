@@ -62,6 +62,8 @@ class OptariController:
         self.active_recon_layer: Image | None = None
         self.active_us_layer: Image | None = None
         self.active_task: GeneratorWorker | None = None
+        # A batch run loads scans and measures on the main thread
+        self.batch_running = False
 
         # Docks, created by UiManager.setup_docks. dock_widgets maps each dock's title to
         # the Qt dock widget holding it, napari's own Layer Controls/List included.
@@ -249,7 +251,7 @@ class OptariController:
 
     @property
     def task_running(self) -> bool:
-        return self.active_task is not None
+        return self.active_task is not None or self.batch_running
 
     def set_active_task(self, worker: GeneratorWorker | None) -> None:
         """Track the running background task and gate the UI around it.

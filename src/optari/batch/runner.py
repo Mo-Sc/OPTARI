@@ -20,6 +20,7 @@ import logging
 from collections.abc import Callable
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -37,6 +38,7 @@ from optari.io.export_pipeline import (
     export_scan_to_hdf5,
     export_scan_to_ipasc,
     save_scan_into_source,
+    scan_export,
 )
 from optari.io.utils import save_viewer_screenshot
 from optari.roi.roi_table import SavedRoiTable
@@ -129,6 +131,8 @@ class BatchRunner:
             len(self.plan.jobs),
             " -> ".join(self.plan.step_names) or "none",
         )
+        self.controller.batch_running = True
+        self.controller.refresh_controller_uis()
         self._gen = self._run()
         self._advance(("ok", None))
 
@@ -178,11 +182,12 @@ class BatchRunner:
             on_done=lambda: self._advance(
                 outcome[0] if outcome else ("error", "step produced no result")
             ),
+            register=self.controller.set_active_task,
         )
-        self.controller.set_active_task(self._worker)
 
     def _finish(self) -> None:
         self._worker = None
+        self.controller.batch_running = False
         self.controller.set_active_task(None)
         logger.info("batch run finished: %s", self.report.summary())
         self._resources.close()
@@ -307,7 +312,7 @@ class BatchRunner:
                 self.saved_table.add_measurements(rows)
             self.report.note(job, n_rows=len(rows))
 
-        self._write_outputs(job, frame_idx, source_layer)
+        yield from self._write_outputs(job, frame_idx, source_layer)
 
     # ============ per-scan work ============
     def _pa_layers(self) -> list:
@@ -390,19 +395,25 @@ class BatchRunner:
             raise BatchStepError("ROI measured no rows on this scan", "roi")
         return rows
 
-    def _write_outputs(
-        self, job: BatchJob, frame_idx: int, source_layer
-    ) -> None:
+    def _write_outputs(self, job: BatchJob, frame_idx: int, source_layer):
+        """Exports run as background steps, so Cancel stays responsive during them.
+
+        An export that fails raises in its worker and fails this scan at that step.
+        """
+        export = scan_export(self.controller)
         # Exports mirror the input layout, so a converted dataset can be reopened
         # exactly like the original: <out>/<format>/<study path>/Scan_Y.hdf5
         if self.plan.outputs.hdf5:
             destination = self._export_path(
                 job, "hdf5", f"{job.scan_stem}.hdf5"
             )
-            if not export_scan_to_hdf5(self.controller, destination):
-                raise BatchStepError(
-                    f"HDF5 export failed (see log): {destination.name}", "hdf5"
-                )
+            yield from _in_background(
+                "hdf5",
+                BackgroundStep,
+                func=partial(export_scan_to_hdf5, export, destination),
+                total=0,
+                desc=f"Exporting {destination.name}",
+            )
             self.report.note(job, hdf5_path=str(destination))
 
         if self.plan.outputs.ipasc:
@@ -410,11 +421,15 @@ class BatchRunner:
             destination = self._export_path(
                 job, "ipasc", f"{job.scan_stem}_ipasc.hdf5"
             )
-            if not export_scan_to_ipasc(self.controller, destination):
-                raise BatchStepError(
-                    f"IPASC export failed (see log): {destination.name}",
-                    "ipasc",
-                )
+            yield from _in_background(
+                "ipasc",
+                BackgroundStep,
+                func=partial(
+                    export_scan_to_ipasc, export.pa_data, destination
+                ),
+                total=0,
+                desc=f"Exporting {destination.name}",
+            )
             self.report.note(job, ipasc_path=str(destination))
 
         if self.plan.outputs.overlay_png:
@@ -429,14 +444,15 @@ class BatchRunner:
         if self.plan.outputs.hdf5_in_place:
             if not can_save_into_scan(self.controller):
                 raise BatchStepError("not an HDF5 file OPTARI created", "hdf5")
-            saved = save_scan_into_source(self.controller)
-            # No layer may stay on screen reading from the closed handle.
+            # Releases the read handle, which HDF5 would not let a writer share.
             self.controller.scan_ctrl.reset_scan_state()
-            if not saved:
-                raise BatchStepError(
-                    f"Saving into the scan failed (see log): {job.scan_path.name}",
-                    "hdf5",
-                )
+            yield from _in_background(
+                "hdf5",
+                BackgroundStep,
+                func=partial(save_scan_into_source, export),
+                total=0,
+                desc=f"Saving into {job.scan_path.name}",
+            )
             self.report.note(job, hdf5_path=str(job.scan_path))
 
     def _export_path(self, job: BatchJob, kind: str, filename: str) -> Path:
@@ -494,7 +510,7 @@ class BatchRunner:
         return match
 
 
-def _guard(step: str, func, *args, **kwargs):
+def _guard(step: str, func, /, *args, **kwargs):
     """Run *func*, turning a per-scan refusal into a failure this run can recover from."""
     try:
         return func(*args, **kwargs)
@@ -502,9 +518,13 @@ def _guard(step: str, func, *args, **kwargs):
         raise BatchStepError(str(exc), step) from exc
 
 
-def _in_background(step: str, prepare, params):
-    """Hand *prepare(params)* to a worker and return its result; failures count against *step*."""
-    background = _guard(step, prepare, params)
+def _in_background(step: str, prepare, /, *args, **kwargs):
+    """Hand the BackgroundStep *prepare* builds to a worker and return its result.
+
+    Failures count against *step*. *prepare* is a controller's ``prepare`` or, for
+    work that needs no validation (exports), ``BackgroundStep`` itself.
+    """
+    background = _guard(step, prepare, *args, **kwargs)
     try:
         return (yield background)
     except BatchStepError as exc:

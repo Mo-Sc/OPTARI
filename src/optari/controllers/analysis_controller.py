@@ -323,6 +323,8 @@ class AnalysisController(TaskControllerBase):
         self.optari_controller.time_analysis.status_label.setText(
             "Computing time series…"
         )
+        # The computation below blocks the event loop, paint the text before it.
+        self.optari_controller.time_analysis.status_label.repaint()
         x, series = self._time_series_for_current_scope(
             channel_idx, feature_id
         )
@@ -410,10 +412,6 @@ class AnalysisController(TaskControllerBase):
 
         frame_idx, channel_idx = self._current_frame_channel()
 
-        self.optari_controller.histograms.status_label.setText(
-            "Computing histograms…"
-        )
-
         roi_vals = extract_roi_pixels_for_slice(
             self.optari_controller.roi_ctrl.current_records(),
             self.optari_controller.active_recon_layer,
@@ -490,10 +488,6 @@ class AnalysisController(TaskControllerBase):
             return
 
         frame_idx, _ = self._current_frame_channel()
-
-        self.optari_controller.spectrum.status_label.setText(
-            "Computing spectra…"
-        )
 
         x, series, x_tick_labels = compute_roi_spectra(
             self.optari_controller.roi_ctrl.current_records(),
