@@ -72,6 +72,15 @@ def _iqr(values: np.ndarray) -> float:
     return float(np.nanpercentile(values, 75) - np.nanpercentile(values, 25))
 
 
+def _sample_std(values: np.ndarray) -> float:
+    """Sample standard deviation (ddof=1), as pandas ``std()`` and Excel ``STDEV.S``.
+    NaN below two pixels, where it is undefined
+    """
+    if np.count_nonzero(~np.isnan(values)) < 2:
+        return float("nan")
+    return float(np.nanstd(values, ddof=1))
+
+
 def _snr(values: np.ndarray) -> float:
     """
     Signal-to-noise ratio (SNR) is defined as the mean of the signal divided by its standard deviation.
@@ -87,10 +96,9 @@ def _bound(value: float | None) -> float:
 
 
 def _size_mm(ctx: ROIContext) -> float:
+    """Area in mm² of a 2D ROI, or length in mm of a line or path.
     """
-    returns the size of the ROI in mm^2 (for 2D ROIs) or length in mm (for line ROIs).
-    """
-    if ctx.kind == "line":
+    if ctx.kind in ("line", "path"):
         return float(np.linalg.norm(np.diff(ctx.verts, axis=0), axis=1).sum())
     return float(ctx.vals.size * ctx.sy * ctx.sx)
 
@@ -101,7 +109,7 @@ FEATURE_REGISTRY: dict[str, FeatureSpec] = {
     "roi_group_uid": FeatureSpec(str, lambda c: str(c.roi_group_uid)),
     "mean": FeatureSpec(float, lambda c: _nan_stat(c.vals, np.nanmean)),
     "median": FeatureSpec(float, lambda c: _nan_stat(c.vals, np.nanmedian)),
-    "std": FeatureSpec(float, lambda c: _nan_stat(c.vals, np.nanstd)),
+    "std": FeatureSpec(float, lambda c: _sample_std(c.vals)),
     "p10": FeatureSpec(
         float, lambda c: _nan_stat(c.vals, lambda v: np.nanpercentile(v, 10))
     ),

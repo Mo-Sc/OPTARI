@@ -29,6 +29,7 @@ from optari.io.export_pipeline import (
     export_roi_table_to_xlsx,
     import_roi_table_from_xlsx,
 )
+from optari.roi.roi_features import FEATURE_REGISTRY
 from optari.roi.roi_geometry import RoiGeometry, napari_to_patato
 from optari.roi.roi_presets import RoiPresetStore
 from optari.roi.roi_records import ROIRecord
@@ -167,6 +168,13 @@ class RoiController(TaskControllerBase):
         self.stored_rois_restored = False
         self.intensity_clamp = NO_CLAMP
         self._roi_preset_store = RoiPresetStore(get_user_roi_presets_dir())
+
+        unknown = set(settings.annotation.roi_features) - set(FEATURE_REGISTRY)
+        if unknown:
+            logger.warning(
+                "config.json lists unknown ROI feature(s), ignored: %s",
+                ", ".join(sorted(unknown)),
+            )
 
     @property
     def roi_records(self) -> list[ROIRecord]:
@@ -839,6 +847,14 @@ class RoiController(TaskControllerBase):
         selected_indices = [idx.row() for idx in selected_rows]
         if not selected_indices:
             logger.warning("No row selected to delete.")
+            return
+        # Saved rows are measurements, not views of them: there is no undo.
+        confirm = QMessageBox.question(
+            None,
+            "Delete ROI data",
+            f"Delete {len(selected_indices)} saved row(s)? This cannot be undone.",
+        )
+        if confirm != QMessageBox.Yes:
             return
 
         deleted = self.saved_table.delete_at(selected_indices)

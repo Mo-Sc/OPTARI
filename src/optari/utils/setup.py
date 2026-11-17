@@ -16,7 +16,7 @@ DEFAULT_CONFIGS_DIR = (
 
 # Names this session's log and ROI table backup. Start time plus process id, so OPTARI instances
 # running side by side never write to the same file, and a session's log and backup match.
-SESSION_ID = f"{datetime.now():%Y%m%dT%H%M%S}_{os.getpid()}"
+SESSION_ID = f"{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}_{os.getpid()}"
 KEPT_SESSION_FILES = 20
 # OPTARI version that last copied its shipped presets into the user directory.
 PRESETS_VERSION_FILE = ".presets_version"

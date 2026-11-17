@@ -70,7 +70,7 @@ YEAR_ONE = datetime(1, 1, 1)
 
 
 def acquisition_start(pa_data: "pat.PAData") -> datetime | None:
-    """Wall-clock time of the first frame, or None if the scan cannot be dated.
+    """Wall-clock time of the first frame, time-zone aware, or None if the scan cannot be dated.
 
     PATATO's iThera and IPASC readers count timestamps in seconds since 0001-01-01, but
     an HDF5 file from another tool may use any epoch. So the timestamps are only read as
@@ -81,6 +81,14 @@ def acquisition_start(pa_data: "pat.PAData") -> datetime | None:
     # NaN when the file records no date
     if not isinstance(scan_date, datetime):
         return None
+    # The frame times are wall-clock times in the date's zone. Without an offset they
+    # cannot be written as UTC
+    if scan_date.tzinfo is None:
+        logger.warning(
+            "scan date %s has no time zone, frame times stay relative",
+            scan_date,
+        )
+        return None
     first_s = float(np.asarray(pa_data.get_timestamps())[0, 0])
     scan_date_s = (scan_date.replace(tzinfo=None) - YEAR_ONE).total_seconds()
     if not abs(first_s - scan_date_s) <= 24 * 3600:
@@ -89,7 +97,21 @@ def acquisition_start(pa_data: "pat.PAData") -> datetime | None:
             scan_date,
         )
         return None
-    return YEAR_ONE + timedelta(seconds=first_s)
+    return (YEAR_ONE + timedelta(seconds=first_s)).replace(
+        tzinfo=scan_date.tzinfo
+    )
+
+
+def sweep_start_timestamps(
+    timestamps: np.ndarray, n_channels: int
+) -> np.ndarray:
+    """Timestamps for a layer whose channels are chromophores or parameters.
+
+    The scan's timestamps are ``(frames, wavelengths)``. Indexed by an unmixed layer's
+    channel they would date Hb with the first wavelength and HbO2 with the second.
+    A value estimated from the whole sweep is dated by its start, on every channel.
+    """
+    return np.repeat(np.asarray(timestamps)[:, :1], n_channels, axis=1)
 
 
 # ---------------------------------------------------------------------------
@@ -321,7 +343,9 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
                 "frames": frame_list,
                 "axis1_name": "Channel",
                 "axis1_labels": axis1_labels,
-                "timestamps": timestamps,
+                "timestamps": sweep_start_timestamps(
+                    timestamps, len(axis1_labels)
+                ),
                 "acquisition_start": start,
                 "settings": _settings(image),
             }

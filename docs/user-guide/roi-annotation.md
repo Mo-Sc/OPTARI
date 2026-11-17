@@ -17,7 +17,7 @@ Each ROI shape is labelled with its `roi_id`, and optionally its track ID (`roi_
     On macOS, ROI deletion by keyboard, when a row is selected in the Live Analysis table, requires the `Delete` (forward-delete) key (`fn` + `Backspace`), not just the ordinary `Backspace`.
 
 !!! tip
-    The line shape (shortcut `L`) can be used as a **measurement tool for distances**. Simply draw a line along the distance you want to measure. The `size_mm` feature in the Live Analysis table will display its length in mm — see [FAQ](faq.md#can-i-measure-distances-in-optari).
+    The line shape (shortcut `L`) can be used as a **measurement tool for distances**. Simply draw a line along the distance you want to measure. The `size_mm` feature in the Live Analysis table will display its length in mm, and the intensity features describe the pixels the line crosses. A path (several segments) works the same way and reports its total length, see [FAQ](faq.md#can-i-measure-distances-in-optari).
 
 
 ## Live Analysis vs. Saved Analysis tables

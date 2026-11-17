@@ -25,6 +25,7 @@ from optari.patato_bridge import (
     display_data_from_patato_obj,
     expand_to_acquisition_frames,
     layer_colormap,
+    sweep_start_timestamps,
 )
 from optari.utils.presets import PresetStore
 from optari.utils.setup import get_user_unmixing_presets_dir
@@ -683,7 +684,9 @@ class UnmixingController(TaskControllerBase):
             axis1_labels=axis1_labels,
             filepath=params.source_layer_metadata.get("filepath"),
             scan_name=params.source_layer_metadata.get("scan_name"),
-            timestamps=params.source_layer_metadata.get("timestamps"),
+            timestamps=sweep_start_timestamps(
+                params.source_layer_metadata["timestamps"], len(axis1_labels)
+            ),
             acquisition_start=params.source_layer_metadata.get(
                 "acquisition_start"
             ),

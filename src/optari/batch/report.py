@@ -126,7 +126,7 @@ class BatchReport:
             scan=job.scan_path.name,
             scan_name=job.scan_name,
             kind=job.scan_info.kind,
-            started_at=dt.datetime.now(),
+            started_at=dt.datetime.now(dt.timezone.utc),
         )
         self._write()
 
@@ -163,7 +163,7 @@ class BatchReport:
         entry.status = status
         entry.message = message
         entry.failed_step = failed_step
-        entry.finished_at = dt.datetime.now()
+        entry.finished_at = dt.datetime.now(dt.timezone.utc)
         self._write()
 
     # ============ persistence ============

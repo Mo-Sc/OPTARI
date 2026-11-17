@@ -110,8 +110,10 @@ def test_validate_plan_reports_every_problem(tmp_path):
     empty_root, out = tmp_path / "data", tmp_path / "out"
     empty_root.mkdir()
     out.mkdir()
+    # The overlay is on by default and alone is a valid plan (export_png)
+    nothing = {"steps": {}, "outputs": {"overlay_png": False}}
     problems = validate_plan(
-        build_plan(root=empty_root, batch_preset={"steps": {}}, output_dir=out)
+        build_plan(root=empty_root, batch_preset=nothing, output_dir=out)
     )
     assert [p[:14] for p in problems] == ["No scans found", "The plan has n"]
 

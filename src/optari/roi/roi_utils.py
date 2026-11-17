@@ -11,13 +11,13 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import UTC, timedelta
 from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from skimage.draw import ellipse, polygon
+from skimage.draw import ellipse, line, polygon
 from optari.config import settings
 from optari.roi.roi_geometry import RoiGeometry
 from optari.roi.roi_features import (
@@ -101,7 +101,12 @@ def slice_datetime(layer, frame_idx: int, channel_idx: int) -> str:
         return "N/A"
     ts = layer.metadata["timestamps"]
     elapsed = float(ts[frame_idx, channel_idx] - ts[0, 0])
-    return str(start + timedelta(seconds=elapsed))
+    # ISO 8601 in UTC, like every timestamp OPTARI writes
+    return (
+        (start + timedelta(seconds=elapsed))
+        .astimezone(UTC)
+        .isoformat(timespec="microseconds")
+    )
 
 
 # Rasterizing is most expensive when calculating ROI statistics. the live table
@@ -120,11 +125,12 @@ def _rasterize(
     verts_pixels = np.frombuffer(verts_bytes, dtype=float).reshape(
         n_verts, 2
     ) / np.array([sy, sx])
-    mask = (
-        ellipse_mask(verts_pixels, image_shape)
-        if kind == "ellipse"
-        else polygon_mask(verts_pixels, image_shape)
-    )
+    if kind == "ellipse":
+        mask = ellipse_mask(verts_pixels, image_shape)
+    elif kind in ("line", "path"):
+        mask = path_mask(verts_pixels, image_shape)
+    else:
+        mask = polygon_mask(verts_pixels, image_shape)
     mask.flags.writeable = (
         False  # shared between callers; must never be mutated
     )
@@ -282,16 +288,6 @@ def _roi_centroid_mm(roi: ROIRecord) -> tuple[float, float]:
     return round(float(yx[0]), 2), round(float(yx[1]), 2)
 
 
-def _resolve_feature_ids(feature_ids: list[str] | None) -> list[str]:
-    if feature_ids is None:
-        return list(ALL_FEATURE_COLUMNS)
-    return [
-        feature_id
-        for feature_id in feature_ids
-        if feature_id in FEATURE_REGISTRY
-    ]
-
-
 @dataclass(frozen=True)
 class IntensityClamp:
     """How ROI pixel values are filtered before any statistic is computed.
@@ -344,6 +340,26 @@ def polygon_mask(verts_px, image_shape):
     return mask
 
 
+def path_mask(verts_px, image_shape):
+    """Rasterize an open line or path (verts in pixel coords) to the pixels it crosses.
+
+    Not ``polygon``: it returns only the two end points of a line, and fills a path
+    as if it were closed.
+    """
+    mask = np.zeros(image_shape, dtype=bool)
+    points = np.rint(verts_px).astype(int)
+    for (r0, c0), (r1, c1) in zip(points[:-1], points[1:]):
+        rr, cc = line(r0, c0, r1, c1)
+        inside = (
+            (rr >= 0)
+            & (rr < image_shape[0])
+            & (cc >= 0)
+            & (cc < image_shape[1])
+        )
+        mask[rr[inside], cc[inside]] = True
+    return mask
+
+
 def ellipse_mask(verts_px, image_shape):
     """Rasterize napari's 4-corner ellipse box (may be rotated) to a boolean mask."""
     p0, p1, p2 = verts_px[:3]
@@ -378,7 +394,9 @@ def compute_roi_stats(
     translate (DeepMB) would otherwise store the same ROI at a different position.
     """
 
-    selected_feature_ids = _resolve_feature_ids(feature_ids)
+    selected_feature_ids = (
+        list(ALL_FEATURE_COLUMNS) if feature_ids is None else feature_ids
+    )
     # Serializing geometry is the expensive context field, and the live table
     # refreshes on every drag -> only compute the caller wants the column
     needs_geometry = "roi_geometry" in selected_feature_ids

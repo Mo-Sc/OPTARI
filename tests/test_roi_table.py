@@ -58,7 +58,8 @@ def test_add_measurements_stamps_and_reports_remeasured(
     assert table.rows["roi_ts"].nunique() == 2 and path.exists()
 
     table.delete_at(list(range(len(table))))
-    assert table.is_empty and not path.exists()
+    # the last non-empty state stays on disk as the session's backup
+    assert table.is_empty and path.exists()
 
 
 def test_xlsx_export_import_round_trip_and_dedupe(measured_rows, tmp_path):

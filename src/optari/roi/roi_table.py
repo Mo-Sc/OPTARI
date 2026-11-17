@@ -67,7 +67,9 @@ class SavedRoiTable:
         TODO: really necessary? Or is wall clock time enough (microsecond precision)?
         """
 
-        now = pd.Timestamp.now()
+        # UTC with offset, like every timestamp OPTARI writes. One offset for all
+        # stamps also keeps the string comparison below chronological.
+        now = pd.Timestamp.now(tz="UTC")
         if not self._rows.empty:
             latest = self._rows["roi_ts"].iloc[-1]
             if now.isoformat(timespec="microseconds") <= str(latest):
@@ -85,11 +87,7 @@ class SavedRoiTable:
         remeasured = set(rows["roi_group_uid"]) & set(
             self._rows.get("roi_group_uid", [])
         )
-        self._rows = (
-            rows
-            if self._rows.empty
-            else pd.concat([self._rows, rows], ignore_index=True)
-        )
+        self._rows = self._appended(rows)
         self._autosave()
         return remeasured
 
@@ -111,7 +109,7 @@ class SavedRoiTable:
         from several sessions or machines combine in one table. ``roi_group_uid`` keeps
         every row attributable to the ROI it was measured from.
         """
-        combined = pd.concat([self._rows, rows], ignore_index=True)
+        combined = self._appended(rows)
         # A measurement is identified by what was measured where and when.
         duplicates = combined[MEASUREMENT_KEY].astype(str).duplicated()
         self._rows = combined[~duplicates].reset_index(drop=True)
@@ -120,17 +118,20 @@ class SavedRoiTable:
         skipped = int(duplicates.sum())
         return len(rows) - skipped, skipped
 
+    def _appended(self, rows: pd.DataFrame) -> pd.DataFrame:
+        # Concatenating onto the empty initial frame, whose columns are all object
+        # dtype, would make every numeric column object too.
+        if self._rows.empty:
+            return rows.reset_index(drop=True)
+        return pd.concat([self._rows, rows], ignore_index=True)
+
     def _autosave(self) -> None:
+        """Write the table to disk, overwriting it on every change.
         """
-        Write the table to disk, overwrite on every change. If the table is empty, delete the file
-        """
-        if self._autosave_path is None:
+        if self._autosave_path is None or self._rows.empty:
             return
         path = self._autosave_path
         try:
-            if self._rows.empty:
-                path.unlink(missing_ok=True)
-                return
             export_roi_table_to_xlsx(self._rows, path)
         except OSError:
             # A failing backup must never discard the ROI data just saved.

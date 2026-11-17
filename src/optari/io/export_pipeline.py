@@ -48,7 +48,9 @@ OPTARI_PUBLICATION_DOI = "10.48550/arXiv.2610.32468"
 
 # Bump only when the meaning of saved-table columns changes (units, semantics).
 # Columns being added or removed can be handled without a schema version bump.
-ROI_TABLE_SCHEMA_VERSION = 1
+# 2: roi_geometry always in scan coordinates, std with ddof=1, timestamps in UTC with
+#    offset, derived layers dated by sweep start, lines and paths measured along the line.
+ROI_TABLE_SCHEMA_VERSION = 2
 ROI_TABLE_SHEET = "roi_table"
 ROI_TABLE_META_SHEET = "optari_meta"
 
