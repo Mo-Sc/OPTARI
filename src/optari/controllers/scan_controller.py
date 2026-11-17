@@ -99,6 +99,7 @@ class ScanController(TaskControllerBase):
                     "failed to close current scan handle", exc_info=True
                 )
         self.optari_controller.pa_data = None
+        self.optari_controller.path = None
         self.optari_controller.scan_info = None
         self.optari_controller.patato_objects = {}
         self.optari_controller.derived_patato_objects = {}
@@ -163,7 +164,6 @@ class ScanController(TaskControllerBase):
         """
         logger.info("loading scan: %s", scan_path)
 
-        self.optari_controller.path = scan_path
         self.reset_scan_state(restore_startup_logo=False)
 
         if not scan_path.exists():
@@ -187,6 +187,8 @@ class ScanController(TaskControllerBase):
             load_startup_logo(self.viewer)
             self.optari_controller.refresh_all()
             return False
+        # Only now, so a failed load leaves no path for exports and dialogs to act on.
+        self.optari_controller.path = scan_path
         self.optari_controller.scan_info = scan_info
 
         try:

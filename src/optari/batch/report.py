@@ -122,7 +122,7 @@ class BatchReport:
     def start(self, job) -> None:
         """Begin tracking *job*, recording its start time, and mirror the report to disk."""
         self._entries[job.key] = _Entry(
-            study=job.study_path.name,
+            study=job.study_rel.as_posix(),
             scan=job.scan_path.name,
             scan_name=job.scan_name,
             kind=job.scan_info.kind,

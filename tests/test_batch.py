@@ -158,6 +158,7 @@ def job(number, kind="hdf5"):
         Path("/d/Study_1"),
         Path(f"/d/Study_1/Scan_{number}.hdf5"),
         ScanInfo(kind, f"S{number}"),
+        Path("/d"),
     )
 
 

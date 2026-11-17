@@ -353,7 +353,7 @@ class BatchDialog(QDialog):
             self.scans_table.setItem(row, INCLUDE_COLUMN, include)
             for column, text in enumerate(
                 (
-                    job.study_path.name,
+                    job.study_rel.as_posix(),
                     job.scan_path.name,
                     job.scan_name,
                     job.scan_info.kind,

@@ -182,6 +182,7 @@ def test_batch_report_lifecycle(tmp_path):
             Path("/d/Study_1"),
             Path(f"/d/Study_1/Scan_{number}.hdf5"),
             ScanInfo("hdf5", f"S{number}"),
+            Path("/d"),
         )
 
     path = tmp_path / "batch_report.xlsx"

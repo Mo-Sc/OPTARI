@@ -11,12 +11,13 @@ the user what is wrong with it must work before anything is loaded.
 from __future__ import annotations
 
 import logging
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from patato.io.attribute_tags import ReconAttributeTags
 
-from optari.io.discovery import ScanInfo, discover_studies, scan_key
+from optari.io.discovery import ScanInfo, discover_studies
 from optari.roi.roi_presets import RoiPreset, RoiPresetStore
 from optari.roi.roi_utils import MeasureScope
 from optari.segmentation.segmenter import load_model_registry
@@ -45,16 +46,33 @@ class BatchJob:
     study_path: Path
     scan_path: Path
     scan_info: ScanInfo
+    dataset_root: Path
+
+    @property
+    def study_rel(self) -> Path:
+        """The study folder relative to the dataset root, or its name when it is the root.
+
+        Two sites may both hold a ``Study_1``, so the folder name alone does not
+        identify a study within the dataset.
+        """
+        if self.study_path == self.dataset_root:
+            return Path(self.study_path.name)
+        return self.study_path.relative_to(self.dataset_root)
 
     @property
     def scan_stem(self) -> str:
-        """``Scan_3``, whether the scan is an HDF5 file or an iThera folder."""
-        return scan_key(self.scan_path)
+        """The file stem (``Scan_3``, ``Scan_3_copy``) or the iThera folder name."""
+        if self.scan_info.kind == "ithera":
+            return self.scan_path.name
+        return self.scan_path.stem
 
     @property
     def key(self) -> str:
-        """Identifier for this scan's outputs, unique across the dataset."""
-        return f"{self.study_path.name}_{self.scan_stem}"
+        """Identifier for this scan's outputs, e.g. ``siteA_Study_1_Scan_3``.
+
+        Flattened for use in file names, so ``validate_plan`` checks it is unique.
+        """
+        return "_".join((*self.study_rel.parts, self.scan_stem))
 
     @property
     def scan_name(self) -> str:
@@ -209,7 +227,9 @@ def build_plan(
         raise ValueError("Batch preset 'steps' must be an object.")
 
     jobs = [
-        BatchJob(study_path=study, scan_path=scan, scan_info=info)
+        BatchJob(
+            study_path=study, scan_path=scan, scan_info=info, dataset_root=root
+        )
         for study, scans in discover_studies(root).items()
         for scan, info in scans.items()
     ]
@@ -296,6 +316,14 @@ def validate_plan(plan: BatchPlan) -> list[str]:
     if not plan.step_names and not (plan.outputs.hdf5 or plan.outputs.ipasc):
         problems.append(
             "The plan has no analysis steps and no file export, so it would do nothing."
+        )
+    keys = Counter(job.key for job in plan.jobs)
+    clashes = sorted(key for key, count in keys.items() if count > 1)
+    if clashes:
+        # e.g. "a_b/Scan_1" and "a/b_Scan_1": one would overwrite the other's outputs
+        problems.append(
+            f"Scans would share output names: {', '.join(clashes)}. Rename a "
+            "folder so each study path is unique."
         )
     if plan.outputs.hdf5_in_place:
         others = [job for job in plan.jobs if job.scan_info.kind != "hdf5"]
