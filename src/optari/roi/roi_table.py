@@ -16,7 +16,6 @@ from pathlib import Path
 import pandas as pd
 
 from optari.io.export_pipeline import export_roi_table_to_xlsx
-from optari.utils.files import atomic_destination
 from optari.roi.roi_utils import saved_export_columns, saved_table_columns
 
 logger = logging.getLogger(__name__)
@@ -132,8 +131,7 @@ class SavedRoiTable:
             if self._rows.empty:
                 path.unlink(missing_ok=True)
                 return
-            with atomic_destination(path) as temporary:
-                export_roi_table_to_xlsx(self._rows, temporary)
+            export_roi_table_to_xlsx(self._rows, path)
         except OSError:
             # A failing backup must never discard the ROI data just saved.
             logger.exception("could not autosave the ROI table to %s", path)

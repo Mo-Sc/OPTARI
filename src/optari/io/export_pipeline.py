@@ -25,7 +25,7 @@ from qtpy.QtWidgets import QFileDialog
 from optari import __version__
 from optari.config import settings
 from optari.config.config import CONFIG_SCHEMA_VERSION
-from optari.patato_bridge import patato_roi_from_geometry
+from optari.patato_bridge import LAYER_NAME_ATTR, patato_roi_from_geometry
 from optari.io.utils import filename_token
 from optari.utils.files import atomic_destination
 from optari.roi.roi_features import SAVED_FIXED_SOURCE_COLUMNS
@@ -81,7 +81,11 @@ def export_roi_table_to_xlsx(df_saved, path=None) -> str | None:
     meta_df = pd.DataFrame(
         {"key": list(meta.keys()), "value": [str(v) for v in meta.values()]}
     )
-    with pd.ExcelWriter(Path(filename)) as writer:
+    # Atomic, since a half-written file would replace the user's earlier table
+    with (
+        atomic_destination(Path(filename)) as temporary,
+        pd.ExcelWriter(temporary) as writer,
+    ):
         df_saved.to_excel(writer, sheet_name=ROI_TABLE_SHEET, index=False)
         meta_df.to_excel(writer, sheet_name=ROI_TABLE_META_SHEET, index=False)
 
@@ -190,8 +194,9 @@ def can_save_into_scan(controller) -> bool:
 def save_scan_into_source(controller) -> bool:
     """Write the session's ROIs and new layers into the loaded scan file itself.
 
-    Stored images stay as they are and only the new layers are added, so nothing is
-    duplicated. A stored layer removed from the viewer stays in the file.
+    Stored images stay as they are and only the session's layers are written, each
+    replacing a stored one of the same name. A stored layer removed from the viewer
+    stays in the file.
     Unlike export this is not atomic.
     """
     path = controller.path
@@ -221,8 +226,10 @@ def export_scan_to_ipasc(controller, destination: Path) -> bool:
     if destination is None:
         return False
 
+    # Atomic, since a partial file would make the next attempt refuse to overwrite it
     try:
-        pat.write_ipasc(controller.pa_data.scan_reader, str(destination))
+        with atomic_destination(destination) as temporary:
+            pat.write_ipasc(controller.pa_data.scan_reader, str(temporary))
     except Exception:
         logger.exception(
             "Failed to export raw time series to %s", destination.name
@@ -316,9 +323,15 @@ def _write_rois(controller, destination_pa_data) -> None:
     if not records:
         return
 
+    fov = controller.scan_ctrl.get_fov()
+    if fov is None:
+        raise ValueError(
+            "the scan has no field of view (no ultrasound or reconstruction), "
+            "so its ROIs cannot be placed"
+        )
+    fov_x_m, fov_y_m = fov
     # Read from the destination, which holds the same arrays: when saving into the
     # scan file, the session's own handle is already closed.
-    fov_x_m, fov_y_m = controller.scan_ctrl.get_fov()
     reader = destination_pa_data.scan_reader
     z_values = reader.get_scanner_z_position()
     run_values = reader.get_run_numbers()
@@ -326,20 +339,21 @@ def _write_rois(controller, destination_pa_data) -> None:
 
     for record in records:
         frame_idx = int(record.frame_id)
-        # Position, run and repetition belong to the frame; every wavelength shares them.
-        try:
-            z = z_values[frame_idx, 0]
-            run = run_values[frame_idx, 0]
-            rep = rep_values[frame_idx, 0]
-        except (IndexError, KeyError):
-            z, run, rep = 0, 0, 0
+        # A frame outside the scan is a corrupt record. Writing it with made-up
+        # acquisition coordinates would hide that.
+        if not 0 <= frame_idx < z_values.shape[0]:
+            raise ValueError(
+                f"ROI {record.roi_id} is on frame {frame_idx}, but the scan has "
+                f"{z_values.shape[0]} frames"
+            )
         roi = patato_roi_from_geometry(
             RoiGeometry.from_record(record, fov_x_m, fov_y_m),
             fov_x_m,
             fov_y_m,
-            z=z,
-            run=run,
-            rep=rep,
+            # Position, run and repetition belong to the frame; every wavelength shares them.
+            z=z_values[frame_idx, 0],
+            run=run_values[frame_idx, 0],
+            rep=rep_values[frame_idx, 0],
             frame_idx=frame_idx,
             roi_id=record.roi_id,
             track_id=record.track_id,
@@ -350,6 +364,19 @@ def _write_rois(controller, destination_pa_data) -> None:
     logger.info("saved %s OPTARI ROI(s)", len(records))
 
 
+def _delete_stored_layer(file: h5py.File, group: str, layer_name: str) -> None:
+    """Delete every dataset in *group* stored under *layer_name*.
+
+    HDF5 does not reclaim the space, so saving in place grows the file; an export is
+    compact.
+    """
+    for subgroup in file.get(group, {}).values():
+        for name, dataset in list(subgroup.items()):
+            if dataset.attrs.get(LAYER_NAME_ATTR) == layer_name:
+                del subgroup[name]
+                logger.info("replacing stored layer '%s'", layer_name)
+
+
 def _write_derived_data(controller, destination_pa_data) -> None:
     """Write runtime-only OPTARI additions: derived PA images, the segmentation mask, and clinical metadata.
 
@@ -358,9 +385,15 @@ def _write_derived_data(controller, destination_pa_data) -> None:
     layers from different sessions while the file-level origin records only its creation.
     """
     origin = json.dumps(file_origin())
-    for image in controller.derived_patato_objects.values():
+    writer = destination_pa_data.scan_writer
+    for layer_name, image in controller.derived_patato_objects.items():
+        # Same layer name means same result (a different one needs a suffix), so a
+        # re-run replaces what an earlier save stored under that name.
+        _delete_stored_layer(
+            writer.file, image.get_hdf5_group_name(), layer_name
+        )
         image.attributes[HDF5Tags.FILE_ORIGIN] = origin
-        destination_pa_data.scan_writer.add_image(image)
+        writer.add_image(image)
     if controller.derived_patato_objects:
         logger.info(
             "saved %s derived image dataset(s)",
@@ -369,7 +402,6 @@ def _write_derived_data(controller, destination_pa_data) -> None:
 
     seg_layer = controller.segmentation_ctrl.seg_layer
     if seg_layer is not None:
-        writer = destination_pa_data.scan_writer
         if HDF5Tags.SEGMENTATION in writer.file:
             del writer.file[HDF5Tags.SEGMENTATION]
         writer.set_segmentation(
@@ -392,9 +424,7 @@ def _write_derived_data(controller, destination_pa_data) -> None:
         )
 
     if controller.clinical_metadata_edits is not None:
-        destination_pa_data.scan_writer.set_clinical_metadata(
-            controller.clinical_metadata_edits
-        )
+        writer.set_clinical_metadata(controller.clinical_metadata_edits)
         logger.info(
             "saved clinical metadata (%s field(s))",
             len(controller.clinical_metadata_edits),

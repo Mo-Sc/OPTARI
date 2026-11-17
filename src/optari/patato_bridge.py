@@ -172,11 +172,20 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
     _pa_fallback = settings.general.PA_FALLBACK_SCALE
 
     patato_objects: dict = {}
-    layers: list = []
+    layers: dict[str, tuple] = {}
+
+    def add_layer(data, kwargs: dict) -> None:
+        name = kwargs["name"]
+        if name in layers:
+            logger.warning(
+                "scan stores layer '%s' twice, showing the later copy. "
+                "Export the scan to a new file to drop the older one.",
+                name,
+            )
+        layers[name] = (data, kwargs)
 
     timestamps = np.array(pa_data.get_timestamps())
     start = acquisition_start(pa_data)
-    wavelengths = [int(w) for w in pa_data.get_wavelengths()]
 
     # --- ultrasound ---
     # IPASC scans have no ultrasound. The acquisition frame count then comes from the time series instead.
@@ -186,20 +195,18 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
         n_acq_frames = us_img.shape[0]
         patato_objects["US"] = us_obj
 
-        layers.append(
-            (
-                us_img,
-                {
-                    "colormap": layer_colormap(HDF5Tags.ULTRASOUND),
-                    "name": "US",
-                    "scale": scale_from_patato_obj(us_obj, _us_fallback),
-                    "opacity": 1.0,
-                    "metadata": {
-                        "type": "us",
-                        "timestamps": timestamps,
-                    },
+        add_layer(
+            us_img,
+            {
+                "colormap": layer_colormap(HDF5Tags.ULTRASOUND),
+                "name": "US",
+                "scale": scale_from_patato_obj(us_obj, _us_fallback),
+                "opacity": 1.0,
+                "metadata": {
+                    "type": "us",
+                    "timestamps": timestamps,
                 },
-            )
+            },
         )
     else:
         n_acq_frames = pa_data.shape[0]
@@ -237,31 +244,32 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
         layer_name = recon.da.attrs.get(
             LAYER_NAME_ATTR, f"Recon: {recon_name}_{idx}"
         )
+        # The recon's own labels, as in ReconstructionController.publish: it may
+        # cover a subset of the scan's wavelengths.
+        wavelengths = [int(w) for w in recon.ax_1_labels]
         patato_objects[layer_name] = recon
-        layers.append(
-            (
-                recon_img,
-                {
-                    "colormap": layer_colormap(HDF5Tags.RECONSTRUCTION),
-                    "name": layer_name,
-                    "scale": scale_from_patato_obj(recon, _pa_fallback),
-                    "translate": _translate(recon, recon_img.ndim),
-                    "opacity": 1.0,
-                    "blending": "multiplicative",
-                    "auto_contrast": True,
-                    "metadata": {
-                        "type": "pa",
-                        "pa_kind": "recon",
-                        "wavelengths": wavelengths,
-                        "axis1_name": "Channel",
-                        "axis1_labels": wavelengths,
-                        "timestamps": timestamps,
-                        "acquisition_start": start,
-                        "frames": recon_frame_list,
-                        "settings": _settings(recon),
-                    },
+        add_layer(
+            recon_img,
+            {
+                "colormap": layer_colormap(HDF5Tags.RECONSTRUCTION),
+                "name": layer_name,
+                "scale": scale_from_patato_obj(recon, _pa_fallback),
+                "translate": _translate(recon, recon_img.ndim),
+                "opacity": 1.0,
+                "blending": "multiplicative",
+                "auto_contrast": True,
+                "metadata": {
+                    "type": "pa",
+                    "pa_kind": "recon",
+                    "wavelengths": wavelengths,
+                    "axis1_name": "Channel",
+                    "axis1_labels": wavelengths,
+                    "timestamps": timestamps,
+                    "acquisition_start": start,
+                    "frames": recon_frame_list,
+                    "settings": _settings(recon),
                 },
-            )
+            },
         )
 
     # --- derived PA image groups that may already exist in HDF5 ---
@@ -300,25 +308,23 @@ def build_napari_layers(pa_data: "pat.PAData") -> tuple[list[tuple], dict]:
             if parameter is not None:
                 metadata["parameter"] = parameter
 
-            layers.append(
-                (
-                    data,
-                    {
-                        "colormap": layer_colormap(group_name),
-                        "name": image.da.attrs.get(
-                            LAYER_NAME_ATTR, f"{prefix}: {dataset_name}_{idx}"
-                        ),
-                        "scale": scale_from_patato_obj(image, _pa_fallback),
-                        "translate": _translate(image, data.ndim),
-                        "opacity": 1.0,
-                        "blending": "multiplicative",
-                        "auto_contrast": True,
-                        "metadata": metadata,
-                    },
-                )
+            add_layer(
+                data,
+                {
+                    "colormap": layer_colormap(group_name),
+                    "name": image.da.attrs.get(
+                        LAYER_NAME_ATTR, f"{prefix}: {dataset_name}_{idx}"
+                    ),
+                    "scale": scale_from_patato_obj(image, _pa_fallback),
+                    "translate": _translate(image, data.ndim),
+                    "opacity": 1.0,
+                    "blending": "multiplicative",
+                    "auto_contrast": True,
+                    "metadata": metadata,
+                },
             )
 
-    return layers, patato_objects
+    return list(layers.values()), patato_objects
 
 
 # ---------------------------------------------------------------------------
@@ -381,7 +387,16 @@ def roi_records_from_scan_rois(
     records: list[ROIRecord] = []
     used_ids: set[int] = set()
     next_id = 0
-    next_track = 0
+    # Above every persisted group id, so an ROI without one never takes the number a
+    # later ROI in the file carries.
+    next_track = 1 + max(
+        (
+            int(r.roi_group_id)
+            for r in rois.values()
+            if r.roi_group_id is not None
+        ),
+        default=-1,
+    )
     frameless = []
     for key, roi in rois.items():
         try:
@@ -409,10 +424,11 @@ def roi_records_from_scan_rois(
             frameless.append(key)
 
         # PATATO calls this "roi_group_id", in OPTARI it is `track_id`.
-        track_id = (
-            next_track if roi.roi_group_id is None else int(roi.roi_group_id)
-        )
-        next_track = max(next_track, track_id + 1)
+        if roi.roi_group_id is None:
+            track_id = next_track
+            next_track += 1
+        else:
+            track_id = int(roi.roi_group_id)
         persisted_id = None if roi.roi_id is None else int(roi.roi_id)
 
         # Every frame copy of one ROI shares the group's identity. a scan written
