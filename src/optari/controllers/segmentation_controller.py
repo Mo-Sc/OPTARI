@@ -36,11 +36,8 @@ from optari.utils.setup import (
 )
 from optari.widgets.dock_helpers import (
     add_checkable_item,
-    add_preset_to_combo,
     checked_items,
     populate_preset_combo,
-    prompt_preset_name,
-    remove_selected_preset,
     set_checked,
 )
 
@@ -168,8 +165,10 @@ class SegmentationController(TaskControllerBase):
     Segmentation-related UI actions and geometry helpers.
     Segmentation masks are generated either for a single frame or all frames, depending on the checkbox state in the UI.
     For single frame, the mask will be shown only on the selected frame.
-    In any case, the mask is padded to the full shape of the US data and repeated across the channel dimension for correct napari display.
+    In any case, the mask is padded to the full shape of the US data and broadcast across the channel dimension for correct napari display.
     """
+
+    preset_fallback_name = "segmentation_preset"
 
     def __init__(self, parent_controller):
         """Load the model registry and initialize segmentation state."""
@@ -247,9 +246,7 @@ class SegmentationController(TaskControllerBase):
         self.on_segmentation_model_changed()
 
         populate_preset_combo(dock.preset_combo, self.preset_store)
-
-        if dock.preset_combo.count() > 0:
-            self.on_preset_changed()
+        self.on_preset_changed()
 
         self.refresh_ui()
 
@@ -413,39 +410,28 @@ class SegmentationController(TaskControllerBase):
                 ),
             )
 
-    def on_preset_changed(self) -> None:
-        """Load and apply the selected segmentation preset."""
-        dock = self.optari_controller.segmentation
-        preset_path = dock.preset_combo.currentData()
-        if preset_path is None:
-            return
-
-        try:
-            settings = self.preset_store.load(preset_path)
-            settings = validate_segmentation_settings(settings)
-            model_config = self._segmentation_model_registry.get(
-                settings["model_id"]
-            )
-            if model_config is None:
-                raise ValueError(
-                    f"Unknown segmentation model: {settings['model_id']}"
-                )
-            settings = validate_segmentation_settings(
-                settings, model_config.class_names
-            )
-            self._apply_preset(settings)
-        except (ValueError, OSError) as exc:
-            dock.status_label.setText(f"Could not apply preset: {exc}")
+    @property
+    def preset_dock(self):
+        return self.optari_controller.segmentation
 
     def _apply_preset(self, settings: dict) -> None:
         dock = self.optari_controller.segmentation
-        model_index = dock.segmentation_model_combo.findData(
+        # The model first: the class ids are checked against its classes
+        settings = validate_segmentation_settings(settings)
+        model_config = self._segmentation_model_registry.get(
             settings["model_id"]
         )
-        if model_index < 0:
+        if model_config is None:
             raise ValueError(
                 f"Unknown segmentation model: {settings['model_id']}"
             )
+        settings = validate_segmentation_settings(
+            settings, model_config.class_names
+        )
+        # The combo lists exactly the registry's models
+        model_index = dock.segmentation_model_combo.findData(
+            settings["model_id"]
+        )
         shape_index = dock.roi_shape_combo.findData(settings["roi_shape"])
         if shape_index < 0:
             raise ValueError(f"Unsupported ROI shape: {settings['roi_shape']}")
@@ -492,16 +478,14 @@ class SegmentationController(TaskControllerBase):
             raise ValueError(f"{label} must be a number.")
         return value
 
-    def on_save_preset_clicked(self) -> None:
-        """Save the current segmentation and ROI settings as a new user preset."""
+    def _preset_settings_from_ui(self) -> dict:
         dock = self.optari_controller.segmentation
         selected_class_ids = sorted(self.selected_segmentation_class_ids())
         if not selected_class_ids:
-            dock.status_label.setText("Select at least one class.")
-            return
-
-        try:
-            preset_values = {
+            raise ValueError("Select at least one class.")
+        # Checked before the name prompt, so a bad entry is not found after typing a name
+        return validate_segmentation_settings(
+            {
                 "model_id": self.active_segmentation_model_id,
                 "selected_class_ids": selected_class_ids,
                 "roi_class_id": dock.roi_class_id_combo.currentData(),
@@ -515,46 +499,9 @@ class SegmentationController(TaskControllerBase):
                 "roi_top_margin_mm": self._parse_roi_value(
                     dock.roi_top_margin_edit.text(), "ROI top margin"
                 ),
-            }
-            preset_name = prompt_preset_name(
-                dock.widget, dock.preset_combo, "segmentation_preset"
-            )
-            if preset_name is None:
-                return
-            preset_values = validate_segmentation_settings(
-                preset_values,
-                self._segmentation_model_registry[
-                    self.active_segmentation_model_id
-                ].class_names,
-            )
-            preset_path = self.preset_store.save(preset_name, preset_values)
-        except (KeyError, ValueError, OSError) as exc:
-            dock.status_label.setText(f"Could not save preset: {exc}")
-            return
-
-        add_preset_to_combo(dock.preset_combo, preset_path)
-        dock.status_label.setText(f"Saved preset: {preset_path.name}")
-
-    def on_remove_preset_clicked(self) -> None:
-        """Remove the selected segmentation preset."""
-        dock = self.optari_controller.segmentation
-        preset_path = dock.preset_combo.currentData()
-        if preset_path is None:
-            dock.status_label.setText("Select a preset to remove.")
-            return
-
-        try:
-            removed_path, removed = remove_selected_preset(
-                dock.preset_combo, self.preset_store
-            )
-        except (ValueError, OSError) as exc:
-            dock.status_label.setText(f"Could not remove preset: {exc}")
-            return
-        if not removed:
-            dock.status_label.setText(f"Preset not found: {preset_path.name}")
-            return
-
-        dock.status_label.setText(f"Removed preset: {removed_path.name}")
+            },
+            self._active_segmentation_model_config().class_names,
+        )
 
     def on_segmentation_select_all_classes_clicked(self) -> None:
         """Check all segmentation classes."""

@@ -34,12 +34,7 @@ from optari.widgets.reconstruction_dock import (
     SPEED_OF_SOUND_MAX,
     SPEED_OF_SOUND_MIN,
 )
-from optari.widgets.dock_helpers import (
-    add_preset_to_combo,
-    populate_preset_combo,
-    prompt_preset_name,
-    remove_selected_preset,
-)
+from optari.widgets.dock_helpers import populate_preset_combo
 
 logger = logging.getLogger(__name__)
 
@@ -195,6 +190,8 @@ def _reconstruct_frames(
 class ReconstructionController(TaskControllerBase):
     """Run PATATO reconstruction presets on the loaded scan and add as layers."""
 
+    preset_fallback_name = "reconstruction_preset"
+
     def __init__(self, parent_controller):
         """Initialize preset state and the reconstruction preset store."""
         super().__init__(parent_controller)
@@ -247,29 +244,40 @@ class ReconstructionController(TaskControllerBase):
             dock.status_label.setText("Select a preset and run.")
         dock.run_button.setEnabled(not self.optari_controller.task_running)
 
-    def on_preset_changed(self) -> None:
-        """Load the selected preset into the in-memory settings editor."""
-        dock = self.optari_controller.reconstruction
-        preset_path = dock.preset_combo.currentData()
-        if preset_path is None:
-            self._set_settings_editor({})
-            return
+    @property
+    def preset_dock(self):
+        return self.optari_controller.reconstruction
 
-        try:
-            preset_settings = self.preset_store.load(preset_path)
-            self._set_settings_editor(preset_settings)
-            self._applied_settings = preset_settings
-            self._settings_dirty = False
-            warning = self._set_speed_of_sound_slider(
-                preset_settings.get(
-                    ReconAttributeTags.SPEED_OF_SOUND, SPEED_OF_SOUND_DEFAULT
-                )
+    def _apply_preset(self, settings: dict) -> None:
+        """Show a loaded preset in the settings editor and use it for the next run."""
+        self._set_settings_editor(settings)
+        self._use_settings(settings)
+
+    def _use_settings(self, settings_dict: dict) -> None:
+        """Make *settings_dict* what a run uses, with its speed of sound on the slider."""
+        self._applied_settings = settings_dict
+        self._settings_dirty = False
+        warning = self._set_speed_of_sound_slider(
+            settings_dict.get(
+                ReconAttributeTags.SPEED_OF_SOUND, SPEED_OF_SOUND_DEFAULT
             )
-        except (ValueError, OSError) as e:
-            dock.status_label.setText(f"Could not load preset: {e}")
-            return
-        if warning:
-            dock.status_label.setText(warning)
+        )
+        self.optari_controller.reconstruction.status_label.setText(
+            f"Preset applied. {warning}".strip()
+        )
+
+    def _preset_settings_from_ui(self) -> dict:
+        """The JSON editor's settings. Raises ValueError with the reason."""
+        text = (
+            self.optari_controller.reconstruction.settings_edit.toPlainText()
+        )
+        try:
+            settings_dict = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Invalid JSON settings: {exc.msg}") from exc
+        if not isinstance(settings_dict, dict):
+            raise ValueError("JSON settings must be an object.")
+        return settings_dict
 
     def on_all_settings_toggled(self, checked: bool) -> None:
         """Show or hide the in-memory JSON settings editor."""
@@ -288,71 +296,14 @@ class ReconstructionController(TaskControllerBase):
 
     def on_apply_preset_clicked(self) -> None:
         """Validate and apply the edited JSON settings in memory."""
-        dock = self.optari_controller.reconstruction
         try:
-            settings_dict = json.loads(dock.settings_edit.toPlainText())
-        except json.JSONDecodeError as exc:
-            dock.status_label.setText(f"Invalid JSON settings: {exc.msg}")
-            return
-        if not isinstance(settings_dict, dict):
-            dock.status_label.setText("JSON settings must be an object.")
-            return
-
-        self._applied_settings = settings_dict
-        self._settings_dirty = False
-        speed_of_sound = settings_dict.get(
-            ReconAttributeTags.SPEED_OF_SOUND, SPEED_OF_SOUND_DEFAULT
-        )
-        warning = self._set_speed_of_sound_slider(speed_of_sound)
-        dock.status_label.setText(f"Preset applied. {warning}".strip())
-
-    def on_remove_preset_clicked(self) -> None:
-        """Remove the selected reconstruction preset."""
-        dock = self.optari_controller.reconstruction
-        preset_path = dock.preset_combo.currentData()
-        if preset_path is None:
-            dock.status_label.setText("Select a preset to remove.")
-            return
-
-        try:
-            removed_path, removed = remove_selected_preset(
-                dock.preset_combo, self.preset_store
+            settings_dict = self._preset_settings_from_ui()
+        except ValueError as exc:
+            self.optari_controller.reconstruction.status_label.setText(
+                str(exc)
             )
-        except (ValueError, OSError) as exc:
-            dock.status_label.setText(f"Could not remove preset: {exc}")
             return
-        if not removed:
-            dock.status_label.setText(f"Preset not found: {preset_path.name}")
-            return
-
-        dock.status_label.setText(f"Removed preset: {removed_path.name}")
-
-    def on_save_preset_clicked(self) -> None:
-        """Save the current JSON editor contents as a new user preset."""
-        dock = self.optari_controller.reconstruction
-        try:
-            settings_dict = json.loads(dock.settings_edit.toPlainText())
-        except json.JSONDecodeError as exc:
-            dock.status_label.setText(f"Invalid JSON settings: {exc.msg}")
-            return
-        if not isinstance(settings_dict, dict):
-            dock.status_label.setText("JSON settings must be an object.")
-            return
-
-        preset_name = prompt_preset_name(
-            dock.widget, dock.preset_combo, "reconstruction_preset"
-        )
-        if preset_name is None:
-            return
-
-        try:
-            preset_path = self.preset_store.save(preset_name, settings_dict)
-        except (ValueError, OSError) as exc:
-            dock.status_label.setText(f"Could not save preset: {exc}")
-            return
-
-        add_preset_to_combo(dock.preset_combo, preset_path)
-        dock.status_label.setText(f"Saved preset: {preset_path.name}")
+        self._use_settings(settings_dict)
 
     def _set_settings_editor(self, settings_dict: dict) -> None:
         dock = self.optari_controller.reconstruction

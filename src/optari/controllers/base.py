@@ -20,6 +20,11 @@ from optari.patato_bridge import (
 )
 from optari.utils.metadata import json_default
 from optari.utils.tasks import download_then, start_task
+from optari.widgets.dock_helpers import (
+    add_preset_to_combo,
+    prompt_preset_name,
+    remove_selected_preset,
+)
 
 if TYPE_CHECKING:
     from optari.controllers.optari_controller import OptariController
@@ -42,6 +47,15 @@ class TaskControllerBase:
 
     Batch mode builds params from a preset instead and calls the same `prepare` and
     `publish`, which is what keeps its numbers equal to the GUI's.
+
+    A controller whose dock has a preset row (combo, Save, Remove) sets `preset_store`
+    and `preset_fallback_name`, and implements:
+
+    - `preset_dock`, the dock holding the row and a `status_label`
+    - `_preset_settings_from_ui()`, the dock's settings as a preset dict, raising
+      ValueError with a user-facing message
+    - `_apply_preset(settings)`, put a loaded preset into the dock, raising on a
+      malformed one before changing anything where it can
     """
 
     image_units = ("dimensionless", "dimensionless", "mm", "mm")
@@ -84,6 +98,58 @@ class TaskControllerBase:
     def refresh_ui(self) -> None:
         """Refresh controller-owned UI after application state changes."""
         pass
+
+    # ============ presets ============
+    def on_preset_changed(self) -> None:
+        """Apply the preset selected in the dock's combo."""
+        dock = self.preset_dock
+        preset_path = dock.preset_combo.currentData()
+        if preset_path is None:
+            return
+        try:
+            self._apply_preset(self.preset_store.load(preset_path))
+        # Preset files are user-edited JSON, so any field may have any type
+        except (TypeError, ValueError, KeyError, OSError) as exc:
+            dock.status_label.setText(f"Could not apply preset: {exc}")
+
+    def on_save_preset_clicked(self) -> None:
+        """Save the dock's current settings as a new user preset."""
+        dock = self.preset_dock
+        try:
+            preset_settings = self._preset_settings_from_ui()
+        except ValueError as exc:
+            dock.status_label.setText(f"Could not save preset: {exc}")
+            return
+        name = prompt_preset_name(
+            dock.widget, dock.preset_combo, self.preset_fallback_name
+        )
+        if name is None:
+            return
+        try:
+            preset_path = self.preset_store.save(name, preset_settings)
+        except (ValueError, OSError) as exc:
+            dock.status_label.setText(f"Could not save preset: {exc}")
+            return
+        # Selecting it applies it through on_preset_changed
+        add_preset_to_combo(dock.preset_combo, preset_path)
+        dock.status_label.setText(f"Saved preset: {preset_path.name}")
+
+    def on_remove_preset_clicked(self) -> None:
+        """Delete the preset selected in the dock's combo."""
+        dock = self.preset_dock
+        try:
+            removed_path, removed = remove_selected_preset(
+                dock.preset_combo, self.preset_store
+            )
+        except OSError as exc:
+            dock.status_label.setText(f"Could not remove preset: {exc}")
+            return
+        if removed_path is None:
+            dock.status_label.setText("Select a preset to remove.")
+        elif not removed:
+            dock.status_label.setText(f"Preset not found: {removed_path.name}")
+        else:
+            dock.status_label.setText(f"Removed preset: {removed_path.name}")
 
     # ============ running a step from the dock ============
     def weights_to_fetch(self, params) -> tuple[Path, str | None] | None:

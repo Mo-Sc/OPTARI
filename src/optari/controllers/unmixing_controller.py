@@ -31,12 +31,9 @@ from optari.utils.presets import PresetStore
 from optari.utils.setup import get_user_unmixing_presets_dir
 from optari.widgets.dock_helpers import (
     add_checkable_item,
-    add_preset_to_combo,
     checked_items,
     list_items,
     populate_preset_combo,
-    prompt_preset_name,
-    remove_selected_preset,
     set_checked,
 )
 
@@ -348,6 +345,8 @@ def _unmix_frames(
 class UnmixingController(TaskControllerBase):
     """Run spectral unmixing and add as layers."""
 
+    preset_fallback_name = "unmixing_preset"
+
     def __init__(self, parent_controller):
         """Initialize the unmixing preset store."""
         super().__init__(parent_controller)
@@ -401,10 +400,13 @@ class UnmixingController(TaskControllerBase):
         self.refresh_ui()
         self.on_chromophores_changed()
 
-    def on_save_preset_clicked(self) -> None:
-        """Save the current unmixing controls as a new user preset."""
+    @property
+    def preset_dock(self):
+        return self.optari_controller.unmixing
+
+    def _preset_settings_from_ui(self) -> dict:
         dock = self.optari_controller.unmixing
-        preset_settings = {
+        return {
             UnmixingAttributeTags.RESOLUTION_REDUCE: dock.resolution_reduction_factor.value(),
             UnmixingAttributeTags.UNMIXING_WAVELENGTHS: self._checked_wavelengths(),
             UnmixingAttributeTags.SPECTRA: self._checked_chromophores(),
@@ -412,42 +414,6 @@ class UnmixingController(TaskControllerBase):
             UnmixingAttributeTags.COMPUTE_SO2: dock.generate_so2_checkbox.isChecked(),
             UnmixingAttributeTags.SUFFIX: dock.suffix_edit.text().strip(),
         }
-        preset_name = prompt_preset_name(
-            dock.widget, dock.preset_combo, "unmixing_preset"
-        )
-        if preset_name is None:
-            return
-
-        try:
-            preset_path = self.preset_store.save(preset_name, preset_settings)
-        except (ValueError, OSError) as exc:
-            dock.status_label.setText(f"Could not save preset: {exc}")
-            return
-
-        add_preset_to_combo(dock.preset_combo, preset_path)
-        dock.status_label.setText(f"Saved preset: {preset_path.name}")
-        self.on_preset_changed()
-
-    def on_remove_preset_clicked(self) -> None:
-        """Remove the selected unmixing preset."""
-        dock = self.optari_controller.unmixing
-        preset_path = dock.preset_combo.currentData()
-        if preset_path is None:
-            dock.status_label.setText("Select a preset to remove.")
-            return
-
-        try:
-            removed_path, removed = remove_selected_preset(
-                dock.preset_combo, self.preset_store
-            )
-        except (ValueError, OSError) as exc:
-            dock.status_label.setText(f"Could not remove preset: {exc}")
-            return
-        if not removed:
-            dock.status_label.setText(f"Preset not found: {preset_path.name}")
-            return
-
-        dock.status_label.setText(f"Removed preset: {removed_path.name}")
 
     def refresh_ui(self) -> None:
         """Refresh source-dependent controls from the active layer."""
@@ -499,36 +465,26 @@ class UnmixingController(TaskControllerBase):
             lambda item: False,
         )
 
-    def on_preset_changed(self) -> None:
-        """Load selected preset values into the unmixing controls."""
+    def _apply_preset(self, settings: dict) -> None:
         dock = self.optari_controller.unmixing
-        preset_path = dock.preset_combo.currentData()
-        if preset_path is None:
-            return
-
-        try:
-            settings = self.preset_store.load(preset_path)
-            reduce_factor = int(
-                settings.get(UnmixingAttributeTags.RESOLUTION_REDUCE, 1)
+        # Every value read before the first widget changes, so a bad preset changes nothing
+        reduce_factor = int(
+            settings.get(UnmixingAttributeTags.RESOLUTION_REDUCE, 1)
+        )
+        spectra = set(settings.get(UnmixingAttributeTags.SPECTRA, []))
+        # Same resolution as a batch run, so the dock shows what a run would use.
+        selected_wavelengths = set(
+            resolve_unmixing_wavelengths(
+                settings,
+                [
+                    item.data(Qt.UserRole)
+                    for item in list_items(dock.wavelengths_list)
+                ],
             )
-            spectra = set(settings.get(UnmixingAttributeTags.SPECTRA, []))
-            # Same resolution as a batch run, so the dock shows what a run would use.
-            selected_wavelengths = set(
-                resolve_unmixing_wavelengths(
-                    settings,
-                    [
-                        item.data(Qt.UserRole)
-                        for item in list_items(dock.wavelengths_list)
-                    ],
-                )
-            )
-
-            compute_so2 = settings.get(UnmixingAttributeTags.COMPUTE_SO2, True)
-            compute_thb = settings.get(UnmixingAttributeTags.COMPUTE_THB, True)
-            suffix = str(settings.get(UnmixingAttributeTags.SUFFIX, ""))
-        except (TypeError, ValueError, KeyError, OSError) as exc:
-            dock.status_label.setText(f"Could not apply preset: {exc}")
-            return
+        )
+        compute_so2 = settings.get(UnmixingAttributeTags.COMPUTE_SO2, True)
+        compute_thb = settings.get(UnmixingAttributeTags.COMPUTE_THB, True)
+        suffix = str(settings.get(UnmixingAttributeTags.SUFFIX, ""))
 
         dock.resolution_reduction_factor.setValue(max(1, reduce_factor))
         dock.suffix_edit.setText(suffix)
