@@ -337,9 +337,23 @@ class OptariController:
         Otherwise a deleted reconstruction/unmixed layer stays in `derived_patato_objects`
         and gets written into the next HDF5 export as if it were still on screen.
         """
-        name = event.value.name
-        self.patato_objects.pop(name, None)
-        self.derived_patato_objects.pop(name, None)
+        layer = event.value
+        self.patato_objects.pop(layer.name, None)
+        self.derived_patato_objects.pop(layer.name, None)
+
+        if (
+            layer is not self.active_recon_layer
+            and layer is not self.active_us_layer
+        ):
+            return
+        if layer is self.active_us_layer:
+            self.active_us_layer = None
+            self.analysis_ctrl.show_motion_scores(compute=False)
+        if layer is self.active_recon_layer:
+            self.active_recon_layer = None
+            self.resolve_active_recon_layer()
+        self.refresh_controller_uis()
+        self.refresh_all()
 
     def on_selection_changed(self, event=None) -> None:
         self.resolve_active_recon_layer()

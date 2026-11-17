@@ -245,6 +245,17 @@ class RoiController(TaskControllerBase):
         """Records for the ROIs currently displayed, in display order."""
         return [self._roi_records[roi_id] for roi_id in self._projection_ids]
 
+    def colors_by_roi_id(self) -> dict[int, str]:
+        """Each ROI's display colour, taken from its track.
+
+        By track rather than display position, so one tracked ROI keeps its colour on
+        every frame and in every plot, whichever other ROIs share a frame with it.
+        """
+        return {
+            r.roi_id: roi_color_for_index(r.track_id)
+            for r in self._roi_records.values()
+        }
+
     def expand_current_projection_to_all_frames(
         self,
         verts_for_frame: (
@@ -539,9 +550,7 @@ class RoiController(TaskControllerBase):
         """Recolor and relabel ROI shapes from their records."""
         shapes = self.optari_controller.shapes_layer
         records = self.current_records()
-        shapes.edge_color = [
-            roi_color_for_index(i) for i in range(len(records))
-        ]
+        shapes.edge_color = [roi_color_for_index(r.track_id) for r in records]
         shapes.properties = {
             "roi_id": [r.roi_id for r in records],
             "track_id": [r.track_id for r in records],
@@ -620,15 +629,25 @@ class RoiController(TaskControllerBase):
         if frame_channel is None:
             return
         frame_idx, channel_idx = frame_channel
+        records = self.current_records()
         df_live = compute_roi_stats(
-            self.current_records(),
+            records,
             layer,
             frame_idx,
             channel_idx,
             scan_fov_m=self.optari_controller.scan_ctrl.get_fov(),
             clamp=self.intensity_clamp,
-            feature_ids=live_cols,
+            feature_ids=["roi_id", *(c for c in live_cols if c != "roi_id")],
         )
+        # An ROI that cannot be rasterised has no row. Row index must stay shape index,
+        # colouring and selection sync rely on it, so it gets an empty row instead.
+        if not df_live.empty:
+            df_live = (
+                df_live.set_index("roi_id")
+                .reindex([r.roi_id for r in records])
+                .reset_index()
+            )
+        df_live = df_live[live_cols]
 
         self._syncing = True
         try:
@@ -637,12 +656,13 @@ class RoiController(TaskControllerBase):
         finally:
             self._syncing = False
 
-        # Color first table column to match each ROI color. A shape whose geometry
-        # cannot be measured has no row.
-        for row_idx in range(len(shapes.data)):
+        # Colour the first table column like the ROI's shape.
+        for row_idx, record in enumerate(records):
             item = table.native.item(row_idx, 0)
             if item is not None:
-                item.setBackground(QColor(roi_color_for_index(row_idx)))
+                item.setBackground(
+                    QColor(roi_color_for_index(record.track_id))
+                )
 
     def on_save_clicked(self, event=None) -> None:
         """Measure the ROIs selected in the viewer and add to the Saved Analysis table."""
@@ -1034,16 +1054,9 @@ class RoiController(TaskControllerBase):
         dims.current_step = (int(frame_idx), *dims.current_step[1:])
 
     def _refresh_roi_presets_ui(self) -> None:
-        try:
-            names = [
-                preset.name for preset in self._roi_preset_store.list_presets()
-            ]
-        except (TypeError, ValueError, OSError) as exc:
-            self.optari_controller.annotation.set_roi_preset_names([])
-            self.optari_controller.annotation.roi_presets_description_label.setText(
-                f"Could not load ROI presets: {exc}"
-            )
-            return
+        # Names only: parsing every file here meant one broken preset emptied the
+        # whole list. Selecting a broken one reports it instead.
+        names = [path.stem for path in self._roi_preset_store.list_paths()]
         self.optari_controller.annotation.set_roi_preset_names(names)
         self.optari_controller.annotation.roi_presets_description_label.setText(
             ""

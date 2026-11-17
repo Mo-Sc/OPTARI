@@ -47,8 +47,15 @@ class ViewerExportController:
         default_name += f"_C{channel_id}"
 
         if dialog_settings["video"]:
+            # Only the frames the active layer holds. On the others the viewer snaps
+            # back to the nearest one, so the video would repeat it.
+            layer = controller.active_recon_layer
+            frames = list(
+                (layer.metadata.get("frames") if layer is not None else None)
+                or range(n_frames)
+            )
             ViewerExportController._export_video(
-                viewer, parent_widget, default_name, n_frames, dialog_settings
+                viewer, parent_widget, default_name, frames, dialog_settings
             )
             return
 
@@ -86,7 +93,7 @@ class ViewerExportController:
         viewer,
         parent_widget,
         default_name: str,
-        n_frames: int,
+        frames: list[int],
         dialog_settings,
     ) -> None:
         """Capture the viewer canvas frame by frame and mux it into an MP4.
@@ -133,7 +140,7 @@ class ViewerExportController:
                 viewer, dialog_settings["include_colorbars"]
             ):
                 for frame_id in cancelable_progress(
-                    range(n_frames), desc="Exporting video"
+                    frames, desc="Exporting video"
                 ):
                     viewer.dims.current_step = (
                         frame_id,
@@ -159,7 +166,7 @@ class ViewerExportController:
             show_activity_dock(viewer, False)
             if writer is not None:
                 writer.release()
-            if frames_written == n_frames:
+            if frames_written == len(frames):
                 tmp_path.replace(filename)
                 logger.info("Video export done: %s", filename)
             else:
@@ -167,5 +174,5 @@ class ViewerExportController:
                 logger.info(
                     "Video export cancelled or failed after %s/%s frame(s); discarded",
                     frames_written,
-                    n_frames,
+                    len(frames),
                 )

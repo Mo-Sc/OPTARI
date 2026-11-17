@@ -159,6 +159,18 @@ class AnalysisController(TaskControllerBase):
         dock.frame_line.show()
         self.update_frame_lines()
 
+    def clear_plots(self) -> None:
+        """Empty the Temporal, Histogram and Spectral plots.
+
+        Called on a scan change
+        """
+        for dock in (
+            self.optari_controller.time_analysis,
+            self.optari_controller.histograms,
+            self.optari_controller.spectrum,
+        ):
+            dock.clear()
+
     def update_frame_lines(self) -> None:
         """Move the Motion and Temporal frame lines to the viewer's current frame."""
         frame_channel = selected_frame_and_channel(self.viewer)
@@ -197,20 +209,6 @@ class AnalysisController(TaskControllerBase):
     def _current_frame_channel(self) -> tuple[int, int]:
         """Current (frame, channel) from viewer dims. Plots fall back to the first."""
         return selected_frame_and_channel(self.viewer) or (0, 0)
-
-    def _clear_plot_layout(self, container) -> object | None:
-        """Remove and delete all plot widgets from a dock container layout."""
-        layout = container.layout()
-        if layout is None:
-            return None
-
-        while layout.count():
-            item = layout.takeAt(0)
-            w = item.widget() if item is not None else None
-            if w is not None:
-                w.setParent(None)
-                w.deleteLater()
-        return layout
 
     def _refresh_time_analysis_track_combo(self) -> int | None:
         """Repopulate the track-id combo from live ROI records.
@@ -267,9 +265,8 @@ class AnalysisController(TaskControllerBase):
     def on_generate_time_analysis_clicked(self, event=None) -> None:
         """Compute and plot the time series for the current Time Analysis scope.
 
-        Validates that ROIs and a multi-frame PA layer are selected, lazily creates the
-        plot widget on first use, then redraws all series for either the selected ROIs
-        or a single tracked ID.
+        Validates that ROIs and a multi-frame PA layer are selected, then redraws all
+        series for either the selected ROIs or a single tracked ID.
         """
         annotation = self.optari_controller.annotation
         track_scope = annotation.time_analysis_track_radio.isChecked()
@@ -293,27 +290,15 @@ class AnalysisController(TaskControllerBase):
         ):
             error_msg = "PA image layer has less than 2 frames"
 
+        time_analysis = self.optari_controller.time_analysis
         if error_msg:
-            self.optari_controller.time_analysis.status_label.setText(
+            time_analysis.clear()
+            time_analysis.status_label.setText(
                 f'<span style="color:red">{error_msg}</span>'
             )
-            if self.optari_controller.time_analysis.plot_widget is not None:
-                self.optari_controller.time_analysis.plot_widget.clear()
             return
 
-        if self.optari_controller.time_analysis.plot_widget is None:
-            plot = pg.PlotWidget()
-            plot.showGrid(x=True, y=True)
-            plot.addLegend()
-            self.optari_controller.time_analysis.plot_widget = plot
-            layout = (
-                self.optari_controller.time_analysis.plot_container.layout()
-            )
-            if layout is not None:
-                layout.addWidget(plot)
-
-        plot = self.optari_controller.time_analysis.plot_widget
-        assert plot is not None
+        plot = time_analysis.plot_widget
 
         _, channel_idx = self._current_frame_channel()
         feature_id = (
@@ -331,11 +316,10 @@ class AnalysisController(TaskControllerBase):
         key_label = "Track" if track_scope else "ROI"
 
         if not series:
-            self.optari_controller.time_analysis.status_label.setText(
+            time_analysis.clear()
+            time_analysis.status_label.setText(
                 f'<span style="color:red">No data for the selected {key_label.lower()}.</span>'
             )
-            if self.optari_controller.time_analysis.plot_widget is not None:
-                self.optari_controller.time_analysis.plot_widget.clear()
             return
 
         plot.clear()
@@ -344,8 +328,10 @@ class AnalysisController(TaskControllerBase):
             self.optari_controller.time_analysis.frame_line, ignoreBounds=True
         )
 
-        for position, (key, y) in enumerate(series.items()):
-            color = roi_color_for_index(position)
+        colors = self.optari_controller.roi_ctrl.colors_by_roi_id()
+        for key, y in series.items():
+            # keyed by track id in the Track ID scope, by ROI id otherwise
+            color = roi_color_for_index(key) if track_scope else colors[key]
             plot.plot(
                 x,
                 y,
@@ -397,11 +383,9 @@ class AnalysisController(TaskControllerBase):
             )
             return
         if len(self.optari_controller.shapes_layer.data) == 0:
+            self.optari_controller.histograms.clear()
             self.optari_controller.histograms.status_label.setText(
                 '<span style="color:red">No ROIs defined</span>'
-            )
-            self._clear_plot_layout(
-                self.optari_controller.histograms.plots_container
             )
             return
         if self.optari_controller.active_recon_layer is None:
@@ -420,12 +404,12 @@ class AnalysisController(TaskControllerBase):
             clamp=self.optari_controller.roi_ctrl.intensity_clamp,
         )
 
-        layout = self._clear_plot_layout(
-            self.optari_controller.histograms.plots_container
-        )
+        self.optari_controller.histograms.clear()
+        layout = self.optari_controller.histograms.plots_container.layout()
 
+        colors = self.optari_controller.roi_ctrl.colors_by_roi_id()
         n_plotted = 0
-        for position, (roi_id, vals) in enumerate(roi_vals.items()):
+        for roi_id, vals in roi_vals.items():
             vals = np.asarray(vals)
             # Remove NaN values before computing histogram
             vals = vals[np.isfinite(vals)]
@@ -442,7 +426,7 @@ class AnalysisController(TaskControllerBase):
             x = (edges[:-1] + edges[1:]) / 2.0
             width = float(edges[1] - edges[0])
 
-            color = roi_color_for_index(position)
+            color = colors[roi_id]
             brush = pg.mkBrush(color)
             pen = pg.mkPen(color)
 
@@ -458,8 +442,7 @@ class AnalysisController(TaskControllerBase):
             )
             plot.addItem(bar)
 
-            if layout is not None:
-                layout.addWidget(plot)
+            layout.addWidget(plot)
             n_plotted += 1
 
         self.optari_controller.histograms.status_label.setText(
@@ -474,11 +457,9 @@ class AnalysisController(TaskControllerBase):
             )
             return
         if len(self.optari_controller.shapes_layer.data) == 0:
+            self.optari_controller.spectrum.clear()
             self.optari_controller.spectrum.status_label.setText(
                 '<span style="color:red">No ROIs defined</span>'
-            )
-            self._clear_plot_layout(
-                self.optari_controller.spectrum.plots_container
             )
             return
         if self.optari_controller.active_recon_layer is None:
@@ -496,9 +477,8 @@ class AnalysisController(TaskControllerBase):
             clamp=self.optari_controller.roi_ctrl.intensity_clamp,
         )
 
-        layout = self._clear_plot_layout(
-            self.optari_controller.spectrum.plots_container
-        )
+        self.optari_controller.spectrum.clear()
+        layout = self.optari_controller.spectrum.plots_container.layout()
 
         n_plotted = 0
         axis1_name = str(
@@ -507,11 +487,12 @@ class AnalysisController(TaskControllerBase):
             )
         )
         x_label = "Channel" if axis1_name.lower() == "channel" else axis1_name
-        for position, (roi_id, y) in enumerate(series.items()):
+        colors = self.optari_controller.roi_ctrl.colors_by_roi_id()
+        for roi_id, y in series.items():
             if y.size == 0 or np.all(np.isnan(y)):
                 continue
 
-            color = roi_color_for_index(position)
+            color = colors[roi_id]
 
             plot = pg.PlotWidget()
             plot.setTitle(f"ROI {roi_id}")
@@ -534,8 +515,7 @@ class AnalysisController(TaskControllerBase):
                 ]
                 plot.getAxis("bottom").setTicks([tick_values])
 
-            if layout is not None:
-                layout.addWidget(plot)
+            layout.addWidget(plot)
             n_plotted += 1
 
         self.optari_controller.spectrum.status_label.setText(

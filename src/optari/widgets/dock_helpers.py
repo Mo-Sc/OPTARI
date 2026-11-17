@@ -189,13 +189,14 @@ class RoiPlotsDock:
             status_label=status_label,
         )
 
-
-def create_bottom_single_plot_container() -> QWidget:
-    """Create the single-plot container used by the time-analysis bottom dock."""
-    plot_container = QWidget()
-    plot_layout = QVBoxLayout(plot_container)
-    plot_layout.setContentsMargins(0, 0, 0, 0)
-    return plot_container
+    def clear(self) -> None:
+        """Remove every plot and the status text."""
+        layout = self.plots_container.layout()
+        while layout.count():
+            plot = layout.takeAt(0).widget()
+            plot.setParent(None)  # hidden now, not only once deleteLater runs
+            plot.deleteLater()
+        self.status_label.setText("")
 
 
 def create_number_edit(

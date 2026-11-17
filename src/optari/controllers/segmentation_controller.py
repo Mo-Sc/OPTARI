@@ -730,6 +730,8 @@ class SegmentationController(TaskControllerBase):
             },
             units=self.image_units,
         )
+        # ROI outlines must stay visible above the half-transparent mask
+        self.optari_controller.ensure_shapes_layer_on_top()
         self._populate_roi_class_combo(mask, class_names)
         if not blank_positions:
             return f"{len(params.output_frames)} frame(s) segmented"

@@ -88,13 +88,6 @@ class RoiPreset:
 class RoiPresetStore(PresetStore):
     """Load and save named ROI presets in the user preset directory."""
 
-    def list_presets(self) -> list[RoiPreset]:
-        """Load every saved preset."""
-        return [
-            RoiPreset.from_dict(path.stem, self.load(path))
-            for path in self.list_paths()
-        ]
-
     def get(self, name: str) -> RoiPreset:
         """Load the preset named *name*."""
         return RoiPreset.from_dict(name, self.load(name))

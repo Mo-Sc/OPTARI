@@ -122,6 +122,7 @@ class ScanController(TaskControllerBase):
             self.viewer.layers.remove(layer)
         self.optari_controller.refresh_controller_uis()
         self.optari_controller.analysis_ctrl.show_motion_scores(compute=False)
+        self.optari_controller.analysis_ctrl.clear_plots()
         if restore_startup_logo:
             load_startup_logo(self.viewer)
 
@@ -213,6 +214,20 @@ class ScanController(TaskControllerBase):
                 data, units=self.image_units, **kw
             ).colorbar.visible = True
 
+        # Set the active US layer if available.
+        self.optari_controller.active_us_layer = next(
+            (
+                l
+                for l in self.viewer.layers
+                if isinstance(l, Image) and l.metadata.get("type") == "us"
+            ),
+            None,
+        )
+        # Before the ROIs layer, so the ROI outlines are drawn above the mask.
+        self.optari_controller.segmentation_ctrl.restore_from_scan(
+            self.optari_controller.pa_data
+        )
+
         # Create the ROIs layer after image layers so it stays on top.
         self.optari_controller.shapes_layer = self.viewer.add_shapes(
             name="ROIs",
@@ -226,26 +241,13 @@ class ScanController(TaskControllerBase):
         self.optari_controller.shapes_layer.locked = True
         self.optari_controller.connect_shapes_layer_events()
 
-        # After adding layers, pick a sensible default selected layer.
+        # Last, so the selection ends on a PA layer and not on a layer added after it.
         try:
             self.optari_controller.select_default_pa_layer()
         except RuntimeError as e:
             logger.info("Default PA layer not found", exc_info=True)
             show_warning(str(e))
-
-        # Set the active US layer if available.
-        self.optari_controller.active_us_layer = next(
-            (
-                l
-                for l in self.viewer.layers
-                if isinstance(l, Image) and l.metadata.get("type") == "us"
-            ),
-            None,
-        )
         self.optari_controller.resolve_active_recon_layer()
-        self.optari_controller.segmentation_ctrl.restore_from_scan(
-            self.optari_controller.pa_data
-        )
         self.optari_controller.refresh_controller_uis()
 
         # Initialize viewer position to DEFAULT_FRAME_INDEX and DEFAULT_CHANNEL_INDEX
