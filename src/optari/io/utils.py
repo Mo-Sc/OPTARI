@@ -10,24 +10,35 @@ import imageio.v3 as iio
 from napari.layers import Image
 from napari.viewer import Viewer
 
+from optari import __version__
+
 
 @contextmanager
-def colorbars_visible(viewer: Viewer, visible: bool):
-    """
-    Temporarily set built-in napari colorbar visibility for all images.
-    Useful for exporting images.
+def export_overlays(viewer: Viewer, include_colorbars: bool):
+    """Temporarily set the canvas up for an exported image or video: colorbars of all
+    images on or off, and the OPTARI version stamped bottom left.
     """
     image_layers = [
         layer for layer in viewer.layers if isinstance(layer, Image)
     ]
     previous = [(layer, layer.colorbar.visible) for layer in image_layers]
     for layer, _ in previous:
-        layer.colorbar.visible = visible
+        layer.colorbar.visible = include_colorbars
+    watermark = viewer.canvas.overlays.text
+    previous_watermark = watermark.dict()
+    watermark.update(
+        {
+            "text": f"Created by OPTARI v{__version__}",
+            "position": "bottom_left",
+            "visible": True,
+        }
+    )
     try:
         yield
     finally:
         for layer, was_visible in previous:
             layer.colorbar.visible = was_visible
+        watermark.update(previous_watermark)
 
 
 def filename_token(text: str) -> str:
@@ -44,7 +55,7 @@ def save_viewer_screenshot(
     Shared by the Export View dialog and batch mode so an overlay saved by a batch
     run is the same image the user would have exported by hand.
     """
-    with colorbars_visible(viewer, include_colorbars):
+    with export_overlays(viewer, include_colorbars):
         image = viewer.screenshot(canvas_only=True)[..., :3]
     # Not cv2.imwrite, which returns False instead of raising and has a history of
     # failing on non-ASCII paths on Windows (user folders with umlauts).

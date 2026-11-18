@@ -11,7 +11,7 @@ import cv2
 from napari.utils.progress import cancelable_progress
 from qtpy.QtWidgets import QFileDialog
 
-from optari.io.utils import colorbars_visible, save_viewer_screenshot
+from optari.io.utils import export_overlays, save_viewer_screenshot
 from optari.utils.viewer import show_activity_dock
 from optari.widgets.viewer_export_dialog import ViewerExportDialog
 
@@ -136,9 +136,7 @@ class ViewerExportController:
             show_activity_dock(viewer, True)
             viewer.scene.camera.mouse_pan = False
             viewer.scene.camera.mouse_zoom = False
-            with colorbars_visible(
-                viewer, dialog_settings["include_colorbars"]
-            ):
+            with export_overlays(viewer, dialog_settings["include_colorbars"]):
                 for frame_id in cancelable_progress(
                     frames, desc="Exporting video"
                 ):
