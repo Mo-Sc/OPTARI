@@ -13,7 +13,7 @@ To create a new reconstruction, raw time series data must be available — eithe
 
 - `backproject_clinical`: default reconstruction settings from PATATO. 
 - `backproject_ithera`: PATATO backprojection, with settings that closely resemble the default iThera backprojection: preprocessed with a 50kHz high-pass filter, correcting for the scanner's acquisition delay, keeping the impulse-response correction from moving the image in depth and using sos of 1497 m/s.
-- `deepmb_ithera` (experimental): DeepMB, with settings for iThera MSOT Acuity Echo devices. Requires a pretrained model: `model_path` is the weights file, relative to the `models` folder of the OPTARI user directory or an absolute path, and an optional `model_url` lets OPTARI download it on first use.
+- `deepmb_ithera` (experimental): DeepMB, with settings for iThera MSOT Acuity Echo devices. Requires a pretrained model: `model_path` is the weights file, relative to the `models` folder of the OPTARI user directory or an absolute path, and an optional `model_url` lets OPTARI download it on first use (see [presets](../configuration/presets.md#reconstruction-presets-presetsreconstruction)).
 
 **(2)** Adjust the **speed of sound** if needed. The slider takes whole m/s between 1400 and 1600 m/s. If a preset's value is a fraction or outside that range, OPTARI warns you and the dock runs with the nearest slider value, while a [batch run](batch-processing.md) uses the preset's exact value.
 

@@ -67,6 +67,8 @@ Two optional keys control the timing of the preprocessing:
 - `DAQ_DELAY_CORRECTION` (`true`/`false`): iThera scanners start recording 200 ns after the laser pulse (`DAQTriggerDelay` in the `.msot` file). Without the correction every structure appears about 0.3 mm too shallow. With it on, a scan that records no delay is refused with an error instead of being reconstructed as if there were none; this applies to HDF5 files converted before OPTARI stored the delay, which have to be converted again from the original scan.
 - `IRF_TIME_ZERO`: where the impulse response's time zero is assumed when `IRF` is on. `"centre"` (PATATO's default) or `"peak"` makes the impulse-response correction sharpen the signal without moving it.
 
+DeepMB presets differ: The network's output grid is fixed and read from the model file, so a DeepMB preset has no `RECONSTRUCTION_N*` or `RECONSTRUCTION_FIELD_OF_VIEW_*` keys and is refused if it sets them. The model does its own band-pass filtering and windowing, so `IRF`, `HILBERT_TRANSFORM` and `DAQ_DELAY_CORRECTION` stay off, the interpolation factors stay 1, and the speed of sound must lie in the model's trained range (1440–1580 m/s for v1.6.0). `OFFSET_Z` places the image in depth, in mm below the scan's field-of-view edge. The model's own geometry puts its first row 7.0 mm down, but visual alignment seems best at 6.7mm, so that is what the preset uses. `laser_energy` stays 1.0 because PATATO already corrects each pulse for its laser energy.
+
 ## Unmixing presets (`presets/unmixing/`)
 
 Wavelength range, chromophore selection, and derived-parameter options.
