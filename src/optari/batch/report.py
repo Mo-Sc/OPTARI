@@ -14,7 +14,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from optari.io.export_pipeline import ROI_TABLE_META_SHEET, file_origin
+from optari.provenance import file_origin
+from optari.roi.roi_table_io import ROI_TABLE_META_SHEET
 from optari.utils.files import atomic_destination
 
 logger = logging.getLogger(__name__)

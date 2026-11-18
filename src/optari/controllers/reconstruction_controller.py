@@ -160,7 +160,7 @@ def _resolve_deepmb_model(settings_dict: dict, model_path: Path) -> None:
     settings_dict[ReconAttributeTags.ADDITIONAL_PARAMETERS] = params
 
 
-def _reconstruct_frames(
+def reconstruct_frames(
     settings: dict, pa_data, speed_of_sound: float, chunk_frames: int
 ) -> Generator[None, None, tuple[pat.ImageSequence, dict]]:
     """Preprocess and reconstruct *pa_data* in frame chunks, yielding once per finished chunk.
@@ -407,7 +407,7 @@ class ReconstructionController(TaskControllerBase):
         )
         return BackgroundStep(
             func=partial(
-                _reconstruct_frames,
+                reconstruct_frames,
                 params.settings,
                 params.pa_data_for_run,
                 params.speed_of_sound,

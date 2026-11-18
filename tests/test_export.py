@@ -3,7 +3,6 @@
 import json
 from dataclasses import replace
 from pathlib import Path
-from types import SimpleNamespace
 
 import h5py
 import numpy as np
@@ -17,22 +16,22 @@ from optari.batch.plan import BatchJob
 from optari.batch.report import REPORT_COLUMNS, REPORT_SHEET, BatchReport
 from optari.io.discovery import ScanInfo, scan_type
 from optari.controllers.unmixing_controller import (
-    UnmixingController,
-    _unmix_frames,
+    set_unmixed_export_attrs,
+    unmix_frames,
 )
 from optari.io.export_pipeline import (
-    OPTARI_FILE_FORMAT_VERSION,
-    ROI_TABLE_META_SHEET,
+    ScanExport,
     export_scan_to_hdf5,
     export_scan_to_ipasc,
-    scan_export,
 )
 from optari.patato_bridge import (
     build_napari_layers,
     display_data_from_patato_obj,
     roi_records_from_scan_rois,
 )
+from optari.provenance import OPTARI_FILE_FORMAT_VERSION
 from optari.roi.roi_records import ROIRecord
+from optari.roi.roi_table_io import ROI_TABLE_META_SHEET
 from tests.conftest import ITHERA_SCAN, needs_study, run_to_end
 
 pytestmark = needs_study
@@ -41,22 +40,17 @@ FRAME = 24  # lowest-motion frame of Scan_2
 FOV = (0.04, 0.04)
 
 
-def controller_with(pa_data, records=(), derived=None, restored=True):
-    """The slice of OptariController that the export pipeline reads."""
-    return SimpleNamespace(
+def scan_export(pa_data, records=(), derived=None) -> ScanExport:
+    """What ScanController.export_snapshot copies from a session with these ROIs and layers."""
+    return ScanExport(
         pa_data=pa_data,
         path=None,
-        roi_ctrl=SimpleNamespace(
-            sync_records_from_shapes=lambda: True,
-            roi_records=list(records),
-            stored_rois_restored=restored,
-        ),
-        scan_fov=FOV,
-        derived_patato_objects=derived or {},
-        segmentation_ctrl=SimpleNamespace(
-            seg_layer=None
-        ),  # _write_derived_data reads this
-        clinical_metadata_edits=None,  # _write_derived_data reads this
+        rois=list(records),
+        replace_stored_rois=True,
+        fov=FOV,
+        derived=derived or {},
+        segmentation=None,
+        clinical_metadata=None,
     )
 
 
@@ -73,7 +67,7 @@ def test_hdf5_export_round_trip(ithera_scan, tmp_path):
     )
     recon = next(iter(ithera_scan.get_scan_reconstructions().values()))
     (unmixed, _, _), _ = run_to_end(
-        _unmix_frames(
+        unmix_frames(
             recon[FRAME : FRAME + 1],
             ithera_scan,
             [700, 730, 760, 800, 850],
@@ -85,7 +79,7 @@ def test_hdf5_export_round_trip(ithera_scan, tmp_path):
             4,
         )
     )
-    UnmixingController._set_export_attrs(
+    set_unmixed_export_attrs(
         unmixed,
         source_layer_name="Recon: iThera BP-40mm(res:100μm)_0",
         output_frames=[FRAME],
@@ -95,10 +89,7 @@ def test_hdf5_export_round_trip(ithera_scan, tmp_path):
     )
 
     destination = tmp_path / "Scan_2.hdf5"
-    controller = controller_with(
-        ithera_scan, [roi], {"Unmixed: iThera": unmixed}
-    )
-    export = scan_export(controller)
+    export = scan_export(ithera_scan, [roi], {"Unmixed: iThera": unmixed})
     run_to_end(export_scan_to_hdf5(export, destination))
     with pytest.raises(FileExistsError):  # never overwrites
         run_to_end(export_scan_to_hdf5(export, destination))

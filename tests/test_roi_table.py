@@ -4,14 +4,14 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from optari.io.export_pipeline import (
-    ROI_TABLE_META_SHEET,
-    ROI_TABLE_SHEET,
-    export_roi_table_to_xlsx,
-    import_roi_table,
-)
 from optari.roi.roi_records import ROIRecord
 from optari.roi.roi_table import SavedRoiTable
+from optari.roi.roi_table_io import (
+    ROI_TABLE_META_SHEET,
+    ROI_TABLE_SHEET,
+    read_roi_table,
+    write_roi_table_xlsx,
+)
 from optari.roi.roi_utils import compute_roi_stats, saved_export_columns
 
 
@@ -65,8 +65,9 @@ def test_add_measurements_stamps_and_reports_remeasured(
 def test_xlsx_export_import_round_trip_and_dedupe(measured_rows, tmp_path):
     table = SavedRoiTable()
     table.add_measurements(measured_rows)
-    path = export_roi_table_to_xlsx(table.rows, tmp_path / "rois.xlsx")
-    imported, _ = import_roi_table(path)
+    path = tmp_path / "rois.xlsx"
+    write_roi_table_xlsx(table.rows, path)
+    imported = read_roi_table(path)
 
     assert list(imported.columns) == saved_export_columns()
     np.testing.assert_allclose(imported["mean"], table.rows["mean"])
@@ -87,7 +88,7 @@ def test_xlsx_export_import_round_trip_and_dedupe(measured_rows, tmp_path):
 def test_import_rejects_foreign_or_outdated_tables(measured_rows, tmp_path):
     measured_rows.to_excel(tmp_path / "foreign.xlsx", index=False)
     with pytest.raises(ValueError, match="not a OPTARI ROI table"):
-        import_roi_table(tmp_path / "foreign.xlsx")
+        read_roi_table(tmp_path / "foreign.xlsx")
 
     with pd.ExcelWriter(tmp_path / "outdated.xlsx") as writer:
         measured_rows.to_excel(writer, sheet_name=ROI_TABLE_SHEET, index=False)
@@ -95,4 +96,4 @@ def test_import_rejects_foreign_or_outdated_tables(measured_rows, tmp_path):
             {"key": ["roi_table_schema_version"], "value": ["0"]}
         ).to_excel(writer, sheet_name=ROI_TABLE_META_SHEET, index=False)
     with pytest.raises(ValueError, match="schema version 0"):
-        import_roi_table(tmp_path / "outdated.xlsx")
+        read_roi_table(tmp_path / "outdated.xlsx")

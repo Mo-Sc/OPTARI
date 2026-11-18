@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from optari.io.export_pipeline import append_roi_table_csv, write_roi_table_csv
+from optari.roi.roi_table_io import append_roi_table_csv, write_roi_table_csv
 from optari.roi.roi_utils import saved_export_columns, saved_table_columns
 
 logger = logging.getLogger(__name__)

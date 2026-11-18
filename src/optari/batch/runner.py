@@ -34,15 +34,14 @@ from optari.controllers.segmentation_controller import SegmentParams
 from optari.controllers.unmixing_controller import UnmixParams
 from optari.io.export_pipeline import (
     can_save_into_scan,
-    export_roi_table_to_xlsx,
     export_scan_to_hdf5,
     export_scan_to_ipasc,
     save_scan_into_source,
-    scan_export,
 )
 from optari.io.utils import save_viewer_screenshot
 from optari.patato_bridge import pa_layers
 from optari.roi.roi_table import SavedRoiTable
+from optari.roi.roi_table_io import write_roi_table_xlsx
 from optari.roi.roi_utils import NO_CLAMP
 from optari.utils.logging import run_log_file
 from optari.utils.tasks import BackgroundStep, run_background_task
@@ -200,9 +199,7 @@ class BatchRunner:
     def _write_table_xlsx(self) -> None:
         """The run's table as XLSX, once, replacing the CSV it was collected in."""
         try:
-            export_roi_table_to_xlsx(
-                self.saved_table.rows, self.plan.table_path
-            )
+            write_roi_table_xlsx(self.saved_table.rows, self.plan.table_path)
         except (ValueError, OSError):
             # e.g. more rows than an Excel sheet holds: the CSV is the result then
             logger.exception(
@@ -412,7 +409,7 @@ class BatchRunner:
 
         An export that fails raises in its worker and fails this scan at that step.
         """
-        export = scan_export(self.controller)
+        export = self.controller.scan_ctrl.export_snapshot()
         # Exports mirror the input layout, so a converted dataset can be reopened
         # exactly like the original: <out>/<format>/<study path>/Scan_Y.hdf5
         if self.plan.outputs.hdf5:
@@ -454,7 +451,9 @@ class BatchRunner:
 
         # Last, since it closes the scan the overlay and the exports read from.
         if self.plan.outputs.hdf5_in_place:
-            if not can_save_into_scan(self.controller):
+            if not can_save_into_scan(
+                self.controller.scan_info, self.controller.pa_data
+            ):
                 raise BatchStepError("not an HDF5 file OPTARI created", "hdf5")
             # Releases the read handle, which HDF5 would not let a writer share.
             self.controller.scan_ctrl.reset_scan_state()

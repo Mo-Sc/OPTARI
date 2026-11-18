@@ -11,14 +11,10 @@ import numpy as np
 import pandas as pd
 from qtpy.QtCore import QSignalBlocker
 from qtpy.QtGui import QColor
-from qtpy.QtWidgets import QMessageBox
+from qtpy.QtWidgets import QFileDialog, QMessageBox
 
 from optari.config import settings
 from optari.controllers.base import TaskControllerBase
-from optari.io.export_pipeline import (
-    export_roi_table_to_xlsx,
-    import_roi_table,
-)
 from optari.patato_bridge import pa_layers
 from optari.roi.roi_features import FEATURE_REGISTRY
 from optari.roi.roi_geometry import RoiGeometry, napari_to_patato
@@ -32,6 +28,11 @@ from optari.roi.roi_presets import RoiPresetStore
 from optari.roi.roi_records import ROIRecord
 from optari.roi.roi_store import RoiStore
 from optari.roi.roi_table import SavedRoiTable
+from optari.roi.roi_table_io import (
+    default_roi_table_filename,
+    read_roi_table,
+    write_roi_table_xlsx,
+)
 from optari.roi.roi_utils import (
     NO_CLAMP,
     IntensityClamp,
@@ -611,38 +612,44 @@ class RoiController(TaskControllerBase):
 
     def on_xlsx_export_clicked(self, event=None) -> None:
         """Prompt for a destination and export the Saved Analysis table to XLSX."""
+        filename, _ = QFileDialog.getSaveFileName(
+            None,
+            "Save ROIs as Excel",
+            default_roi_table_filename(),
+            "Excel Files (*.xlsx)",
+        )
+        if not filename:
+            return
+        path = Path(filename if filename.endswith(".xlsx") else f"{filename}.xlsx")
         try:
-            filename = export_roi_table_to_xlsx(self.saved_table.rows)
+            write_roi_table_xlsx(self.saved_table.rows, path)
         except ValueError as exc:  # more rows than an Excel sheet holds
             QMessageBox.warning(None, "Export failed", str(exc))
             return
-        if filename is None:
-            return
 
-        show_info(f"Exported ROI table to {Path(filename).name}")
-        logger.info("Saved ROI table to %s", filename)
+        show_info(f"Exported ROI table to {path.name}")
+        logger.info("Saved ROI table to %s", path)
 
     def on_import_clicked(self, event=None) -> None:
         """Append a previously exported table to the saved table."""
+        filename, _ = QFileDialog.getOpenFileName(
+            None, "Import ROI Analysis Table", "", "ROI tables (*.xlsx *.csv)"
+        )
+        if not filename:
+            return
+        path = Path(filename)
         try:
-            imported = import_roi_table()
+            rows = read_roi_table(path)
         except ValueError as exc:
             QMessageBox.warning(None, "Import failed", str(exc))
             return
-        if imported is None:
-            return
 
-        rows, filename = imported
         added, skipped = self.saved_table.merge_imported(rows)
         self._set_saved_table_view()
 
         already = f", {skipped} already present" if skipped else ""
-        show_info(
-            f"Imported {added} row(s) from {Path(filename).name}{already}"
-        )
-        logger.info(
-            "Imported %s of %s row(s) from %s", added, len(rows), filename
-        )
+        show_info(f"Imported {added} row(s) from {path.name}{already}")
+        logger.info("Imported %s of %s row(s) from %s", added, len(rows), path)
 
     def on_saved_row_double_clicked(self, row: int, _column: int = 0) -> None:
         """Restore the ROI of the double-clicked row onto that row's frame."""

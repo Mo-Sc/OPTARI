@@ -81,7 +81,7 @@ but the PATATO wheels referenced in `pyproject.toml` have to be rebuilt.
 
 New chromophores are added in PATATO as a `Spectrum` subclass in `patato/unmixing/spectra/__init__.py`. They appear in
 the Unmixing dock automatically. PATATO only provides linear unmixing (`SpectralUnmixer`). A new unmixing algorithm would be added to PATATO too, but
-OPTARI calls `pat.SpectralUnmixer` directly in `_unmix_frames` (`src/optari/controllers/unmixing_controller.py`), so
+OPTARI calls `pat.SpectralUnmixer` directly in `unmix_frames` (`src/optari/controllers/unmixing_controller.py`), so
 that call has to be switched as well.
 
 ### Segmentation models

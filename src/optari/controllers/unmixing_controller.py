@@ -288,7 +288,7 @@ def _block_average(recon, factor: int):
     )
 
 
-def _unmix_frames(
+def unmix_frames(
     recon_for_run,
     pa_data,
     wavelengths: list[int],
@@ -341,6 +341,27 @@ def _unmix_frames(
     thb = pat.ImageSequence.concat(thb_chunks) if thb_chunks else None
     so2 = pat.ImageSequence.concat(so2_chunks) if so2_chunks else None
     return unmixed, thb, so2
+
+
+def set_unmixed_export_attrs(
+    image_sequence,
+    *,
+    source_layer_name: str,
+    output_frames: list[int],
+    channel_labels: list[str],
+    pa_kind: str,
+    frame_mode: str,
+    parameter: str | None = None,
+) -> None:
+    """Attributes the HDF5 export writes with an unmixing output, and a reload reads back."""
+    attrs = image_sequence.attributes
+    attrs["frames"] = np.asarray(output_frames, dtype=int)
+    attrs["source_layer"] = str(source_layer_name)
+    attrs["axis1_labels"] = [str(label) for label in channel_labels]
+    attrs["pa_kind"] = str(pa_kind)
+    attrs["source_frame_mode"] = str(frame_mode)
+    if parameter is not None:
+        attrs["parameter"] = str(parameter)
 
 
 class UnmixingController(TaskControllerBase):
@@ -514,27 +535,6 @@ class UnmixingController(TaskControllerBase):
             dock.generate_so2_checkbox.setChecked(False)
             dock.generate_thb_checkbox.setChecked(False)
 
-    @staticmethod
-    def _set_export_attrs(
-        image_sequence,
-        *,
-        source_layer_name: str,
-        output_frames: list[int],
-        channel_labels: list[str],
-        pa_kind: str,
-        frame_mode: str,
-        parameter: str | None = None,
-    ) -> None:
-        """Attributes the HDF5 export writes with an unmixing output, and a reload reads back."""
-        attrs = image_sequence.attributes
-        attrs["frames"] = np.asarray(output_frames, dtype=int)
-        attrs["source_layer"] = str(source_layer_name)
-        attrs["axis1_labels"] = [str(label) for label in channel_labels]
-        attrs["pa_kind"] = str(pa_kind)
-        attrs["source_frame_mode"] = str(frame_mode)
-        if parameter is not None:
-            attrs["parameter"] = str(parameter)
-
     # ============ run: params -> prepare -> publish ============
     def _params_from_ui(self) -> UnmixParams:
         """Build run parameters from the dock. Raises ValueError with a user-facing message."""
@@ -570,7 +570,7 @@ class UnmixingController(TaskControllerBase):
         )
         return BackgroundStep(
             func=partial(
-                _unmix_frames,
+                unmix_frames,
                 params.recon_for_run,
                 self.optari_controller.pa_data,
                 params.wavelengths,
@@ -610,7 +610,7 @@ class UnmixingController(TaskControllerBase):
             source_layer=params.source_layer_name,
             parameter=parameter,
         )
-        self._set_export_attrs(
+        set_unmixed_export_attrs(
             image,
             source_layer_name=params.source_layer_name,
             output_frames=params.output_frames,

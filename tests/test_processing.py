@@ -9,12 +9,12 @@ from napari.layers import Labels
 
 from optari.controllers.reconstruction_controller import (
     ReconParams,
-    _reconstruct_frames,
+    reconstruct_frames,
 )
 from optari.roi.roi_placement import anchor_verts_to_mask
 from optari.controllers.unmixing_controller import (
     UnmixParams,
-    _unmix_frames,
+    unmix_frames,
     resolve_unmixing_wavelengths,
 )
 from optari.patato_bridge import display_data_from_patato_obj
@@ -59,7 +59,7 @@ def backprojection(hdf5_scan):
     # Scan_3.hdf5 was converted before acquisition delays were stored
     preset["DAQ_DELAY_CORRECTION"] = False
     (recon, _), steps = run_to_end(
-        _reconstruct_frames(
+        reconstruct_frames(
             preset, hdf5_scan[FRAME : FRAME + 1], 1497.0, chunk_frames=1
         )
     )
@@ -130,7 +130,7 @@ def test_resolve_unmixing_wavelengths():
 def test_unmix_haemoglobin_single_frame(hdf5_scan, vendor_recon):
     wavelengths = [700, 730, 760, 800, 850]
     (unmixed, thb, so2), steps = run_to_end(
-        _unmix_frames(
+        unmix_frames(
             vendor_recon[FRAME : FRAME + 1],
             hdf5_scan,
             wavelengths,

@@ -10,6 +10,8 @@
 
 ::: optari.roi.roi_table
 
+::: optari.roi.roi_table_io
+
 ::: optari.roi.roi_utils
 
 ::: optari.roi.roi_shapes

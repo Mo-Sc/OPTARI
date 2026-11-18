@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import logging
 from collections.abc import Callable
 from functools import partial
@@ -22,13 +23,14 @@ from optari.patato_bridge import (
     roi_records_from_scan_rois,
 )
 from optari.io.export_pipeline import (
+    ScanExport,
     can_save_into_scan,
     export_scan_to_hdf5,
     export_scan_to_ipasc,
     ipasc_export_report,
     save_scan_into_source,
-    scan_export,
 )
+from optari.segmentation.segmenter import MASK_DTYPE
 from optari.utils.misc import roi_color_for_index
 from optari.utils.tasks import BackgroundStep, start_task
 from optari.utils.motion import (
@@ -394,6 +396,36 @@ class ScanController(TaskControllerBase):
         shapes_layer.selected_data = set(range(len(shapes_layer.data)))
         roi_ctrl.refresh_ui()
 
+    def export_snapshot(self) -> ScanExport:
+        """Copy what the loaded scan's HDF5 export writes, so it can run in a worker. Main thread only."""
+        controller = self.optari_controller
+        roi_ctrl = controller.roi_ctrl
+        roi_ctrl.sync_records_from_shapes()
+        seg_layer = controller.segmentation_ctrl.seg_layer
+        return ScanExport(
+            pa_data=controller.pa_data,
+            path=controller.path,
+            rois=copy.deepcopy(
+                [
+                    r
+                    for r in roi_ctrl.roi_records
+                    if r.source.startswith("OPTARI")
+                ]
+            ),
+            replace_stored_rois=roi_ctrl.stored_rois_restored,
+            fov=controller.scan_fov,
+            derived=dict(controller.derived_patato_objects),
+            segmentation=(
+                None
+                if seg_layer is None
+                else (
+                    np.asarray(seg_layer.data)[:, 0].astype(MASK_DTYPE),
+                    dict(seg_layer.metadata),
+                )
+            ),
+            clinical_metadata=controller.clinical_metadata_edits,
+        )
+
     def on_hdf5_export_clicked(self, event=None) -> None:
         """Prompt for a destination: a new file gets a copy, the loaded scan file is updated.
 
@@ -404,7 +436,7 @@ class ScanController(TaskControllerBase):
         if destination is None:
             return
 
-        export = scan_export(controller)
+        export = self.export_snapshot()
         if not (destination.exists() and destination.samefile(export.path)):
             # An existing file other than the loaded scan is refused by the export.
             start_task(
@@ -421,7 +453,7 @@ class ScanController(TaskControllerBase):
             )
             return
 
-        if not can_save_into_scan(controller):
+        if not can_save_into_scan(controller.scan_info, controller.pa_data):
             show_warning(
                 "OPTARI only writes into HDF5 files it created. Choose a new file "
                 "to save a copy."

@@ -33,9 +33,8 @@ holding a direct reference to it.
 
 ## `patato_bridge.py`
 
-Handles conversion between PATATO objects and napari layers/coordinates. No controller
-reads a PATATO array or writes an HDF5 attribute directly outside `patato_bridge.py` and
-`io/export_pipeline.py`.
+Handles conversion between PATATO objects and napari layers/coordinates. HDF5 attributes are
+written only there and in `io/export_pipeline.py`. Controllers read PATATO arrays through `patato_bridge.py`
 
 !!! note "Export creates a new file, unless it is the loaded scan"
     `export_scan_to_hdf5` always creates a new file. When the destination chosen for **Save HDF5** is the loaded
@@ -48,7 +47,7 @@ reads a PATATO array or writes an HDF5 attribute directly outside `patato_bridge
 !!! note "Exports run in the background"
     `export_scan_to_hdf5`, `save_scan_into_source` and `export_scan_to_ipasc` are generators run as background
     steps (`start_task` in the GUI, a yielded `BackgroundStep` in batch mode). They never read the viewer or a
-    controller: `scan_export(controller)` copies what they write (OPTARI ROIs, derived images, segmentation mask,
+    controller: `ScanController.export_snapshot()` copies what they write (OPTARI ROIs, derived images, segmentation mask,
     clinical metadata edits) on the main thread first, so ROIs edited during a running export do not leak into it.
 
 !!! note "Export always overwrites"

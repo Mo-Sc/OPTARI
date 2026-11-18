@@ -1,8 +1,15 @@
-"""Writing files so that a failed write never leaves a half-written file behind."""
+"""File naming, and writing files so that a failed write never leaves a half-written file behind."""
 
+import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+
+
+def filename_token(text: str) -> str:
+    """Reduce free text to something safe to embed in a filename."""
+    token = re.sub(r"[^A-Za-z0-9]+", "-", str(text)).strip("-")
+    return token or "unknown"
 
 
 @contextmanager

@@ -275,10 +275,10 @@ Analysis's Track ID scope makes for a gap in the plot.
 
 ### Schema version
 
-`ROI_TABLE_SCHEMA_VERSION` lives in `export_pipeline.py` beside `OPTARI_FILE_FORMAT_VERSION`. `CONFIG_SCHEMA_VERSION` versions the user's config file and a
+`ROI_TABLE_SCHEMA_VERSION` lives in `roi/roi_table_io.py`, `OPTARI_FILE_FORMAT_VERSION` (the HDF5 format) in `provenance.py`. `CONFIG_SCHEMA_VERSION` versions the user's config file and a
 mismatch archives `~/.optari`.
 
-`import_roi_table()` reads an exported XLSX or the CSV backup. It rejects a file without
+`read_roi_table()` (`roi/roi_table_io.py`) reads an exported XLSX or the CSV backup. It rejects a file without
 OPTARI's metadata (the `optari_meta` sheet, or the CSV's first-line header), a version mismatch, a missing fixed column, or a row with a blank `roi_group_uid`.
 Everything else is reconciled **by name**: unknown columns are dropped and absent ones filled
 with NaN.

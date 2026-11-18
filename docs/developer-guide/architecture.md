@@ -10,8 +10,7 @@ Model-View-Controller split across four layers.
   dataclass of Qt widget references and holds no logic.
 - **Control layer** (`controllers/`): one controller per feature area, all owned by
   `OptariController`.
-- **Utilities** (`utils/`): config, logging, presets, motion scoring, stateless helpers used by
-  controllers.
+- **Utilities** (`utils/`): logging, presets, motion scoring, file helpers and other stateless helpers used by controllers.
 - **External layer**: PATATO (I/O, reconstruction, unmixing), napari (viewer/layers), ONNX
   Runtime (segmentation, DeepMB), PACFISH (IPASC). See
   [Data & Integrations](data-and-integrations.md) for the PATATO/IPASC boundary.

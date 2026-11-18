@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from pathlib import Path
-import re
 
 import imageio.v3 as iio
 from napari.layers import Image
@@ -39,12 +38,6 @@ def export_overlays(viewer: Viewer, include_colorbars: bool):
         for layer, was_visible in previous:
             layer.colorbar.visible = was_visible
         watermark.update(previous_watermark)
-
-
-def filename_token(text: str) -> str:
-    """Reduce free text to something safe to embed in a filename."""
-    token = re.sub(r"[^A-Za-z0-9]+", "-", str(text)).strip("-")
-    return token or "unknown"
 
 
 def save_viewer_screenshot(
