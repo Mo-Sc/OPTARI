@@ -10,7 +10,6 @@ Full reference for `~/.optari/config/config.json`. All fields are required unles
 | `GUI_LOG_LEVEL` | string | Settings ▸ General | Verbosity of messages surfaced as in-app napari notifications (e.g. `"INFO"` / `"WARNING"`). |
 | `DEFAULT_PA_LAYER` | string | Settings ▸ Viewer | Name of the OA reconstruction layer selected by default when a scan loads. |
 | `PA_FALLBACK_SCALE` | `[frame, z, x]` | Settings ▸ Viewer | Fallback mm/pixel scale for OA layers when FOV metadata is missing. |
-| `DEFAULT_US_LAYER` | string | *hidden* | Name of the default US layer (not implemented, no effect). |
 | `US_FALLBACK_SCALE` | `[frame, z, x]` | Settings ▸ Viewer | Fallback mm/pixel scale for US layers. |
 | `DEFAULT_FRAME_INDEX` | int, `"spectral_motion"`, `"frame_motion"`, `"acquisition_start"` or `"roi"` | Settings ▸ Viewer | Fixed starting frame index, `"spectral_motion"` or `"frame_motion"` for the frame with the least motion of that kind (see [Automatic Frame Selection](../user-guide/viewer-and-navigation.md#automatic-frame-selection)), `"acquisition_start"` for the frame where recording started (ithera scans), or `"roi"` for the first frame holding one of the scan's stored ROIs (0 if it has none). |
 | `DEFAULT_CHANNEL_INDEX` | int | Settings ▸ Viewer | Default acquisition channel (as integer index). |

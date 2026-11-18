@@ -13,7 +13,7 @@ _user_dir = tempfile.TemporaryDirectory(prefix="optari-test-")
 os.environ["OPTARI_USER_DIR"] = _user_dir.name
 from optari.utils.setup import (
     get_user_models_dir,
-    get_user_roi_presets_dir,
+    get_user_presets_dir,
 )  # noqa: E402
 
 for weights in (Path.home() / ".optari" / "models").glob("*.onnx"):
@@ -73,7 +73,7 @@ def seg_model():
 
 @pytest.fixture
 def roi_presets():
-    return RoiPresetStore(get_user_roi_presets_dir())
+    return RoiPresetStore(get_user_presets_dir("roi"))
 
 
 @pytest.fixture

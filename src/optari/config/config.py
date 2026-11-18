@@ -4,10 +4,16 @@ from dataclasses import dataclass, field, replace
 import json
 from pathlib import Path
 
-from optari.utils.setup import archive_config_dir, get_user_config_file
+from optari.utils.setup import (
+    archive_config_dir,
+    get_default_config_file,
+    get_user_config_file,
+)
 from optari.utils.files import atomic_destination
 
-CONFIG_SCHEMA_VERSION = 6  # adapt in default config.json as well
+CONFIG_SCHEMA_VERSION = json.loads(
+    get_default_config_file().read_text(encoding="utf-8")
+)["schema_version"]
 
 
 @dataclass(frozen=True)
@@ -18,7 +24,6 @@ class GeneralConfig:
     GUI_LOG_LEVEL: str
     DEFAULT_PA_LAYER: str
     PA_FALLBACK_SCALE: tuple[float, float, float]
-    DEFAULT_US_LAYER: str  # not implemented yet
     US_FALLBACK_SCALE: tuple[float, float, float]
     DEFAULT_FRAME_INDEX: (
         int | str
@@ -59,15 +64,6 @@ class SegmentationConfig:
     default_model: str
 
 
-@dataclass(frozen=True)
-class ExportConfig:
-    """Layout settings for exported figures: font size, colorbar width, and padding."""
-
-    font_size: int
-    cbar_width: int
-    padding: int
-
-
 @dataclass
 class OptariConfig:
     """Top-level config, loaded at startup into the module-level ``settings``.
@@ -80,7 +76,6 @@ class OptariConfig:
     annotation: AnnotationConfig
     analysis: AnalysisConfig
     segmentation: SegmentationConfig
-    export: ExportConfig
 
     @classmethod
     def load_from_user_dir(cls) -> "OptariConfig":
@@ -115,7 +110,6 @@ def _config_from_dict(data: dict) -> OptariConfig:
         annotation=AnnotationConfig(**data["annotation"]),
         analysis=AnalysisConfig(**data["analysis"]),
         segmentation=SegmentationConfig(**data["segmentation"]),
-        export=ExportConfig(**data["export"]),
     )
 
 

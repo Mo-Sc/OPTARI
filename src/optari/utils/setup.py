@@ -86,29 +86,9 @@ def archive_config_dir(config_dir: Path) -> Path:
     return archive_dir
 
 
-def get_user_unmixing_presets_dir() -> Path:
-    """Returns the path to the user-editable unmixing presets directory."""
-    return get_user_dir() / "config" / "presets" / "unmixing"
-
-
-def get_user_reconstruction_presets_dir() -> Path:
-    """Returns the path to the user-editable reconstruction presets directory."""
-    return get_user_dir() / "config" / "presets" / "reconstruction"
-
-
-def get_user_roi_presets_dir() -> Path:
-    """Returns the path to the user-editable ROI presets directory."""
-    return get_user_dir() / "config" / "presets" / "roi"
-
-
-def get_user_batch_presets_dir() -> Path:
-    """Returns the path to the user-editable batch plan presets directory."""
-    return get_user_dir() / "config" / "presets" / "batch"
-
-
-def get_user_segmentation_presets_dir() -> Path:
-    """Returns the path to the user-editable segmentation presets directory."""
-    return get_user_dir() / "config" / "presets" / "segmentation"
+def get_user_presets_dir(category: str) -> Path:
+    """The user-editable presets of *category* ("reconstruction", "unmixing", "roi", "segmentation", "batch")."""
+    return get_user_dir() / "config" / "presets" / category
 
 
 def get_user_config_file() -> Path:

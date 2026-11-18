@@ -10,13 +10,13 @@ import jax  # noqa: jax is required by PATATO
 from qtpy.QtGui import QIcon
 from qtpy.QtWidgets import QApplication
 
-from .utils.logging import configure_logging
-from .utils.setup import configure_napari, load_startup_logo
+from optari.utils.logging import configure_logging
+from optari.utils.setup import configure_napari, load_startup_logo
 from optari.config import settings
 from optari.controllers.optari_controller import OptariController
 from optari.widgets.settings_dialog import identification_dialog
 
-from . import __version__
+from optari import __version__
 
 logger = logging.getLogger(__name__)
 

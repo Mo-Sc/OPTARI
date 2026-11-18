@@ -28,7 +28,7 @@ from optari.patato_bridge import (
     pa_layer_metadata,
 )
 from optari.utils.presets import PresetStore
-from optari.utils.setup import get_user_unmixing_presets_dir
+from optari.utils.setup import get_user_presets_dir
 from optari.widgets.dock_helpers import (
     add_checkable_item,
     checked_items,
@@ -372,7 +372,7 @@ class UnmixingController(TaskControllerBase):
     def __init__(self, parent_controller):
         """Initialize the unmixing preset store."""
         super().__init__(parent_controller)
-        self.preset_store = PresetStore(get_user_unmixing_presets_dir())
+        self.preset_store = PresetStore(get_user_presets_dir("unmixing"))
 
     def _signal_bindings(self) -> list[tuple[object, Callable]]:
         """Unmixing dock signals."""

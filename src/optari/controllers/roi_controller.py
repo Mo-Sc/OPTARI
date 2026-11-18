@@ -45,7 +45,7 @@ from optari.roi.roi_utils import (
 from optari.utils.misc import parse_float_input, roi_color_for_index
 from optari.utils.setup import (
     get_user_autosave_dir,
-    get_user_roi_presets_dir,
+    get_user_presets_dir,
     new_session_file,
 )
 from optari.utils.viewer import selected_frame_and_channel, selected_frame_idx
@@ -89,7 +89,7 @@ class RoiController(TaskControllerBase):
         # stored OPTARI ROIs if they are, so a failed restore cannot drop them.
         self.stored_rois_restored = False
         self.intensity_clamp = NO_CLAMP
-        self._roi_preset_store = RoiPresetStore(get_user_roi_presets_dir())
+        self._roi_preset_store = RoiPresetStore(get_user_presets_dir("roi"))
 
         unknown = set(settings.annotation.roi_features) - set(FEATURE_REGISTRY)
         if unknown:

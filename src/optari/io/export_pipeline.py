@@ -264,11 +264,11 @@ def _write_derived_data(export: ScanExport, destination_pa_data) -> None:
             del writer.file[HDF5Tags.SEGMENTATION]
         writer.set_segmentation(mask)
         meta = {
-            "source_model_id": layer_meta.get("source_model_id", ""),
-            "frame_mode": layer_meta.get("frame_mode", "all"),
-            "frames": [int(f) for f in layer_meta.get("frames", [])],
+            "source_model_id": layer_meta["source_model_id"],
+            "frame_mode": layer_meta["frame_mode"],
+            "frames": [int(f) for f in layer_meta["frames"]],
             "class_names": {
-                str(k): v for k, v in layer_meta.get("class_names", {}).items()
+                str(k): v for k, v in layer_meta["class_names"].items()
             },
         }
         writer.file[HDF5Tags.SEGMENTATION].attrs["optari_meta"] = json.dumps(

@@ -30,7 +30,7 @@ from optari.patato_bridge import (
 from optari.config import settings
 from optari.utils.presets import PresetStore
 from optari.utils.setup import (
-    get_user_reconstruction_presets_dir,
+    get_user_presets_dir,
     resolve_model_path,
 )
 from optari.utils.tasks import BackgroundStep
@@ -203,7 +203,7 @@ class ReconstructionController(TaskControllerBase):
         self._updating_settings = False
         self._settings_dirty = False
         self._applied_settings: dict = {}
-        self.preset_store = PresetStore(get_user_reconstruction_presets_dir())
+        self.preset_store = PresetStore(get_user_presets_dir("reconstruction"))
 
     def _signal_bindings(self) -> list[tuple[object, Callable]]:
         """Reconstruction dock signals."""

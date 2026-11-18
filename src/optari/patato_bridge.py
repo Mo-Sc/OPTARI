@@ -333,9 +333,11 @@ def build_napari_layers(
     start = acquisition_start(pa_data)
 
     # --- ultrasound ---
-    # IPASC scans have no ultrasound. The acquisition frame count then comes from the time series instead.
+    # IPASC scans have no ultrasound, for which PATATO returns {} (a dict also for several
+    # US images, which no supported scanner writes). The acquisition frame count then
+    # comes from the time series instead.
     us_obj = pa_data.get_ultrasound()
-    if hasattr(us_obj, "da"):
+    if not isinstance(us_obj, dict):
         us_img = display_data_from_patato_obj(us_obj)
         n_acq_frames = us_img.shape[0]
         patato_objects["US"] = us_obj

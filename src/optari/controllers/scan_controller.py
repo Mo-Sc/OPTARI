@@ -100,12 +100,7 @@ class ScanController(TaskControllerBase):
     def close_current_scan(self) -> None:
         """Close the HDF5 handle for the current scan."""
         if self.optari_controller.pa_data is not None:
-            try:
-                self.optari_controller.pa_data.close()
-            except Exception:
-                logger.info(
-                    "failed to close current scan handle", exc_info=True
-                )
+            self.optari_controller.pa_data.close()
         self.optari_controller.pa_data = None
         self.optari_controller.path = None
         self.optari_controller.scan_info = None

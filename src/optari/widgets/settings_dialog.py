@@ -45,7 +45,7 @@ from optari.utils.setup import (
     get_user_dir,
     get_user_logs_dir,
     get_user_models_dir,
-    get_user_reconstruction_presets_dir,
+    get_user_presets_dir,
 )
 
 logger = logging.getLogger(__name__)
@@ -376,7 +376,7 @@ class SettingsDialog(QDialog):
         for label, path in (
             ("User directory", get_user_dir()),
             ("Config file", get_user_config_file()),
-            ("Presets", get_user_reconstruction_presets_dir().parent),
+            ("Presets", get_user_presets_dir("reconstruction").parent),
             ("Models", get_user_models_dir()),
             ("Logs", get_user_logs_dir()),
             ("ROI table backups", get_user_autosave_dir()),

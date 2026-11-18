@@ -147,39 +147,19 @@ class OptariController:
             self.reconstruction_ctrl,
             self.segmentation_ctrl,
         ):
-            try:
-                controller.unbind_events()
-                controller.teardown()
-            except Exception:
-                logger.exception(
-                    "Error shutting down %s", type(controller).__name__
-                )
+            controller.unbind_events()
+            controller.teardown()
 
-        # Disconnect events
-        try:
-            self.viewer.dims.events.point.disconnect(self.on_dims_changed)
-            self.viewer.layers.selection.events.changed.disconnect(
-                self.on_selection_changed
-            )
-            for evt, handler in self._shapes_layer_bindings:
-                evt.disconnect(handler)
-        except Exception:
-            logger.exception("Error disconnecting events during shutdown")
+        self.viewer.dims.events.point.disconnect(self.on_dims_changed)
+        self.viewer.layers.selection.events.changed.disconnect(
+            self.on_selection_changed
+        )
+        for evt, handler in self._shapes_layer_bindings:
+            evt.disconnect(handler)
 
-        # Close current scan to release file handles
-        try:
-            self.scan_ctrl.close_current_scan()
-        except Exception:
-            logger.exception("Error closing current scan during shutdown")
-
-        # Clear references to break circular references
-        self.pa_data = None
-        self.patato_objects.clear()
-        self.derived_patato_objects.clear()
-        self.shapes_layer = None
-        self.active_recon_layer = None
-        self.active_us_layer = None
-
+        # An error above reaches the log through napari's exception hook (close event) or
+        # the launcher, which ends the process with os._exit either way, releasing the file.
+        self.scan_ctrl.close_current_scan()
         logger.info("OptariController: Shutdown complete")
 
     # ============ viewer setup ============

@@ -24,10 +24,7 @@ from optari.segmentation.segmenter import load_model_registry
 from optari.utils.presets import PresetStore
 from optari.utils.setup import (
     get_user_models_dir,
-    get_user_reconstruction_presets_dir,
-    get_user_roi_presets_dir,
-    get_user_segmentation_presets_dir,
-    get_user_unmixing_presets_dir,
+    get_user_presets_dir,
     resolve_model_path,
 )
 
@@ -243,19 +240,19 @@ def build_plan(
     name = _step_preset_name(steps, "reconstruction")
     if name is not None:
         reconstruction = _load_named(
-            PresetStore(get_user_reconstruction_presets_dir()),
+            PresetStore(get_user_presets_dir("reconstruction")),
             name,
             "reconstruction",
         )
     name = _step_preset_name(steps, "unmixing")
     if name is not None:
         unmixing = _load_named(
-            PresetStore(get_user_unmixing_presets_dir()), name, "unmixing"
+            PresetStore(get_user_presets_dir("unmixing")), name, "unmixing"
         )
     name = _step_preset_name(steps, "segmentation")
     if name is not None:
         segmentation = _load_named(
-            PresetStore(get_user_segmentation_presets_dir()),
+            PresetStore(get_user_presets_dir("segmentation")),
             name,
             "segmentation",
         )
@@ -265,7 +262,7 @@ def build_plan(
     roi_from_scan = name == ROI_FROM_SCAN
     if name is not None and not roi_from_scan:
         try:
-            roi = RoiPresetStore(get_user_roi_presets_dir()).get(name)
+            roi = RoiPresetStore(get_user_presets_dir("roi")).get(name)
         except (TypeError, ValueError, OSError) as exc:
             raise ValueError(
                 f"Could not load ROI preset '{name}': {exc}"

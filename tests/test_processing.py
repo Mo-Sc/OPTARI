@@ -21,10 +21,7 @@ from optari.patato_bridge import display_data_from_patato_obj
 from optari.roi.roi_shapes import class_top_at_center_column
 from optari.segmentation.segmenter import create_segmenter
 from optari.utils.presets import PresetStore
-from optari.utils.setup import (
-    get_user_reconstruction_presets_dir,
-    get_user_unmixing_presets_dir,
-)
+from optari.utils.setup import get_user_presets_dir
 from tests.conftest import HDF5_SCAN, needs_study, run_to_end
 
 pytestmark = needs_study
@@ -53,7 +50,7 @@ def brightest_pixel(image_2d):
 
 @pytest.fixture(scope="module")
 def backprojection(hdf5_scan):
-    preset = PresetStore(get_user_reconstruction_presets_dir()).load(
+    preset = PresetStore(get_user_presets_dir("reconstruction")).load(
         "backproject_ithera"
     )
     # Scan_3.hdf5 was converted before acquisition delays were stored
@@ -86,7 +83,7 @@ def test_backprojection_single_frame(backprojection, vendor_recon):
 
 
 def test_recon_params_from_preset(hdf5_scan):
-    preset = PresetStore(get_user_reconstruction_presets_dir()).load(
+    preset = PresetStore(get_user_presets_dir("reconstruction")).load(
         "backproject_ithera"
     )
     controller = SimpleNamespace(
@@ -181,7 +178,7 @@ def test_unmix_params_from_preset(vendor_recon, image_layer):
     controller = SimpleNamespace(
         active_recon_layer=layer, patato_objects={layer.name: vendor_recon}
     )
-    preset = PresetStore(get_user_unmixing_presets_dir()).load("haemoglobin")
+    preset = PresetStore(get_user_presets_dir("unmixing")).load("haemoglobin")
 
     params = UnmixParams.from_preset(preset, controller, frame_id=FRAME)
     assert params.wavelengths == [700, 730, 760, 800, 850]

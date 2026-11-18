@@ -275,7 +275,7 @@ Analysis's Track ID scope makes for a gap in the plot.
 
 ### Schema version
 
-`ROI_TABLE_SCHEMA_VERSION` lives in `roi/roi_table_io.py`, `OPTARI_FILE_FORMAT_VERSION` (the HDF5 format) in `provenance.py`. `CONFIG_SCHEMA_VERSION` versions the user's config file and a
+`ROI_TABLE_SCHEMA_VERSION` lives in `roi/roi_table_io.py`, `OPTARI_FILE_FORMAT_VERSION` (the HDF5 format) in `provenance.py`. `CONFIG_SCHEMA_VERSION` versions the user's config file (it is read from the shipped `config.json`, so a bump is made there) and a
 mismatch archives `~/.optari`.
 
 `read_roi_table()` (`roi/roi_table_io.py`) reads an exported XLSX or the CSV backup. It rejects a file without

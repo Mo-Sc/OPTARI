@@ -32,7 +32,7 @@ from optari.config import settings
 from optari.utils.presets import PresetStore
 from optari.utils.setup import (
     get_user_models_dir,
-    get_user_segmentation_presets_dir,
+    get_user_presets_dir,
 )
 from optari.widgets.dock_helpers import (
     add_checkable_item,
@@ -191,7 +191,7 @@ class SegmentationController(TaskControllerBase):
         self._segmenter_model_id = None
         self._seg_layer: Labels | None = None
         self._pending_roi_class_id: int | None = None
-        self.preset_store = PresetStore(get_user_segmentation_presets_dir())
+        self.preset_store = PresetStore(get_user_presets_dir("segmentation"))
 
     def _signal_bindings(self) -> list[tuple[object, Callable]]:
         """Segmentation dock signals."""
@@ -579,7 +579,7 @@ class SegmentationController(TaskControllerBase):
             seg_dock.status_label.setText(str(exc))
             return
 
-        class_names = (seg_layer.metadata or {}).get("class_names", {})
+        class_names = seg_layer.metadata["class_names"]
         self.optari_controller.roi_ctrl.add_shape(
             verts, shape_type, str(class_names.get(int(class_id), class_id))
         )

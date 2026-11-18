@@ -41,7 +41,7 @@ from optari.batch.plan import (
 )
 from optari.batch.runner import BatchRunner
 from optari.utils.presets import PresetStore
-from optari.utils.setup import get_user_batch_presets_dir
+from optari.utils.setup import get_user_presets_dir
 from optari.widgets.dock_helpers import (
     add_preset_to_combo,
     create_preset_controls,
@@ -70,7 +70,7 @@ class BatchDialog(QDialog):
         self.setWindowTitle("OPTARI Batch Processing")
         self.setMinimumSize(880, 640)
 
-        self._preset_store = PresetStore(get_user_batch_presets_dir())
+        self._preset_store = PresetStore(get_user_presets_dir("batch"))
         self._plan = None
         self._runner = None
         self._row_for_key: dict[str, int] = {}

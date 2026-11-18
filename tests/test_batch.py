@@ -25,12 +25,12 @@ from optari.batch.runner import (
 from optari.io.discovery import ScanInfo
 from optari.roi.roi_utils import MeasureScope
 from optari.utils.presets import PresetStore
-from optari.utils.setup import get_user_batch_presets_dir, get_user_models_dir
+from optari.utils.setup import get_user_models_dir, get_user_presets_dir
 from tests.conftest import HDF5_SCAN, ITHERA_SCAN, STUDY_DIR, needs_study
 
 
 def batch_preset(name):
-    return PresetStore(get_user_batch_presets_dir()).load(name)
+    return PresetStore(get_user_presets_dir("batch")).load(name)
 
 
 @needs_study
