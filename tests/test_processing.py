@@ -56,9 +56,11 @@ def backprojection(hdf5_scan):
     preset = PresetStore(get_user_reconstruction_presets_dir()).load(
         "backproject_ithera"
     )
+    # Scan_3.hdf5 was converted before acquisition delays were stored
+    preset["DAQ_DELAY_CORRECTION"] = False
     (recon, _), steps = run_to_end(
         _reconstruct_frames(
-            preset, hdf5_scan[FRAME : FRAME + 1], 1525.0, chunk_frames=1
+            preset, hdf5_scan[FRAME : FRAME + 1], 1497.0, chunk_frames=1
         )
     )
     return recon, steps
@@ -99,7 +101,7 @@ def test_recon_params_from_preset(hdf5_scan):
     assert params.pa_data_for_run.shape[0] == 1
     assert (
         params.layer_name == "Recon: Reference Backprojection_F15"
-        and params.speed_of_sound == 1525
+        and params.speed_of_sound == 1497
     )
 
     with pytest.raises(ValueError, match="not available"):

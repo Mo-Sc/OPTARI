@@ -62,6 +62,11 @@ Reconstruction algorithm and filtering parameters, passed through to PATATO and 
 }
 ```
 
+Two optional keys control the timing of the preprocessing:
+
+- `DAQ_DELAY_CORRECTION` (`true`/`false`): iThera scanners start recording 200 ns after the laser pulse (`DAQTriggerDelay` in the `.msot` file). Without the correction every structure appears about 0.3 mm too shallow. With it on, a scan that records no delay is refused with an error instead of being reconstructed as if there were none; this applies to HDF5 files converted before OPTARI stored the delay, which have to be converted again from the original scan.
+- `IRF_TIME_ZERO`: where the impulse response's time zero is assumed when `IRF` is on. `"centre"` (PATATO's default) or `"peak"` makes the impulse-response correction sharpen the signal without moving it.
+
 ## Unmixing presets (`presets/unmixing/`)
 
 Wavelength range, chromophore selection, and derived-parameter options.
