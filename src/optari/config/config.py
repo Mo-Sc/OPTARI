@@ -15,6 +15,16 @@ CONFIG_SCHEMA_VERSION = json.loads(
     get_default_config_file().read_text(encoding="utf-8")
 )["schema_version"]
 
+# Named frames a scan can open on (DEFAULT_FRAME_INDEX, a batch preset's "frame"), next to a
+# plain frame number, with the label the Settings dialog shows. ScanController.go_to_frame
+# resolves them.
+FRAME_SELECTORS = {
+    "spectral_motion": "Motion (Spectral)",
+    "frame_motion": "Motion (Frame-to-Frame)",
+    "acquisition_start": "Acquisition start",
+    "roi": "First ROI frame",
+}
+
 
 @dataclass(frozen=True)
 class GeneralConfig:
@@ -25,9 +35,7 @@ class GeneralConfig:
     DEFAULT_PA_LAYER: str
     PA_FALLBACK_SCALE: tuple[float, float, float]
     US_FALLBACK_SCALE: tuple[float, float, float]
-    DEFAULT_FRAME_INDEX: (
-        int | str
-    )  # frame index, "spectral_motion" / "frame_motion", "acquisition_start" or "roi"
+    DEFAULT_FRAME_INDEX: int | str  # a frame number or a FRAME_SELECTORS key
     DEFAULT_CHANNEL_INDEX: int
     DEFAULT_PLAYBACK_FPS: int
     OPERATOR: str

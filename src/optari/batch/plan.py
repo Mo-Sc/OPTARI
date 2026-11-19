@@ -15,8 +15,9 @@ from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from patato.io.attribute_tags import ReconAttributeTags
+from patato.io.attribute_tags import ReconAttributeTags, UnmixingAttributeTags
 
+from optari.config.config import FRAME_SELECTORS
 from optari.io.discovery import ScanInfo, discover_studies
 from optari.roi.roi_presets import RoiPreset, RoiPresetStore
 from optari.roi.roi_utils import MeasureScope
@@ -171,12 +172,16 @@ def _step_preset_name(steps: dict, label: str) -> str | None:
     return name.strip()
 
 
-def _load_named(store: PresetStore, name: str, label: str) -> dict:
+def _load_step_preset(steps: dict, step: str) -> dict | None:
+    """The preset the plan names for *step* ("reconstruction", "unmixing", "segmentation"), or None."""
+    name = _step_preset_name(steps, step)
+    if name is None:
+        return None
     try:
-        return store.load(name)
+        return PresetStore(get_user_presets_dir(step)).load(name)
     except (ValueError, OSError) as exc:
         raise ValueError(
-            f"Could not load {label} preset '{name}': {exc}"
+            f"Could not load {step} preset '{name}': {exc}"
         ) from exc
 
 
@@ -206,11 +211,11 @@ def _frame_selector(value) -> int | str:
         return value
     if value is None:
         return "spectral_motion"
-    if value in ("spectral_motion", "frame_motion", "acquisition_start", "roi"):
+    if value in FRAME_SELECTORS:
         return value
     raise ValueError(
-        f"Invalid frame selector {value!r}. Use 'spectral_motion', 'frame_motion', "
-        "'acquisition_start', 'roi' or a frame number."
+        f"Invalid frame selector {value!r}. Use "
+        f"{', '.join(repr(s) for s in FRAME_SELECTORS)} or a frame number."
     )
 
 
@@ -236,26 +241,10 @@ def build_plan(
         for scan, info in scans.items()
     ]
 
-    reconstruction = unmixing = segmentation = None
-    name = _step_preset_name(steps, "reconstruction")
-    if name is not None:
-        reconstruction = _load_named(
-            PresetStore(get_user_presets_dir("reconstruction")),
-            name,
-            "reconstruction",
-        )
-    name = _step_preset_name(steps, "unmixing")
-    if name is not None:
-        unmixing = _load_named(
-            PresetStore(get_user_presets_dir("unmixing")), name, "unmixing"
-        )
-    name = _step_preset_name(steps, "segmentation")
-    if name is not None:
-        segmentation = _load_named(
-            PresetStore(get_user_presets_dir("segmentation")),
-            name,
-            "segmentation",
-        )
+    reconstruction, unmixing, segmentation = (
+        _load_step_preset(steps, step)
+        for step in ("reconstruction", "unmixing", "segmentation")
+    )
 
     roi = None
     name = _step_preset_name(steps, "roi")
@@ -425,7 +414,7 @@ def _validate_unmixing(plan: BatchPlan) -> list[str]:
         return []
     from patato.unmixing.spectra import SPECTRA_NAMES
 
-    chromophores = list(plan.unmixing.get("SPECTRA", []))
+    chromophores = list(plan.unmixing.get(UnmixingAttributeTags.SPECTRA, []))
     if not chromophores:
         return ["The unmixing preset selects no chromophores."]
     unknown = [c for c in chromophores if c not in SPECTRA_NAMES]

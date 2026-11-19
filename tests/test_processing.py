@@ -213,7 +213,7 @@ def test_unmix_params_from_preset(vendor_recon, image_layer):
 def segmentation(hdf5_scan, seg_model):
     """Segmentation of the analysis frame's ultrasound image."""
     us = display_data_from_patato_obj(hdf5_scan.get_ultrasound())[FRAME, 0]
-    return create_segmenter(seg_model).predict(us[np.newaxis])[0]
+    return create_segmenter(seg_model).predict(us)
 
 
 def test_segmentation_of_us_frame(segmentation, seg_model):

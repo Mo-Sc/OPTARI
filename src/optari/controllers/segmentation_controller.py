@@ -64,8 +64,8 @@ def _segment_frames(
     """
     segmenter = load_segmenter()
     results = []
-    for i in range(us_data.shape[0]):
-        results.extend(segmenter.predict(us_data[i : i + 1]))
+    for frame in us_data:
+        results.append(segmenter.predict(frame))
         yield
 
     class_names = results[0].class_names
@@ -173,20 +173,20 @@ class SegmentationController(TaskControllerBase):
     def __init__(self, parent_controller):
         """Load the model registry and initialize segmentation state."""
         super().__init__(parent_controller)
-        self._segmentation_model_registry = load_model_registry()
-        if not self._segmentation_model_registry:
+        self._model_registry = load_model_registry()
+        if not self._model_registry:
             raise ValueError(
                 "segmentation_models.json lists no models, so segmentation cannot run"
             )
         default_model_id = settings.segmentation.default_model
-        if default_model_id not in self._segmentation_model_registry:
+        if default_model_id not in self._model_registry:
             logger.warning(
                 f"Default segmentation model '{default_model_id}' not found in registry. "
-                f"Available models: {list(self._segmentation_model_registry.keys())}. "
+                f"Available models: {list(self._model_registry.keys())}. "
                 f"Falling back to first available model."
             )
-            default_model_id = next(iter(self._segmentation_model_registry))
-        self._active_segmentation_model_id = default_model_id
+            default_model_id = next(iter(self._model_registry))
+        self._active_model_id = default_model_id
         self._segmenter = None
         self._segmenter_model_id = None
         self._seg_layer: Labels | None = None
@@ -199,15 +199,15 @@ class SegmentationController(TaskControllerBase):
         return [
             (
                 dock.segmentation_model_combo.currentIndexChanged,
-                self.on_segmentation_model_changed,
+                self.on_model_changed,
             ),
             (
                 dock.select_all_classes_button.clicked,
-                self.on_segmentation_select_all_classes_clicked,
+                self.on_select_all_classes_clicked,
             ),
             (
                 dock.clear_classes_button.clicked,
-                self.on_segmentation_clear_classes_clicked,
+                self.on_clear_classes_clicked,
             ),
             (
                 dock.generate_roi_button.clicked,
@@ -229,21 +229,17 @@ class SegmentationController(TaskControllerBase):
 
         if dock.segmentation_model_combo.count() == 0:
             # Populate available models once on first dock init.
-            for model_id in self.segmentation_model_options():
+            for model_id in self.model_options():
                 dock.segmentation_model_combo.addItem(
                     model_id, userData=model_id
                 )
 
             # Set to active model (default is first in registry).
-            for i in range(dock.segmentation_model_combo.count()):
-                if (
-                    dock.segmentation_model_combo.itemData(i)
-                    == self.active_segmentation_model_id
-                ):
-                    dock.segmentation_model_combo.setCurrentIndex(i)
-                    break
+            dock.segmentation_model_combo.setCurrentIndex(
+                dock.segmentation_model_combo.findData(self.active_model_id)
+            )
 
-        self.on_segmentation_model_changed()
+        self.on_model_changed()
 
         populate_preset_combo(dock.preset_combo, self.preset_store)
         self.on_preset_changed()
@@ -276,34 +272,30 @@ class SegmentationController(TaskControllerBase):
             and not self.optari_controller.task_running
         )
 
-    def segmentation_model_options(self) -> list[str]:
+    def model_options(self) -> list[str]:
         """Return model IDs for the model combo."""
-        return list(self._segmentation_model_registry.keys())
+        return list(self._model_registry.keys())
 
     @property
-    def active_segmentation_model_id(self) -> str:
+    def active_model_id(self) -> str:
         """ID of the currently selected segmentation model."""
-        return self._active_segmentation_model_id
+        return self._active_model_id
 
-    def set_active_segmentation_model(self, model_id: str) -> None:
+    def set_active_model(self, model_id: str) -> None:
         """Set the active model. Raises ValueError if *model_id* is not in the registry."""
-        if model_id not in self._segmentation_model_registry:
+        if model_id not in self._model_registry:
             raise ValueError(f"Unknown segmentation model: {model_id}")
-        self._active_segmentation_model_id = model_id
+        self._active_model_id = model_id
 
-    def _active_segmentation_model_config(self) -> SegmentationModelConfig:
+    def _active_model_config(self) -> SegmentationModelConfig:
         """Return config for the currently selected segmentation model."""
-        return self._segmentation_model_registry[
-            self._active_segmentation_model_id
-        ]
+        return self._model_registry[self._active_model_id]
 
-    def active_segmentation_class_items(self) -> list[tuple[int, str]]:
+    def active_class_items(self) -> list[tuple[int, str]]:
         """Return sorted ``(class_id, class_name)`` entries for the active model."""
-        return sorted(
-            self._active_segmentation_model_config().class_names.items()
-        )
+        return sorted(self._active_model_config().class_names.items())
 
-    def selected_segmentation_class_ids(self) -> set[int]:
+    def selected_class_ids(self) -> set[int]:
         """Return the class IDs checked in the segmentation classes list."""
         return {
             item.data(Qt.UserRole)
@@ -318,11 +310,9 @@ class SegmentationController(TaskControllerBase):
         A caller that already decided which model to run (a batch plan naming one)
         must get that model, not whichever the dock happens to be showing.
         """
-        model_id = model_id or self._active_segmentation_model_id
+        model_id = model_id or self._active_model_id
         if self._segmenter is None or self._segmenter_model_id != model_id:
-            self._segmenter = create_segmenter(
-                self._segmentation_model_registry[model_id]
-            )
+            self._segmenter = create_segmenter(self._model_registry[model_id])
             self._segmenter_model_id = model_id
         return self._segmenter
 
@@ -373,20 +363,20 @@ class SegmentationController(TaskControllerBase):
         )
         self._populate_roi_class_combo(mask, class_names)
 
-    def on_segmentation_model_changed(self) -> None:
+    def on_model_changed(self) -> None:
         """Apply the model picked in the combo and repopulate the class list."""
         dock = self.optari_controller.segmentation
         model_id = dock.segmentation_model_combo.currentData()
         if model_id is None:
             return
-        self.set_active_segmentation_model(str(model_id))
-        self.populate_segmentation_controls()
+        self.set_active_model(str(model_id))
+        self.populate_class_controls()
         self._pending_roi_class_id = None
         dock.status_label.setText(
             f"Model: {dock.segmentation_model_combo.currentText()}"
         )
 
-    def populate_segmentation_controls(
+    def populate_class_controls(
         self, selected_class_ids: set[int] | None = None
     ) -> None:
         """Rebuild the classes list for the active model.
@@ -395,10 +385,10 @@ class SegmentationController(TaskControllerBase):
         own default class.
         """
         seg_dock = self.optari_controller.segmentation
-        default_class = self._active_segmentation_model_config().default_class
+        default_class = self._active_model_config().default_class
         seg_dock.segmentation_classes_list.clear()
 
-        for class_id, class_name in self.active_segmentation_class_items():
+        for class_id, class_name in self.active_class_items():
             add_checkable_item(
                 seg_dock.segmentation_classes_list,
                 f"{class_id}: {class_name}",
@@ -418,9 +408,7 @@ class SegmentationController(TaskControllerBase):
         dock = self.optari_controller.segmentation
         # The model first: the class ids are checked against its classes
         settings = validate_segmentation_settings(settings)
-        model_config = self._segmentation_model_registry.get(
-            settings["model_id"]
-        )
+        model_config = self._model_registry.get(settings["model_id"])
         if model_config is None:
             raise ValueError(
                 f"Unknown segmentation model: {settings['model_id']}"
@@ -442,10 +430,8 @@ class SegmentationController(TaskControllerBase):
         finally:
             dock.segmentation_model_combo.blockSignals(False)
 
-        self.set_active_segmentation_model(settings["model_id"])
-        self.populate_segmentation_controls(
-            set(settings["selected_class_ids"])
-        )
+        self.set_active_model(settings["model_id"])
+        self.populate_class_controls(set(settings["selected_class_ids"]))
         # Select the preset's class in the existing mask if it has it, and keep it
         # pending so the next run's mask preselects it too.
         self._pending_roi_class_id = settings["roi_class_id"]
@@ -480,13 +466,13 @@ class SegmentationController(TaskControllerBase):
 
     def _preset_settings_from_ui(self) -> dict:
         dock = self.optari_controller.segmentation
-        selected_class_ids = sorted(self.selected_segmentation_class_ids())
+        selected_class_ids = sorted(self.selected_class_ids())
         if not selected_class_ids:
             raise ValueError("Select at least one class.")
         # Checked before the name prompt, so a bad entry is not found after typing a name
         return validate_segmentation_settings(
             {
-                "model_id": self.active_segmentation_model_id,
+                "model_id": self.active_model_id,
                 "selected_class_ids": selected_class_ids,
                 "roi_class_id": dock.roi_class_id_combo.currentData(),
                 "roi_shape": dock.roi_shape_combo.currentData() or "ellipse",
@@ -500,17 +486,17 @@ class SegmentationController(TaskControllerBase):
                     dock.roi_top_margin_edit.text(), "ROI top margin"
                 ),
             },
-            self._active_segmentation_model_config().class_names,
+            self._active_model_config().class_names,
         )
 
-    def on_segmentation_select_all_classes_clicked(self) -> None:
+    def on_select_all_classes_clicked(self) -> None:
         """Check all segmentation classes."""
         set_checked(
             self.optari_controller.segmentation.segmentation_classes_list,
             lambda item: True,
         )
 
-    def on_segmentation_clear_classes_clicked(self) -> None:
+    def on_clear_classes_clicked(self) -> None:
         """Uncheck all segmentation classes."""
         set_checked(
             self.optari_controller.segmentation.segmentation_classes_list,
@@ -604,19 +590,16 @@ class SegmentationController(TaskControllerBase):
         )
         return SegmentParams.build(
             self.optari_controller,
-            self.active_segmentation_model_id,
-            self.selected_segmentation_class_ids(),
+            self.active_model_id,
+            self.selected_class_ids(),
             frame_id=frame_id,
         )
 
     def model_weights_path(self, model_id: str) -> Path:
         """Where the given model's ONNX weights are expected on disk."""
-        if model_id not in self._segmentation_model_registry:
+        if model_id not in self._model_registry:
             raise ValueError(f"Unknown segmentation model: {model_id}")
-        return (
-            get_user_models_dir()
-            / self._segmentation_model_registry[model_id].filename
-        )
+        return get_user_models_dir() / self._model_registry[model_id].filename
 
     def weights_to_fetch(
         self, params: SegmentParams
@@ -624,7 +607,7 @@ class SegmentationController(TaskControllerBase):
         """Local path and download URL for the model *params* requires."""
         return (
             self.model_weights_path(params.model_id),
-            self._segmentation_model_registry[params.model_id].url,
+            self._model_registry[params.model_id].url,
         )
 
     def prepare(self, params: SegmentParams) -> BackgroundStep:

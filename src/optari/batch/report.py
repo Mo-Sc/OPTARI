@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+from collections import Counter
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -107,12 +108,9 @@ class BatchReport:
             else pd.DataFrame(columns=REPORT_COLUMNS)
         )
 
-    def counts(self) -> dict[str, int]:
+    def counts(self) -> Counter[str]:
         """How many scans ended in each status, for the run summary."""
-        counts: dict[str, int] = {}
-        for entry in self._entries.values():
-            counts[entry.status] = counts.get(entry.status, 0) + 1
-        return counts
+        return Counter(entry.status for entry in self._entries.values())
 
     @property
     def failures(self) -> list[_Entry]:

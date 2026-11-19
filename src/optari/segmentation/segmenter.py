@@ -135,35 +135,22 @@ class ModelAdapterBase(ABC):
         """
         raise NotImplementedError
 
-    def predict(self, frames: np.ndarray) -> list[SegmentationResult]:
-        """Segment a batch of frames.
-
-        Args:
-            frames: (nframes, H, W), use frames[np.newaxis] for a single frame.
-        """
-        results = []
-        for frame_2d in frames:
-            # A constant frame has nothing to segment, and its z-score normalization would divide
-            # by a zero std and feed NaN to the model, which returns a meaningless mask.
-            if np.ptp(frame_2d) == 0:
-                results.append(
-                    SegmentationResult(
-                        seg=np.zeros(frame_2d.shape, dtype=MASK_DTYPE),
-                        class_names=dict(self.class_names),
-                        blank=True,
-                    )
-                )
-            else:
-                mask_2d = self.postprocess(
-                    self.infer(self.preprocess(frame_2d)), frame_2d.shape
-                )
-                results.append(
-                    SegmentationResult(
-                        seg=mask_2d.astype(MASK_DTYPE),
-                        class_names=dict(self.class_names),
-                    )
-                )
-        return results
+    def predict(self, frame_2d: np.ndarray) -> SegmentationResult:
+        """Segment one (H, W) frame. Batched inference would be a separate path (F-34)."""
+        # A constant frame has nothing to segment, and its z-score normalization would divide
+        # by a zero std and feed NaN to the model, which returns a meaningless mask.
+        if np.ptp(frame_2d) == 0:
+            return SegmentationResult(
+                seg=np.zeros(frame_2d.shape, dtype=MASK_DTYPE),
+                class_names=dict(self.class_names),
+                blank=True,
+            )
+        mask_2d = self.postprocess(
+            self.infer(self.preprocess(frame_2d)), frame_2d.shape
+        )
+        return SegmentationResult(
+            seg=mask_2d.astype(MASK_DTYPE), class_names=dict(self.class_names)
+        )
 
 
 class UKErUSSegAdapter(ModelAdapterBase):
@@ -248,13 +235,11 @@ class UKErUSSegAdapter(ModelAdapterBase):
         # resize back to original frame shape
         mask_2d = resize_mask(mask_2d, frame_shape)
         # only keep the largest connected component for the given class ids
-        mask_2d = keep_largest_region(
-            mask_2d, post_cfg["keep_largest_per_class"]
-        )
+        keep_largest_region(mask_2d, post_cfg["keep_largest_per_class"])
         # give freed pixels the most frequent remaining class in their row
-        mask_2d = reassign_freed_pixels_row_based(mask_2d)
+        reassign_freed_pixels_row_based(mask_2d)
         # combine given classes into one class (here fascia classes)
-        mask_2d = combine_classes(mask_2d, post_cfg["combine_class_groups"])
+        combine_classes(mask_2d, post_cfg["combine_class_groups"])
         for class_id, max_size in post_cfg["remove_small_objects_config"]:
             class_mask = mask_2d == class_id
             processed_class = remove_small_objects(
@@ -264,12 +249,8 @@ class UKErUSSegAdapter(ModelAdapterBase):
         # The row-wise step hands a row's majority class to pixels anywhere in that row,
         # which can recreate fragments of a class reduced to its largest component above.
         # Enforce that again last, then give the gaps their nearest class.
-        mask_2d = keep_largest_region(
-            mask_2d, post_cfg["keep_largest_per_class"]
-        )
-        mask_2d = reassign_freed_pixels(mask_2d)
-
-        return mask_2d
+        keep_largest_region(mask_2d, post_cfg["keep_largest_per_class"])
+        return reassign_freed_pixels(mask_2d)
 
 
 def create_segmenter(

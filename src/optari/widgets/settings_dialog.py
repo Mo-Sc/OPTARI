@@ -35,7 +35,11 @@ from qtpy.QtWidgets import (
 )
 
 from optari.config import settings
-from optari.config.config import read_user_config_dict, write_user_config_dict
+from optari.config.config import (
+    FRAME_SELECTORS,
+    read_user_config_dict,
+    write_user_config_dict,
+)
 from optari.roi.roi_features import FEATURE_REGISTRY
 from optari.segmentation.segmenter import load_model_registry
 from optari.utils.setup import (
@@ -195,16 +199,8 @@ class SettingsDialog(QDialog):
         form.addRow("Default PA layer", self.default_pa_layer_edit)
 
         self.frame_mode_combo = QComboBox()
-        self.frame_mode_combo.addItem(
-            "Motion (Spectral)", userData="spectral_motion"
-        )
-        self.frame_mode_combo.addItem(
-            "Motion (Frame-to-Frame)", userData="frame_motion"
-        )
-        self.frame_mode_combo.addItem(
-            "Acquisition start", userData="acquisition_start"
-        )
-        self.frame_mode_combo.addItem("First ROI frame", userData="roi")
+        for selector, label in FRAME_SELECTORS.items():
+            self.frame_mode_combo.addItem(label, userData=selector)
         self.frame_mode_combo.addItem("Fixed index", userData="index")
         self.frame_mode_combo.setToolTip(
             "Motion (Spectral): least tissue motion during the frame's wavelength set, "
@@ -411,12 +407,7 @@ class SettingsDialog(QDialog):
         self.default_pa_layer_edit.setText(str(general["DEFAULT_PA_LAYER"]))
 
         frame_index = general["DEFAULT_FRAME_INDEX"]
-        is_fixed = frame_index not in (
-            "spectral_motion",
-            "frame_motion",
-            "acquisition_start",
-            "roi",
-        )
+        is_fixed = frame_index not in FRAME_SELECTORS
         self.frame_mode_combo.setCurrentIndex(
             self.frame_mode_combo.findData(
                 "index" if is_fixed else frame_index
