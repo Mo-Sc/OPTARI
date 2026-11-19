@@ -10,7 +10,7 @@ cd OPTARI
 pip install -e ".[test,docs,dev]"
 ```
 
-**Note:** this pulls in a [custom PATATO fork](https://github.com/Mo-Sc/patato/releases/tag/patari-v0.8.0), not upstream [BohndiekLab/patato](https://github.com/BohndiekLab/patato).
+**Note:** this pulls in a [custom PATATO fork](https://github.com/Mo-Sc/patato/releases/tag/patari-v0.9.0), not upstream [BohndiekLab/patato](https://github.com/BohndiekLab/patato).
 
 
 ### Test data

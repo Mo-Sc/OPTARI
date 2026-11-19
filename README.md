@@ -58,7 +58,7 @@ To build the docs locally:
 mkdocs build --no-directory-urls --site-dir optari-docs
 ```
 
-**Note:** OPTARI currently depends on a [custom PATATO fork](https://github.com/Mo-Sc/patato/releases/tag/patari-v0.8.0) (see `pyproject.toml`). 
+**Note:** OPTARI currently depends on a [custom PATATO fork](https://github.com/Mo-Sc/patato/releases/tag/patari-v0.9.0) (see `pyproject.toml`). 
  
 To contribute to OPTARI, follow [Contributing](https://mo-sc.github.io/OPTARI/developer-guide/contributing/).
 
