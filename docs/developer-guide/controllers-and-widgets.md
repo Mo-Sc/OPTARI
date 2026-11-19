@@ -17,6 +17,27 @@ Controllers share one base class: `controllers/base.py`:
 
 Batch mode builds `params` from a preset instead of the dock and calls the same `prepare`/`publish`.
 
+`OptariController` also calls three hooks on every controller, in the order of its `controllers` list. Each does
+nothing unless overridden:
+
+- `on_active_layers_changed()`: the layer selection changed, or the active PA or US layer was removed.
+- `on_frame_changed(frame_idx)`: the viewer moved to another frame.
+- `on_slice_shown()`: the viewer shows another frame, channel or layer, for live readouts.
+
+## Adding a feature
+
+A new feature with its own dock and controller touches three places outside its own files:
+
+1. Write the dock as a `create_*_dock()` factory in `widgets/` and the controller as a `TaskControllerBase` subclass:
+   `_signal_bindings()` for its dock's signals, `refresh_ui()` for gating, the hooks above if it follows the viewer,
+   and `_params_from_ui` / `prepare` / `publish` if it runs heavy work.
+2. Add a row to `DOCKS` in `controllers/ui_manager.py` (attribute, factory, title, area, tabify), and the typed dock
+   attribute in `OptariController.__init__`.
+3. Create the controller in `OptariController.__init__` and add it to `self.controllers`. Initializing, binding,
+   refreshing, the hooks and shutdown then include it.
+
+The dock shows up in OPTARI ▸ Docks and in the Settings dock list on its own.
+
 ## Controllers
 
 | Controller | Owns |

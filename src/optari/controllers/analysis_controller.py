@@ -77,6 +77,15 @@ class AnalysisController(TaskControllerBase):
             ),
         ]
 
+    def on_active_layers_changed(self) -> None:
+        """Gate the plot buttons on the new layers. Without a US layer the motion plot says why."""
+        self.refresh_ui()
+        if self.optari_controller.active_us_layer is None:
+            self.show_motion_scores(compute=False)
+
+    def on_frame_changed(self, frame_idx: int) -> None:
+        self.update_frame_lines()
+
     def on_time_analysis_scope_changed(self, checked: bool) -> None:
         """When the user switches between the "Selected ROI" and "Track ID" scopes,
         refresh the track-id combo, show only tracks that exist in the current

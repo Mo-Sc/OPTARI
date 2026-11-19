@@ -439,6 +439,10 @@ class UnmixingController(TaskControllerBase):
             UnmixingAttributeTags.SUFFIX: dock.suffix_edit.text().strip(),
         }
 
+    def on_active_layers_changed(self) -> None:
+        """The source layer may have changed."""
+        self.refresh_ui()
+
     def refresh_ui(self) -> None:
         """Refresh source-dependent controls from the active layer."""
         dock = self.optari_controller.unmixing

@@ -22,6 +22,29 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# OPTARI's docks as (attribute on OptariController, factory, title, area, tabify). The order
+# is the order of OPTARI > Docks and of the Settings dock list.a tabified dock joins the
+# previous one in its area. A new dock is one row here plus its typed attribute.
+DOCKS = (
+    ("scan_browser", create_scan_browser_dock, "Scan Browser", "right", False),
+    ("info", create_info_dock, "Active Slice Info", "left", False),
+    ("roi", create_roi_dock, "Tabular", "bottom", False),
+    ("time_analysis", create_time_analysis_dock, "Temporal", "bottom", True),
+    ("motion", create_motion_dock, "Frame QC", "bottom", True),
+    ("histograms", create_histogram_dock, "Histogram", "bottom", True),
+    ("spectrum", create_spectrum_dock, "Spectral", "bottom", True),
+    ("annotation", create_annotation_dock, "Annotation", "right", True),
+    ("segmentation", create_segmentation_dock, "Segmentation", "right", True),
+    ("unmixing", create_unmixing_dock, "Unmixing", "right", True),
+    (
+        "reconstruction",
+        create_reconstruction_dock,
+        "Reconstruction",
+        "right",
+        True,
+    ),
+)
+
 
 class UiManager:
     """Build and wire dock widgets for a single OPTARI controller instance."""
@@ -36,34 +59,14 @@ class UiManager:
         and of the Settings dock list; tabified docks join the previous one in their area.
         """
         controller = self.controller
-        add = self._add_dock
-        controller.scan_browser = add(
-            create_scan_browser_dock(), "Scan Browser", "right", tabify=False
-        )
-        controller.info = add(
-            create_info_dock(), "Active Slice Info", "left", tabify=False
-        )
-        controller.roi = add(
-            create_roi_dock(), "Tabular", "bottom", tabify=False
-        )
-        controller.time_analysis = add(
-            create_time_analysis_dock(), "Temporal", "bottom"
-        )
-        controller.motion = add(create_motion_dock(), "Frame QC", "bottom")
-        controller.histograms = add(
-            create_histogram_dock(), "Histogram", "bottom"
-        )
-        controller.spectrum = add(create_spectrum_dock(), "Spectral", "bottom")
-        controller.annotation = add(
-            create_annotation_dock(), "Annotation", "right"
-        )
-        controller.segmentation = add(
-            create_segmentation_dock(), "Segmentation", "right"
-        )
-        controller.unmixing = add(create_unmixing_dock(), "Unmixing", "right")
-        controller.reconstruction = add(
-            create_reconstruction_dock(), "Reconstruction", "right"
-        )
+        for attribute, create_dock, title, area, tabify in DOCKS:
+            dock = create_dock()
+            controller.dock_widgets[title] = (
+                controller.viewer.window.add_dock_widget(
+                    dock.widget, name=title, area=area, tabify=tabify
+                )
+            )
+            setattr(controller, attribute, dock)
         # The info dock floats by default instead of sitting in the left area.
         controller.dock_widgets["Active Slice Info"].setFloating(True)
 
@@ -77,15 +80,6 @@ class UiManager:
         QTimer.singleShot(0, self._select_default_docks)
 
         logger.info("Dock widgets created and added to the viewer window.")
-
-    def _add_dock(self, dock, title: str, area: str, tabify: bool = True):
-        """Add *dock*'s widget to the window under *title* and return *dock*."""
-        self.controller.dock_widgets[title] = (
-            self.controller.viewer.window.add_dock_widget(
-                dock.widget, name=title, area=area, tabify=tabify
-            )
-        )
-        return dock
 
     # ============ dock layout ============
     def _select_default_docks(self) -> None:
@@ -128,9 +122,5 @@ class UiManager:
         )
 
         # -------- dock signal wiring in controllers --------
-        controller.scan_ctrl.bind_events()
-        controller.roi_ctrl.bind_events()
-        controller.analysis_ctrl.bind_events()
-        controller.unmixing_ctrl.bind_events()
-        controller.reconstruction_ctrl.bind_events()
-        controller.segmentation_ctrl.bind_events()
+        for task_controller in controller.controllers:
+            task_controller.bind_events()

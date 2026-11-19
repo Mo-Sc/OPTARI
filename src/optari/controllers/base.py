@@ -99,6 +99,20 @@ class TaskControllerBase:
         """Refresh controller-owned UI after application state changes."""
         pass
 
+    # ============ viewer hooks ============
+    # OptariController calls these on every controller, in the order of its `controllers`.
+    def on_active_layers_changed(self) -> None:
+        """The layer selection changed, or the active PA or US layer was removed. Override if needed."""
+        pass
+
+    def on_frame_changed(self, frame_idx: int) -> None:
+        """The viewer moved to another frame. Override if needed."""
+        pass
+
+    def on_slice_shown(self) -> None:
+        """The viewer shows another frame, channel or layer: refresh live readouts. Override if needed."""
+        pass
+
     # ============ presets ============
     def on_preset_changed(self) -> None:
         """Apply the preset selected in the dock's combo."""

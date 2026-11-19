@@ -29,6 +29,7 @@ from optari.widgets.unmixing_dock import UnmixingDock
 from optari.widgets.histogram_dock import HistogramDock
 from optari.widgets.spectrum_dock import SpectrumDock
 from optari.widgets.layer_metadata_dialog import LayerMetadataDialog
+from optari.controllers.base import TaskControllerBase
 from optari.controllers.ui_manager import UiManager
 from optari.controllers.menu_manager import MenuManager
 from optari.controllers.shortcut_manager import ShortcutManager
@@ -70,14 +71,16 @@ class OptariController:
         # A batch run loads scans and measures on the main thread
         self.batch_running = False
 
-        # Docks, created by UiManager.setup_docks(). dock_widgets maps each dock's title to
-        # the Qt dock widget holding it, napari's own Layer Controls/List included.
+        # Docks, set by UiManager.setup_docks() from its DOCKS table. dock_widgets maps each
+        # dock's title to the Qt dock widget holding it, napari's own Layer Controls/List included.
         self.dock_widgets: dict[str, QDockWidget] = {}
-        # --- left elements ---
-        self.info: InfoDock | None = None
-
-        # --- right elements ---
         self.scan_browser: ScanBrowserDock | None = None
+        self.info: InfoDock | None = None
+        self.roi: RoiDock | None = None
+        self.time_analysis: TimeAnalysisDock | None = None
+        self.motion: MotionDock | None = None
+        self.histograms: HistogramDock | None = None
+        self.spectrum: SpectrumDock | None = None
         self.annotation: AnnotationDock | None = None
         self.segmentation: SegmentationDock | None = None
         self.unmixing: UnmixingDock | None = None
@@ -90,16 +93,19 @@ class OptariController:
         self.analysis_ctrl = AnalysisController(self)
         self.unmixing_ctrl = UnmixingController(self)
         self.reconstruction_ctrl = ReconstructionController(self)
+        # Every task controller. Each step (initialize, bind, refresh, shut down)
+        # and viewer hook runs over this list in this order, so a new one is added here only.
+        self.controllers: list[TaskControllerBase] = [
+            self.scan_ctrl,
+            self.roi_ctrl,
+            self.analysis_ctrl,
+            self.unmixing_ctrl,
+            self.reconstruction_ctrl,
+            self.segmentation_ctrl,
+        ]
 
         # Track event bindings for proper cleanup
         self._shapes_layer_bindings = []
-
-        # -- bottom elements --
-        self.roi: RoiDock | None = None
-        self.time_analysis: TimeAnalysisDock | None = None
-        self.motion: MotionDock | None = None
-        self.histograms: HistogramDock | None = None
-        self.spectrum: SpectrumDock | None = None
 
         self.settings_dialog = None
         self.batch_dialog = None
@@ -110,12 +116,9 @@ class OptariController:
         self.ui_manager.setup_docks()
         self.menu_manager = MenuManager(self)
         self.menu_manager.setup()
-        self.roi_ctrl.initialize_ui()
-        self.segmentation_ctrl.initialize_ui()
-        self.unmixing_ctrl.initialize_ui()
-        self.reconstruction_ctrl.initialize_ui()
-        self.analysis_ctrl.refresh_ui()
-        self.scan_ctrl.refresh_ui()
+        for controller in self.controllers:
+            controller.initialize_ui()
+        self.refresh_controller_uis()
         self.ui_manager.connect_events()
         self.shortcut_manager = ShortcutManager(self)
         self.shortcut_manager.register_all()
@@ -144,14 +147,7 @@ class OptariController:
                 )
             self.active_task = None
 
-        for controller in (
-            self.scan_ctrl,
-            self.roi_ctrl,
-            self.analysis_ctrl,
-            self.unmixing_ctrl,
-            self.reconstruction_ctrl,
-            self.segmentation_ctrl,
-        ):
+        for controller in self.controllers:
             controller.unbind_events()
             controller.teardown()
 
@@ -253,14 +249,7 @@ class OptariController:
 
     def refresh_controller_uis(self) -> None:
         """Refresh all controller-owned UI after a state transition."""
-        for controller in (
-            self.scan_ctrl,
-            self.roi_ctrl,
-            self.analysis_ctrl,
-            self.unmixing_ctrl,
-            self.reconstruction_ctrl,
-            self.segmentation_ctrl,
-        ):
+        for controller in self.controllers:
             controller.refresh_ui()
 
     def select_default_pa_layer(self) -> None:
@@ -330,17 +319,18 @@ class OptariController:
             return
         if layer is self.active_us_layer:
             self.active_us_layer = None
-            self.analysis_ctrl.show_motion_scores(compute=False)
         if layer is self.active_recon_layer:
             self.active_recon_layer = None
             self.resolve_active_recon_layer()
+        for controller in self.controllers:
+            controller.on_active_layers_changed()
         self.refresh_controller_uis()
         self.refresh_all()
 
     def on_selection_changed(self, event=None) -> None:
         self.resolve_active_recon_layer()
-        self.unmixing_ctrl.refresh_ui()
-        self.analysis_ctrl.refresh_ui()
+        for controller in self.controllers:
+            controller.on_active_layers_changed()
         if self._snap_dims_to_active_layer():
             return
         self.refresh_all()
@@ -353,18 +343,17 @@ class OptariController:
         frame_idx = int(round(self.viewer.dims.point[0]))
         if frame_idx != self._last_frame_idx:
             self._last_frame_idx = frame_idx
-            self.roi_ctrl.project_current_frame()
-            self.analysis_ctrl.update_frame_lines()
+            for controller in self.controllers:
+                controller.on_frame_changed(frame_idx)
 
         self.refresh_all()
 
     # ============ update everything ============
     def refresh_all(self) -> None:
-        """
-        refresh all info that should be live updated
-        """
+        """Refresh everything that follows the shown slice: the info dock and the controllers' live readouts."""
         self.update_info_labels()
-        self.roi_ctrl.update_live_table()
+        for controller in self.controllers:
+            controller.on_slice_shown()
 
     # ============ layer snappin & constraints ============
     def snap_to_reconstructed_frame(self, frame_idx: int) -> int:

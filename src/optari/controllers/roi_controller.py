@@ -1031,6 +1031,13 @@ class RoiController(TaskControllerBase):
         self._set_saved_table_view()
         self.refresh_ui()
 
+    def on_frame_changed(self, frame_idx: int) -> None:
+        """Show the ROIs this frame owns."""
+        self.project_current_frame()
+
+    def on_slice_shown(self) -> None:
+        self.update_live_table()
+
     def refresh_ui(self) -> None:
         """Refresh ROI controls after scan or active-layer state changes."""
         if self.optari_controller.shapes_layer is None:
