@@ -1,5 +1,5 @@
 {
-    "schema_version": 6,
+    "schema_version": 7,
     "general": {
         "LOG_LEVEL" : "INFO",
         "GUI_LOG_LEVEL" : "WARNING",
