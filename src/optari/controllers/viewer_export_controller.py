@@ -31,20 +31,14 @@ class ViewerExportController:
         parent_widget = viewer.window._qt_window
         active_layer = viewer.layers.selection.active
         n_frames = viewer.dims.nsteps[0] if viewer.dims.ndim > 0 else 1
-        dialog = ViewerExportDialog(
-            parent_widget, video_available=n_frames > 1
-        )
+        dialog = ViewerExportDialog(parent_widget, video_available=n_frames > 1)
         if dialog.exec() != ViewerExportDialog.Accepted:
             return
 
         dialog_settings = dialog.get_dialog_export_settings()
-        default_name = (
-            f"OPTARIVIEW_{active_layer.name if active_layer else 'viewer'}"
-        )
+        default_name = f"OPTARIVIEW_{active_layer.name if active_layer else 'viewer'}"
         if not dialog_settings["video"]:
-            frame_id = (
-                viewer.dims.current_step[0] if viewer.dims.ndim > 0 else 0
-            )
+            frame_id = viewer.dims.current_step[0] if viewer.dims.ndim > 0 else 0
             default_name += f"_F{frame_id}"
         channel_id = viewer.dims.current_step[1] if viewer.dims.ndim > 1 else 0
         default_name += f"_C{channel_id}"
@@ -86,9 +80,7 @@ class ViewerExportController:
             ".tiff" if "TIFF" in file_filter else ".png"
         )
 
-        save_viewer_screenshot(
-            viewer, filename, include_colorbars=include_colorbars
-        )
+        save_viewer_screenshot(viewer, filename, include_colorbars=include_colorbars)
         logger.info("Exported image to %s", filename)
 
     @staticmethod
@@ -101,9 +93,9 @@ class ViewerExportController:
     ) -> None:
         """Capture the viewer canvas frame by frame and mux it into an MP4.
 
-        Unlike the reconstruction/unmixing/segmentation tasks, this cannot run in a worker
-        thread. `camera.mouse_pan`/`mouse_zoom` are blocked to prevent the camera drifting mid-capture
-        since that would corrupt the recording
+        Unlike the reconstruction/unmixing/segmentation tasks, this cannot run in a
+        worker thread. `camera.mouse_pan`/`mouse_zoom` are blocked to prevent the camera
+        drifting mid-capture since that would corrupt the recording
         """
         filename, _ = QFileDialog.getSaveFileName(
             parent_widget,
@@ -116,7 +108,8 @@ class ViewerExportController:
 
         filename = Path(filename).with_suffix(".mp4")
         # Write to a scratch file and rename only once every frame is captured, so a
-        # cancelled or failed export can never leave a corrupt file at the real destination.
+        # cancelled or failed export can never leave a corrupt file at the real
+        # destination.
         fd, tmp_name = tempfile.mkstemp(
             dir=filename.parent, prefix=f".{filename.stem}-", suffix=".mp4"
         )
@@ -140,9 +133,7 @@ class ViewerExportController:
             viewer.scene.camera.mouse_pan = False
             viewer.scene.camera.mouse_zoom = False
             with export_overlays(viewer, dialog_settings["include_colorbars"]):
-                for frame_id in cancelable_progress(
-                    frames, desc="Exporting video"
-                ):
+                for frame_id in cancelable_progress(frames, desc="Exporting video"):
                     viewer.dims.current_step = (
                         frame_id,
                         *viewer.dims.current_step[1:],

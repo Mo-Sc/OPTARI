@@ -41,16 +41,12 @@ def measured_rows(image_layer):
     )
 
 
-def test_add_measurements_stamps_and_reports_remeasured(
-    measured_rows, tmp_path
-):
+def test_add_measurements_stamps_and_reports_remeasured(measured_rows, tmp_path):
     path = tmp_path / "autosave.csv"
     table = SavedRoiTable(path)
 
     assert table.add_measurements(measured_rows) == set()
-    assert table.add_measurements(measured_rows) == set(
-        measured_rows["roi_group_uid"]
-    )
+    assert table.add_measurements(measured_rows) == set(measured_rows["roi_group_uid"])
     assert (
         len(table) == 2 * len(measured_rows)
         and list(table.rows.columns) == saved_export_columns()
@@ -92,8 +88,8 @@ def test_import_rejects_foreign_or_outdated_tables(measured_rows, tmp_path):
 
     with pd.ExcelWriter(tmp_path / "outdated.xlsx") as writer:
         measured_rows.to_excel(writer, sheet_name=ROI_TABLE_SHEET, index=False)
-        pd.DataFrame(
-            {"key": ["roi_table_schema_version"], "value": ["0"]}
-        ).to_excel(writer, sheet_name=ROI_TABLE_META_SHEET, index=False)
+        pd.DataFrame({"key": ["roi_table_schema_version"], "value": ["0"]}).to_excel(
+            writer, sheet_name=ROI_TABLE_META_SHEET, index=False
+        )
     with pytest.raises(ValueError, match="schema version 0"):
         read_roi_table(tmp_path / "outdated.xlsx")

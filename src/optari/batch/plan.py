@@ -49,7 +49,8 @@ class BatchJob:
 
     @property
     def study_rel(self) -> Path:
-        """The study folder relative to the dataset root, or its name when it is the root.
+        """The study folder relative to the dataset root, or its name when it is the
+        root.
 
         Two sites may both hold a ``Study_1``, so the folder name alone does not
         identify a study within the dataset.
@@ -75,13 +76,17 @@ class BatchJob:
 
     @property
     def scan_name(self) -> str:
-        """The scan's internal name from its acquisition metadata, or empty if it has none."""
+        """The scan's internal name from its acquisition metadata, or empty if it has
+        none.
+        """
         return self.scan_info.internal_name or ""
 
 
 @dataclass(frozen=True)
 class OutputSpec:
-    """Which outputs a batch run writes per scan: ROI table, HDF5/IPASC export, and overlay PNG."""
+    """Which outputs a batch run writes per scan: ROI table, HDF5/IPASC export, and
+    overlay PNG.
+    """
 
     xlsx: bool = True
     hdf5: bool = False
@@ -174,16 +179,16 @@ def _step_preset_name(steps: dict, label: str) -> str | None:
 
 
 def _load_step_preset(steps: dict, step: str) -> dict | None:
-    """The preset the plan names for *step* ("reconstruction", "unmixing", "segmentation"), or None."""
+    """The preset the plan names for *step* ("reconstruction", "unmixing",
+    "segmentation"), or None.
+    """
     name = _step_preset_name(steps, step)
     if name is None:
         return None
     try:
         return PresetStore(get_user_presets_dir(step)).load(name)
     except (ValueError, OSError) as exc:
-        raise ValueError(
-            f"Could not load {step} preset '{name}': {exc}"
-        ) from exc
+        raise ValueError(f"Could not load {step} preset '{name}': {exc}") from exc
 
 
 def _measure_scope(spec: dict, all_frames: bool) -> MeasureScope:
@@ -198,7 +203,8 @@ def _measure_scope(spec: dict, all_frames: bool) -> MeasureScope:
             f"Invalid measure.layers '{mode}'. Use one of {MEASURE_LAYER_MODES}."
         )
     return MeasureScope(
-        # "analysis" narrows to this run's own chain, which the runner passes explicitly.
+        # "analysis" narrows to this run's own chain, which the runner passes
+        # explicitly.
         all_layers=mode == "all_pa",
         all_frames=all_frames,
         all_channels=bool(spec.get("all_channels", True)),
@@ -209,7 +215,9 @@ def _measure_scope(spec: dict, all_frames: bool) -> MeasureScope:
 
 
 def _frame_selector(value) -> int | str:
-    """A batch preset's ``frame``: a frame number or a ``FRAME_SELECTORS`` key, spectral motion if unset."""
+    """A batch preset's ``frame``: a frame number or a ``FRAME_SELECTORS`` key, spectral
+    motion if unset.
+    """
     if isinstance(value, int) and not isinstance(value, bool):
         return value
     if value is None:
@@ -222,9 +230,7 @@ def _frame_selector(value) -> int | str:
     )
 
 
-def build_plan(
-    *, root: Path, batch_preset: dict, output_dir: Path
-) -> BatchPlan:
+def build_plan(*, root: Path, batch_preset: dict, output_dir: Path) -> BatchPlan:
     """Resolve *batch_preset* against the dataset at *root*.
 
     Raises ValueError, message safe to show the user, when the preset cannot be
@@ -237,9 +243,7 @@ def build_plan(
         raise ValueError("Batch preset 'steps' must be an object.")
 
     jobs = [
-        BatchJob(
-            study_path=study, scan_path=scan, scan_info=info, dataset_root=root
-        )
+        BatchJob(study_path=study, scan_path=scan, scan_info=info, dataset_root=root)
         for study, scans in discover_studies(root).items()
         for scan, info in scans.items()
     ]
@@ -256,16 +260,14 @@ def build_plan(
         try:
             roi = RoiPresetStore(get_user_presets_dir("roi")).get(name)
         except (TypeError, ValueError, OSError) as exc:
-            raise ValueError(
-                f"Could not load ROI preset '{name}': {exc}"
-            ) from exc
+            raise ValueError(f"Could not load ROI preset '{name}': {exc}") from exc
 
     outputs_spec = batch_preset.get("outputs") or {}
     # Strict, since a mistyped "in_place" must not quietly turn into copies.
     hdf5 = outputs_spec.get("hdf5", False)
     if hdf5 not in (True, False, "in_place"):
         raise ValueError(
-            f"Invalid outputs.hdf5 {hdf5!r}. Use true, false or \"in_place\"."
+            f'Invalid outputs.hdf5 {hdf5!r}. Use true, false or "in_place".'
         )
     return BatchPlan(
         jobs=jobs,
@@ -278,7 +280,8 @@ def build_plan(
         roi_from_scan=roi_from_scan,
         source=(batch_preset.get("source") or None),
         frame=_frame_selector(batch_preset.get("frame")),
-        # the scan's ROIs sit on their own frames, so steps and measurement need them all
+        # the scan's ROIs sit on their own frames, so steps and measurement need them
+        # all
         measure=_measure_scope(
             batch_preset.get("measure") or {},
             bool(batch_preset.get("all_frames", False)) or roi_from_scan,
@@ -304,15 +307,10 @@ def validate_plan(plan: BatchPlan) -> list[str]:
     problems: list[str] = []
 
     if not plan.jobs:
-        problems.append(
-            "No scans found. Pick a folder holding Study_*/Scan_* data."
-        )
+        problems.append("No scans found in this folder or the folders below it.")
     outputs = plan.outputs
     if not plan.step_names and not (
-        outputs.hdf5
-        or outputs.hdf5_in_place
-        or outputs.ipasc
-        or outputs.overlay_png
+        outputs.hdf5 or outputs.hdf5_in_place or outputs.ipasc or outputs.overlay_png
     ):
         problems.append(
             "The plan has no analysis steps and no output, so it would do nothing."
@@ -462,9 +460,7 @@ def describe_plan(plan: BatchPlan) -> str:
             f"{plan.reconstruction.get('RECONSTRUCTION_SPEED_OF_SOUND', '?')} m/s"
         )
     if plan.unmixing is not None:
-        lines.append(
-            f"Unmixing:   {', '.join(plan.unmixing.get('SPECTRA', []))}"
-        )
+        lines.append(f"Unmixing:   {', '.join(plan.unmixing.get('SPECTRA', []))}")
     if plan.segmentation is not None:
         lines.append(f"Model:      {plan.segmentation.get('model_id', '?')}")
     if plan.roi is not None:
@@ -473,9 +469,7 @@ def describe_plan(plan: BatchPlan) -> str:
             f"tissue class '{plan.roi.geometry.tissue_class}')"
         )
     if plan.roi_from_scan:
-        lines.append(
-            "ROI:        the scan's own, each on the frames it is drawn on"
-        )
+        lines.append("ROI:        the scan's own, each on the frames it is drawn on")
 
     # Nothing is analysed or measured without an ROI, so saying how would be noise.
     if plan.measures:

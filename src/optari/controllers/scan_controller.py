@@ -72,7 +72,9 @@ class ScanController(TaskControllerBase):
         ]
 
     def refresh_ui(self) -> None:
-        """Lock the scan browser while a task runs, and enable the exports only with a scan loaded."""
+        """Lock the scan browser while a task runs, and enable the exports only with a
+        scan loaded.
+        """
         self.optari_controller.scan_browser_dock.widget.setEnabled(
             not self.optari_controller.task_running
         )
@@ -84,11 +86,13 @@ class ScanController(TaskControllerBase):
         )
 
     def scan_name(self) -> str | None:
-        """The scan's internal (vendor) name, for stamping onto layers OPTARI creates."""
+        """The scan's internal (vendor) name, stamped onto layers OPTARI creates."""
         return self.optari_controller.scan_info.internal_name
 
     def close_current_scan(self) -> None:
-        """Close the scan file and forget everything read from it or edited in the session."""
+        """Close the scan file and forget everything read from it or edited in the
+        session.
+        """
         if self.optari_controller.pa_data is not None:
             self.optari_controller.pa_data.close()
         self.optari_controller.pa_data = None
@@ -131,7 +135,7 @@ class ScanController(TaskControllerBase):
             self.set_scan_folder(Path(folder))
 
     def on_scan_selected(self, row: int) -> None:
-        """Load the scan at *row* in the scan list, ignoring an out-of-range selection."""
+        """Load the scan at *row* of the list, ignoring an out-of-range row."""
         scans = list(self.scans.items())
         if row < 0 or row >= len(scans):
             return
@@ -142,14 +146,10 @@ class ScanController(TaskControllerBase):
         self.scans = discover_scans(folder)
 
         self.optari_controller.scan_browser_dock.set_folder(folder)
-        self.optari_controller.scan_browser_dock.set_scans(
-            list(self.scans.items())
-        )
+        self.optari_controller.scan_browser_dock.set_scans(list(self.scans.items()))
 
         if self.scans:
-            self.optari_controller.scan_browser_dock.scans_list.setCurrentRow(
-                0
-            )
+            self.optari_controller.scan_browser_dock.scans_list.setCurrentRow(0)
         else:
             self.reset_scan_state()
 
@@ -196,7 +196,8 @@ class ScanController(TaskControllerBase):
         controller.scan_fov = fov_from_objects(controller.patato_objects)
         if controller.scan_fov is None and layers:
             # Objects without FOV metadata are drawn at the fallback scale, so the first
-            # image's extent (the ultrasound's, when there is one) is the frame ROIs live in.
+            # image's extent (the ultrasound's, when there is one) is the frame ROIs
+            # live in.
             data, kwargs = layers[0]
             scale = kwargs["scale"]
             controller.scan_fov = (
@@ -206,7 +207,7 @@ class ScanController(TaskControllerBase):
         return layers
 
     def _add_layers(self, layers: list[tuple]) -> None:
-        """Add the image, segmentation and ROI layers and select the default PA layer."""
+        """Add the image, segmentation and ROI layers and pick the default PA layer."""
         for data, kw in layers:
             self.viewer.add_image(
                 data, units=self.image_units, **kw
@@ -242,7 +243,9 @@ class ScanController(TaskControllerBase):
         self.optari_controller.refresh_controller_uis()
 
     def _position_viewer(self) -> None:
-        """Go to the configured frame and channel, restore the scan's ROIs, fit the view."""
+        """Go to the configured frame and channel, restore the scan's ROIs, fit the
+        view.
+        """
         frame_selector = settings.general.DEFAULT_FRAME_INDEX
         try:
             # "roi" needs the scan's ROIs, which are restored below
@@ -252,7 +255,8 @@ class ScanController(TaskControllerBase):
             self.viewer.dims.set_point(0, 0)
         self.viewer.dims.set_point(1, settings.general.DEFAULT_CHANNEL_INDEX)
 
-        # Populate ROIs after dims are initialized to avoid computing stats before the viewer is ready.
+        # Populate ROIs after dims are initialized to avoid computing stats before the
+        # viewer is ready.
         self.init_shapes_from_scan()
         if frame_selector == "roi":
             self.go_to_frame("roi")
@@ -266,14 +270,13 @@ class ScanController(TaskControllerBase):
         """Show the frame *selector* means for the loaded scan, and return it.
 
         ``"spectral_motion"`` and ``"frame_motion"`` are the frame with the lowest score
-        of that kind in ``motion_scores()``. A scan without spectral motion (one image per
-        wav set) uses frame-to-frame motion instead. A scan with no ultrasound (a raw time
-        series) has nothing to score and falls back to frame 0.
-        ``"acquisition_start"`` is the ithera recording start frame
-        ``"roi"`` is the first frame holding one of the scan's ROIs, frame 0 without any.
-        It needs the scan's ROIs restored first.
-        Both the viewer and a batch run go through this, so a selector means the same
-        frame in either.
+        of that kind in ``motion_scores()``. A scan without spectral motion (one image
+        per wav set) uses frame-to-frame motion instead. A scan with no ultrasound (a
+        raw time series) has nothing to score and falls back to frame 0.
+        ``"acquisition_start"`` is the ithera recording start frame ``"roi"`` is the
+        first frame holding one of the scan's ROIs, frame 0 without any. It needs the
+        scan's ROIs restored first. Both the viewer and a batch run go through this, so
+        a selector means the same frame in either.
 
         Raises ValueError for a frame number the scan does not have.
         """
@@ -285,9 +288,7 @@ class ScanController(TaskControllerBase):
             frame_id = self._first_roi_frame()
         else:
             frame_id = int(selector)
-            n_frames = (
-                int(self.viewer.dims.nsteps[0]) if self.viewer.dims.ndim else 0
-            )
+            n_frames = int(self.viewer.dims.nsteps[0]) if self.viewer.dims.ndim else 0
             if not 0 <= frame_id < n_frames:
                 raise ValueError(
                     f"frame {frame_id} is outside this scan ({n_frames} frames)"
@@ -296,9 +297,7 @@ class ScanController(TaskControllerBase):
         return frame_id
 
     def _first_roi_frame(self) -> int:
-        frames = [
-            r.frame_id for r in self.optari_controller.roi_ctrl.roi_records
-        ]
+        frames = [r.frame_id for r in self.optari_controller.roi_ctrl.roi_records]
         if not frames:
             logger.info("scan has no ROIs, using frame 0")
             return 0
@@ -307,9 +306,7 @@ class ScanController(TaskControllerBase):
     def _acquisition_start_frame(self) -> int:
         frame_id = self.optari_controller.pa_data.get_acquisition_start_frame()
         if frame_id is None:
-            logger.info(
-                "scan records no acquisition start frame, using frame 0"
-            )
+            logger.info("scan records no acquisition start frame, using frame 0")
             return 0
         logger.info("acquisition start frame selection: frame %d", frame_id)
         return frame_id
@@ -332,9 +329,7 @@ class ScanController(TaskControllerBase):
             if not compute:
                 return None
             us_data = np.asarray(us_layer.data)
-            rows = transducer_mask_rows(
-                float(us_layer.scale[-2]), us_data.shape[-2]
-            )
+            rows = transducer_mask_rows(float(us_layer.scale[-2]), us_data.shape[-2])
             us_layer.metadata["motion_scores"] = {
                 "spectral_motion": spectral_motion_scores(us_data, rows),
                 "frame_motion": frame_motion_scores(us_data, rows),
@@ -370,9 +365,7 @@ class ScanController(TaskControllerBase):
             try:
                 # Projects the current frame into the layer, with ids and properties.
                 roi_ctrl.restore_roi_records(
-                    roi_records_from_scan_rois(
-                        self.optari_controller.pa_data, *fov
-                    )
+                    roi_records_from_scan_rois(self.optari_controller.pa_data, *fov)
                 )
                 logger.info(
                     "restored %s stored ROI record(s)",
@@ -385,9 +378,7 @@ class ScanController(TaskControllerBase):
                     exc,
                     exc_info=True,
                 )
-                show_warning(
-                    f"Scan loaded without saved ROI annotations: {exc}"
-                )
+                show_warning(f"Scan loaded without saved ROI annotations: {exc}")
 
         # Select the restored ROIs, which also enables the Save button.
         shapes_layer = self.optari_controller.shapes_layer
@@ -395,24 +386,30 @@ class ScanController(TaskControllerBase):
         roi_ctrl.refresh_ui()
 
     def export_snapshot(self) -> ScanExport:
-        """Copy what the loaded scan's HDF5 export writes, so it can run in a worker. Main thread only."""
+        """Copy what the loaded scan's HDF5 export writes, so it can run in a worker.
+
+        Main thread only.
+        """
         controller = self.optari_controller
         roi_ctrl = controller.roi_ctrl
         roi_ctrl.sync_records_from_shapes()
         seg_layer = controller.segmentation_ctrl.seg_layer
+        # The worker stamps its origin onto every image it writes. It gets copies with
+        # their own attributes, sharing the pixel data, so the session's stay as they
+        # are.
+        derived = {}
+        for name, image in controller.derived_patato_objects.items():
+            derived[name] = copy.copy(image)
+            derived[name].da = image.da.copy(deep=False)
         return ScanExport(
             pa_data=controller.pa_data,
             path=controller.path,
             rois=copy.deepcopy(
-                [
-                    r
-                    for r in roi_ctrl.roi_records
-                    if r.source.startswith("OPTARI")
-                ]
+                [r for r in roi_ctrl.roi_records if r.source.startswith("OPTARI")]
             ),
             replace_stored_rois=roi_ctrl.stored_rois_restored,
             fov=controller.scan_fov,
-            derived=dict(controller.derived_patato_objects),
+            derived=derived,
             segmentation=(
                 None
                 if seg_layer is None
@@ -425,7 +422,8 @@ class ScanController(TaskControllerBase):
         )
 
     def on_hdf5_export_clicked(self, event=None) -> None:
-        """Prompt for a destination: a new file gets a copy, the loaded scan file is updated.
+        """Prompt for a destination: a new file gets a copy, the loaded scan file is
+        updated.
 
         The dialog's own overwrite prompt is the confirmation for updating the scan.
         """
@@ -444,9 +442,7 @@ class ScanController(TaskControllerBase):
                     total=0,
                     desc=f"Exporting {destination.name}",
                 ),
-                on_result=lambda _: show_info(
-                    f"Exported scan to {destination.name}"
-                ),
+                on_result=lambda _: show_info(f"Exported scan to {destination.name}"),
                 on_error=show_warning,
             )
             return
@@ -483,7 +479,9 @@ class ScanController(TaskControllerBase):
         )
 
     def on_ipasc_export_clicked(self, event=None) -> None:
-        """Prompt for a destination and export the current scan's raw time series as IPASC."""
+        """Prompt for a destination and export the current scan's raw time series as
+        IPASC.
+        """
         destination = self._choose_export_path(
             title="Export raw time series as IPASC", suffix="_ipasc"
         )
@@ -514,15 +512,11 @@ class ScanController(TaskControllerBase):
         self, title: str = "Save scan as HDF5", suffix: str = ""
     ) -> Path | None:
         scan_path = self.optari_controller.path
-        default_name = (
-            f"{scan_path.stem if scan_path else 'export'}{suffix}.hdf5"
-        )
+        default_name = f"{scan_path.stem if scan_path else 'export'}{suffix}.hdf5"
         filename, _ = QFileDialog.getSaveFileName(
             None,
             title,
-            str(
-                (scan_path.parent if scan_path else Path.cwd()) / default_name
-            ),
+            str((scan_path.parent if scan_path else Path.cwd()) / default_name),
             "HDF5 files (*.hdf5 *.h5)",
         )
         if not filename:

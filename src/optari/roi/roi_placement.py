@@ -1,4 +1,5 @@
-"""Placing a saved ROI preset on a scan: as drawn (static) or anchored to a segmented class (auto).
+"""Placing a saved ROI preset on a scan: as drawn (static) or anchored to a segmented
+class (auto).
 
 Plain geometry in world (y, x) mm. A mask's pixel *scale* and *translate* are the
 segmentation layer's last two axes. Errors are ValueErrors with a message safe to show
@@ -46,7 +47,8 @@ def anchor_verts_to_mask(
     translate,
     top_margin_mm: float = 0.0,
 ) -> np.ndarray:
-    """Shift *verts* so their top-center sits *top_margin_mm* below *class_mask*'s top-center.
+    """Shift *verts* so their top-center sits *top_margin_mm* below *class_mask*'s
+    top-center.
 
     Raises ValueError like `class_anchor_mm`.
     """
@@ -82,7 +84,9 @@ def auto_preset_verts(
     scale,
     translate,
 ) -> tuple[np.ndarray, int]:
-    """The preset's vertices anchored to its tissue class in the 2D mask *seg*, and that class's id."""
+    """The preset's vertices anchored to its tissue class in the 2D mask *seg*, and that
+    class's id.
+    """
     class_name_to_id = {
         str(name): int(class_id) for class_id, name in class_names.items()
     }

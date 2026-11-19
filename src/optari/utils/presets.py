@@ -13,12 +13,7 @@ def normalize_preset_name(name: str) -> str:
     name = str(name).strip()
     if name.lower().endswith(".json"):
         name = name[:-5].rstrip()
-    if (
-        not name
-        or name in {".", ".."}
-        or Path(name).name != name
-        or "\\" in name
-    ):
+    if not name or name in {".", ".."} or Path(name).name != name or "\\" in name:
         raise ValueError("Preset name must be a single file name.")
     return name
 
@@ -50,9 +45,7 @@ class PresetStore:
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
-            raise ValueError(
-                f"Invalid JSON in {path.name}: {exc.msg}"
-            ) from exc
+            raise ValueError(f"Invalid JSON in {path.name}: {exc.msg}") from exc
 
         if not isinstance(data, dict):
             raise ValueError(f"Preset must contain a JSON object: {path.name}")

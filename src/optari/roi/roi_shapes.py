@@ -66,7 +66,8 @@ def roi_verts_from_mask(
     ty: float = 0.0,
     tx: float = 0.0,
 ) -> np.ndarray:
-    """World-mm vertices of a *shape_type* ROI placed in *class_mask*'s largest component.
+    """World-mm vertices of a *shape_type* ROI placed in *class_mask*'s largest
+    component.
 
     ``rectangle`` and ``ellipse`` are boxes anchored to the class's top at the centre
     column; ``polygon`` follows the class outline, trimmed to the configured bounds.
@@ -140,7 +141,8 @@ def _box_verts_mm(
     ty: float,
     tx: float,
 ) -> np.ndarray:
-    """Rectangle/ellipse corners (world mm) centred on the class's top at the centre column.
+    """Rectangle/ellipse corners (world mm) centred on the class's top at the centre
+    column.
 
     Exact millimetres rather than whole pixels, so the box has the requested size and
     margin, and sits where an ROI preset anchored with the same margin would.
@@ -172,7 +174,8 @@ def _polygon_verts_px(
     """Polygon (pixels) from the class's outline, trimmed to the configured bounds and
     anchored to the component's absolute top.
 
-    TODO: holes in the mask are currently ignored. Find a good way of handling them if needed.
+    TODO: holes in the mask are currently ignored. Find a good way of handling them if
+    needed.
     """
     x0, x1, y0, y1, largest_mask = _pixel_bounds(class_mask, config, sy, sx)
 
@@ -185,9 +188,7 @@ def _polygon_verts_px(
         trimmed_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
     )
     if not contours:
-        raise ValueError(
-            "No polygon found after trimming. Check sizes and depth."
-        )
+        raise ValueError("No polygon found after trimming. Check sizes and depth.")
 
     # cv2 returns (x, y) points; a single-point contour squeezes to 1-D
     largest_contour = max(contours, key=cv2.contourArea).reshape(-1, 2)

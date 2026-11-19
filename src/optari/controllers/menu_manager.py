@@ -1,4 +1,6 @@
-"""The OPTARI menu (Settings, Batch Mode, docs, dock toggles) and the napari entries it hides."""
+"""The OPTARI menu (Settings, Batch Mode, docs, dock toggles) and the napari entries it
+hides.
+"""
 
 from __future__ import annotations
 
@@ -21,8 +23,8 @@ logger = logging.getLogger(__name__)
 
 DOCS_URL = "https://mo-sc.github.io/OPTARI/"
 
-# most napari menu items are useless in OPTARI, and some can even break it. Hide them to avoid confusion.
-# can be overridden by setting the OPTARI_FULL_MENUS=1 env var.
+# most napari menu items are useless in OPTARI, and some can even break it. Hide them to
+# avoid confusion. can be overridden by setting the OPTARI_FULL_MENUS=1 env var.
 HIDDEN_NAPARI_MENUS = (
     "plugins_menu",
     "layers_menu",
@@ -47,7 +49,9 @@ HIDDEN_VIEW_ENTRIES = (
 
 
 class MenuManager:
-    """Add the OPTARI menu to napari's menu bar and hide the entries OPTARI doesn't support."""
+    """Add the OPTARI menu to napari's menu bar and hide the entries OPTARI doesn't
+    support.
+    """
 
     def __init__(self, controller: OptariController):
         self.controller = controller
@@ -58,9 +62,7 @@ class MenuManager:
         self._add_optari_menu(window)
 
         if os.getenv("OPTARI_FULL_MENUS") == "1":
-            logger.info(
-                "OPTARI_FULL_MENUS=1: leaving the napari menus untouched."
-            )
+            logger.info("OPTARI_FULL_MENUS=1: leaving the napari menus untouched.")
             return
 
         self._prune_napari_menus(window)
@@ -70,8 +72,8 @@ class MenuManager:
         menu = QMenu("OPTARI", window._qt_window)
 
         settings_action = QAction("Settings", menu)
-        # macOS moves any action whose text mentions settings/preferences/options into the
-        # application menu unless the role is pinned.
+        # macOS moves any action whose text mentions settings/preferences/options into
+        # the application menu unless the role is pinned.
         settings_action.setMenuRole(QAction.NoRole)
         settings_action.triggered.connect(self._show_settings)
         menu.addAction(settings_action)
@@ -83,9 +85,7 @@ class MenuManager:
 
         menu.addSeparator()
         docs_action = QAction("Documentation", menu)
-        docs_action.triggered.connect(
-            lambda: QDesktopServices.openUrl(QUrl(DOCS_URL))
-        )
+        docs_action.triggered.connect(lambda: QDesktopServices.openUrl(QUrl(DOCS_URL)))
         menu.addAction(docs_action)
 
         menu.addSeparator()
@@ -96,8 +96,9 @@ class MenuManager:
     def _add_dock_toggles(self, menu: QMenu) -> None:
         """Add a Docks submenu with a checkable show/hide toggle per dock.
 
-        Reuses QDockWidget's own toggleViewAction(), the same mechanism napari uses for its own
-        Window menu so visibility stays in sync even when a dock is closed some other way.
+        Reuses QDockWidget's own toggleViewAction(), the same mechanism napari uses for
+        its own Window menu so visibility stays in sync even when a dock is closed some
+        other way.
         """
         docks_menu = menu.addMenu("Docks")
         for label, dock_widget in self.controller.dock_widgets.items():
@@ -151,11 +152,10 @@ class MenuManager:
     def _hide_entries(menu, hidden_ids: tuple[str, ...]) -> None:
         for action in menu.actions():
             submenu = action.menu()
-            # Command actions carry the id on the action, submenus carry it on the QMenu.
+            # Command actions carry the id on the action, submenus carry it on the
+            # QMenu.
             identifier = (
-                submenu.objectName()
-                if submenu is not None
-                else action.objectName()
+                submenu.objectName() if submenu is not None else action.objectName()
             )
             if identifier in hidden_ids:
                 action.setVisible(False)

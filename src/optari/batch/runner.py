@@ -44,9 +44,11 @@ from optari.roi.roi_table import SavedRoiTable
 from optari.roi.roi_table_io import write_roi_table_xlsx
 from optari.roi.roi_utils import NO_CLAMP
 from optari.utils.logging import run_log_file
-from optari.utils.tasks import BackgroundStep, run_background_task
+from optari.utils.tasks import BackgroundStep, Outcome, run_background_task
 
 if TYPE_CHECKING:
+    from napari.layers import Image
+
     from optari.controllers.optari_controller import OptariController
 
 logger = logging.getLogger(__name__)
@@ -100,8 +102,8 @@ class BatchRunner:
     ) -> None:
         """Prepare *plan* to run in *controller*'s viewer.
 
-        *on_progress(job, status)* is called as each scan starts and ends, *on_finished()*
-        once after the run.
+        *on_progress(job, status)* is called as each scan starts and ends,
+        *on_finished()* once after the run.
         """
         self.controller = controller
         self.viewer = controller.viewer
@@ -135,12 +137,14 @@ class BatchRunner:
         self._advance(("ok", None))
 
     def cancel(self) -> None:
-        """Stop the run after the current step, and ask a running background worker to quit early."""
+        """Stop the run after the current step, and ask a running background worker to
+        quit early.
+        """
         self._cancel_requested = True
         if self._worker is not None:
             self._worker.quit()
 
-    def _advance(self, outcome) -> None:
+    def _advance(self, outcome: Outcome) -> None:
         """Resume the plan generator with the last step's outcome. Main thread only."""
         if self.controller.is_shut_down:
             return
@@ -189,9 +193,7 @@ class BatchRunner:
             write_roi_table_xlsx(self.saved_table.rows, self.plan.table_path)
         except (ValueError, OSError):
             # e.g. more rows than an Excel sheet holds: the CSV is the result then
-            logger.exception(
-                "measurements stay in %s", self.plan.table_csv_path.name
-            )
+            logger.exception("measurements stay in %s", self.plan.table_csv_path.name)
             return
         # Missing when every append failed (logged by SavedRoiTable)
         self.plan.table_csv_path.unlink(missing_ok=True)
@@ -215,9 +217,7 @@ class BatchRunner:
             try:
                 yield from self._run_job(job)
             except BatchStepError as exc:
-                logger.warning(
-                    "scan %s failed at %s: %s", job.scan_path, exc.step, exc
-                )
+                logger.warning("scan %s failed at %s: %s", job.scan_path, exc.step, exc)
                 self.report.fail(job, str(exc), step=exc.step)
                 self._on_progress(job, "failed")
                 continue
@@ -228,9 +228,7 @@ class BatchRunner:
             except Exception as exc:
                 # A bug in one step must not take the rest of the dataset with it.
                 logger.exception("unexpected failure on %s", job.scan_path)
-                self.report.fail(
-                    job, f"{type(exc).__name__}: {exc}", step="unexpected"
-                )
+                self.report.fail(job, f"{type(exc).__name__}: {exc}", step="unexpected")
                 self._on_progress(job, "failed")
                 continue
 
@@ -242,15 +240,14 @@ class BatchRunner:
         segment, unmix, place the ROI, measure, write the outputs.
 
         Each step works on the layers the previous one made. Heavy steps are yielded to
-        run in a worker, and a refusal or failure raises ``BatchStepError`` naming the step.
+        run in a worker, and a refusal or failure raises ``BatchStepError`` naming the
+        step.
         """
         controller = self.controller
         if not controller.scan_ctrl.load_scan(job.scan_path, job.scan_info):
             raise BatchStepError("could not open scan", "load")
 
-        frame_idx = _guard(
-            "frame", controller.scan_ctrl.go_to_frame, self.plan.frame
-        )
+        frame_idx = _guard("frame", controller.scan_ctrl.go_to_frame, self.plan.frame)
         self.report.note(job, analysis_frame=frame_idx)
         # Measuring across frames needs every frame reconstructed and segmented, not
         # just the one the overlay is taken on.
@@ -270,9 +267,7 @@ class BatchRunner:
                 controller.reconstruction_ctrl.prepare,
                 params,
             )
-            produced_recon = controller.reconstruction_ctrl.publish(
-                result, params
-            )
+            produced_recon = controller.reconstruction_ctrl.publish(result, params)
 
         # One run works on exactly one reconstruction: everything downstream (unmixing,
         # measurement, overlay) hangs off this layer, so a scan that already contains
@@ -286,12 +281,7 @@ class BatchRunner:
                 SegmentParams.build,
                 controller,
                 str(self.plan.segmentation.get("model_id", "")),
-                {
-                    int(c)
-                    for c in self.plan.segmentation.get(
-                        "selected_class_ids", []
-                    )
-                },
+                {int(c) for c in self.plan.segmentation.get("selected_class_ids", [])},
                 frame_id=run_frame,
             )
             result = yield from _in_background(
@@ -329,7 +319,7 @@ class BatchRunner:
         yield from self._write_outputs(job, frame_idx, source_layer)
 
     # ============ per-scan work ============
-    def _select_source_layer(self, produced_recon: str | None):
+    def _select_source_layer(self, produced_recon: str | None) -> Image:
         """The one reconstruction this run analyses, and make it the active layer.
 
         Selecting it through the viewer rather than assigning the attribute keeps the
@@ -339,9 +329,7 @@ class BatchRunner:
         wanted = self.plan.source or produced_recon
         candidates = pa_layers(self.viewer.layers)
         if wanted:
-            layer = next(
-                (l for l in candidates if l.name.startswith(wanted)), None
-            )
+            layer = next((l for l in candidates if l.name.startswith(wanted)), None)
             if layer is None:
                 available = ", ".join(l.name for l in candidates) or "none"
                 raise BatchStepError(
@@ -412,13 +400,15 @@ class BatchRunner:
 
         An export that fails raises in its worker and fails this scan at that step.
         """
-        export = self.controller.scan_ctrl.export_snapshot()
+        export = (
+            self.controller.scan_ctrl.export_snapshot()
+            if self.plan.outputs.hdf5 or self.plan.outputs.hdf5_in_place
+            else None
+        )
         # Exports mirror the input layout, so a converted dataset can be reopened
         # exactly like the original: <out>/<format>/<study path>/Scan_Y.hdf5
         if self.plan.outputs.hdf5:
-            destination = self._export_path(
-                job, "hdf5", f"{job.scan_stem}.hdf5"
-            )
+            destination = self._export_path(job, "hdf5", f"{job.scan_stem}.hdf5")
             yield from _in_background(
                 "hdf5",
                 BackgroundStep,
@@ -430,14 +420,12 @@ class BatchRunner:
 
         if self.plan.outputs.ipasc:
             # Same suffix the Scan Browser's IPASC export uses.
-            destination = self._export_path(
-                job, "ipasc", f"{job.scan_stem}_ipasc.hdf5"
-            )
+            destination = self._export_path(job, "ipasc", f"{job.scan_stem}_ipasc.hdf5")
             yield from _in_background(
                 "ipasc",
                 BackgroundStep,
                 func=partial(
-                    export_scan_to_ipasc, export.pa_data, destination
+                    export_scan_to_ipasc, self.controller.pa_data, destination
                 ),
                 total=0,
                 desc=f"Exporting {destination.name}",
@@ -447,9 +435,7 @@ class BatchRunner:
         if self.plan.outputs.overlay_png:
             self.report.note(
                 job,
-                overlay_path=str(
-                    self._write_overlay(job, frame_idx, source_layer)
-                ),
+                overlay_path=str(self._write_overlay(job, frame_idx, source_layer)),
             )
 
         # Last, since it closes the scan the overlay and the exports read from.
@@ -474,15 +460,11 @@ class BatchRunner:
         destination.parent.mkdir(parents=True, exist_ok=True)
         return destination
 
-    def _write_overlay(
-        self, job: BatchJob, frame_idx: int, source_layer
-    ) -> Path:
+    def _write_overlay(self, job: BatchJob, frame_idx: int, source_layer) -> Path:
         overlay_layer = self._overlay_layer(source_layer)
 
         channel_idx = (
-            int(self.viewer.dims.current_step[1])
-            if self.viewer.dims.ndim > 1
-            else 0
+            int(self.viewer.dims.current_step[1]) if self.viewer.dims.ndim > 1 else 0
         )
         destination = (
             self.plan.output_dir
@@ -502,7 +484,8 @@ class BatchRunner:
         return destination
 
     def _overlay_layer(self, source_layer):
-        """The layer the overlay shows: the one named by the plan, else the last derived.
+        """The layer the overlay shows: the one named by the plan, else the last
+        derived.
 
         Restricted to this run's own analysis chain, so the picture matches the numbers.
         Unmixing publishes Unmixed, THb, sO2 in that order, so "last" is the most
@@ -512,9 +495,7 @@ class BatchRunner:
         wanted = self.plan.outputs.overlay_layer
         if not wanted:
             return candidates[-1]
-        match = next(
-            (l for l in candidates if l.name.startswith(wanted)), None
-        )
+        match = next((l for l in candidates if l.name.startswith(wanted)), None)
         if match is None:
             names = ", ".join(l.name for l in candidates)
             raise BatchStepError(
@@ -525,7 +506,7 @@ class BatchRunner:
 
 
 def _guard(step: str, func, /, *args, **kwargs):
-    """Run *func*, turning a per-scan refusal into a failure this run can recover from."""
+    """Run *func*, turning a refusal into a scan failure the run can recover from."""
     try:
         return func(*args, **kwargs)
     except ValueError as exc:

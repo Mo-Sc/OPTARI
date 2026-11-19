@@ -33,18 +33,15 @@ def roi_color_for_index(index: int) -> str:
     return roi_colors[int(index) % len(roi_colors)]
 
 
-def open_download(
-    url: str | None, dest_name: str
-) -> tuple[requests.Response, int]:
-    """Open a streaming GET and return ``(response, total_size)`` without reading the body.
+def open_download(url: str | None, dest_name: str) -> tuple[requests.Response, int]:
+    """Open a streaming GET and return ``(response, total_size)`` without reading the
+    body.
 
     Run as its own worker step before ``download_chunks``, so the size is known when
     the download's progress bar is created.
     """
     if not url:
-        raise FileNotFoundError(
-            f"{dest_name} not found and no download URL provided."
-        )
+        raise FileNotFoundError(f"{dest_name} not found and no download URL provided.")
 
     response = requests.get(url, stream=True, timeout=DOWNLOAD_TIMEOUT_S)
     response.raise_for_status()
@@ -58,9 +55,7 @@ def open_download(
     return response, int(response.headers.get("content-length", 0))
 
 
-def download_chunks(
-    response: requests.Response, dest_path: Path
-) -> Iterator[int]:
+def download_chunks(response: requests.Response, dest_path: Path) -> Iterator[int]:
     """Stream *response* to *dest_path*, yielding the bytes written per chunk.
 
     Runs in a worker thread after `open_download`. Writes to a
@@ -74,9 +69,7 @@ def download_chunks(
     tmp_path = Path(tmp_name)
     try:
         with os.fdopen(fd, "wb") as f:
-            for chunk in response.iter_content(
-                chunk_size=DOWNLOAD_CHUNK_BYTES
-            ):
+            for chunk in response.iter_content(chunk_size=DOWNLOAD_CHUNK_BYTES):
                 if chunk:
                     f.write(chunk)
                     yield len(chunk)

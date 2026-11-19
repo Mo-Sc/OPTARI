@@ -1,4 +1,5 @@
-"""Motion scores per frame, from the ultrasound, to pick a still frame and flag moving ones.
+"""Motion scores per frame, from the ultrasound, to pick a still frame and flag moving
+ones.
 
 Spectral motion follows Kukačka et al., Sci Rep 16, 1325 (2026).
 """
@@ -9,11 +10,12 @@ import numpy as np
 from skimage.metrics import structural_similarity as ssim
 
 # Depth of the band at the top of the ultrasound left out of motion scoring
-TRANSDUCER_MASK_MM = 11.4 # iThera 40 mm / 210 px ultrasound (0.19 mm/px),
+TRANSDUCER_MASK_MM = 11.4  # iThera 40 mm / 210 px ultrasound (0.19 mm/px),
 
 
 def transducer_mask_rows(pixel_mm: float, n_rows: int) -> int:
-    """Rows of an ultrasound image with *pixel_mm* row spacing that ``TRANSDUCER_MASK_MM`` covers.
+    """Rows of an ultrasound image with *pixel_mm* row spacing that
+    ``TRANSDUCER_MASK_MM`` covers.
 
     Raises ValueError when that leaves nothing to score, rather than scoring nothing.
     """
@@ -38,7 +40,8 @@ def spectral_motion_scores(
 ) -> np.ndarray | None:
     """
     adapted from:
-    Kukačka, J., Bader, M., Jüstel, D. et al. Motion score for spectral quality control of optoacoustic-ultrasound data. Sci Rep 16, 1325 (2026).
+    Kukačka, J., Bader, M., Jüstel, D. et al. Motion score for spectral quality control
+    of optoacoustic-ultrasound data. Sci Rep 16, 1325 (2026).
     https://doi.org/10.1038/s41598-025-33753-6
     SSIM and ZNCC motion scores, vectorised over the padded US data.
 
@@ -47,15 +50,16 @@ def spectral_motion_scores(
     spectra and corrupts unmixing. Frames are not compared with each other, only
     scaled against each other at the end.
 
-    A wavelength set whose wavelengths all show the same US image scores NaN. This can happen
-    if the scanner refreshes the US slower than OA frames, but duplicates the US frames instead
-    unscored frame.
+    A wavelength set whose wavelengths all show the same US image scores NaN. That
+    happens when the scanner refreshes the US slower than the OA frames and repeats the
+    last US image, so the set has no motion to measure.
 
     Returns None when no frame has two distinct images to compare (a single
     wavelength, or a scanner repeating one US image per wavelength set).
 
     Input shape: (n_frames, n_wavelengths, height, width)
-    mask_transducer: rows to leave out at the top of the image, see ``transducer_mask_rows``
+    mask_transducer: rows to leave out at the top of the image, see
+    ``transducer_mask_rows``
     """
     n_frames = us_data.shape[0]
 
@@ -110,9 +114,7 @@ def spectral_motion_scores(
     return (_min_max_scale(raw_ssim) + _min_max_scale(raw_zncc)) / 2.0
 
 
-def frame_motion_scores(
-    us_data: np.ndarray, mask_transducer: int
-) -> np.ndarray:
+def frame_motion_scores(us_data: np.ndarray, mask_transducer: int) -> np.ndarray:
     """Motion *between* frames: how much each frame's ultrasound differs from the
     previous and the next frame, e.g. from breathing or probe movement.
 
@@ -157,10 +159,7 @@ def frame_motion_scores(
         return np.nanmean(np.stack([padded[:-1], padded[1:]]), axis=0)
 
     return (
-        (
-            _min_max_scale(per_image(pair_ssim))
-            + _min_max_scale(per_image(pair_zncc))
-        )
+        (_min_max_scale(per_image(pair_ssim)) + _min_max_scale(per_image(pair_zncc)))
         / 2.0
     )[image_of_frame]
 

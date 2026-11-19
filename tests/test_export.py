@@ -59,9 +59,7 @@ def test_hdf5_export_round_trip(ithera_scan, tmp_path):
         frame_id=FRAME,
         kind="ellipse",
         tissue_class="Muskel1",
-        verts=np.array(
-            [[15.0, 15.0], [15.0, 25.0], [17.0, 25.0], [17.0, 15.0]]
-        ),
+        verts=np.array([[15.0, 15.0], [15.0, 25.0], [17.0, 25.0], [17.0, 15.0]]),
     )
     recon = next(iter(ithera_scan.get_scan_reconstructions().values()))
     (unmixed, _, _), _ = run_to_end(
@@ -185,18 +183,19 @@ def test_batch_report_lifecycle(tmp_path):
 
     rows = report.rows
     assert list(rows.columns) == REPORT_COLUMNS
-    assert rows.loc[
-        0, ["scan", "scan_name", "analysis_frame", "n_rows"]
-    ].tolist() == ["Scan_1.hdf5", "S1", 15, 13]
+    assert rows.loc[0, ["scan", "scan_name", "analysis_frame", "n_rows"]].tolist() == [
+        "Scan_1.hdf5",
+        "S1",
+        15,
+        13,
+    ]
     assert rows.loc[1, ["failed_step", "message"]].tolist() == [
         "unmixing",
         "no reconstruction",
     ]
     assert report.summary() == "3 scan(s): 1 cancelled, 1 failed, 1 ok"
 
-    on_disk = pd.read_excel(
-        path, sheet_name=None
-    )  # rewritten after every scan
+    on_disk = pd.read_excel(path, sheet_name=None)  # rewritten after every scan
     assert set(on_disk) == {REPORT_SHEET, ROI_TABLE_META_SHEET}
     assert on_disk[REPORT_SHEET]["status"].tolist() == [
         "ok",

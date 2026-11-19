@@ -51,9 +51,7 @@ def prompt_roi_preset(
         margin_spin.setValue(margins_by_location.get(location, 0.0))
 
     location_combo.currentIndexChanged.connect(on_location_changed)
-    location_combo.setCurrentIndex(
-        max(location_combo.findData(current_location), 0)
-    )
+    location_combo.setCurrentIndex(max(location_combo.findData(current_location), 0))
     on_location_changed()
 
     form.addRow("ROI Name:", preset_name_edit)

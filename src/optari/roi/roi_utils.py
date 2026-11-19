@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from datetime import UTC, timedelta
 from functools import lru_cache
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -29,11 +30,16 @@ from optari.roi.roi_features import (
 from optari.roi.roi_geometry import RoiGeometry
 from optari.roi.roi_records import RoiRecord
 
+if TYPE_CHECKING:
+    from napari.layers import Image
+
 logger = logging.getLogger(__name__)
 
 
 def visible_feature_columns() -> list[str]:
-    """Feature columns the user has enabled in settings, determines the live table's columns."""
+    """Feature columns the user has enabled in settings, determines the live table's
+    columns.
+    """
     return [
         c
         for c in ALL_FEATURE_COLUMNS
@@ -75,25 +81,28 @@ class MeasureScope:
     follow_track: bool = False
 
 
-def _scale_sy_sx(active_recon_layer) -> tuple[float, float]:
+def _scale_sy_sx(active_recon_layer: Image) -> tuple[float, float]:
     scale = active_recon_layer.scale
     return float(scale[-2]), float(scale[-1])
 
 
-def _is_reconstructed_frame(active_recon_layer, frame_idx: int) -> bool:
-    """Whether the layer holds data on *frame_idx*. Without ``frames`` it holds them all."""
+def _is_reconstructed_frame(active_recon_layer: Image, frame_idx: int) -> bool:
+    """Whether the layer holds data on *frame_idx*.
+
+    Without ``frames`` it holds them all.
+    """
     frames = active_recon_layer.metadata.get("frames")
     return frames is None or frame_idx in frames
 
 
-def _channel_value(active_recon_layer, channel_idx: int) -> object:
+def _channel_value(active_recon_layer: Image, channel_idx: int) -> int | str:
     """The channel's label: a wavelength (nm) or a chromophore/parameter name."""
     label = active_recon_layer.metadata["axis1_labels"][channel_idx]
     # numpy scalars would land in the table as e.g. "np.int64(700)"
     return label.item() if isinstance(label, np.generic) else label
 
 
-def slice_datetime(layer, frame_idx: int, channel_idx: int) -> str:
+def slice_datetime(layer: Image, frame_idx: int, channel_idx: int) -> str:
     """Wall-clock acquisition time of one slice, or "N/A" if the scan cannot be dated.
 
     See ``patato_bridge.acquisition_start`` for when a scan counts as datable.
@@ -133,9 +142,7 @@ def _rasterize(
         mask = path_mask(verts_pixels, image_shape)
     else:
         mask = polygon_mask(verts_pixels, image_shape)
-    mask.flags.writeable = (
-        False  # shared between callers; must never be mutated
-    )
+    mask.flags.writeable = False  # shared between callers, so it must never change
     return mask
 
 
@@ -178,7 +185,7 @@ def _roi_mask(
         return None
 
 
-def _layer_translate(active_recon_layer) -> tuple[float, float]:
+def _layer_translate(active_recon_layer: Image) -> tuple[float, float]:
     """Where the layer's pixel 0 centre sits in world mm: half a pixel inside its FOV
     edge, plus any placement offset (like DeepMB's)."""
     translate = active_recon_layer.translate
@@ -193,7 +200,7 @@ def records_by_track_and_frame(
 
 
 def iter_roi_masks(
-    records: list[RoiRecord], active_recon_layer, image_shape
+    records: list[RoiRecord], active_recon_layer: Image, image_shape
 ) -> Iterator[tuple[RoiRecord, np.ndarray]]:
     """Yield each usable ROI with its boolean mask over *image_shape*.
 
@@ -205,9 +212,7 @@ def iter_roi_masks(
     ty, tx = _layer_translate(active_recon_layer)
 
     for roi in records:
-        mask = _roi_mask(
-            roi, sy=sy, sx=sx, ty=ty, tx=tx, image_shape=image_shape
-        )
+        mask = _roi_mask(roi, sy=sy, sx=sx, ty=ty, tx=tx, image_shape=image_shape)
         if mask is not None:
             yield roi, mask
 
@@ -226,7 +231,7 @@ class _LayerInfo:
     sx: float
 
     @classmethod
-    def resolve(cls, layer, channel_idx: int) -> _LayerInfo:
+    def resolve(cls, layer: Image, channel_idx: int) -> _LayerInfo:
         """Resolve *layer*'s per-call constants once, from its metadata and scale."""
         filepath = str(layer.metadata.get("filepath", "") or "")
         sy, sx = _scale_sy_sx(layer)
@@ -303,12 +308,8 @@ class IntensityClamp:
 
     @property
     def label(self) -> str:
-        """What is recorded with each measurement: the mode, or ``none`` without bounds."""
-        return (
-            "none"
-            if self.minimum is None and self.maximum is None
-            else self.mode
-        )
+        """The mode recorded with each measurement, ``none`` without bounds."""
+        return "none" if self.minimum is None and self.maximum is None else self.mode
 
     def apply(self, values: np.ndarray) -> np.ndarray:
         """Apply the clip or exclude policy to *values*."""
@@ -332,7 +333,7 @@ class IntensityClamp:
 NO_CLAMP = IntensityClamp()
 
 
-def polygon_mask(verts_px, image_shape):
+def polygon_mask(verts_px: np.ndarray, image_shape: tuple[int, int]) -> np.ndarray:
     """Rasterize a polygon (verts in pixel coords) to a boolean mask."""
     rr, cc = polygon(verts_px[:, 0], verts_px[:, 1], image_shape)
     mask = np.zeros(image_shape, dtype=bool)
@@ -340,7 +341,7 @@ def polygon_mask(verts_px, image_shape):
     return mask
 
 
-def path_mask(verts_px, image_shape):
+def path_mask(verts_px: np.ndarray, image_shape: tuple[int, int]) -> np.ndarray:
     """Rasterize an open line or path (verts in pixel coords) to the pixels it crosses.
 
     Not ``polygon``: it returns only the two end points of a line, and fills a path
@@ -350,17 +351,12 @@ def path_mask(verts_px, image_shape):
     points = np.rint(verts_px).astype(int)
     for (r0, c0), (r1, c1) in zip(points[:-1], points[1:]):
         rr, cc = line(r0, c0, r1, c1)
-        inside = (
-            (rr >= 0)
-            & (rr < image_shape[0])
-            & (cc >= 0)
-            & (cc < image_shape[1])
-        )
+        inside = (rr >= 0) & (rr < image_shape[0]) & (cc >= 0) & (cc < image_shape[1])
         mask[rr[inside], cc[inside]] = True
     return mask
 
 
-def ellipse_mask(verts_px, image_shape):
+def ellipse_mask(verts_px: np.ndarray, image_shape: tuple[int, int]) -> np.ndarray:
     """Rasterize napari's 4-corner ellipse box (may be rotated) to a boolean mask."""
     p0, p1, p2 = verts_px[:3]
     cy, cx = verts_px.mean(axis=0)
@@ -379,7 +375,7 @@ def ellipse_mask(verts_px, image_shape):
 
 def roi_stat_rows(
     records: list[RoiRecord],
-    layer,
+    layer: Image,
     frame_idx: int,
     channel_idx: int,
     *,
@@ -422,7 +418,7 @@ def roi_stat_rows(
 
 def compute_roi_stats(
     records: list[RoiRecord],
-    layer,
+    layer: Image,
     frame_idx: int,
     channel_idx: int,
     *,
@@ -494,9 +490,7 @@ def measure_rois(
             or scope.all_channels
             or layer.metadata["pa_kind"] != "recon"
         )
-        channels = (
-            range(layer.data.shape[1]) if every_channel else [channel_idx]
-        )
+        channels = range(layer.data.shape[1]) if every_channel else [channel_idx]
         for frame in frames:
             records_here = records_at(frame)
             for channel in channels:
@@ -510,15 +504,11 @@ def measure_rois(
                         clamp=clamp,
                     )
                 )
-    return (
-        pd.DataFrame(rows, columns=ALL_FEATURE_COLUMNS)
-        if rows
-        else pd.DataFrame()
-    )
+    return pd.DataFrame(rows, columns=ALL_FEATURE_COLUMNS) if rows else pd.DataFrame()
 
 
 def time_axis(
-    active_recon_layer, channel_idx: int
+    active_recon_layer: Image, channel_idx: int
 ) -> tuple[np.ndarray, np.ndarray]:
     """Resolve the frame indices to plot and the x-axis value for each."""
     n_frames = active_recon_layer.data.shape[0]
@@ -540,7 +530,7 @@ def time_axis(
 
 
 def _feature_series(
-    layer,
+    layer: Image,
     channel_idx: int,
     frames: np.ndarray,
     feature_id: str,
@@ -579,7 +569,7 @@ def _feature_series(
 
 def compute_roi_time_series(
     records: list[RoiRecord],
-    layer,
+    layer: Image,
     channel_idx: int,
     feature_id: str,
     *,
@@ -610,7 +600,7 @@ def compute_roi_time_series(
 def compute_roi_track_time_series(
     track_id: int,
     records: list[RoiRecord],
-    layer,
+    layer: Image,
     channel_idx: int,
     feature_id: str,
     *,
@@ -620,7 +610,8 @@ def compute_roi_track_time_series(
 
     Unlike ``compute_roi_time_series``, each frame is measured on **its own record**.
     Used for the "Track ID" scope. E.g. for a shape that was moved or restored frame by
-    frame to follow anatomy. A frame the track has no record on is left as a gap (``NaN``)
+    frame to follow anatomy. A frame the track has no record on is left as a gap
+    (``NaN``)
     """
     frames, x = time_axis(layer, channel_idx)
     records_by_frame = records_by_track_and_frame(records, track_id)
@@ -634,9 +625,7 @@ def compute_roi_track_time_series(
         record = records_by_frame.get(frame_idx)
         if record is None:
             return None
-        mask = _roi_mask(
-            record, sy=sy, sx=sx, ty=ty, tx=tx, image_shape=image_shape
-        )
+        mask = _roi_mask(record, sy=sy, sx=sx, ty=ty, tx=tx, image_shape=image_shape)
         return None if mask is None else (record, mask)
 
     return x, {
@@ -648,12 +637,12 @@ def compute_roi_track_time_series(
 
 def extract_roi_pixels_for_slice(
     records: list[RoiRecord],
-    active_recon_layer,
+    active_recon_layer: Image,
     frame_idx: int,
     channel_idx: int,
     *,
     clamp: IntensityClamp = NO_CLAMP,
-):
+) -> dict[int, np.ndarray]:
     """Extract pixel values per ROI for the given frame/channel."""
 
     frame_idx = int(frame_idx)
@@ -664,19 +653,17 @@ def extract_roi_pixels_for_slice(
 
     return {
         roi.roi_id: clamp.apply(img2d[mask])
-        for roi, mask in iter_roi_masks(
-            records, active_recon_layer, img2d.shape
-        )
+        for roi, mask in iter_roi_masks(records, active_recon_layer, img2d.shape)
     }
 
 
 def compute_roi_spectra(
     records: list[RoiRecord],
-    active_recon_layer,
+    active_recon_layer: Image,
     frame_idx: int,
     *,
     clamp: IntensityClamp = NO_CLAMP,
-):
+) -> tuple[np.ndarray, dict[int, np.ndarray], list[str]]:
     """Compute per-ROI mean intensity over channels for a fixed frame."""
 
     data = active_recon_layer.data
@@ -695,9 +682,7 @@ def compute_roi_spectra(
     frame = np.asarray(data[frame_idx])
     series: dict[int, np.ndarray] = {}
     # One mask per ROI, reused across every channel (see iter_roi_masks).
-    for roi, mask in iter_roi_masks(
-        records, active_recon_layer, frame.shape[-2:]
-    ):
+    for roi, mask in iter_roi_masks(records, active_recon_layer, frame.shape[-2:]):
         means = []
         for values in frame[:, mask]:
             values = clamp.apply(values)

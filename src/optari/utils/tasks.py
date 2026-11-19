@@ -16,6 +16,7 @@ from qtpy.QtWidgets import QLabel
 
 from optari.utils.misc import download_chunks, open_download
 from optari.utils.viewer import show_activity_dock
+from optari.widgets.dock_helpers import show_status_error
 
 if TYPE_CHECKING:
     from optari.controllers.optari_controller import OptariController
@@ -38,18 +39,20 @@ class BackgroundStep:
 
 
 class TaskFailed(Exception):
-    """Re-typed RuntimeError that gets a worker exception past a napari/superqt special case.
+    """Re-typed RuntimeError that gets a worker exception past a napari/superqt special
+    case.
 
-    ``GeneratorWorker.work`` treats a bare ``RuntimeError`` specifically — and only that type
-    — as "the underlying C/C++ object was probably deleted", returning it instead of letting
-    it propagate: ``WorkerBase.run`` then emits neither ``errored`` nor ``finished`` for it, so
-    the task looks like it's still running forever, the activity-dock bar never closes and the
-    UI stays gated. Every other exception type reaches ``errored`` correctly.
+    ``GeneratorWorker.work`` treats a bare ``RuntimeError``, and only that type, as "the
+    underlying C/C++ object was probably deleted", returning it instead of letting it
+    propagate: ``WorkerBase.run`` then emits neither ``errored`` nor ``finished`` for
+    it, so the task looks like it's still running forever, the activity-dock bar never
+    closes and the UI stays gated. Every other exception type reaches ``errored``
+    correctly.
     """
 
 
 def _guarded(func: Callable[[], Generator]) -> Callable[[], Generator]:
-    """Wrap *func* so a RuntimeError it raises reaches ``errored`` (see ``TaskFailed``)."""
+    """Wrap *func* so its RuntimeError reaches ``errored`` (see ``TaskFailed``)."""
 
     def wrapper():
         try:
@@ -122,7 +125,7 @@ def start_task(
     optari_controller: OptariController,
     step: BackgroundStep,
     *,
-    on_result: Callable,
+    on_result: Callable[[object], None],
     on_error: Callable[[str], None],
 ) -> None:
     """Run *step* as the application's single background task.
@@ -190,15 +193,13 @@ def download_then(
                 desc=f"Downloading {model_path.name}",
             ),
             on_result=lambda _: then(),
-            on_error=status_label.setText,
+            on_error=partial(show_status_error, status_label),
         )
 
     status_label.setText("Preparing…")
     start_task(
         optari_controller,
-        BackgroundStep(
-            connect, total=0, desc=f"Connecting for {model_path.name}"
-        ),
+        BackgroundStep(connect, total=0, desc=f"Connecting for {model_path.name}"),
         on_result=download,
-        on_error=status_label.setText,
+        on_error=partial(show_status_error, status_label),
     )

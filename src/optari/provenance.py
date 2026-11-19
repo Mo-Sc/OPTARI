@@ -1,4 +1,6 @@
-"""The origin record OPTARI writes into every file it creates (HDF5 scans, ROI tables, batch reports)."""
+"""The origin record OPTARI writes into every file it creates (HDF5 scans, ROI tables,
+batch reports).
+"""
 
 from __future__ import annotations
 
@@ -8,7 +10,8 @@ from optari import __version__
 from optari.config import settings
 from optari.config.config import CONFIG_SCHEMA_VERSION
 
-OPTARI_FILE_FORMAT_VERSION = 2  # increment if the HDF5 file format changes in a way that breaks backward compatibility
+# increment if the HDF5 file format changes in a way that breaks backward compatibility
+OPTARI_FILE_FORMAT_VERSION = 2
 OPTARI_SOURCE_URL = "https://github.com/Mo-Sc/OPTARI"
 OPTARI_DOCS_URL = "https://mo-sc.github.io/OPTARI/"
 OPTARI_PUBLICATION_DOI = "10.48550/arXiv.2610.32468"

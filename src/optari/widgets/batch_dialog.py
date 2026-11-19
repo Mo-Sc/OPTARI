@@ -48,6 +48,7 @@ from optari.widgets.dock_helpers import (
     populate_preset_combo,
     prompt_preset_name,
     remove_selected_preset,
+    show_status_error,
 )
 
 logger = logging.getLogger(__name__)
@@ -91,11 +92,11 @@ class BatchDialog(QDialog):
         form = QFormLayout(box)
 
         self.root_edit = QLineEdit()
-        self.root_edit.setPlaceholderText("Folder holding Study_*/Scan_* data")
-        self.root_edit.textChanged.connect(self.discard_plan)
-        form.addRow(
-            "Dataset folder", _with_browse(self.root_edit, self.on_browse_root)
+        self.root_edit.setPlaceholderText(
+            "Folder with scans, or with study folders that hold them"
         )
+        self.root_edit.textChanged.connect(self.discard_plan)
+        form.addRow("Dataset folder", _with_browse(self.root_edit, self.on_browse_root))
 
         self.output_edit = QLineEdit()
         self.output_edit.setPlaceholderText("Empty folder for the results")
@@ -116,9 +117,7 @@ class BatchDialog(QDialog):
         )
         self.preset_combo.currentIndexChanged.connect(self.on_preset_changed)
         self.save_preset_button.clicked.connect(self.on_save_preset_clicked)
-        self.remove_preset_button.clicked.connect(
-            self.on_remove_preset_clicked
-        )
+        self.remove_preset_button.clicked.connect(self.on_remove_preset_clicked)
         form.addRow("Batch preset", self.preset_combo)
         return box
 
@@ -162,9 +161,7 @@ class BatchDialog(QDialog):
         self.scans_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.scans_table.setSelectionMode(QAbstractItemView.NoSelection)
         header = self.scans_table.horizontalHeader()
-        header.setSectionResizeMode(
-            INCLUDE_COLUMN, QHeaderView.ResizeToContents
-        )
+        header.setSectionResizeMode(INCLUDE_COLUMN, QHeaderView.ResizeToContents)
         for column in range(1, len(SCAN_COLUMNS)):
             header.setSectionResizeMode(column, QHeaderView.Stretch)
         layout.addWidget(self.scans_table, stretch=1)
@@ -216,7 +213,7 @@ class BatchDialog(QDialog):
         try:
             text = Path(preset_path).read_text(encoding="utf-8")
         except OSError as exc:
-            self.status_label.setText(f"Could not read preset: {exc}")
+            show_status_error(self.status_label, f"Could not read preset: {exc}")
             return
         self.preset_edit.blockSignals(True)
         try:
@@ -233,11 +230,9 @@ class BatchDialog(QDialog):
         if name is None:
             return
         try:
-            preset_path = self._preset_store.save(
-                name, plan_dict, overwrite=True
-            )
+            preset_path = self._preset_store.save(name, plan_dict, overwrite=True)
         except (ValueError, OSError) as exc:
-            self.status_label.setText(f"Could not save preset: {exc}")
+            show_status_error(self.status_label, f"Could not save preset: {exc}")
             return
         if self.preset_combo.findText(preset_path.stem) < 0:
             add_preset_to_combo(self.preset_combo, preset_path)
@@ -249,7 +244,7 @@ class BatchDialog(QDialog):
                 self.preset_combo, self._preset_store
             )
         except OSError as exc:
-            self.status_label.setText(f"Could not remove preset: {exc}")
+            show_status_error(self.status_label, f"Could not remove preset: {exc}")
             return
         if removed:
             self.status_label.setText(f"Removed preset: {removed_path.name}")
@@ -260,9 +255,7 @@ class BatchDialog(QDialog):
         try:
             data = json.loads(self.preset_edit.toPlainText())
         except json.JSONDecodeError as exc:
-            self._set_problems(
-                [f"Invalid JSON: {exc.msg} (line {exc.lineno})"]
-            )
+            self._set_problems([f"Invalid JSON: {exc.msg} (line {exc.lineno})"])
             return None
         if not isinstance(data, dict):
             self._set_problems(["The batch plan must be a JSON object."])
@@ -271,9 +264,7 @@ class BatchDialog(QDialog):
 
     # ============ plan preview ============
     def on_browse_root(self) -> None:
-        folder = QFileDialog.getExistingDirectory(
-            self, "Select dataset folder"
-        )
+        folder = QFileDialog.getExistingDirectory(self, "Select dataset folder")
         if folder:
             self.root_edit.setText(folder)
 
@@ -320,7 +311,8 @@ class BatchDialog(QDialog):
             self.settings_view.setPlainText("")
             return
 
-        # Discovering a large dataset can take a while, so show a status message and change the cursor.
+        # Discovering a large dataset can take a while, so show a status message and
+        # change the cursor.
         previous_status = self.status_label.text()
         self.status_label.setText("Scanning dataset folder…")
         self.status_label.repaint()
@@ -362,14 +354,10 @@ class BatchDialog(QDialog):
                 start=1,
             ):
                 self.scans_table.setItem(row, column, QTableWidgetItem(text))
-            self.scans_table.setItem(
-                row, STATUS_COLUMN, QTableWidgetItem("pending")
-            )
+            self.scans_table.setItem(row, STATUS_COLUMN, QTableWidgetItem("pending"))
             self._row_for_key[job.key] = row
 
-    def _set_problems(
-        self, problems: list[str], warnings: list[str] = ()
-    ) -> None:
+    def _set_problems(self, problems: list[str], warnings: list[str] = ()) -> None:
         """Problems hold the run back; warnings are said out loud and let it through."""
         lines = [f"✗ {p}" for p in problems] + [f"! {w}" for w in warnings]
         self.problems_label.setText("\n".join(lines))
@@ -379,8 +367,7 @@ class BatchDialog(QDialog):
         return [
             job
             for row, job in enumerate(self._plan.jobs)
-            if self.scans_table.item(row, INCLUDE_COLUMN).checkState()
-            == Qt.Checked
+            if self.scans_table.item(row, INCLUDE_COLUMN).checkState() == Qt.Checked
         ]
 
     # ============ running ============
@@ -388,14 +375,14 @@ class BatchDialog(QDialog):
         if self._plan is None:
             return
         if self.controller.task_running:
-            self.status_label.setText(
-                "Another task is running. Wait for it to finish."
+            show_status_error(
+                self.status_label, "Another task is running. Wait for it to finish."
             )
             return
 
         jobs = self._included_jobs()
         if not jobs:
-            self.status_label.setText("No scans selected.")
+            show_status_error(self.status_label, "No scans selected.")
             return
 
         confirm = QMessageBox.question(
@@ -431,9 +418,7 @@ class BatchDialog(QDialog):
         row = self._row_for_key.get(job.key)
         if row is not None:
             self.scans_table.item(row, STATUS_COLUMN).setText(status)
-            self.scans_table.scrollToItem(
-                self.scans_table.item(row, STATUS_COLUMN)
-            )
+            self.scans_table.scrollToItem(self.scans_table.item(row, STATUS_COLUMN))
         if status == "running":
             self.status_label.setText(
                 f"Processing {job.study_rel.as_posix()} / {job.scan_path.name}"
@@ -441,9 +426,7 @@ class BatchDialog(QDialog):
             return
         # The report already counts finished scans, the bar just mirrors it.
         finished = sum(
-            n
-            for s, n in self._runner.report.counts().items()
-            if s != "running"
+            n for s, n in self._runner.report.counts().items() if s != "running"
         )
         self.progress_bar.setValue(finished)
 
@@ -478,11 +461,7 @@ class BatchDialog(QDialog):
                 f"  {e.study}/{e.scan} ({e.failed_step}): {e.message}"
                 for e in failures[:8]
             )
-            more = (
-                f"\n  … and {len(failures) - 8} more"
-                if len(failures) > 8
-                else ""
-            )
+            more = f"\n  … and {len(failures) - 8} more" if len(failures) > 8 else ""
             QMessageBox.warning(
                 self,
                 "Batch finished with failures",
@@ -512,7 +491,7 @@ class BatchDialog(QDialog):
         """Refuse to close mid-run: the runner drives the viewer this window owns."""
         if self._running:
             event.ignore()
-            self.status_label.setText("Cancel the run before closing.")
+            show_status_error(self.status_label, "Cancel the run before closing.")
             return
         super().closeEvent(event)
 

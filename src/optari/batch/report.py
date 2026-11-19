@@ -84,7 +84,8 @@ class BatchReport:
     def __init__(
         self, destination: Path | None = None, plan_source: dict | None = None
     ):
-        """Track scan outcomes, and mirror them to *destination* after each update if given.
+        """Track scan outcomes, and mirror them to *destination* after each update if
+        given.
 
         *plan_source* is the batch preset the run came from, for the provenance sheet.
         """
@@ -117,7 +118,9 @@ class BatchReport:
 
     # ============ recording ============
     def start(self, job) -> None:
-        """Begin tracking *job*, recording its start time, and mirror the report to disk."""
+        """Begin tracking *job*, recording its start time, and mirror the report to
+        disk.
+        """
         self._entries[job.key] = _Entry(
             study=job.study_rel.as_posix(),
             scan=job.scan_path.name,
@@ -128,7 +131,9 @@ class BatchReport:
         self._write()
 
     def note(self, job, **fields) -> None:
-        """Attach details to a scan still being processed (frame, output paths, row count)."""
+        """Attach details to a scan still being processed (frame, output paths, row
+        count).
+        """
         entry = self._entries.get(job.key)
         if entry is None:
             return
@@ -165,7 +170,10 @@ class BatchReport:
 
     # ============ persistence ============
     def _write(self) -> None:
-        """Overwrite the report file. Never raises: losing the report must not stop a run."""
+        """Overwrite the report file.
+
+        Never raises: losing the report must not stop a run.
+        """
         if self._destination is None:
             return
         path = self._destination
@@ -181,23 +189,13 @@ class BatchReport:
                 atomic_destination(path) as temporary,
                 pd.ExcelWriter(temporary) as writer,
             ):
-                self.rows.to_excel(
-                    writer, sheet_name=REPORT_SHEET, index=False
-                )
-                meta_df.to_excel(
-                    writer, sheet_name=ROI_TABLE_META_SHEET, index=False
-                )
+                self.rows.to_excel(writer, sheet_name=REPORT_SHEET, index=False)
+                meta_df.to_excel(writer, sheet_name=ROI_TABLE_META_SHEET, index=False)
         except OSError:
             logger.exception("could not write the batch report to %s", path)
 
     def summary(self) -> str:
         """One line for the batch window once the run ends."""
         counts = self.counts()
-        parts = [
-            f"{count} {status}" for status, count in sorted(counts.items())
-        ]
-        return (
-            f"{len(self)} scan(s): {', '.join(parts)}"
-            if parts
-            else "nothing to do"
-        )
+        parts = [f"{count} {status}" for status, count in sorted(counts.items())]
+        return f"{len(self)} scan(s): {', '.join(parts)}" if parts else "nothing to do"

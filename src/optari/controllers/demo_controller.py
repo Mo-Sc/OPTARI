@@ -20,7 +20,9 @@ from optari.widgets.demo_dock import create_demo_dock
 
 @dataclass(frozen=True)
 class DemoParams:
-    """Everything one run needs, read from the dock (or a batch preset) before it starts."""
+    """Everything one run needs, read from the dock (or a batch preset) before it
+    starts.
+    """
 
     n_frames: int
 
@@ -28,7 +30,8 @@ class DemoParams:
 def demo_frames(n_frames: int) -> Generator[None, None, int]:
     """The work itself. Runs in a worker thread, so it must not touch Qt or napari.
 
-    Each yield advances the progress bar by one, and cancelling stops it at the next yield.
+    Each yield advances the progress bar by one, and cancelling stops it at the next
+    yield.
     """
     for _ in range(n_frames):
         time.sleep(0.05)
@@ -45,7 +48,10 @@ class DemoController(TaskControllerBase):
         return [(self.dock.run_button.clicked, self.on_run_clicked)]
 
     def refresh_ui(self) -> None:
-        """Called after every state change, e.g. a scan load or a task starting or ending."""
+        """Called after every state change, e.g.
+
+        a scan load or a task starting or ending.
+        """
         self.dock.run_button.setEnabled(
             self.optari_controller.pa_data is not None
             and not self.optari_controller.task_running
@@ -73,5 +79,8 @@ class DemoController(TaskControllerBase):
         )
 
     def publish(self, result: int, params: DemoParams) -> str:
-        """Back on the main thread: add layers here. Returns the text after "Finished:"."""
+        """Back on the main thread: add layers here.
+
+        Returns the text after "Finished:".
+        """
         return f"walked over {result} frame(s), nothing changed"

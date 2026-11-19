@@ -17,9 +17,7 @@ def export_overlays(viewer: Viewer, include_colorbars: bool):
     """Temporarily set the canvas up for an exported image or video: colorbars of all
     images on or off, and the OPTARI version stamped bottom left.
     """
-    image_layers = [
-        layer for layer in viewer.layers if isinstance(layer, Image)
-    ]
+    image_layers = [layer for layer in viewer.layers if isinstance(layer, Image)]
     previous = [(layer, layer.colorbar.visible) for layer in image_layers]
     for layer, _ in previous:
         layer.colorbar.visible = include_colorbars

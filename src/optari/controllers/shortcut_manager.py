@@ -10,10 +10,12 @@ logger = logging.getLogger(__name__)
 # workaround for cross-platform cmd/ctrl key in shortcuts
 CMD_CTRL = "Meta" if sys.platform == "darwin" else "Control"
 
+# napari key names. Each button's tooltip shows its shortcut from here, so this is the
+# only place a key is written down.
 SHORTCUTS = {
-    "save_roi_data": f"{CMD_CTRL}-Shift-S",  # triggers "Save ROI Data" button
-    "run_unmixing": f"{CMD_CTRL}-Shift-U",  # triggers unmixing with current settings
-    "run_segmentation": f"{CMD_CTRL}-Shift-T",  # triggers segmentation with current settings
+    "save_roi_data": f"{CMD_CTRL}-Shift-S",
+    "run_unmixing": f"{CMD_CTRL}-Shift-U",
+    "run_segmentation": f"{CMD_CTRL}-Shift-T",
 }
 
 
@@ -42,8 +44,12 @@ class ShortcutManager:
     def _bind_shortcut_to_button(
         self, shortcut_id: str, button: QPushButton, action_name: str
     ) -> None:
-        """Bind a keyboard shortcut to a dock's QPushButton."""
+        """Bind a shortcut to a dock button and name it in the button's tooltip."""
         shortcut = SHORTCUTS[shortcut_id]
+        keys = (
+            shortcut.replace("Meta", "Cmd").replace("Control", "Ctrl").replace("-", "+")
+        )
+        button.setToolTip(f"{button.toolTip()} ({keys})")
 
         @self.controller.viewer.bind_key(shortcut, overwrite=True)
         def trigger_button(viewer):

@@ -1,4 +1,6 @@
-"""Owns the ROI shapes layer, the Live and Saved Analysis tables, and ROI presets and placement."""
+"""Owns the ROI shapes layer, the Live and Saved Analysis tables, and ROI presets and
+placement.
+"""
 
 from __future__ import annotations
 
@@ -24,7 +26,7 @@ from optari.roi.roi_placement import (
     per_frame_auto_resolver,
     static_preset_verts,
 )
-from optari.roi.roi_presets import RoiPresetStore
+from optari.roi.roi_presets import RoiPreset, RoiPresetStore
 from optari.roi.roi_records import RoiRecord
 from optari.roi.roi_store import RoiStore
 from optari.roi.roi_table import SavedRoiTable
@@ -52,6 +54,8 @@ from optari.utils.viewer import selected_frame_and_channel, selected_frame_idx
 from optari.widgets.roi_preset_dialog import prompt_roi_preset
 
 if TYPE_CHECKING:
+    from napari.layers import Image
+
     from optari.controllers.optari_controller import OptariController
 
 from napari.utils.notifications import show_error, show_info
@@ -59,8 +63,8 @@ from napari.utils.notifications import show_error, show_info
 logger = logging.getLogger(__name__)
 ROI_EDGE_WIDTH = 0.1
 
-# napari actions that we are listening to for ROI changes
-# usually emit two events: an intent event before the layer is mutated, and a completion event after
+# napari actions that we are listening to for ROI changes usually emit two events: an
+# intent event before the layer is mutated, and a completion event after
 _COMPLETED_DATA_ACTIONS = {"added", "changed", "removed"}
 
 
@@ -96,7 +100,9 @@ class RoiController(TaskControllerBase):
         return list(self.store.records.values())
 
     def _n_frames(self) -> int:
-        """The scan's frame count: the ultrasound's, else the active layer's, else the raw data's."""
+        """The scan's frame count: the ultrasound's, else the active layer's, else the
+        raw data's.
+        """
         layer = self.optari_controller.active_us_layer
         if layer is None:
             layer = self.optari_controller.active_recon_layer
@@ -132,7 +138,10 @@ class RoiController(TaskControllerBase):
         self.project_current_frame()
 
     def clear_roi_records(self) -> None:
-        """Discard all ROI records and the rasterized-mask cache, e.g. when switching scans."""
+        """Discard all ROI records and the rasterized-mask cache, e.g.
+
+        when switching scans.
+        """
         self.stored_rois_restored = False
         self.store.clear()
         clear_mask_cache()
@@ -154,9 +163,7 @@ class RoiController(TaskControllerBase):
 
     def expand_current_projection_to_all_frames(
         self,
-        verts_for_frame: (
-            Callable[[int, np.ndarray], np.ndarray | None] | None
-        ) = None,
+        verts_for_frame: Callable[[int, np.ndarray], np.ndarray | None] | None = None,
     ) -> None:
         """Duplicate the last-placed ROI onto every other frame, as one group, and keep
         it selected. *verts_for_frame* as in `RoiStore.expand_last_to_all_frames`.
@@ -180,12 +187,11 @@ class RoiController(TaskControllerBase):
         shapes = self.optari_controller.shapes_layer
         if shapes is None or self._projecting:
             return
-        visible = self.store.project(
-            selected_frame_idx(self.viewer, self._n_frames())
-        )
+        visible = self.store.project(selected_frame_idx(self.viewer, self._n_frames()))
         self._projecting = True
         try:
-            # pass (verts, kind) pairs so napari never rebuilds shapes against a stale shape_type
+            # pass (verts, kind) pairs so napari never rebuilds shapes against a stale
+            # shape_type
             shapes.data = [(r.verts, r.kind) for r in visible]
             if visible:
                 shapes.edge_width = [ROI_EDGE_WIDTH] * len(visible)
@@ -215,7 +221,7 @@ class RoiController(TaskControllerBase):
         self.optari_controller.roi_dock.xlsx_button.setEnabled(has_rows)
 
     def _set_live_table_selection(self, selected_rows: list[int]) -> None:
-        """Select *selected_rows* in the live table without firing its selection signal."""
+        """Select *selected_rows* in the live table without emitting its signal."""
         table = self.optari_controller.roi_dock.live_table.native
         with QSignalBlocker(table):
             table.clearSelection()
@@ -248,7 +254,8 @@ class RoiController(TaskControllerBase):
         if self._syncing or shapes is None:
             return
         # Never write selection back into napari during shape drag/select interactions.
-        # Private napari state: an upgrade that drops it should fail here, not go unnoticed
+        # Private napari state: an upgrade that drops it should fail here, not go
+        # unnoticed
         if shapes._is_moving or shapes._is_selecting:
             return
         rows = {
@@ -269,7 +276,8 @@ class RoiController(TaskControllerBase):
 
     def on_live_table_delete_key(self) -> None:
         """Delete selected shapes when Delete is pressed in the live table.
-        on MacOS the actual Delete (forward-delete) key (Fn+Backspace) has to be pressed, not just the backspace key
+        on MacOS the actual Delete (forward-delete) key (Fn+Backspace) has to be
+        pressed, not just the backspace key
         """
         if self.optari_controller.shapes_layer is None:
             return
@@ -283,12 +291,8 @@ class RoiController(TaskControllerBase):
         annotation = self.optari_controller.annotation_dock
         if annotation.roi_exclusion_box.isChecked():
             self.intensity_clamp = IntensityClamp(
-                minimum=parse_float_input(
-                    annotation.roi_exclude_min_edit.text()
-                ),
-                maximum=parse_float_input(
-                    annotation.roi_exclude_max_edit.text()
-                ),
+                minimum=parse_float_input(annotation.roi_exclude_min_edit.text()),
+                maximum=parse_float_input(annotation.roi_exclude_max_edit.text()),
                 mode="exclude",
             )
         elif annotation.roi_clipping_box.isChecked():
@@ -378,9 +382,7 @@ class RoiController(TaskControllerBase):
         }
         # napari text supports formatting from properties.
         label = (
-            "{roi_id}/{track_id}"
-            if settings.annotation.show_track_id
-            else "{roi_id}"
+            "{roi_id}/{track_id}" if settings.annotation.show_track_id else "{roi_id}"
         )
         shapes.text = {
             "string": label,
@@ -388,15 +390,16 @@ class RoiController(TaskControllerBase):
         }
 
     def on_shapes_data_changed(self, event=None) -> None:
-        """Sync ROI records after a completed Shapes-layer edit, then refresh the display and live table.
+        """Sync ROI records after a completed Shapes-layer edit, then refresh the
+        display and live table.
 
         Runs on every mouse-move of a drag. Ignores the intent event napari fires
         before a mutation (only the completion event is acted on), and skips the
         shape-display refresh unless the set of projected ids actually changed.
         """
-        # napari emits events.data in pairs: an intent event before the layer is
-        # mutated (adding/changing/removing) and a completion event after.
-        # We only want to refresh the ROI table on the completion event, so ignore the intent event.
+        # napari emits events.data in pairs: an intent event before the layer is mutated
+        # (adding/changing/removing) and a completion event after. We only want to
+        # refresh the ROI table on the completion event, so ignore the intent event.
         # None when on_shapes_set_data calls in
         if event is not None and str(event.action) not in _COMPLETED_DATA_ACTIONS:
             return
@@ -409,7 +412,8 @@ class RoiController(TaskControllerBase):
             return
 
         # Shape labels and colours come from ids, sources and positions, none of which
-        # is affected by geometry edits. So only refresh the display if the set of projected ids changed
+        # is affected by geometry edits. So only refresh the display if the set of
+        # projected ids changed
         if self.store.projection_ids != projected_before:
             self._refresh_shape_display()
 
@@ -419,9 +423,9 @@ class RoiController(TaskControllerBase):
     def on_shapes_set_data(self, event=None) -> None:
         """Catch shape additions that never emit ``events.data``.
 
-        copy/pasting shapes (e.g. from one frame to another) appends to the layer and emits
-        only ``set_data``, so a pasted ROI would stay invisible. ``set_data`` also fires on every redraw,
-        hence the count check before doing any real work.
+        copy/pasting shapes (e.g. from one frame to another) appends to the layer and
+        emits only ``set_data``, so a pasted ROI would stay invisible. ``set_data`` also
+        fires on every redraw, hence the count check before doing any real work.
         """
         shapes = self.optari_controller.shapes_layer
         if shapes is None or self._projecting:
@@ -430,7 +434,8 @@ class RoiController(TaskControllerBase):
             self.on_shapes_data_changed()
 
     def update_live_table(self, event=None) -> None:
-        """Recompute the Live Analysis table for the ROIs on the current frame, active layer and channel.
+        """Recompute the Live Analysis table for the ROIs on the current frame, active
+        layer and channel.
 
         Falls back to an empty table when there is no shapes layer or no active
         reconstruction layer to measure against.
@@ -478,21 +483,17 @@ class RoiController(TaskControllerBase):
         for row_idx, record in enumerate(records):
             item = table.native.item(row_idx, 0)
             if item is not None:
-                item.setBackground(
-                    QColor(roi_color_for_index(record.track_id))
-                )
+                item.setBackground(QColor(roi_color_for_index(record.track_id)))
 
     def on_save_clicked(self, event=None) -> None:
-        """Measure the ROIs selected in the viewer and add to the Saved Analysis table."""
+        """Measure the selected ROIs and add them to the Saved Analysis table."""
         selected_ids = self.selected_roi_ids()
         if not selected_ids:
             return
 
         rows = self.measure_selected_rois(selected_ids)
         if rows.empty:
-            show_info(
-                "Nothing to save: select a PA image layer that holds this frame."
-            )
+            show_info("Nothing to save: select a PA image layer that holds this frame.")
             return
 
         self._append_saved_rows(rows, n_rois=len(selected_ids))
@@ -529,7 +530,7 @@ class RoiController(TaskControllerBase):
         selected_ids: set[int],
         *,
         scope: MeasureScope | None = None,
-        layers: list | None = None,
+        layers: list[Image] | None = None,
         clamp: IntensityClamp | None = None,
     ) -> pd.DataFrame:
         """Measure the selected ROIs over every layer, frame and channel in scope.
@@ -552,9 +553,7 @@ class RoiController(TaskControllerBase):
         scope = scope if scope is not None else self._save_scope()
         if layers is None:
             layers = (
-                pa_layers(self.viewer.layers)
-                if scope.all_layers
-                else [active_layer]
+                pa_layers(self.viewer.layers) if scope.all_layers else [active_layer]
             )
         return measure_rois(
             [self.store.records[roi_id] for roi_id in selected_ids],
@@ -568,8 +567,10 @@ class RoiController(TaskControllerBase):
         )
 
     def _append_saved_rows(self, rows: pd.DataFrame, *, n_rois: int) -> None:
-        """Append measured rows and report anything measured a second time.
-        TODO: is this desired, or should we rather fail / overwrite / prompt?
+        """Append measured rows, and say when an ROI already had measurements.
+
+        A re-measurement is kept next to the earlier one on purpose. ``roi_ts`` tells
+        them apart.
         """
         remeasured = self.saved_table.add_measurements(rows)
         self._set_saved_table_view()
@@ -655,9 +656,7 @@ class RoiController(TaskControllerBase):
         """Put the selected saved rows back into the viewer, one ROI per row.
         Restoring is per row, not per ROI group
         """
-        selection = (
-            self.optari_controller.roi_dock.saved_table.native.selectionModel()
-        )
+        selection = self.optari_controller.roi_dock.saved_table.native.selectionModel()
         positions = [index.row() for index in selection.selectedRows()]
         if not positions and default_row is not None:
             positions = [default_row]
@@ -694,10 +693,9 @@ class RoiController(TaskControllerBase):
         }
         show_info(f"Restored {len(records)} ROI(s)")
 
-    def _saved_rows_match_current_context(
-        self, rows: pd.DataFrame
-    ) -> str | None:
-        """Refuse restoring a ROI row unless the scan the rows were measured on is loaded.
+    def _saved_rows_match_current_context(self, rows: pd.DataFrame) -> str | None:
+        """Refuse restoring a ROI row unless the scan the rows were measured on is
+        loaded.
 
         Identified by study and scan folder: the scanner's internal scan name repeats
         across patients with protocol-style names, and a restored ROI keeps its
@@ -717,9 +715,7 @@ class RoiController(TaskControllerBase):
         )
         current = (path.parent.name, path.stem)
         if saved != {current}:
-            names = ", ".join(
-                f"{study}/{scan}" for study, scan in sorted(saved)
-            )
+            names = ", ".join(f"{study}/{scan}" for study, scan in sorted(saved))
             return (
                 f"That ROI was measured on {names}, "
                 f"but {current[0]}/{current[1]} is loaded."
@@ -727,7 +723,9 @@ class RoiController(TaskControllerBase):
 
         n_frames = self._n_frames()
         if not rows["frame"].astype(int).between(0, n_frames - 1).all():
-            return f"That ROI references frames outside this scan's {n_frames} frame(s)."
+            return (
+                f"That ROI references frames outside this scan's {n_frames} frame(s)."
+            )
         return None
 
     def _records_from_saved_rows(self, rows: pd.DataFrame) -> list[RoiRecord]:
@@ -789,13 +787,13 @@ class RoiController(TaskControllerBase):
         # whole list. Selecting a broken one reports it instead.
         names = [path.stem for path in self._roi_preset_store.list_paths()]
         self.optari_controller.annotation_dock.set_roi_preset_names(names)
-        self.optari_controller.annotation_dock.roi_presets_description_label.setText(
-            ""
-        )
+        self.optari_controller.annotation_dock.roi_presets_description_label.setText("")
         self._update_remove_roi_preset_button_state()
 
     def _update_remove_roi_preset_button_state(self) -> None:
-        """Update remove-preset button enabled state based on the current list selection."""
+        """Update remove-preset button enabled state based on the current list
+        selection.
+        """
         ann = self.optari_controller.annotation_dock
         ann.remove_roi_preset_button.setEnabled(
             ann.roi_presets_list.currentItem() is not None
@@ -827,9 +825,7 @@ class RoiController(TaskControllerBase):
         # centre), each with the ROI's current margin below its top edge.
         # Background (id 0) is no location.
         margins_by_location = {}
-        mask_result = (
-            self.optari_controller.segmentation_ctrl.active_seg_mask_2d()
-        )
+        mask_result = self.optari_controller.segmentation_ctrl.active_seg_mask_2d()
         if mask_result is not None:
             seg, seg_layer = mask_result
             class_names = seg_layer.metadata["class_names"]
@@ -842,8 +838,8 @@ class RoiController(TaskControllerBase):
                     )
                 except ValueError:
                     continue
-                margins_by_location[str(class_names.get(class_id, class_id))] = (
-                    float(verts[:, 0].min() - anchor[0])
+                margins_by_location[str(class_names.get(class_id, class_id))] = float(
+                    verts[:, 0].min() - anchor[0]
                 )
 
         metadata = prompt_roi_preset(margins_by_location, record.tissue_class)
@@ -920,9 +916,7 @@ class RoiController(TaskControllerBase):
         try:
             self.place_preset(
                 preset,
-                placement=str(
-                    annotation.roi_placement_mode_combo.currentData()
-                ),
+                placement=str(annotation.roi_placement_mode_combo.currentData()),
                 all_frames=annotation.all_frames_radio.isChecked(),
             )
         except ValueError as exc:
@@ -931,7 +925,7 @@ class RoiController(TaskControllerBase):
             )
 
     def place_preset(
-        self, preset, *, placement: str, all_frames: bool
+        self, preset: RoiPreset, *, placement: str, all_frames: bool
     ) -> None:
         """Place *preset* on the current frame, and across every frame if asked.
 
@@ -953,9 +947,7 @@ class RoiController(TaskControllerBase):
 
         mask = self.optari_controller.segmentation_ctrl.active_seg_mask_2d()
         if mask is None:
-            raise ValueError(
-                "No segmentation mask found. Generate segmentation first."
-            )
+            raise ValueError("No segmentation mask found. Generate segmentation first.")
         seg, seg_layer = mask
         scale, translate = seg_layer.scale[-2:], seg_layer.translate[-2:]
         verts, class_id = auto_preset_verts(
@@ -982,7 +974,8 @@ class RoiController(TaskControllerBase):
             )
 
     def on_roi_preset_item_selected(self, item, previous=None) -> None:
-        """Preselect the placement for *item*'s preset, and show its description and location.
+        """Preselect the placement for *item*'s preset, and show its description and
+        location.
 
         Runs only when the selection changes, so a placement the user picked by hand
         survives clicking or double-clicking the same preset again.

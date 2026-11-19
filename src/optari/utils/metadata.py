@@ -48,9 +48,7 @@ def _format(value, details: bool = False) -> str:
 def layer_metadata_rows(layer) -> list[tuple[str, str, str]]:
     """(label, value, full value) rows describing *layer* for the metadata window."""
     if layer is None:
-        return [
-            ("Status", "No image layer selected", "No image layer selected")
-        ]
+        return [("Status", "No image layer selected", "No image layer selected")]
 
     rows = [
         ("Name", layer.name),
@@ -68,8 +66,7 @@ def layer_metadata_rows(layer) -> list[tuple[str, str, str]]:
         ("Layer-specific metadata", dict(layer.metadata)),
     ]
     return [
-        (label, _format(value), _format(value, details=True))
-        for label, value in rows
+        (label, _format(value), _format(value, details=True)) for label, value in rows
     ]
 
 
@@ -79,7 +76,9 @@ def scan_metadata_rows(
     study_path: Path | None = None,
     scan_info=None,
 ) -> list[tuple[str, str, str]]:
-    """(label, value, full value) rows describing the loaded scan: acquisition and geometry."""
+    """(label, value, full value) rows describing the loaded scan: acquisition and
+    geometry.
+    """
     if pa_data is None:
         return [("Status", "No scan loaded", "No scan loaded")]
 
@@ -108,8 +107,7 @@ def scan_metadata_rows(
         ("Timestamps (s)", np.asarray(pa_data.get_timestamps())),
     ]
     return [
-        (label, _format(value), _format(value, details=True))
-        for label, value in rows
+        (label, _format(value), _format(value, details=True)) for label, value in rows
     ]
 
 
@@ -117,9 +115,9 @@ def ipasc_metadata_rows(pa_data) -> list[tuple[str, str, str]]:
     """
     Scan metadata under the IPASC tag names, in IPASC SI units.
 
-    These are the same values OPTARI writes into the ``meta_data`` group on export, built by
-    the custom PATATO fork. Fields IPASC marks as minimal
-    are flagged, and fields the scan does not provide are listed as absent.
+    These are the same values OPTARI writes into the ``meta_data`` group on export,
+    built by the custom PATATO fork. Fields IPASC marks as minimal are flagged, and
+    fields the scan does not provide are listed as absent.
     """
     if pa_data is None:
         return [("Status", "No scan loaded", "No scan loaded")]
@@ -137,20 +135,12 @@ def ipasc_metadata_rows(pa_data) -> list[tuple[str, str, str]]:
         (
             "IPASC completeness",
             status,
-            (
-                status
-                if not missing
-                else status + "\nMissing: " + ", ".join(missing)
-            ),
+            (status if not missing else status + "\nMissing: " + ", ".join(missing)),
         )
     ]
     for entry in entries:
         label = entry["tag"] + (" *" if entry["minimal"] else "")
         unit = "" if entry["unit"] in ("N/A", None) else f" [{entry['unit']}]"
-        summary = (
-            "absent"
-            if not entry["present"]
-            else _format(entry["value"]) + unit
-        )
+        summary = "absent" if not entry["present"] else _format(entry["value"]) + unit
         rows.append((label, summary, _format(entry["value"], details=True)))
     return rows

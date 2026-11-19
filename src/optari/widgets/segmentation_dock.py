@@ -108,8 +108,7 @@ def create_segmentation_dock() -> SegmentationDock:
 
     generate_tissue_segmentation_button = QPushButton("Run Segmentation")
     generate_tissue_segmentation_button.setToolTip(
-        "Generate a tissue mask for the checked classes on an active US layer "
-        "(Shift+Ctrl+T / Shift+Cmd+T)"
+        "Generate a tissue mask for the checked classes on an active US layer"
     )
     frame_scope_row, current_frames_radio, all_frames_radio = (
         create_frame_scope_controls()

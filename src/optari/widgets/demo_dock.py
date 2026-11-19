@@ -31,6 +31,4 @@ def create_demo_dock() -> DemoDock:
     layout.addWidget(status_label)
     layout.addWidget(run_button)
     layout.addStretch()
-    return DemoDock(
-        widget=widget, status_label=status_label, run_button=run_button
-    )
+    return DemoDock(widget=widget, status_label=status_label, run_button=run_button)

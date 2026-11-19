@@ -23,7 +23,9 @@ FILE_FORMAT = "%(asctime)s %(levelname)s %(threadName)s %(name)s: %(message)s"
 
 
 class _NapariNotificationHandler(logging.Handler):
-    """Show optari log records as napari notifications, with the traceback left to the log file."""
+    """Show optari log records as napari notifications, with the traceback left to the
+    log file.
+    """
 
     def __init__(self, level: int | str, log_file: Path) -> None:
         super().__init__(level)
@@ -48,7 +50,7 @@ class _NapariNotificationHandler(logging.Handler):
 
 
 def _log_napari_error(notification) -> None:
-    """Exceptions raised in napari event callbacks only reach napari's popup otherwise."""
+    """Log exceptions from napari callbacks, which otherwise only reach its popup."""
     if isinstance(notification, ErrorNotification):
         exception = notification.exception
         logging.getLogger("napari").error(
@@ -58,19 +60,19 @@ def _log_napari_error(notification) -> None:
 
 
 def configure_logging() -> Path:
-    """Configure console, session log file and napari notifications; return the log file.
+    """Configure the console, the session log file and napari notifications.
 
-    The ``optari`` logger runs at ``OPTARI_LOG_LEVEL`` (default: config ``LOG_LEVEL``) and
-    propagates to the root handlers, while other packages (napari, PATATO, ...) only log
-    warnings and above. ``optari`` records at ``OPTARI_GUI_LOG_LEVEL`` (default: config
-    ``GUI_LOG_LEVEL``) and above also show up as napari notifications.
+    Returns the log file.
+
+    The ``optari`` logger runs at ``OPTARI_LOG_LEVEL`` (default: config ``LOG_LEVEL``)
+    and propagates to the root handlers, while other packages (napari, PATATO, ...) only
+    log warnings and above. ``optari`` records at ``OPTARI_GUI_LOG_LEVEL`` (default:
+    config ``GUI_LOG_LEVEL``) and above also show up as napari notifications.
     """
     log_file = new_session_file(get_user_logs_dir(), "optari", ".log")
 
     console = logging.StreamHandler()
-    console.setFormatter(
-        logging.Formatter("%(levelname)s:%(name)s:%(message)s")
-    )
+    console.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
     session_file = logging.FileHandler(log_file, encoding="utf-8")
     session_file.setFormatter(logging.Formatter(FILE_FORMAT))
 
@@ -79,7 +81,8 @@ def configure_logging() -> Path:
     root.addHandler(console)
     root.addHandler(session_file)
 
-    # hide a harmless vispy warning about QThreadStorage during shutdown on windows binaries
+    # hide a harmless vispy warning about QThreadStorage during shutdown on windows
+    # binaries
     logging.getLogger("vispy").addFilter(
         lambda r: "QThreadStorage" not in r.getMessage()
     )

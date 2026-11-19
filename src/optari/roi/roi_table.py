@@ -1,11 +1,13 @@
-"""The Saved Analysis table consisting of saved ROI measurements.
+"""The Saved Analysis table, the ROI measurements saved in a session.
 
-- **Saving never overwrites.** Re-measuring an ROI appends a second set of rows under
-  the same ``roi_group_uid``, separated by ``roi_ts``. TODO: should this be kept or cause error/delete prompt?
-- **Every change writes to disk.** New rows are appended to a CSV, a delete rewrites it
-- **Re-importing the same file adds nothing.** Identical rows are skipped, so analysis sheets can be combined
+- **Saving never overwrites.** Re-measuring an ROI appends another set of rows under
+  the same ``roi_group_uid``, told apart by ``roi_ts``. Earlier measurements stay, so
+  the table records everything that was measured.
+- **Every change writes to disk.** New rows are appended to a CSV, a delete rewrites it.
+- **Re-importing the same file adds nothing.** Identical rows are skipped, so analysis
+  sheets can be combined.
 
-All the Qt stuff is in the controller
+The Qt side lives in ``RoiController``.
 """
 
 from __future__ import annotations
@@ -61,10 +63,11 @@ class SavedRoiTable:
         return self._rows.iloc[positions]
 
     def _next_measurement_stamp(self) -> str:
-        """A roi timestamp. Must not collide.
+        """A ``roi_ts`` for the next save, later than every stamp already in the table.
 
-        To avoid collisions, the stamp is guaranteed to be later than the most recent one in the table.
-        TODO: really necessary? Or is wall clock time enough (microsecond precision)?
+        ``roi_ts`` is part of the measurement key, so two saves must never share one.
+        The wall clock alone can repeat or step back (clock sync), which would merge two
+        measurements into one.
         """
 
         # UTC with offset, like every timestamp OPTARI writes. One offset for all

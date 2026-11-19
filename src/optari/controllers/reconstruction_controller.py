@@ -1,4 +1,6 @@
-"""Reconstruction controller: presets and running PATATO's backprojection/DeepMB pipelines."""
+"""Reconstruction controller: presets and running PATATO's backprojection/DeepMB
+pipelines.
+"""
 
 from __future__ import annotations
 
@@ -10,6 +12,7 @@ from datetime import datetime
 from functools import partial
 from math import ceil
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import patato as pat
@@ -35,12 +38,15 @@ from optari.utils.setup import (
     resolve_model_path,
 )
 from optari.utils.tasks import BackgroundStep
-from optari.widgets.dock_helpers import populate_preset_combo
+from optari.widgets.dock_helpers import populate_preset_combo, show_status_error
 from optari.widgets.reconstruction_dock import (
     SPEED_OF_SOUND_DEFAULT,
     SPEED_OF_SOUND_MAX,
     SPEED_OF_SOUND_MIN,
 )
+
+if TYPE_CHECKING:
+    from optari.controllers.optari_controller import OptariController
 
 logger = logging.getLogger(__name__)
 
@@ -82,9 +88,7 @@ class ReconParams:
         """Output layer name, encoding the algorithm, suffix and frame."""
         suffix_part = f"_{self.suffix}" if self.suffix else ""
         frame_part = (
-            f"_F{self.current_frame_id}"
-            if self.current_frame_id is not None
-            else ""
+            f"_F{self.current_frame_id}" if self.current_frame_id is not None else ""
         )
         return f"Recon: {self.algorithm_name}{suffix_part}{frame_part}"
 
@@ -113,9 +117,7 @@ class ReconParams:
         settings_dict = dict(settings_dict)
         if speed_of_sound is None:
             if ReconAttributeTags.SPEED_OF_SOUND not in settings_dict:
-                raise ValueError(
-                    "Reconstruction preset has no speed of sound."
-                )
+                raise ValueError("Reconstruction preset has no speed of sound.")
             speed_of_sound = settings_dict[ReconAttributeTags.SPEED_OF_SOUND]
         offset_x_mm = float(settings_dict.pop("OFFSET_X", 0.0))
         offset_z_mm = float(settings_dict.pop("OFFSET_Z", 0.0))
@@ -164,7 +166,8 @@ def _resolve_deepmb_model(settings_dict: dict, model_path: Path) -> None:
 def reconstruct_frames(
     settings: dict, pa_data, speed_of_sound: float, chunk_frames: int
 ) -> Generator[None, None, tuple[pat.ImageSequence, dict]]:
-    """Preprocess and reconstruct *pa_data* in frame chunks, yielding once per finished chunk.
+    """Preprocess and reconstruct *pa_data* in frame chunks, yielding once per finished
+    chunk.
 
     Runs in a worker thread, so it must not touch Qt or napari. The preprocessing ->
     reconstruction chain is run explicitly (not via patato's run_pipeline) so the
@@ -198,7 +201,7 @@ class ReconstructionController(TaskControllerBase):
 
     preset_fallback_name = "reconstruction_preset"
 
-    def __init__(self, parent_controller):
+    def __init__(self, parent_controller: OptariController):
         """Initialize preset state and the reconstruction preset store."""
         super().__init__(parent_controller)
         self._updating_settings = False
@@ -235,8 +238,9 @@ class ReconstructionController(TaskControllerBase):
         self.refresh_ui()
 
     def refresh_ui(self) -> None:
-        """Refresh scan-dependent controls. Reconstruction runs off the loaded scan, not a
-        layer. There is no "Source" to pick, so the only thing to reflect here is whether a
+        """Refresh scan-dependent controls. Reconstruction runs off the loaded scan, not
+        a layer. There is no "Source" to pick, so the only thing to reflect here is
+        whether a
         scan is loaded at all."""
         dock = self.optari_controller.reconstruction_dock
         pa_data = self.optari_controller.pa_data
@@ -262,13 +266,11 @@ class ReconstructionController(TaskControllerBase):
         self._use_settings(settings)
 
     def _use_settings(self, settings_dict: dict) -> None:
-        """Make *settings_dict* what a run uses, with its speed of sound on the slider."""
+        """Use *settings_dict* for runs, with its speed of sound on the slider."""
         self._applied_settings = settings_dict
         self._settings_dirty = False
         warning = self._set_speed_of_sound_slider(
-            settings_dict.get(
-                ReconAttributeTags.SPEED_OF_SOUND, SPEED_OF_SOUND_DEFAULT
-            )
+            settings_dict.get(ReconAttributeTags.SPEED_OF_SOUND, SPEED_OF_SOUND_DEFAULT)
         )
         self.optari_controller.reconstruction_dock.status_label.setText(
             f"Preset applied. {warning}".strip()
@@ -276,9 +278,7 @@ class ReconstructionController(TaskControllerBase):
 
     def _preset_settings_from_ui(self) -> dict:
         """The JSON editor's settings. Raises ValueError with the reason."""
-        text = (
-            self.optari_controller.reconstruction_dock.settings_edit.toPlainText()
-        )
+        text = self.optari_controller.reconstruction_dock.settings_edit.toPlainText()
         try:
             settings_dict = json.loads(text)
         except json.JSONDecodeError as exc:
@@ -307,8 +307,8 @@ class ReconstructionController(TaskControllerBase):
         try:
             settings_dict = self._preset_settings_from_ui()
         except ValueError as exc:
-            self.optari_controller.reconstruction_dock.status_label.setText(
-                str(exc)
+            show_status_error(
+                self.optari_controller.reconstruction_dock.status_label, str(exc)
             )
             return
         self._use_settings(settings_dict)
@@ -317,9 +317,7 @@ class ReconstructionController(TaskControllerBase):
         dock = self.optari_controller.reconstruction_dock
         self._updating_settings = True
         try:
-            dock.settings_edit.setPlainText(
-                json.dumps(settings_dict, indent=2)
-            )
+            dock.settings_edit.setPlainText(json.dumps(settings_dict, indent=2))
         finally:
             self._updating_settings = False
 
@@ -354,7 +352,10 @@ class ReconstructionController(TaskControllerBase):
 
     # ============ run: params -> prepare -> publish ============
     def _params_from_ui(self) -> ReconParams:
-        """Build run parameters from the dock. Raises ValueError with a user-facing message."""
+        """Build run parameters from the dock.
+
+        Raises ValueError with a user-facing message.
+        """
         dock = self.optari_controller.reconstruction_dock
         if dock.preset_combo.currentData() is None:
             raise ValueError("Select a reconstruction preset.")
@@ -374,9 +375,7 @@ class ReconstructionController(TaskControllerBase):
             frame_id=frame_id,
         )
 
-    def weights_to_fetch(
-        self, params: ReconParams
-    ) -> tuple[Path, str | None] | None:
+    def weights_to_fetch(self, params: ReconParams) -> tuple[Path, str | None] | None:
         """DeepMB needs its ONNX weights on disk before the preset can be built."""
         if params.algorithm_name != DEEPMB_ALGORITHM:
             return None
@@ -384,7 +383,8 @@ class ReconstructionController(TaskControllerBase):
         return resolve_model_path(extra["model_path"]), extra.get("model_url")
 
     def prepare(self, params: ReconParams) -> BackgroundStep:
-        """Validate *params* and return the work to run. Raises ValueError if it can't run.
+        """Validate *params* and return the work to run. Raises ValueError if it can't
+        run.
 
         Model weights are required to already be on disk: fetching them is the caller's
         job, so an unattended run can download once up front instead of per scan.
@@ -393,9 +393,7 @@ class ReconstructionController(TaskControllerBase):
         if weights is not None:
             model_path, _ = weights
             if not model_path.is_file():
-                raise ValueError(
-                    f"DeepMB model weights not found: {model_path}"
-                )
+                raise ValueError(f"DeepMB model weights not found: {model_path}")
             _resolve_deepmb_model(params.settings, model_path)
 
         n_chunks = ceil(len(params.output_frames) / params.chunk_frames)
@@ -471,9 +469,7 @@ class ReconstructionController(TaskControllerBase):
         recon_mm = (data.shape[-2] * scale[-2], data.shape[-1] * scale[-1])
         scan_fov = controller.scan_fov
         scan_mm = (
-            recon_mm
-            if scan_fov is None
-            else (scan_fov[1] * 1000, scan_fov[0] * 1000)
+            recon_mm if scan_fov is None else (scan_fov[1] * 1000, scan_fov[0] * 1000)
         )
         edge_mm = (
             (scan_mm[0] - recon_mm[0]) / 2 + params.offset_z_mm,

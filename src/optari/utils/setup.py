@@ -20,17 +20,16 @@ DEFAULT_CONFIGS_DIR = (
     Path(__file__).resolve().parent.parent / "config" / "default_configs"
 )
 
-# Names this session's log and ROI table backup. Start time plus process id, so OPTARI instances
-# running side by side never write to the same file, and a session's log and backup match.
+# Names this session's log and ROI table backup. Start time plus process id, so OPTARI
+# instances running side by side never write to the same file, and a session's log and
+# backup match.
 SESSION_ID = f"{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}_{os.getpid()}"
 KEPT_SESSION_FILES = 20
 # OPTARI version that last copied its shipped presets into the user directory.
 PRESETS_VERSION_FILE = ".presets_version"
 
 
-def _copy_default_presets(
-    default_configs_dir: Path, user_config_dir: Path
-) -> None:
+def _copy_default_presets(default_configs_dir: Path, user_config_dir: Path) -> None:
     """Copy missing shipped presets once per OPTARI version.
 
     A deleted shipped preset comes back with the next version
@@ -42,9 +41,7 @@ def _copy_default_presets(
         return
 
     for preset_file in default_presets_dir.rglob("*.json"):
-        target = user_presets_dir / preset_file.relative_to(
-            default_presets_dir
-        )
+        target = user_presets_dir / preset_file.relative_to(default_presets_dir)
         # Never overwrite a preset that the user has edited.
         if target.exists():
             continue
@@ -54,7 +51,9 @@ def _copy_default_presets(
 
 
 def get_user_dir() -> Path:
-    """The user directory, ``OPTARI_USER_DIR`` or ``~/.optari``, seeded with defaults on first use."""
+    """The user directory, ``OPTARI_USER_DIR`` or ``~/.optari``, seeded with defaults on
+    first use.
+    """
 
     user_dir = Path(os.environ.get("OPTARI_USER_DIR", Path.home() / ".optari"))
 
@@ -64,9 +63,9 @@ def get_user_dir() -> Path:
             f"Default configs directory not found at {DEFAULT_CONFIGS_DIR}"
         )
 
-    # First-run:
+    # First run. Messages here use print, since logging cannot be configured before the
+    # folder its log file goes into exists.
     if not (config_dir / "config.json").exists():
-        # create the user dir and subdirs for config, logs, models
         print(f"creating OPTARI user directory at {user_dir}")
         user_dir.mkdir(parents=True, exist_ok=True)
         config_dir.mkdir(exist_ok=True)
@@ -84,7 +83,7 @@ def get_user_dir() -> Path:
 
 
 def archive_config_dir(config_dir: Path) -> Path:
-    """Move an outdated config folder aside; models and logs next to it stay in place."""
+    """Move an outdated config folder aside. Models and logs next to it stay."""
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     archive_dir = config_dir.with_name(f"{config_dir.name}_old_{timestamp}")
     config_dir.rename(archive_dir)
@@ -93,7 +92,9 @@ def archive_config_dir(config_dir: Path) -> Path:
 
 
 def get_user_presets_dir(category: str) -> Path:
-    """The user-editable presets of *category* ("reconstruction", "unmixing", "roi", "segmentation", "batch")."""
+    """The user-editable presets of *category* ("reconstruction", "unmixing", "roi",
+    "segmentation", "batch").
+    """
     return get_user_dir() / "config" / "presets" / category
 
 
@@ -119,7 +120,8 @@ def get_user_models_dir() -> Path:
 
 def resolve_model_path(path: str) -> Path:
     """A model file named in a preset. Relative paths live in the user models directory,
-    absolute (and ``~``) paths are taken as given, since pathlib drops the base for them.
+    absolute (and ``~``) paths are taken as given, since pathlib drops the base for
+    them.
     """
     return get_user_models_dir() / Path(path).expanduser()
 
@@ -132,8 +134,8 @@ def get_user_seg_models_config_file() -> Path:
 def new_session_file(directory: Path, prefix: str, suffix: str) -> Path:
     """This session's file in *directory*, after deleting all but the newest older ones.
 
-    Timestamped names sort chronologically. Room is kept for the new file, so the directory
-    holds at most ``KEPT_SESSION_FILES`` files with this prefix.
+    Timestamped names sort chronologically. Room is kept for the new file, so the
+    directory holds at most ``KEPT_SESSION_FILES`` files with this prefix.
     """
     directory.mkdir(parents=True, exist_ok=True)
     for old_file in sorted(directory.glob(f"{prefix}_*{suffix}"))[
@@ -150,24 +152,25 @@ def get_default_config_file() -> Path:
 
 def configure_napari(viewer) -> None:
     """
-    configure OPTARI specific napari settings (playback fps, save window state, grid stride).
-    Deactivate keyboard search in layers panel to avoid accidental layer selection during ROI drawing.
+    configure OPTARI specific napari settings (playback fps, save window state, grid
+    stride). Deactivate keyboard search in layers panel to avoid accidental layer
+    selection during ROI drawing.
     """
-    # imported here: optari.config imports this module, and headless users of it shouldn't load napari
+    # imported here: optari.config imports this module, and headless users of it
+    # shouldn't load napari
     from napari.settings import get_settings
 
     from optari.config import settings
 
     napari_settings = get_settings()
-    napari_settings.application.playback_fps = (
-        settings.general.DEFAULT_PLAYBACK_FPS
-    )
+    napari_settings.application.playback_fps = settings.general.DEFAULT_PLAYBACK_FPS
     napari_settings.application.save_window_state = True
     # one layer per grid cell, in layer list order.
     napari_settings.application.grid_stride = -1
     napari_settings.appearance.theme = "dark"
 
-    # deactivate keyboard search in layers panel because it slows down keyboard-based ROI drawing
+    # Keyboard search in the layer list slows down drawing ROIs with the keyboard, so it
+    # is switched off.
     # workaround described here: https://github.com/napari/napari/issues/7551
     # private _qt_viewer (public qt_viewer is deprecated), still present in napari 0.9.1
     viewer.window._qt_viewer.layers.keyboardSearch = lambda s: None

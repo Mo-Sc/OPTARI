@@ -23,8 +23,9 @@ pytestmark = needs_study
 
 
 def test_discover_studies_finds_both_scans(tmp_path):
+    # The test data folder holds other studies too, Study_19 is the one checked here.
     studies = discover_studies(STUDY_DIR.parent)
-    assert list(studies) == [STUDY_DIR]
+    assert STUDY_DIR in studies
     scans = studies[STUDY_DIR]
     assert list(scans) == [ITHERA_SCAN, HDF5_SCAN]
     assert [(info.kind, info.internal_name) for info in scans.values()] == [
@@ -68,9 +69,7 @@ def test_build_layers_from_hdf5_scan(hdf5_scan, vendor_recon):
     assert us_kw["scale"] == pytest.approx((1, 40 / 210, 40 / 210), rel=1e-6)
     assert us_kw["metadata"]["type"] == "us"
 
-    assert recon_kw[
-        "name"
-    ] == "Recon: iThera BP-40mm(res:100μm)_0" and recon.shape == (
+    assert recon_kw["name"] == "Recon: iThera BP-40mm(res:100μm)_0" and recon.shape == (
         26,
         13,
         400,

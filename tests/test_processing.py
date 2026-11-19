@@ -55,9 +55,7 @@ def backprojection(hdf5_scan):
     # Scan_3.hdf5 was converted before acquisition delays were stored
     preset["DAQ_DELAY_CORRECTION"] = False
     (recon, _), steps = run_to_end(
-        reconstruct_frames(
-            preset, hdf5_scan[FRAME : FRAME + 1], 1497.0, chunk_frames=1
-        )
+        reconstruct_frames(preset, hdf5_scan[FRAME : FRAME + 1], 1497.0, chunk_frames=1)
     )
     return recon, steps
 
@@ -74,9 +72,7 @@ def test_backprojection_single_frame(backprojection, vendor_recon):
     # The vendor image is processed differently, so compare where the
     # strongest absorber sits rather than pixel values: the skin line at 800 nm.
     assert (
-        np.abs(
-            np.subtract(brightest_pixel(ours[3]), brightest_pixel(vendor[3]))
-        ).max()
+        np.abs(np.subtract(brightest_pixel(ours[3]), brightest_pixel(vendor[3]))).max()
         <= 3
     )
 
@@ -104,11 +100,7 @@ def test_recon_params_from_preset(hdf5_scan):
         ReconParams.from_settings(preset, controller, frame_id=26)
     with pytest.raises(ValueError, match="speed of sound"):
         ReconParams.from_settings(
-            {
-                k: v
-                for k, v in preset.items()
-                if k != "RECONSTRUCTION_SPEED_OF_SOUND"
-            },
+            {k: v for k, v in preset.items() if k != "RECONSTRUCTION_SPEED_OF_SOUND"},
             controller,
         )
 
@@ -162,9 +154,7 @@ def test_unmix_haemoglobin_single_frame(hdf5_scan, vendor_recon):
     assert (
         valid.any() and not valid.all()
     )  # nan_invalid=True blanks non-physical pixels
-    np.testing.assert_allclose(
-        so2_img[valid], (hbo2 / thb_img)[valid], rtol=1e-5
-    )
+    np.testing.assert_allclose(so2_img[valid], (hbo2 / thb_img)[valid], rtol=1e-5)
     assert so2_img[valid].min() >= 0 and so2_img[valid].max() <= 1
 
 
@@ -186,14 +176,10 @@ def test_unmix_params_from_preset(vendor_recon, image_layer):
         and params.generate_thb
         and params.generate_so2
     )
-    assert (
-        params.output_frames == [FRAME] and params.recon_for_run.shape[0] == 1
-    )
+    assert params.output_frames == [FRAME] and params.recon_for_run.shape[0] == 1
     assert params.name_stem == "iThera BP_F15"
 
-    hb_only = UnmixParams.from_preset(
-        {**preset, "SPECTRA": ["Hb"]}, controller
-    )
+    hb_only = UnmixParams.from_preset({**preset, "SPECTRA": ["Hb"]}, controller)
     assert (
         not hb_only.generate_thb
         and not hb_only.generate_so2
@@ -222,9 +208,7 @@ def test_segmentation_of_us_frame(segmentation, seg_model):
 
     assert seg.shape == (210, 210) and class_names == seg_model.class_names
     assert (
-        ids <= set(class_names)
-        and by_name["Muskel1"] in ids
-        and by_name["Haut"] in ids
+        ids <= set(class_names) and by_name["Muskel1"] in ids and by_name["Haut"] in ids
     )
     # Anatomy: skin lies above the muscle in the image.
     rows = lambda class_id: np.nonzero(seg == class_id)[0].mean()
@@ -233,10 +217,7 @@ def test_segmentation_of_us_frame(segmentation, seg_model):
 
 def test_auto_roi_anchors_to_segmented_muscle(segmentation, roi_presets):
     preset = roi_presets.get("clinical_ellipse_10x2mm_Muskel1")
-    assert (
-        preset.placement == "auto"
-        and preset.geometry.tissue_class == "Muskel1"
-    )
+    assert preset.placement == "auto" and preset.geometry.tissue_class == "Muskel1"
     muscle = segmentation.seg == 3
     seg_layer = Labels(
         segmentation.seg[np.newaxis, np.newaxis],

@@ -35,9 +35,7 @@ from optari import OPTARI_SOURCE_TAG
 from optari.roi.roi_records import RoiRecord, new_roi_group_uid
 
 
-def patato_to_napari(
-    pts_m: np.ndarray, fov_x_m: float, fov_y_m: float
-) -> np.ndarray:
+def patato_to_napari(pts_m: np.ndarray, fov_x_m: float, fov_y_m: float) -> np.ndarray:
     """Convert PATATO ``(x_m, y_m)`` polygon vertices to napari ``(y_mm, x_mm)``.
 
     PATATO: origin at image centre, x→right, y→up, metres.
@@ -84,7 +82,10 @@ class RoiGeometry:
     source: str = OPTARI_SOURCE_TAG
 
     def __post_init__(self) -> None:
-        """Coerce *verts_m* to an (N, 2) array and the other fields to their types. Rejects an empty geometry."""
+        """Coerce *verts_m* to an (N, 2) array and the other fields to their types.
+
+        Rejects an empty geometry.
+        """
         self.verts_m = np.asarray(self.verts_m, dtype=float).reshape(-1, 2)
         if self.verts_m.size == 0:
             raise ValueError("ROI geometry must contain vertices")
@@ -135,7 +136,7 @@ class RoiGeometry:
     def repositioned(
         self, source_fov: tuple[float, float], target_fov: tuple[float, float]
     ) -> RoiGeometry:
-        """Move the ROI to the same relative spot in a different FOV, keeping its size."""
+        """Move the ROI to the same relative spot in another FOV, keeping its size."""
         scale = np.asarray(target_fov, dtype=float) / np.asarray(
             source_fov, dtype=float
         )

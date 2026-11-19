@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -23,6 +24,7 @@ from optari.widgets.dock_helpers import (
     add_preset_to_combo,
     prompt_preset_name,
     remove_selected_preset,
+    show_status_error,
 )
 
 if TYPE_CHECKING:
@@ -102,9 +104,12 @@ class TaskControllerBase:
         pass
 
     # ============ viewer hooks ============
-    # OptariController calls these on every controller, in the order of its `controllers`.
+    # OptariController calls these on every controller, in ``controllers`` order.
     def on_active_layers_changed(self) -> None:
-        """The layer selection changed, or the active PA or US layer was removed. Override if needed."""
+        """The layer selection changed, or the active PA or US layer was removed.
+
+        Override if needed.
+        """
         pass
 
     def on_frame_changed(self, frame_idx: int) -> None:
@@ -112,7 +117,10 @@ class TaskControllerBase:
         pass
 
     def on_slice_shown(self) -> None:
-        """The viewer shows another frame, channel or layer: refresh live readouts. Override if needed."""
+        """The viewer shows another frame, channel or layer: refresh live readouts.
+
+        Override if needed.
+        """
         pass
 
     # ============ presets ============
@@ -126,7 +134,7 @@ class TaskControllerBase:
             self._apply_preset(self.preset_store.load(preset_path))
         # Preset files are user-edited JSON, so any field may have any type
         except (TypeError, ValueError, KeyError, OSError) as exc:
-            dock.status_label.setText(f"Could not apply preset: {exc}")
+            show_status_error(dock.status_label, f"Could not apply preset: {exc}")
 
     def on_save_preset_clicked(self) -> None:
         """Save the dock's current settings as a new user preset."""
@@ -134,7 +142,7 @@ class TaskControllerBase:
         try:
             preset_settings = self._preset_settings_from_ui()
         except ValueError as exc:
-            dock.status_label.setText(f"Could not save preset: {exc}")
+            show_status_error(dock.status_label, f"Could not save preset: {exc}")
             return
         name = prompt_preset_name(
             dock.widget, dock.preset_combo, self.preset_fallback_name
@@ -144,7 +152,7 @@ class TaskControllerBase:
         try:
             preset_path = self.preset_store.save(name, preset_settings)
         except (ValueError, OSError) as exc:
-            dock.status_label.setText(f"Could not save preset: {exc}")
+            show_status_error(dock.status_label, f"Could not save preset: {exc}")
             return
         # Selecting it applies it through on_preset_changed
         add_preset_to_combo(dock.preset_combo, preset_path)
@@ -158,49 +166,51 @@ class TaskControllerBase:
                 dock.preset_combo, self.preset_store
             )
         except OSError as exc:
-            dock.status_label.setText(f"Could not remove preset: {exc}")
+            show_status_error(dock.status_label, f"Could not remove preset: {exc}")
             return
         if removed_path is None:
-            dock.status_label.setText("Select a preset to remove.")
+            show_status_error(dock.status_label, "Select a preset to remove.")
         elif not removed:
-            dock.status_label.setText(f"Preset not found: {removed_path.name}")
+            show_status_error(
+                dock.status_label, f"Preset not found: {removed_path.name}"
+            )
         else:
             dock.status_label.setText(f"Removed preset: {removed_path.name}")
 
     # ============ running a step from the dock ============
     def weights_to_fetch(self, params) -> tuple[Path, str | None] | None:
-        """(local path, download url) a run needs on disk before it can start, or None."""
+        """(local path, download url) a run needs on disk first, or None."""
         return None
 
     def run_from_ui(self, dock) -> None:
-        """The dock's Run button: params from widgets, fetch weights if needed, run, publish."""
+        """The dock's Run button: params from widgets, fetch weights if needed, run,
+        publish.
+        """
         try:
             params = self._params_from_ui()
         except ValueError as exc:
-            dock.status_label.setText(str(exc))
+            show_status_error(dock.status_label, str(exc))
             return
 
         def run() -> None:
             try:
                 step = self.prepare(params)
             except ValueError as exc:
-                dock.status_label.setText(str(exc))
+                show_status_error(dock.status_label, str(exc))
                 return
             dock.status_label.setText(f"{step.desc}…")
 
             def finished(result) -> None:
                 # Replaced on success. If publish raises, napari reports the error and
                 # the label must not keep saying the step is still running.
-                dock.status_label.setText("Failed, see the log")
-                dock.status_label.setText(
-                    f"Finished: {self.publish(result, params)}"
-                )
+                show_status_error(dock.status_label, "Failed, see the log")
+                dock.status_label.setText(f"Finished: {self.publish(result, params)}")
 
             start_task(
                 self.optari_controller,
                 step,
                 on_result=finished,
-                on_error=dock.status_label.setText,
+                on_error=partial(show_status_error, dock.status_label),
             )
 
         weights = self.weights_to_fetch(params)
@@ -234,12 +244,8 @@ class TaskControllerBase:
         patato_obj.attributes[SETTINGS_ATTR] = json.dumps(
             metadata["settings"], default=json_default
         )
-        patato_obj.attributes[TRANSLATE_ATTR] = [
-            float(t) for t in translate_yx
-        ]
-        if name in self.viewer.layers and isinstance(
-            self.viewer.layers[name], Image
-        ):
+        patato_obj.attributes[TRANSLATE_ATTR] = [float(t) for t in translate_yx]
+        if name in self.viewer.layers and isinstance(self.viewer.layers[name], Image):
             # layer already exists, update its data and metadata
             layer = self.viewer.layers[name]
             layer.data = data
@@ -257,7 +263,8 @@ class TaskControllerBase:
                 "colormap": colormap,
                 "metadata": metadata,
                 "opacity": 1.0,
-                "blending": "multiplicative",  # blending always multiplicative for better overlay
+                # blending always multiplicative for better overlay
+                "blending": "multiplicative",
                 "auto_contrast": True,
                 "units": self.image_units,
             }

@@ -40,22 +40,17 @@ def test_shipped_presets_resolve_against_the_dataset(tmp_path):
         output_dir=tmp_path,
     )
 
-    assert [job.key for job in plan.jobs] == [
-        "Study_19_Scan_2",
-        "Study_19_Scan_3",
-    ]
-    assert [job.scan_path for job in plan.jobs] == [ITHERA_SCAN, HDF5_SCAN]
-    assert plan.jobs[1].scan_name == "DEMO_SCAN_3"
+    jobs = [job for job in plan.jobs if job.study_path == STUDY_DIR]
+    assert [job.key for job in jobs] == ["Study_19_Scan_2", "Study_19_Scan_3"]
+    assert [job.scan_path for job in jobs] == [ITHERA_SCAN, HDF5_SCAN]
+    assert jobs[1].scan_name == "DEMO_SCAN_3"
     assert plan.step_names == [
         "reconstruction",
         "segmentation",
         "unmixing",
         "roi (auto)",
     ]
-    assert (
-        plan.reconstruction["RECONSTRUCTION_ALGORITHM"]
-        == "Reference Backprojection"
-    )
+    assert plan.reconstruction["RECONSTRUCTION_ALGORITHM"] == "Reference Backprojection"
     assert plan.unmixing["SPECTRA"] == ["Hb", "HbO2"]
     assert plan.segmentation["model_id"] == "c_unet_gastrocnemius-transverse"
     assert (
@@ -82,9 +77,7 @@ def test_shipped_presets_resolve_against_the_dataset(tmp_path):
         output_dir=tmp_path,
     )
     assert (
-        convert.step_names == []
-        and convert.outputs.hdf5
-        and not convert.outputs.xlsx
+        convert.step_names == [] and convert.outputs.hdf5 and not convert.outputs.xlsx
     )
 
     existing = build_plan(
@@ -92,9 +85,7 @@ def test_shipped_presets_resolve_against_the_dataset(tmp_path):
         batch_preset=batch_preset("existing_recon_roi"),
         output_dir=tmp_path,
     )
-    assert (
-        existing.source == "Recon: iThera" and existing.reconstruction is None
-    )
+    assert existing.source == "Recon: iThera" and existing.reconstruction is None
     assert plan_warnings(existing) == [] and plan_warnings(convert) == []
     assert plan_warnings(
         build_plan(
@@ -136,9 +127,7 @@ def test_validate_plan_reports_every_problem(tmp_path):
         "Unknown chromophore(s): Unobtainium",
         "already contains batch_roi_table.xlsx",
     ]
-    if not (
-        get_user_models_dir() / "c_unet_ta_20260928_gastrocnemius.onnx"
-    ).is_file():
+    if not (get_user_models_dir() / "c_unet_ta_20260928_gastrocnemius.onnx").is_file():
         expected.insert(0, "are not downloaded")
     assert len(problems) == len(expected) + 1
     for text in expected:
@@ -282,9 +271,7 @@ def test_source_and_overlay_layer_selection(tmp_path):
         name="sO2: Reference Backprojection_F15",
         metadata={"type": "pa", "source_layer": ours.name},
     )
-    viewer.add_image(
-        np.zeros((1, 1, 2, 2)), name="US", metadata={"type": "us"}
-    )
+    viewer.add_image(np.zeros((1, 1, 2, 2)), name="US", metadata={"type": "us"})
     controller = SimpleNamespace(
         viewer=viewer,
         active_recon_layer=vendor,
@@ -301,9 +288,7 @@ def test_source_and_overlay_layer_selection(tmp_path):
     )  # nothing made, nothing named: the default PA layer
     assert list(viewer.layers.selection) == [vendor]
     plan.source = "Recon: iThera"
-    assert (
-        runner._select_source_layer(ours.name) is vendor
-    )  # an explicit source wins
+    assert runner._select_source_layer(ours.name) is vendor  # an explicit source wins
     plan.source = "Recon: DeepMB"
     with pytest.raises(
         BatchStepError,

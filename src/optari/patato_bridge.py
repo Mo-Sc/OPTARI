@@ -20,9 +20,7 @@ from optari.segmentation.segmenter import MASK_DTYPE
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# FOV-derived scales
-# ---------------------------------------------------------------------------
+# ============ FOV-derived scales ============
 
 
 def _fov_m(obj) -> tuple[float, float] | None:
@@ -58,42 +56,38 @@ def scale_from_patato_obj(obj, fallback: tuple) -> tuple:
     fov_x_m, fov_y_m = fov
     ny, nx = obj.shape_2d[-2:]  # pixels
     if not (ny and nx and fov_x_m and fov_y_m):
-        logger.warning(
-            "no usable FOV on %s, using fallback scale %s", obj, fallback
-        )
+        logger.warning("no usable FOV on %s, using fallback scale %s", obj, fallback)
         return fallback
     return (fallback[0], fov_y_m / ny * 1000, fov_x_m / nx * 1000)
 
 
-def layer_translate(
-    scale: tuple, ndim: int, edge_mm=(0.0, 0.0)
-) -> tuple[float, ...]:
+def layer_translate(scale: tuple, ndim: int, edge_mm=(0.0, 0.0)) -> tuple[float, ...]:
     """napari translate for an image whose top-left outer pixel edge sits at *edge_mm*.
 
     Every image OPTARI shows has its field of view spanning the outer pixel edges:
     iThera's vendor recons and ultrasound, DeepMB, and PATATO's own reconstructions
     since the fork's 2026-11-17 grid change. napari puts pixel centres at
-    ``translate + index * scale``, so the first centre sits half a pixel inside the edge.
+    ``translate + index * scale``, so the first centre sits half a pixel inside the
+    edge.
     """
     return (0.0,) * (ndim - 2) + tuple(
         float(e + s / 2) for e, s in zip(edge_mm, scale[-2:])
     )
 
 
-# ---------------------------------------------------------------------------
-# Acquisition time
-# ---------------------------------------------------------------------------
+# ============ Acquisition time ============
 
 YEAR_ONE = datetime(1, 1, 1)
 
 
 def acquisition_start(pa_data: pat.PAData) -> datetime | None:
-    """Wall-clock time of the first frame, time-zone aware, or None if the scan cannot be dated.
+    """Wall-clock time of the first frame, time-zone aware, or None if the scan cannot
+    be dated.
 
     PATATO's iThera and IPASC readers count timestamps in seconds since 0001-01-01, but
     an HDF5 file from another tool may use any epoch. So the timestamps are only read as
-    wall-clock times when they match the date PATATO reads from the scan itself. A day of
-    tolerance absorbs time zones: iThera records local time, IPASC UTC.
+    wall-clock times when they match the date PATATO reads from the scan itself. A day
+    of tolerance absorbs time zones: iThera records local time, IPASC UTC.
     """
     scan_date = pa_data.get_scan_datetime()
     # NaN when the file records no date
@@ -115,14 +109,10 @@ def acquisition_start(pa_data: pat.PAData) -> datetime | None:
             scan_date,
         )
         return None
-    return (YEAR_ONE + timedelta(seconds=first_s)).replace(
-        tzinfo=scan_date.tzinfo
-    )
+    return (YEAR_ONE + timedelta(seconds=first_s)).replace(tzinfo=scan_date.tzinfo)
 
 
-def sweep_start_timestamps(
-    timestamps: np.ndarray, n_channels: int
-) -> np.ndarray:
+def sweep_start_timestamps(timestamps: np.ndarray, n_channels: int) -> np.ndarray:
     """Timestamps for a layer whose channels are chromophores or parameters.
 
     The scan's timestamps are ``(frames, wavelengths)``. Indexed by an unmixed layer's
@@ -132,9 +122,7 @@ def sweep_start_timestamps(
     return np.repeat(np.asarray(timestamps)[:, :1], n_channels, axis=1)
 
 
-# ---------------------------------------------------------------------------
-# Coordinate conversion
-# ---------------------------------------------------------------------------
+# ============ Coordinate conversion ============
 
 
 def display_data_from_patato_obj(image_sequence) -> np.ndarray:
@@ -146,8 +134,9 @@ class PaddedFrames:
     """*data* held for some acquisition *frames*, read as an array over all of them.
 
     PA layers span every acquisition frame so they share the frame slider with the
-    ultrasound. Here only the computed frames are kept and the others read as zeros. napari, the
-    measurement code and ``np.asarray`` see an ordinary (frames, channels, y, x) array.
+    ultrasound. Here only the computed frames are kept and the others read as zeros.
+    napari, the measurement code and ``np.asarray`` see an ordinary (frames, channels,
+    y, x) array.
     """
 
     def __init__(self, data: np.ndarray, frames: list[int], n_frames: int):
@@ -165,15 +154,14 @@ class PaddedFrames:
     def __getitem__(self, key):
         key = key if isinstance(key, tuple) else (key,)
         if key[0] is Ellipsis:
-            return np.asarray(self)[key]
+            # Spelled out, so the frames are read one at a time like any frame slice
+            key = (slice(None),) * (self.ndim - len(key) + 1) + key[1:]
         frame_key, rest = key[0], key[1:]
         if isinstance(frame_key, (int, np.integer)):
             position = self._position[frame_key]
             if position < 0:
                 # a read-only view of one zero, no allocation for a missing frame
-                return np.broadcast_to(
-                    np.zeros((), self.dtype), self.shape[1:]
-                )[rest]
+                return np.broadcast_to(np.zeros((), self.dtype), self.shape[1:])[rest]
             return self.held[position][rest]
         # Frame by frame with the rest of the key applied first: napari asks for one
         # plane through a frame slice, which must not cost a whole frame of channels.
@@ -184,6 +172,10 @@ class PaddedFrames:
         return np.stack(parts)
 
     def __array__(self, dtype=None, copy=None) -> np.ndarray:
+        if copy is False:
+            raise ValueError(
+                "PaddedFrames builds a new array, it cannot be read without a copy"
+            )
         out = self[:]
         return out if dtype is None else out.astype(dtype)
 
@@ -200,9 +192,7 @@ def expand_to_acquisition_frames(
     if data.shape[0] == n_acq_frames:
         return data
     # A frame list that does not match the data would put images on the wrong frames.
-    if len(frames) != data.shape[0] or not all(
-        0 <= f < n_acq_frames for f in frames
-    ):
+    if len(frames) != data.shape[0] or not all(0 <= f < n_acq_frames for f in frames):
         raise ValueError(
             f"frame indices {frames} do not match {data.shape[0]} image frame(s) "
             f"within {n_acq_frames} acquisition frame(s)"
@@ -210,9 +200,7 @@ def expand_to_acquisition_frames(
     return PaddedFrames(data, frames, n_acq_frames)
 
 
-# ---------------------------------------------------------------------------
-# Layer building
-# ---------------------------------------------------------------------------
+# ============ Layer building ============
 
 
 # Used for any image group that LAYER_COLOR_MAPS in config.json does not name.
@@ -227,9 +215,7 @@ DEFAULT_COLORMAPS = {
 
 def layer_colormap(group: str) -> str:
     """Colormap for an HDF5 image *group*, whether loaded from the scan or computed."""
-    return settings.general.LAYER_COLOR_MAPS.get(
-        group, DEFAULT_COLORMAPS[group]
-    )
+    return settings.general.LAYER_COLOR_MAPS.get(group, DEFAULT_COLORMAPS[group])
 
 
 # What napari knows about a derived image but the PATATO data does not, stored with
@@ -334,10 +320,10 @@ def build_napari_layers(
     timestamps = np.array(pa_data.get_timestamps())
     start = acquisition_start(pa_data)
 
-    # --- ultrasound ---
-    # IPASC scans have no ultrasound, for which PATATO returns {} (a dict also for several
-    # US images, which no supported scanner writes). The acquisition frame count then
-    # comes from the time series instead.
+    # ============ ultrasound ============
+    # IPASC scans have no ultrasound, for which PATATO returns {} (a dict also for
+    # several US images, which no supported scanner writes). The acquisition frame count
+    # then comes from the time series instead.
     us_obj = pa_data.get_ultrasound()
     if not isinstance(us_obj, dict):
         us_img = display_data_from_patato_obj(us_obj)
@@ -374,7 +360,8 @@ def build_napari_layers(
         return {"scale": scale, "translate": translate}
 
     def _settings(image_sequence) -> dict:
-        # what OPTARI made the layer with, else the file's own attributes (vendor recons)
+        # what OPTARI made the layer with, else the file's own attributes (vendor
+        # recons)
         attrs = image_sequence.da.attrs
         if SETTINGS_ATTR in attrs:
             return json.loads(attrs[SETTINGS_ATTR])
@@ -390,7 +377,7 @@ def build_napari_layers(
         # arrays. anything int() rejects is a corrupt attribute and should fail
         return [int(f) for f in np.atleast_1d(frames_info)]
 
-    # --- reconstructions ---
+    # ============ reconstructions ============
     us_fov = _fov_m(us_obj) if "US" in patato_objects else None
     for (recon_name, idx), recon in pa_data.get_scan_reconstructions().items():
         recon_fov = _fov_m(recon)
@@ -404,9 +391,7 @@ def build_napari_layers(
             and recon_fov is not None
             and LAYER_NAME_ATTR not in recon.da.attrs
         ):
-            pixel_m = (
-                max(scale_from_patato_obj(recon, _pa_fallback)[1:]) / 1000
-            )
+            pixel_m = max(scale_from_patato_obj(recon, _pa_fallback)[1:]) / 1000
             if not np.allclose(recon_fov, us_fov, rtol=0, atol=pixel_m):
                 raise ValueError(
                     f"reconstruction '{recon_name}' covers "
@@ -421,9 +406,7 @@ def build_napari_layers(
             recon_raw, recon_frame_list, n_acq_frames
         )
 
-        layer_name = recon.da.attrs.get(
-            LAYER_NAME_ATTR, f"Recon: {recon_name}_{idx}"
-        )
+        layer_name = recon.da.attrs.get(LAYER_NAME_ATTR, f"Recon: {recon_name}_{idx}")
         # The recon's own labels, as in ReconstructionController.publish: it may
         # cover a subset of the scan's wavelengths.
         wavelengths = [int(w) for w in recon.ax_1_labels]
@@ -450,7 +433,7 @@ def build_napari_layers(
             },
         )
 
-    # --- derived PA image groups that may already exist in HDF5 ---
+    # ============ derived PA image groups that may already exist in HDF5 ============
     derived_specs = [
         (HDF5Tags.UNMIXED, "Unmixed", "unmixed", None),
         (HDF5Tags.THB, "THb", "unmixed_param", "thb"),
@@ -469,9 +452,7 @@ def build_napari_layers(
             )
             metadata = pa_layer_metadata(
                 pa_kind=pa_kind,
-                channel_labels=list(
-                    map(str, np.asarray(image.ax_1_labels).tolist())
-                ),
+                channel_labels=list(map(str, np.asarray(image.ax_1_labels).tolist())),
                 frames=frame_list,
                 scan_timestamps=timestamps,
                 acquisition_start=start,
@@ -499,9 +480,7 @@ def build_napari_layers(
     return list(layers.values()), patato_objects
 
 
-# ---------------------------------------------------------------------------
-# FOV helpers
-# ---------------------------------------------------------------------------
+# ============ FOV helpers ============
 
 
 def fov_from_objects(patato_objects: dict) -> tuple[float, float] | None:
@@ -512,9 +491,7 @@ def fov_from_objects(patato_objects: dict) -> tuple[float, float] | None:
     first object with a usable FOV. ``None`` if no object records one.
     """
     candidates = (
-        [patato_objects["US"]]
-        if "US" in patato_objects
-        else patato_objects.values()
+        [patato_objects["US"]] if "US" in patato_objects else patato_objects.values()
     )
     for obj in candidates:
         fov = _fov_m(obj)
@@ -523,24 +500,21 @@ def fov_from_objects(patato_objects: dict) -> tuple[float, float] | None:
     return None
 
 
-# ---------------------------------------------------------------------------
-# Segmentation I/O
-# ---------------------------------------------------------------------------
+# ============ Segmentation I/O ============
 
 
 def segmentation_from_scan(pa_data: pat.PAData) -> dict | None:
     """Load a previously exported segmentation mask and its class metadata.
 
-    Returns ``None`` when the scan has no segmentation, or one that has not optari compatible metadata
+    Returns ``None`` when the scan has no segmentation, or one that has not optari
+    compatible metadata
     """
     seg = pa_data.get_segmentation()
     if seg is None:
         return None
     dataset = pa_data.scan_reader.file[HDF5Tags.SEGMENTATION]
     if "optari_meta" not in dataset.attrs:
-        logger.info(
-            "scan has a segmentation dataset OPTARI did not write, ignoring it"
-        )
+        logger.info("scan has a segmentation dataset OPTARI did not write, ignoring it")
         return None
     meta = json.loads(dataset.attrs["optari_meta"])
     meta["mask"] = np.asarray(seg, dtype=MASK_DTYPE)  # (n_frames, H, W)
@@ -548,9 +522,7 @@ def segmentation_from_scan(pa_data: pat.PAData) -> dict | None:
     return meta
 
 
-# ---------------------------------------------------------------------------
-# ROI I/O
-# ---------------------------------------------------------------------------
+# ============ ROI I/O ============
 
 
 def roi_records_from_scan_rois(
@@ -569,11 +541,7 @@ def roi_records_from_scan_rois(
     # Above every persisted group id, so an ROI without one never takes the number a
     # later ROI in the file carries.
     next_track = 1 + max(
-        (
-            int(r.roi_group_id)
-            for r in rois.values()
-            if r.roi_group_id is not None
-        ),
+        (int(r.roi_group_id) for r in rois.values() if r.roi_group_id is not None),
         default=-1,
     )
     frameless = []
@@ -581,9 +549,7 @@ def roi_records_from_scan_rois(
         try:
             verts_m = np.asarray(roi.points, dtype=float)
         except (TypeError, ValueError) as exc:
-            raise ValueError(
-                f"stored ROI {key!r} has invalid geometry"
-            ) from exc
+            raise ValueError(f"stored ROI {key!r} has invalid geometry") from exc
         geometry = RoiGeometry(
             verts_m=verts_m,
             kind=roi.shape_type,
@@ -591,14 +557,16 @@ def roi_records_from_scan_rois(
             tissue_class=roi.position,
         )
         frames = np.unique(roi.ax0_index)
-        # A frame this scan does not have means the ROI was drawn on another acquisition.
+        # A frame this scan does not have means the ROI was drawn on another
+        # acquisition.
         if np.any((frames < 0) | (frames >= n_frames)):
             raise ValueError(
                 f"stored ROI {key!r} references frame(s) {frames.tolist()}, "
                 f"but the scan has {n_frames}"
             )
         if not frames.size:
-            # No frame recorded at all (e.g. iLabs .iROI files): the ROI covers the whole acquisition.
+            # No frame recorded at all (e.g. iLabs .iROI files): the ROI covers the
+            # whole acquisition.
             frames = np.arange(n_frames, dtype=int)
             frameless.append(key)
 
@@ -656,7 +624,8 @@ def patato_roi_from_geometry(
 ) -> object:
     """Convert an ROI geometry into a PATATO ROI object for the native writer.
 
-    The geometry's ``source`` becomes PATATO's ``roi_class``, so provenance survives export.
+    The geometry's ``source`` becomes PATATO's ``roi_class``, so provenance survives
+    export.
     """
     roi = PatatoROI.from_polygon_mm(
         verts_yx_mm=geometry.verts_mm(fov_x_m, fov_y_m),

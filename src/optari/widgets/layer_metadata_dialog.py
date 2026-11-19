@@ -30,7 +30,9 @@ from optari.utils.metadata import (
 
 
 class LayerMetadataDialog(QDialog):
-    """Display selected layer and scan metadata in separate tabs; the Clinical tab is editable."""
+    """Show the selected layer's and the scan's metadata in tabs. The Clinical tab is
+    editable.
+    """
 
     def __init__(
         self,
@@ -59,9 +61,7 @@ class LayerMetadataDialog(QDialog):
         tabs.addTab(self._create_table(ipasc_metadata_rows(pa_data)), "IPASC")
         tabs.addTab(self._build_clinical_tab(pa_data, controller), "Clinical")
 
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.Save | QDialogButtonBox.Close
-        )
+        buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Close)
         buttons.rejected.connect(self.reject)
         buttons.accepted.connect(self._on_save)
 
@@ -71,9 +71,7 @@ class LayerMetadataDialog(QDialog):
 
     def _build_clinical_tab(self, pa_data, controller) -> QWidget:
         if pa_data is None:
-            return self._create_table(
-                [("Status", "No scan loaded", "No scan loaded")]
-            )
+            return self._create_table([("Status", "No scan loaded", "No scan loaded")])
 
         current = (
             controller.clinical_metadata_edits
@@ -116,7 +114,9 @@ class LayerMetadataDialog(QDialog):
             self._clinical_table.removeRow(row)
 
     def _paste_clinical_json(self) -> None:
-        """Merge a JSON object from the clipboard into the table, applied on Save like any edit."""
+        """Merge a JSON object from the clipboard into the table, applied on Save like
+        any edit.
+        """
         try:
             pasted = json.loads(QApplication.clipboard().text())
         except json.JSONDecodeError as exc:
@@ -134,8 +134,7 @@ class LayerMetadataDialog(QDialog):
 
         table = self._clinical_table
         rows = {
-            table.item(row, 0).text().strip(): row
-            for row in range(table.rowCount())
+            table.item(row, 0).text().strip(): row for row in range(table.rowCount())
         }
         for key, value in pasted.items():
             row = rows.get(key.strip())
@@ -189,9 +188,7 @@ class LayerMetadataDialog(QDialog):
         else:
             table.setEditTriggers(QAbstractItemView.NoEditTriggers)
             table.cellDoubleClicked.connect(
-                lambda row, _column: LayerMetadataDialog._show_details(
-                    table, row
-                )
+                lambda row, _column: LayerMetadataDialog._show_details(table, row)
             )
         for row, (label, summary, details) in enumerate(rows):
             table.setItem(row, 0, QTableWidgetItem(label))

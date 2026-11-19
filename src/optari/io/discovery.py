@@ -28,14 +28,17 @@ class ScanInfo:
 
 
 def scan_key(scan_path: Path) -> str:
-    """Return the ``Scan_<n>`` prefix of *scan_path*'s name, or the full name if it doesn't match."""
+    """Return the ``Scan_<n>`` prefix of *scan_path*'s name, or the full name if it
+    doesn't match.
+    """
     name = scan_path.stem if scan_path.is_file() else scan_path.name
     m = re.match(r"^(Scan_\d+)", name)
     return m.group(1) if m else name
 
 
-def scan_sort_key(scan_path: Path):
-    """Sort key that orders ``Scan_<n>`` names numerically, ahead of any other name sorted alphabetically.
+def scan_sort_key(scan_path: Path) -> tuple[int, int, str]:
+    """Sort key that orders ``Scan_<n>`` names numerically, ahead of any other name
+    sorted alphabetically.
 
     Files sharing a ``Scan_<n>`` prefix (an export, its IPASC copy) sort by full name.
     """
@@ -79,9 +82,7 @@ def _read_internal_scan_name(path: Path, kind: str) -> str | None:
             # Not f"{path.name}.msot": a renamed scan folder keeps its old .msot name.
             msot = next(path.glob("*.msot"))
             in_scan_node = False
-            for event, element in ElementTree.iterparse(
-                msot, events=("start", "end")
-            ):
+            for event, element in ElementTree.iterparse(msot, events=("start", "end")):
                 if event == "start" and element.tag == "ScanNode":
                     in_scan_node = True
                 elif event == "end" and in_scan_node and element.tag == "Name":
@@ -113,7 +114,9 @@ def discover_studies(
     studies: dict[Path, dict[Path, ScanInfo]] = {}
 
     def walk(folder: Path, depth: int) -> None:
-        """Recurse into *folder* up to *max_depth*, stopping at the first folder that holds a scan."""
+        """Recurse into *folder* up to *max_depth*, stopping at the first folder that
+        holds a scan.
+        """
         scans = discover_scans(folder)
         if scans:
             studies[folder] = scans
@@ -139,7 +142,8 @@ def discover_studies(
 
 
 def discover_scans(folder: Path) -> dict[Path, ScanInfo]:
-    """Find every scan directly under *folder*, keyed by path, in ``scan_sort_key`` order.
+    """Find every scan directly under *folder*, keyed by path, in ``scan_sort_key``
+    order.
 
     Every HDF5 file is listed, also several sharing one ``Scan_<n>`` prefix: an
     OPTARI export, an IPASC export and a copy hold different data. An iThera folder

@@ -28,9 +28,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# OPTARI's docks as (attribute on OptariController, factory, title, area, tabify). The order
-# is the order of OPTARI > Docks and of the Settings dock list.a tabified dock joins the
-# previous one in its area. A new dock is one row here plus its typed attribute.
+# OPTARI's docks as (attribute on OptariController, factory, title, area, tabify). The
+# order is the order of OPTARI > Docks and of the Settings dock list.a tabified dock
+# joins the previous one in its area. A new dock is one row here plus its typed
+# attribute.
 DOCKS = (
     (
         "scan_browser_dock",
@@ -80,23 +81,23 @@ class UiManager:
     def setup_docks(self) -> None:
         """Create OPTARI's docks and register them, with napari's own, in
         ``controller.dock_widgets``. The order there is the order of OPTARI ▸ Docks
-        and of the Settings dock list; tabified docks join the previous one in their area.
+        and of the Settings dock list. A tabified dock joins the previous one in its
+        area.
         """
         controller = self.controller
         own_docks = tuple(c.DOCK for c in controller.controllers if c.DOCK)
         for attribute, create_dock, title, area, tabify in DOCKS + own_docks:
             dock = create_dock()
-            controller.dock_widgets[title] = (
-                controller.viewer.window.add_dock_widget(
-                    dock.widget, name=title, area=area, tabify=tabify
-                )
+            controller.dock_widgets[title] = controller.viewer.window.add_dock_widget(
+                dock.widget, name=title, area=area, tabify=tabify
             )
             setattr(controller, attribute, dock)
         # The info dock floats by default instead of sitting in the left area.
         controller.dock_widgets["Active Slice Info"].setFloating(True)
 
         # napari's own docks, so they can be toggled and defaulted like OPTARI's.
-        # private _qt_viewer (public qt_viewer is deprecated), still present in napari 0.9.1
+        # private _qt_viewer (public qt_viewer is deprecated), still present in napari
+        # 0.9.1
         qt_viewer = controller.viewer.window._qt_viewer
         controller.dock_widgets["Layer Controls"] = qt_viewer.dockLayerControls
         controller.dock_widgets["Layer List"] = qt_viewer.dockLayerList
@@ -128,7 +129,7 @@ class UiManager:
 
     def connect_events(self) -> None:
         controller = self.controller
-        # -------- viewer core events --------
+        # ============ viewer core events ============
         controller.connect_shapes_layer_events()
         controller.viewer.dims.events.point.connect(controller.on_dims_changed)
         controller.viewer.layers.selection.events.changed.connect(
@@ -142,10 +143,8 @@ class UiManager:
         # TODO: should reordering / adding layers trigger anything?
         # controller.viewer.layers.events.reordered.connect(controller.on_layers_changed)
         # controller.viewer.layers.events.inserted.connect(controller.on_layers_changed)
-        controller.viewer.layers.events.removed.connect(
-            controller.on_layer_removed
-        )
+        controller.viewer.layers.events.removed.connect(controller.on_layer_removed)
 
-        # -------- dock signal wiring in controllers --------
+        # ============ dock signal wiring in controllers ============
         for task_controller in controller.controllers:
             task_controller.bind_events()

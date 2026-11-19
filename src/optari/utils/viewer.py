@@ -7,7 +7,8 @@ from napari.viewer import Viewer
 def show_activity_dock(viewer: Viewer, visible: bool) -> None:
     """
     Force the activity dock (progress bars, cancel buttons) open or closed.
-    _toggle_activity_dock is deprecated private API access, however currently only way to force the activity dock to open
+    _toggle_activity_dock is deprecated private API access, however currently only way
+    to force the activity dock to open
     https://github.com/napari/napari/issues/4598
     """
     viewer.window._status_bar._toggle_activity_dock(visible)

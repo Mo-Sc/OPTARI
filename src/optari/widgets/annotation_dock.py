@@ -30,7 +30,9 @@ from .dock_helpers import (
 
 @dataclass
 class AnnotationDock:
-    """ROI tools: presets, the intensity filter, what Save measures and the Temporal plot's feature."""
+    """ROI tools: presets, the intensity filter, what Save measures and the Temporal
+    plot's feature.
+    """
 
     widget: QWidget
     roi_clipping_box: QGroupBox
@@ -117,9 +119,7 @@ def create_annotation_dock() -> AnnotationDock:
     placement_layout.addWidget(roi_placement_mode_combo)
     roi_presets_layout.addWidget(placement_row)
 
-    scope_row, current_frames_radio, all_frames_radio = (
-        create_frame_scope_controls()
-    )
+    scope_row, current_frames_radio, all_frames_radio = create_frame_scope_controls()
     roi_presets_layout.addWidget(scope_row)
 
     roi_presets_layout.addWidget(button_row)
@@ -236,8 +236,9 @@ def create_annotation_dock() -> AnnotationDock:
     )
     time_analysis_layout.addRow("Feature", time_analysis_feature_combo)
 
-    # Scope: "Selected ROI" measures each ROI shown on this frame, with its current outline, on every frame
-    # "Track ID" follows one tracked ROI's own record per frame instead, leaving a gap where it has no record on a frame.
+    # Scope: "Selected ROI" measures each ROI shown on this frame, with its current
+    # outline, on every frame "Track ID" follows one tracked ROI's own record per frame
+    # instead, leaving a gap where it has no record on a frame.
     time_analysis_selected_radio = QRadioButton("Selected ROI")
     time_analysis_track_radio = QRadioButton("Track ID")
     time_analysis_selected_radio.setChecked(True)
@@ -266,9 +267,7 @@ def create_annotation_dock() -> AnnotationDock:
     time_analysis_track_id_combo.setToolTip(
         "Which tracked ROI to plot. Refreshed each time you generate the plot."
     )
-    time_analysis_track_radio.toggled.connect(
-        time_analysis_track_id_combo.setEnabled
-    )
+    time_analysis_track_radio.toggled.connect(time_analysis_track_id_combo.setEnabled)
     time_analysis_layout.addRow("Track", time_analysis_track_id_combo)
 
     outer.addWidget(roi_presets_box)

@@ -5,7 +5,7 @@ import numpy as np
 from scipy.ndimage import distance_transform_edt
 from skimage.measure import label, regionprops
 
-# --- processing functions for images ---
+# ============ processing functions for images ============
 
 
 def resize_img(image: np.ndarray, shape: tuple[int, int]) -> np.ndarray:
@@ -19,7 +19,7 @@ def normalize_img(image: np.ndarray) -> np.ndarray:
     return (image - image.mean()) / image.std()
 
 
-# --- processing functions for segmentation masks ---
+# ============ processing functions for segmentation masks ============
 
 
 def resize_mask(mask: np.ndarray, shape: tuple[int, int]) -> np.ndarray:
@@ -36,7 +36,9 @@ def combine_classes(mask: np.ndarray, class_groups: list[list[int]]) -> None:
 
 
 def keep_largest_region(mask: np.ndarray, class_ids: list[int]) -> None:
-    """In place: keep each class's largest connected component, set the rest to background (0)."""
+    """In place: keep each class's largest connected component, set the rest to
+    background (0).
+    """
     for class_id in class_ids:
         binary_mask = mask == class_id
         labeled_mask, num_labels = label(binary_mask, return_num=True)

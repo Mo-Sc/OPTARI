@@ -128,7 +128,8 @@ class ModelAdapterBase(ABC):
     def postprocess(
         self, mask_2d: np.ndarray, frame_shape: tuple[int, int]
     ) -> np.ndarray:
-        """Turn the raw predicted mask into the final class id map for the original frame.
+        """Turn the raw predicted mask into the final class id map for the original
+        frame.
 
         Implementations resize the mask back to *frame_shape* and clean up the class
         predictions.
@@ -136,9 +137,13 @@ class ModelAdapterBase(ABC):
         raise NotImplementedError
 
     def predict(self, frame_2d: np.ndarray) -> SegmentationResult:
-        """Segment one (H, W) frame. Batched inference would be a separate path (F-34)."""
-        # A constant frame has nothing to segment, and its z-score normalization would divide
-        # by a zero std and feed NaN to the model, which returns a meaningless mask.
+        """Segment one (H, W) frame.
+
+        Batched inference would be a separate path (F-34).
+        """
+        # A constant frame has nothing to segment, and its z-score normalization would
+        # divide by a zero std and feed NaN to the model, which returns a meaningless
+        # mask.
         if np.ptp(frame_2d) == 0:
             return SegmentationResult(
                 seg=np.zeros(frame_2d.shape, dtype=MASK_DTYPE),
@@ -155,9 +160,9 @@ class ModelAdapterBase(ABC):
 
 class UKErUSSegAdapter(ModelAdapterBase):
     """
-    Ultrasound segmentation adapter for scans taken at the university hospital of Erlangen
-    using itheras Acuity Echo MSOT scanners.
-    Requires trained ONNX model file and a config entry in segmentation_models.json.
+    Ultrasound segmentation adapter for scans taken at the university hospital of
+    Erlangen using itheras Acuity Echo MSOT scanners. Requires trained ONNX model file
+    and a config entry in segmentation_models.json.
 
     """
 
@@ -183,27 +188,22 @@ class UKErUSSegAdapter(ModelAdapterBase):
         model_path = get_user_models_dir() / model_config.filename
 
         if not model_path.is_file():
-            raise FileNotFoundError(
-                f"Segmentation model not downloaded: {model_path}"
-            )
+            raise FileNotFoundError(f"Segmentation model not downloaded: {model_path}")
 
-        # CUDA is only available with onnxruntime-gpu (Linux). Elsewhere this resolves to CPU.
+        # CUDA is only available with onnxruntime-gpu (Linux). Elsewhere this resolves
+        # to CPU.
         providers = [
             p
             for p in ("CUDAExecutionProvider", "CPUExecutionProvider")
             if p in ort.get_available_providers()
         ]
-        self.session = ort.InferenceSession(
-            str(model_path), providers=providers
-        )
-        logger.info(
-            "segmentation running on %s", self.session.get_providers()[0]
-        )
+        self.session = ort.InferenceSession(str(model_path), providers=providers)
+        logger.info("segmentation running on %s", self.session.get_providers()[0])
         self.input_name = self.session.get_inputs()[0].name
         self.output_name = self.session.get_outputs()[0].name
 
     def preprocess(self, frame_2d: np.ndarray) -> np.ndarray:
-        """Resize the frame to the model's input shape and apply z-score normalization."""
+        """Resize the frame to the model's input and z-score normalize it."""
         # resize to model input shape
         # TODO: check resize vs padding
         frame_2d = resize_img(frame_2d, self.input_shape)
@@ -218,9 +218,7 @@ class UKErUSSegAdapter(ModelAdapterBase):
         """Run the ONNX session on the frame and return the per-pixel class id map."""
         # add leading dim and run inference
         frame_tensor = np.expand_dims(frame_2d, axis=(0, 1))
-        outputs = self.session.run(
-            [self.output_name], {self.input_name: frame_tensor}
-        )
+        outputs = self.session.run([self.output_name], {self.input_name: frame_tensor})
         mask_2d = np.argmax(outputs[0], axis=1).squeeze()
 
         return mask_2d
@@ -242,13 +240,11 @@ class UKErUSSegAdapter(ModelAdapterBase):
         combine_classes(mask_2d, post_cfg["combine_class_groups"])
         for class_id, max_size in post_cfg["remove_small_objects_config"]:
             class_mask = mask_2d == class_id
-            processed_class = remove_small_objects(
-                class_mask, max_size=max_size
-            )
+            processed_class = remove_small_objects(class_mask, max_size=max_size)
             mask_2d[class_mask & ~processed_class] = 0
         # The row-wise step hands a row's majority class to pixels anywhere in that row,
-        # which can recreate fragments of a class reduced to its largest component above.
-        # Enforce that again last, then give the gaps their nearest class.
+        # which can recreate fragments of a class reduced to its largest component
+        # above. Enforce that again last, then give the gaps their nearest class.
         keep_largest_region(mask_2d, post_cfg["keep_largest_per_class"])
         return reassign_freed_pixels(mask_2d)
 

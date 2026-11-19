@@ -15,9 +15,9 @@ CONFIG_SCHEMA_VERSION = json.loads(
     get_default_config_file().read_text(encoding="utf-8")
 )["schema_version"]
 
-# Named frames a scan can open on (DEFAULT_FRAME_INDEX, a batch preset's "frame"), next to a
-# plain frame number, with the label the Settings dialog shows. ScanController.go_to_frame
-# resolves them.
+# Named frames a scan can open on (DEFAULT_FRAME_INDEX, a batch preset's "frame"), next
+# to a plain frame number, with the label the Settings dialog shows.
+# ScanController.go_to_frame resolves them.
 FRAME_SELECTORS = {
     "spectral_motion": "Motion (Spectral)",
     "frame_motion": "Motion (Frame-to-Frame)",
@@ -28,7 +28,9 @@ FRAME_SELECTORS = {
 
 @dataclass(frozen=True)
 class GeneralConfig:
-    """App-wide defaults: logging, default layers/scales/frame/channel, operator identity, layer colors, dock visibility."""
+    """App-wide defaults: logging, default layers/scales/frame/channel, operator
+    identity, layer colors, dock visibility.
+    """
 
     LOG_LEVEL: str
     GUI_LOG_LEVEL: str
@@ -76,7 +78,8 @@ class SegmentationConfig:
 class OptariConfig:
     """Top-level config, loaded at startup into the module-level ``settings``.
 
-    Modules import that object by name, so it is updated in place, see ``apply_live``. Mirrors ``~/.optari/config/config.json``: one section per settings category.
+    Modules import that object by name, so it is updated in place, see ``apply_live``.
+    Mirrors ``~/.optari/config/config.json``: one section per settings category.
     """
 
     schema_version: int
@@ -87,7 +90,8 @@ class OptariConfig:
 
     @classmethod
     def load_from_user_dir(cls) -> "OptariConfig":
-        """Load the user's config.json, archiving and re-seeding it after a schema change.
+        """Load the user's config.json, archiving and re-seeding it after a schema
+        change.
 
         Raises on any missing or unknown key, so a hand-edited config fails at launch
         instead of running with a setting silently ignored.
@@ -105,7 +109,9 @@ class OptariConfig:
         return _config_from_dict(data)
 
     def apply_live(self, data: dict) -> None:
-        """Take over the settings that change no measurement, the rest is read at launch."""
+        """Take over the settings that change no measurement, the rest is read at
+        launch.
+        """
         new = _config_from_dict(data)
         self.annotation, self.analysis = new.annotation, new.analysis
         self.general = replace(
@@ -139,8 +145,8 @@ def write_user_config_dict(data: dict) -> Path:
             f"expected {CONFIG_SCHEMA_VERSION}."
         )
 
-    # Constructing the sections also works as validation: the loader is intolerant of missing or
-    # unknown keys, so anything it would reject never reaches disk.
+    # Constructing the sections also works as validation: the loader is intolerant of
+    # missing or unknown keys, so anything it would reject never reaches disk.
     _config_from_dict(data)
 
     path = get_user_config_file()

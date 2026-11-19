@@ -1,7 +1,8 @@
-"""``RoiStore``: every ROI record of the loaded scan, and which of them the Shapes layer shows.
+"""``RoiStore``: every ROI record of the loaded scan, and which of them the Shapes layer
+shows.
 
-Qt- and napari-free. ``RoiController`` reads the Shapes layer and hands its data in, so the
-sync between the layer and the records can be tested on plain arrays.
+Qt- and napari-free. ``RoiController`` reads the Shapes layer and hands its data in, so
+the sync between the layer and the records can be tested on plain arrays.
 """
 
 from __future__ import annotations
@@ -47,9 +48,7 @@ class RoiStore:
         self.records = {record.roi_id: record for record in records}
         self.projection_ids = []
         self._next_roi_id = max((r.roi_id for r in records), default=-1) + 1
-        self._next_track_id = (
-            max((r.track_id for r in records), default=-1) + 1
-        )
+        self._next_track_id = max((r.track_id for r in records), default=-1) + 1
 
     def clear(self) -> None:
         self.records.clear()
@@ -68,21 +67,18 @@ class RoiStore:
         self.projection_ids = [r.roi_id for r in visible]
         return visible
 
-    def _match_ids_after_removal(
-        self, data, kinds: list[str]
-    ) -> list[int | None]:
-        """Match surviving shapes to their prior ids. Removal preserves relative order."""
+    def _match_ids_after_removal(self, data, kinds: list[str]) -> list[int | None]:
+        """Match surviving shapes to their prior ids.
+
+        Removal preserves relative order.
+        """
         old_records = self.projected()
         matched: list[int | None] = []
         j = 0
         for verts, kind in zip(data, kinds):
-            while j < len(old_records) and not layer_holds(
-                old_records[j], verts, kind
-            ):
+            while j < len(old_records) and not layer_holds(old_records[j], verts, kind):
                 j += 1
-            matched.append(
-                old_records[j].roi_id if j < len(old_records) else None
-            )
+            matched.append(old_records[j].roi_id if j < len(old_records) else None)
             j += 1
         return matched
 
@@ -123,7 +119,8 @@ class RoiStore:
                 continue
             record.verts = np.array(verts, dtype=float)
             record.kind = kind
-            # An edited annotation is OPTARI's, but also the stored original stays as it was.
+            # An edited annotation is OPTARI's, but also the stored original stays as it
+            # was.
             record.source = OPTARI_SOURCE_TAG
             changed = True
 
@@ -136,9 +133,7 @@ class RoiStore:
     def expand_last_to_all_frames(
         self,
         n_frames: int,
-        verts_for_frame: (
-            Callable[[int, np.ndarray], np.ndarray | None] | None
-        ) = None,
+        verts_for_frame: Callable[[int, np.ndarray], np.ndarray | None] | None = None,
     ) -> None:
         """Duplicate the last projected ROI onto every other frame, as one group.
 

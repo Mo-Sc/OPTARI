@@ -21,9 +21,7 @@ class TimeAnalysisDock:
     # Follows the viewer's frame, dragging it moves the viewer to that frame.
     frame_line: pg.InfiniteLine
 
-    plotted_frames: np.ndarray = field(
-        default_factory=lambda: np.empty(0, dtype=int)
-    )
+    plotted_frames: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=int))
     plotted_x: np.ndarray = field(default_factory=lambda: np.empty(0))
 
     def clear(self) -> None:

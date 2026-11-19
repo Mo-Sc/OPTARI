@@ -1,6 +1,8 @@
-"""The Saved Analysis table on disk: the CSV it is collected in, and the XLSX it is exported as.
+"""The Saved Analysis table on disk: the CSV it is collected in, and the XLSX it is
+exported as.
 
-Headless, so callers choose the path, the controller with a file dialog, a batch run from its plan.
+Headless, so callers choose the path, the controller with a file dialog, a batch run
+from its plan.
 """
 
 from __future__ import annotations
@@ -20,10 +22,10 @@ from optari.utils.files import atomic_destination, filename_token
 
 logger = logging.getLogger(__name__)
 
-# Bump only when the meaning of saved-table columns changes (units, semantics).
-# Columns being added or removed can be handled without a schema version bump.
-# 2: roi_geometry always in scan coordinates, std with ddof=1, timestamps in UTC with
-#    offset, derived layers dated by sweep start, lines and paths measured along the line.
+# Bump only when the meaning of saved-table columns changes (units, semantics). Columns
+# being added or removed can be handled without a schema version bump. 2: roi_geometry
+# always in scan coordinates, std with ddof=1, timestamps in UTC with offset, derived
+# layers dated by sweep start, lines and paths measured along the line.
 ROI_TABLE_SCHEMA_VERSION = 2
 ROI_TABLE_SHEET = "roi_table"
 ROI_TABLE_META_SHEET = "optari_meta"
@@ -44,13 +46,13 @@ def default_roi_table_filename() -> str:
 
 
 def append_roi_table_csv(rows: pd.DataFrame, path: Path) -> None:
-    """Append *rows* to the CSV form of the ROI table, creating it with its header first."""
+    """Append *rows* to the CSV form of the ROI table, creating it with its header
+    first.
+    """
     new = not path.exists()
     with path.open("a", encoding="utf-8", newline="") as file:
         if new:
-            meta = file_origin(
-                roi_table_schema_version=ROI_TABLE_SCHEMA_VERSION
-            )
+            meta = file_origin(roi_table_schema_version=ROI_TABLE_SCHEMA_VERSION)
             file.write(f"# {json.dumps(meta)}\n")
         rows.to_csv(file, header=new, index=False)
 
@@ -113,14 +115,10 @@ def read_roi_table(path: Path) -> pd.DataFrame:
     df = (
         pd.read_csv(path, skiprows=1, dtype=text_columns)
         if is_csv
-        else pd.read_excel(
-            path, sheet_name=ROI_TABLE_SHEET, dtype=text_columns
-        )
+        else pd.read_excel(path, sheet_name=ROI_TABLE_SHEET, dtype=text_columns)
     )
 
-    missing_required = [
-        c for c in SAVED_FIXED_SOURCE_COLUMNS if c not in df.columns
-    ]
+    missing_required = [c for c in SAVED_FIXED_SOURCE_COLUMNS if c not in df.columns]
     if missing_required:
         raise ValueError(
             f"ROI table is missing required column(s): {', '.join(missing_required)}."
@@ -137,12 +135,8 @@ def read_roi_table(path: Path) -> pd.DataFrame:
     dropped = [c for c in df.columns if c not in expected]
     added = [c for c in expected if c not in df.columns]
     if dropped:
-        logger.warning(
-            "ignoring unknown column(s) in %s: %s", path, ", ".join(dropped)
-        )
+        logger.warning("ignoring unknown column(s) in %s: %s", path, ", ".join(dropped))
     if added:
-        logger.warning(
-            "filling absent column(s) in %s: %s", path, ", ".join(added)
-        )
+        logger.warning("filling absent column(s) in %s: %s", path, ", ".join(added))
 
     return df.reindex(columns=expected).reset_index(drop=True)

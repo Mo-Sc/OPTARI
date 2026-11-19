@@ -47,9 +47,7 @@ class ViewerExportDialog(QDialog):
         self.fps_spinbox.setValue(float(settings.general.DEFAULT_PLAYBACK_FPS))
         self.fps_row.setVisible(False)
 
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
-        )
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
 

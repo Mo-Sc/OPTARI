@@ -7,6 +7,7 @@ from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from functools import partial
 from math import ceil
+from typing import TYPE_CHECKING
 
 import numpy as np
 import patato as pat
@@ -37,16 +38,18 @@ from optari.widgets.dock_helpers import (
     set_checked,
 )
 
+if TYPE_CHECKING:
+    from optari.controllers.optari_controller import OptariController
+
 logger = logging.getLogger(__name__)
 
-# Unlike PATATO's reconstruction/preprocessing, SpectralUnmixer.run has no internal batch
-# loop or GPU/ONNX call. We chunk it ourselves to allow progress updates and cancellation.
+# Unlike PATATO's reconstruction/preprocessing, SpectralUnmixer.run has no internal
+# batch loop or GPU/ONNX call. We chunk it ourselves to allow progress updates and
+# cancellation.
 UNMIXING_CHUNK_FRAMES = 4
 
 
-def resolve_unmixing_wavelengths(
-    preset: dict, available: list[int]
-) -> list[int]:
+def resolve_unmixing_wavelengths(preset: dict, available: list[int]) -> list[int]:
     """Which of a scan's *available* wavelengths a preset selects.
 
     Presets name either an explicit list or an inclusive range, and both are resolved
@@ -66,9 +69,7 @@ def resolve_unmixing_wavelengths(
     return []
 
 
-def validate_unmixing_spectra(
-    wavelengths: list[int], chromophores: list[str]
-) -> None:
+def validate_unmixing_spectra(wavelengths: list[int], chromophores: list[str]) -> None:
     """Raise a user-facing error when a spectrum has no values at a wavelength."""
     wavelength_array = np.asarray(wavelengths, dtype=float)
     missing = {
@@ -82,11 +83,7 @@ def validate_unmixing_spectra(
         ]
         for chromophore in chromophores
     }
-    missing = {
-        chromophore: values
-        for chromophore, values in missing.items()
-        if values
-    }
+    missing = {chromophore: values for chromophore, values in missing.items() if values}
     if missing:
         details = "; ".join(
             f"{chromophore}: {', '.join(f'{wavelength} nm' for wavelength in wavelengths)}"
@@ -106,7 +103,8 @@ class UnmixParams:
     wavelengths: list[int]
     chromophores: list[str]
     output_frames: list[int]
-    # napari translate of the output layers on the image axes (mm), see UnmixParams.build
+    # napari translate of the output layers on the image axes (mm), see
+    # UnmixParams.build
     translate_yx: tuple[float, float]
     reduce_factor: int = 1
     suffix: str = ""
@@ -121,20 +119,23 @@ class UnmixParams:
 
     @property
     def name_stem(self) -> str:
-        """Base name for output layers, derived from the source recon layer, suffix and frame."""
+        """Base name for output layers, derived from the source recon layer, suffix and
+        frame.
+        """
         source_name = self.source_layer_name.replace("Recon: ", "")
         suffix_part = f"_{self.suffix}" if self.suffix else ""
         # Encode the acquisition-frame index when only a single frame is unmixed.
         frame_part = (
-            f"_F{self.current_frame_id}"
-            if self.current_frame_id is not None
-            else ""
+            f"_F{self.current_frame_id}" if self.current_frame_id is not None else ""
         )
         return f"{source_name}{suffix_part}{frame_part}"
 
     @property
     def settings(self) -> dict:
-        """Settings dict stored as metadata on output layers, e.g. for presets and export."""
+        """Settings dict stored as metadata on output layers, e.g.
+
+        for presets and export.
+        """
         return {
             "wavelengths": self.wavelengths,
             "chromophores": self.chromophores,
@@ -198,9 +199,7 @@ class UnmixParams:
             # past its first pixel.
             translate_yx=tuple(
                 float(t + (reduce_factor - 1) / 2 * s)
-                for t, s in zip(
-                    active_layer.translate[-2:], active_layer.scale[-2:]
-                )
+                for t, s in zip(active_layer.translate[-2:], active_layer.scale[-2:])
             ),
             wavelengths=wavelengths,
             chromophores=chromophores,
@@ -213,16 +212,12 @@ class UnmixParams:
         )
 
     @classmethod
-    def from_preset(
-        cls, preset: dict, controller, *, frame_id: int | None = None
-    ):
+    def from_preset(cls, preset: dict, controller, *, frame_id: int | None = None):
         """Resolve an unmixing preset against the loaded scan's own wavelengths."""
         active_layer = controller.active_recon_layer
         if active_layer is None:
             raise ValueError("Select a PA reconstruction layer.")
-        available = [
-            int(w) for w in active_layer.metadata.get("wavelengths") or []
-        ]
+        available = [int(w) for w in active_layer.metadata.get("wavelengths") or []]
         wavelengths = resolve_unmixing_wavelengths(preset, available)
         if not wavelengths:
             raise ValueError(
@@ -236,9 +231,7 @@ class UnmixParams:
             controller,
             wavelengths=wavelengths,
             chromophores=chromophores,
-            reduce_factor=int(
-                preset.get(UnmixingAttributeTags.RESOLUTION_REDUCE, 1)
-            ),
+            reduce_factor=int(preset.get(UnmixingAttributeTags.RESOLUTION_REDUCE, 1)),
             suffix=str(preset.get(UnmixingAttributeTags.SUFFIX, "")),
             generate_thb=hb_pair
             and bool(preset.get(UnmixingAttributeTags.COMPUTE_THB, True)),
@@ -262,9 +255,7 @@ def _block_average(recon, factor: int):
     # z is shown flipped (display_data_from_patato_obj), so its partial block is cut at
     # the start: the viewer's bottom edge, like x's at the right edge.
     cropped = data[:, :, z % fz :, : y - y % fy, : x - x % fx]
-    coarse = downscale_local_mean(cropped, (1, 1, fz, fy, fx)).astype(
-        np.float32
-    )
+    coarse = downscale_local_mean(cropped, (1, 1, fz, fy, fx)).astype(np.float32)
     attributes = dict(recon.attributes)
     fov_tags = (
         ReconAttributeTags.X_FIELD_OF_VIEW,
@@ -301,9 +292,7 @@ def unmix_frames(
 ) -> Generator[
     None,
     None,
-    tuple[
-        pat.ImageSequence, pat.ImageSequence | None, pat.ImageSequence | None
-    ],
+    tuple[pat.ImageSequence, pat.ImageSequence | None, pat.ImageSequence | None],
 ]:
     """Unmix *recon_for_run* in frame chunks, yielding once per finished chunk.
 
@@ -353,7 +342,9 @@ def set_unmixed_export_attrs(
     frame_mode: str,
     parameter: str | None = None,
 ) -> None:
-    """Attributes the HDF5 export writes with an unmixing output, and a reload reads back."""
+    """Attributes the HDF5 export writes with an unmixing output, and a reload reads
+    back.
+    """
     attrs = image_sequence.attributes
     attrs["frames"] = np.asarray(output_frames, dtype=int)
     attrs["source_layer"] = str(source_layer_name)
@@ -369,11 +360,12 @@ class UnmixingController(TaskControllerBase):
 
     preset_fallback_name = "unmixing_preset"
 
-    def __init__(self, parent_controller):
+    def __init__(self, parent_controller: OptariController):
         """Initialize the unmixing preset store."""
         super().__init__(parent_controller)
         self.preset_store = PresetStore(get_user_presets_dir("unmixing"))
-        # The layer the wavelength list was filled from, so manual picks survive refreshes
+        # The layer the wavelength list was filled from, so manual picks survive
+        # refreshes
         self._wavelengths_source: str | None = None
 
     def _signal_bindings(self) -> list[tuple[object, Callable]]:
@@ -497,19 +489,15 @@ class UnmixingController(TaskControllerBase):
 
     def _apply_preset(self, settings: dict) -> None:
         dock = self.optari_controller.unmixing_dock
-        # Every value read before the first widget changes, so a bad preset changes nothing
-        reduce_factor = int(
-            settings.get(UnmixingAttributeTags.RESOLUTION_REDUCE, 1)
-        )
+        # Every value read before the first widget changes, so a bad preset changes
+        # nothing
+        reduce_factor = int(settings.get(UnmixingAttributeTags.RESOLUTION_REDUCE, 1))
         spectra = set(settings.get(UnmixingAttributeTags.SPECTRA, []))
         # Same resolution as a batch run, so the dock shows what a run would use.
         selected_wavelengths = set(
             resolve_unmixing_wavelengths(
                 settings,
-                [
-                    item.data(Qt.UserRole)
-                    for item in list_items(dock.wavelengths_list)
-                ],
+                [item.data(Qt.UserRole) for item in list_items(dock.wavelengths_list)],
             )
         )
         compute_so2 = settings.get(UnmixingAttributeTags.COMPUTE_SO2, True)
@@ -518,9 +506,7 @@ class UnmixingController(TaskControllerBase):
 
         dock.resolution_reduction_factor.setValue(max(1, reduce_factor))
         dock.suffix_edit.setText(suffix)
-        set_checked(
-            dock.chromophores_list, lambda item: item.text() in spectra
-        )
+        set_checked(dock.chromophores_list, lambda item: item.text() in spectra)
         set_checked(
             dock.wavelengths_list,
             lambda item: item.data(Qt.UserRole) in selected_wavelengths,
@@ -542,7 +528,10 @@ class UnmixingController(TaskControllerBase):
 
     # ============ run: params -> prepare -> publish ============
     def _params_from_ui(self) -> UnmixParams:
-        """Build run parameters from the dock. Raises ValueError with a user-facing message."""
+        """Build run parameters from the dock.
+
+        Raises ValueError with a user-facing message.
+        """
         dock = self.optari_controller.unmixing_dock
         frame_id = (
             int(self.viewer.dims.current_step[0])

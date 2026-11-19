@@ -65,14 +65,10 @@ def create_motion_dock() -> MotionDock:
         symbolBrush=(255, 160, 60),
         name="Frame-to-frame",
     )
-    stillest = pg.ScatterPlotItem(
-        size=12, brush=pg.mkBrush("g"), pen=pg.mkPen("w")
-    )
+    stillest = pg.ScatterPlotItem(size=12, brush=pg.mkBrush("g"), pen=pg.mkPen("w"))
     plot.addItem(stillest)
     spectral_standout, frame_standout = (
-        pg.BarGraphItem(
-            x=[], height=[], width=1, brush=pg.mkBrush(*rgb, 60), pen=None
-        )
+        pg.BarGraphItem(x=[], height=[], width=1, brush=pg.mkBrush(*rgb, 60), pen=None)
         for rgb in ((100, 180, 255), (255, 160, 60))
     )
     for standout in (spectral_standout, frame_standout):

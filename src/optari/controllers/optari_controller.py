@@ -56,8 +56,8 @@ class OptariController:
 
     Attributes ending in ``_dock`` are the dock widget dataclasses, those ending in
     ``_ctrl`` the controllers. Controllers never hold each other and go through this
-    object instead. Every lifecycle step (initialize, bind, refresh, shut down) and every
-    viewer hook runs over ``controllers``.
+    object instead. Every lifecycle step (initialize, bind, refresh, shut down) and
+    every viewer hook runs over ``controllers``.
     """
 
     def __init__(self, viewer: Viewer):
@@ -82,8 +82,9 @@ class OptariController:
         # A batch run loads scans and measures on the main thread
         self.batch_running = False
 
-        # Docks, set by UiManager.setup_docks() from its DOCKS table. dock_widgets maps each
-        # dock's title to the Qt dock widget holding it, napari's own Layer Controls/List included.
+        # Docks, set by UiManager.setup_docks() from its DOCKS table. dock_widgets maps
+        # each dock's title to the Qt dock widget holding it, napari's own Layer
+        # Controls/List included.
         self.dock_widgets: dict[str, QDockWidget] = {}
         self.scan_browser_dock: ScanBrowserDock | None = None
         self.info_dock: InfoDock | None = None
@@ -104,8 +105,9 @@ class OptariController:
         self.analysis_ctrl = AnalysisController(self)
         self.unmixing_ctrl = UnmixingController(self)
         self.reconstruction_ctrl = ReconstructionController(self)
-        # Every task controller. Each step (initialize, bind, refresh, shut down)
-        # and viewer hook runs over this list in this order, so a new one is added here only.
+        # Every task controller. Each step (initialize, bind, refresh, shut down) and
+        # viewer hook runs over this list in this order, so a new one is added here
+        # only.
         self.controllers: list[TaskControllerBase] = [
             self.scan_ctrl,
             self.roi_ctrl,
@@ -138,25 +140,24 @@ class OptariController:
         self.refresh_all()
 
     def shutdown(self) -> None:
-        """Disconnect every signal and release resources before the widget tree is destroyed.
+        """Disconnect every signal and release resources before the widget tree is
+        destroyed.
 
-        Called from the main window's close event (see UiManager._install_shutdown_hook),
-        which is the last moment at which the dock widgets still exist, and again from the
-        launcher as a fallback
+        Called from the main window's close event (see
+        UiManager._install_shutdown_hook), which is the last moment at which the dock
+        widgets still exist, and again from the launcher as a fallback
         """
         if self.is_shut_down:
             return
         self.is_shut_down = True
 
         if self.active_task is not None:
-            # A worker thread still driving the UI while Qt tears the widget tree down is a
-            # crash, so give it a bounded moment to leave its generator.
+            # A worker thread still driving the UI while Qt tears the widget tree down
+            # is a crash, so give it a bounded moment to leave its generator.
             try:
                 self.active_task.await_workers(msecs=5000)
             except RuntimeError:
-                logger.warning(
-                    "background task did not stop within 5 s of shutdown"
-                )
+                logger.warning("background task did not stop within 5 s of shutdown")
             self.active_task = None
 
         for controller in self.controllers:
@@ -170,16 +171,15 @@ class OptariController:
         for evt, handler in self._shapes_layer_bindings:
             evt.disconnect(handler)
 
-        # An error above reaches the log through napari's exception hook (close event) or
-        # the launcher, which ends the process with os._exit either way, releasing the file.
+        # An error above reaches the log through napari's exception hook (close event)
+        # or the launcher, which ends the process with os._exit either way, releasing
+        # the file.
         self.scan_ctrl.close_current_scan()
         logger.info("OptariController: Shutdown complete")
 
     # ============ viewer setup ============
     def _setup_viewer(self) -> None:
-        self.viewer.scene.overlays.axes.visible = (
-            False  # axes hidden by default
-        )
+        self.viewer.scene.overlays.axes.visible = False  # axes hidden by default
         self.viewer.scene.overlays.axes.labels = True
         self.viewer.canvas.grid.enabled = False
         self.viewer.canvas.overlays.scale_bar.visible = True
@@ -187,29 +187,33 @@ class OptariController:
 
     def connect_shapes_layer_events(self) -> None:
         """
-        Connects events for the shapes layer to the ROI controller. This includes data changes and selection changes.
-        data changes mean ROIs were added/removed/replaced
-        selection changes mean the active ROI set changed
+        Connects events for the shapes layer to the ROI controller. This includes data
+        changes and selection changes. data changes mean ROIs were
+        added/removed/replaced selection changes mean the active ROI set changed
         """
         if self.shapes_layer is None:
             return
 
-        # drop the previous scan's bindings, the live table signal would otherwise fire twice
+        # drop the previous scan's bindings, the live table signal would otherwise fire
+        # twice
         for evt, handler in self._shapes_layer_bindings:
             evt.disconnect(handler)
 
         self._shapes_layer_bindings = [
-            # Shapes layer data changes drive ROI table refresh, label updates, and formatting.
+            # Shapes layer data changes drive ROI table refresh, label updates, and
+            # formatting.
             (
                 self.shapes_layer.events.data,
                 self.roi_ctrl.on_shapes_data_changed,
             ),
-            # Shape copy/paste appends shapes without emitting events.data, so watch set_data too.
+            # Shape copy/paste appends shapes without emitting events.data, so watch
+            # set_data too.
             (
                 self.shapes_layer.events.set_data,
                 self.roi_ctrl.on_shapes_set_data,
             ),
-            # selected_data.items_changed is the selection signal for viewer -> table sync.
+            # selected_data.items_changed is the selection signal for viewer -> table
+            # sync.
             (
                 self.shapes_layer.selected_data.events.items_changed,
                 self.roi_ctrl.on_shapes_selection_changed,
@@ -227,8 +231,9 @@ class OptariController:
     # ============ ROI layer management ============
     def ensure_shapes_layer_on_top(self) -> None:
         """
-        Moves ROI layer to top. Necessary because some operations (e.g. unmixing) add new image layers on top of the ROI layer
-        ROI layer should always be on top of the layer stack to be visible and interactive.
+        Moves ROI layer to top. Necessary because some operations (e.g. unmixing) add
+        new image layers on top of the ROI layer ROI layer should always be on top of
+        the layer stack to be visible and interactive.
         """
         if self.shapes_layer is None:
             return
@@ -254,8 +259,8 @@ class OptariController:
     def set_active_task(self, worker: GeneratorWorker | None) -> None:
         """Track the running background task and gate the UI around it.
 
-        Only one heavy task at a time: while one runs, the other run buttons and the scan
-        browser stay disabled.
+        Only one heavy task at a time: while one runs, the other run buttons and the
+        scan browser stay disabled.
         """
         self.active_task = worker
         self.refresh_controller_uis()
@@ -288,13 +293,13 @@ class OptariController:
             # Raw time series scans (e.g. IPASC) carry no images until reconstructed.
             return
 
-        raise RuntimeError(
-            f"No PA image layer found (looking for '{default_pa}')"
-        )
+        raise RuntimeError(f"No PA image layer found (looking for '{default_pa}')")
 
     # ============ layer selection ============
     def resolve_active_recon_layer(self) -> None:
-        """Set `active_recon_layer` to the selected PA image layer (if exactly one is selected)."""
+        """Set `active_recon_layer` to the selected PA image layer (if exactly one is
+        selected).
+        """
 
         selection = self.viewer.layers.selection
 
@@ -312,7 +317,8 @@ class OptariController:
 
             self.active_recon_layer = selected_layer
             logger.info("active layer set to %s", self.active_recon_layer.name)
-            # show only the active PA layer. blending and auto contrast are set when PA layers are created
+            # show only the active PA layer. blending and auto contrast are set when PA
+            # layers are created
             for layer in pa_layers(self.viewer.layers):
                 layer.visible = layer is self.active_recon_layer
 
@@ -320,17 +326,15 @@ class OptariController:
     def on_layer_removed(self, event) -> None:
         """Drop any PATATO object tracked under a removed layer's name.
 
-        Otherwise a deleted reconstruction/unmixed layer stays in `derived_patato_objects`
-        and gets written into the next HDF5 export as if it were still on screen.
+        Otherwise a deleted reconstruction/unmixed layer stays in
+        `derived_patato_objects` and gets written into the next HDF5 export as if it
+        were still on screen.
         """
         layer = event.value
         self.patato_objects.pop(layer.name, None)
         self.derived_patato_objects.pop(layer.name, None)
 
-        if (
-            layer is not self.active_recon_layer
-            and layer is not self.active_us_layer
-        ):
+        if layer is not self.active_recon_layer and layer is not self.active_us_layer:
             return
         if layer is self.active_us_layer:
             self.active_us_layer = None
@@ -343,7 +347,7 @@ class OptariController:
         self.refresh_all()
 
     def on_selection_changed(self, event=None) -> None:
-        """Follow a new layer selection: active layer, controller hooks, dims, readouts."""
+        """Follow a new layer selection: active layer, hooks, dims and readouts."""
         self.resolve_active_recon_layer()
         for controller in self.controllers:
             controller.on_active_layers_changed()
@@ -352,7 +356,7 @@ class OptariController:
         self.refresh_all()
 
     def on_dims_changed(self, event=None) -> None:
-        """Keep the viewer on a slice the active layer holds and tell the controllers."""
+        """Snap to a slice the active layer holds and tell the controllers."""
         if self._snap_dims_to_active_layer():
             return
 
@@ -366,7 +370,9 @@ class OptariController:
 
     # ============ update everything ============
     def refresh_all(self) -> None:
-        """Refresh everything that follows the shown slice: the info dock and the controllers' live readouts."""
+        """Refresh everything that follows the shown slice: the info dock and the
+        controllers' live readouts.
+        """
         self.update_info_labels()
         for controller in self.controllers:
             controller.on_slice_shown()
@@ -374,7 +380,8 @@ class OptariController:
     # ============ snapping dims to the active layer ============
     def snap_to_reconstructed_frame(self, frame_idx: int) -> int:
         """
-        snap the given frame index to the closest available frame in the active layer's metadata
+        snap the given frame index to the closest available frame in the active layer's
+        metadata
         """
         if self.active_recon_layer is None:
             return frame_idx
@@ -413,7 +420,8 @@ class OptariController:
         snapped_channel = self.snap_to_available_channel(channel_idx)
 
         changed = False
-        # Enforce valid index support of the active layer to avoid sampling zero-padded channels.
+        # Enforce valid index support of the active layer to avoid sampling zero-padded
+        # channels.
         if snapped_frame != frame_idx:
             self.viewer.dims.set_point(0, snapped_frame)
             changed = True
@@ -444,7 +452,7 @@ class OptariController:
         )
 
     def update_info_labels(self, event=None) -> None:
-        """Show the active slice's study, scan, layer, frame and time in the info dock."""
+        """Show the active slice's scan, layer, frame and time in the info dock."""
         # Scan, IPASC and clinical metadata need no layer, only the Layer tab does.
         self.info_dock.metadata_button.setEnabled(self.pa_data is not None)
         if self.active_recon_layer is None:
@@ -458,9 +466,7 @@ class OptariController:
         frame_idx, channel_idx = frame_channel
 
         # Every PA layer labels its channel axis, dims are snapped to its channels.
-        channel = str(
-            self.active_recon_layer.metadata["axis1_labels"][channel_idx]
-        )
+        channel = str(self.active_recon_layer.metadata["axis1_labels"][channel_idx])
 
         frames = self.active_recon_layer.metadata.get("frames")
         is_reconstructed = frames is None or frame_idx in frames
@@ -480,9 +486,7 @@ class OptariController:
         ts, ts_delta = self.timestamp_for_slice(frame_idx, channel_idx)
         scan_folder = self.path.stem if self.path else "N/A"
         scan_name = self.scan_info.internal_name if self.scan_info else ""
-        scan_display = (
-            f"{scan_folder} ({scan_name})" if scan_name else scan_folder
-        )
+        scan_display = f"{scan_folder} ({scan_name})" if scan_name else scan_folder
         study_str = self.study_path.stem if self.study_path else "N/A"
         self.info_dock.set_rows(
             [
@@ -495,7 +499,10 @@ class OptariController:
         )
 
     def on_metadata_clicked(self) -> None:
-        """Open the metadata window. Scan metadata are shown even without an image layer."""
+        """Open the metadata window.
+
+        Scan metadata are shown even without an image layer.
+        """
         selected_layers = list(self.viewer.layers.selection)
         layer = next(
             (

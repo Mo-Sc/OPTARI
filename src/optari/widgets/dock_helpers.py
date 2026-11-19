@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -28,9 +29,12 @@ from qtpy.QtWidgets import (
 from optari.utils.presets import PresetStore
 
 
-def create_frame_scope_controls() -> (
-    tuple[QWidget, QRadioButton, QRadioButton]
-):
+def show_status_error(label: QLabel, message: str) -> None:
+    """Show *message* on a dock's status label in red, the style of every error."""
+    label.setText(f'<span style="color:red">{html.escape(message)}</span>')
+
+
+def create_frame_scope_controls() -> tuple[QWidget, QRadioButton, QRadioButton]:
     """Create the shared current/all frames radio-button control."""
     container = QWidget()
     layout = QHBoxLayout(container)
@@ -52,9 +56,7 @@ def create_frame_scope_controls() -> (
 
 
 # helpers for preset management
-def create_preset_controls() -> (
-    tuple[QComboBox, QPushButton, QPushButton, QWidget]
-):
+def create_preset_controls() -> tuple[QComboBox, QPushButton, QPushButton, QWidget]:
     """Create the shared preset selector and save/remove action row."""
     preset_combo = QComboBox()
     save_preset_button = QPushButton("Save Preset")
@@ -81,9 +83,7 @@ def populate_preset_combo(combo: QComboBox, store: PresetStore) -> None:
         combo.blockSignals(False)
 
 
-def prompt_preset_name(
-    parent: QWidget, combo: QComboBox, fallback: str
-) -> str | None:
+def prompt_preset_name(parent: QWidget, combo: QComboBox, fallback: str) -> str | None:
     """Ask for a new preset name, returning ``None`` when cancelled."""
     name, accepted = QInputDialog.getText(
         parent,
@@ -201,9 +201,7 @@ class RoiPlotsDock:
         self.status_label.setText("")
 
 
-def create_number_edit(
-    *, placeholder: str = "", signed: bool = True
-) -> QLineEdit:
+def create_number_edit(*, placeholder: str = "", signed: bool = True) -> QLineEdit:
     """A line edit for a decimal number, read with ``parse_float_input``.
 
     Point and comma are both accepted as the decimal separator, whatever the system
@@ -241,11 +239,7 @@ def list_items(list_widget: QListWidget) -> list[QListWidgetItem]:
 
 def checked_items(list_widget: QListWidget) -> list[QListWidgetItem]:
     """The checked entries, in display order."""
-    return [
-        item
-        for item in list_items(list_widget)
-        if item.checkState() == Qt.Checked
-    ]
+    return [item for item in list_items(list_widget) if item.checkState() == Qt.Checked]
 
 
 def set_checked(

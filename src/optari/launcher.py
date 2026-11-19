@@ -1,4 +1,4 @@
-"""Entry point of the ``optari`` command: logging, the napari window and the controller."""
+"""Entry point of the ``optari`` command: logging, the napari window, the controller."""
 
 import logging
 from os import _exit as os_exit
@@ -53,10 +53,9 @@ def main() -> None:
         run()
 
     except Exception:
-        # os_exit below ends the process before a re-raised exception could print its traceback
-        logger.exception(
-            "OPTARI stopped on an unhandled error, log: %s", log_file
-        )
+        # os_exit below ends the process before a re-raised exception could print its
+        # traceback
+        logger.exception("OPTARI stopped on an unhandled error, log: %s", log_file)
         exit_code = 1
 
     finally:
@@ -66,8 +65,9 @@ def main() -> None:
                 logger.info("OPTARI shutdown complete")
             except Exception:
                 logger.exception("error during controller shutdown")
-        # os._exit bypasses Pythons GC. Probably not ideal, but avoids a segfault on shutdown due to Qt objects
-        # being destroyed in the wrong order after the event loop has stopped.
+        # os._exit bypasses Pythons GC. Probably not ideal, but avoids a segfault on
+        # shutdown due to Qt objects being destroyed in the wrong order after the event
+        # loop has stopped.
         os_exit(exit_code)
 
 

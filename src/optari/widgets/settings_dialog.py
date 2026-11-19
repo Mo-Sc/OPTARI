@@ -53,13 +53,14 @@ from optari.utils.setup import (
     get_user_models_dir,
     get_user_presets_dir,
 )
+from optari.widgets.dock_helpers import show_status_error
 
 logger = logging.getLogger(__name__)
 
 LOG_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
-# Keys of general.LAYER_COLOR_MAPS, paired with a readable label. Sourced from HDF5Tags so they
-# stay in step with the lookup in patato_bridge.layer_colormap().
+# Keys of general.LAYER_COLOR_MAPS, paired with a readable label. Sourced from HDF5Tags
+# so they stay in step with the lookup in patato_bridge.layer_colormap().
 COLOR_MAP_KEYS: list[tuple[str, str]] = [
     (HDF5Tags.ULTRASOUND, "Ultrasound"),
     (HDF5Tags.RECONSTRUCTION, "Reconstruction"),
@@ -141,9 +142,7 @@ class SettingsDialog(QDialog):
             | QDialogButtonBox.Close
             | QDialogButtonBox.RestoreDefaults
         )
-        buttons.button(QDialogButtonBox.Save).clicked.connect(
-            self.on_save_clicked
-        )
+        buttons.button(QDialogButtonBox.Save).clicked.connect(self.on_save_clicked)
         buttons.button(QDialogButtonBox.Close).clicked.connect(self.close)
         buttons.button(QDialogButtonBox.RestoreDefaults).clicked.connect(
             self.on_restore_defaults_clicked
@@ -232,12 +231,8 @@ class SettingsDialog(QDialog):
         self.playback_fps_spin.setRange(1, 240)
         form.addRow("Playback FPS", self.playback_fps_spin)
 
-        self.pa_scale_spins = self._add_scale_row(
-            form, "PA fallback scale (mm)"
-        )
-        self.us_scale_spins = self._add_scale_row(
-            form, "US fallback scale (mm)"
-        )
+        self.pa_scale_spins = self._add_scale_row(form, "PA fallback scale (mm)")
+        self.us_scale_spins = self._add_scale_row(form, "US fallback scale (mm)")
 
         self.show_track_id_check = QCheckBox("Show track ID on ROI shapes")
         self.show_track_id_check.setToolTip(
@@ -265,9 +260,7 @@ class SettingsDialog(QDialog):
 
         return widget
 
-    def _add_scale_row(
-        self, form: QFormLayout, label: str
-    ) -> list[QDoubleSpinBox]:
+    def _add_scale_row(self, form: QFormLayout, label: str) -> list[QDoubleSpinBox]:
         row = QWidget()
         layout = QHBoxLayout(row)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -385,9 +378,7 @@ class SettingsDialog(QDialog):
             edit = QLineEdit(str(path))
             edit.setReadOnly(True)
             open_button = QPushButton("Open")
-            open_button.clicked.connect(
-                lambda _checked=False, p=path: _open_path(p)
-            )
+            open_button.clicked.connect(lambda _checked=False, p=path: _open_path(p))
             row_layout.addWidget(edit)
             row_layout.addWidget(open_button)
             form.addRow(label, row)
@@ -399,21 +390,15 @@ class SettingsDialog(QDialog):
         self.operator_edit.setText(str(general["OPERATOR"]))
         self.analysis_id_edit.setText(str(general["ANALYSIS_ID"]))
         self.log_level_combo.setCurrentText(str(general["LOG_LEVEL"]).upper())
-        self.gui_log_level_combo.setCurrentText(
-            str(general["GUI_LOG_LEVEL"]).upper()
-        )
-        self.histogram_bins_spin.setValue(
-            int(data["analysis"]["histogram_bins"])
-        )
+        self.gui_log_level_combo.setCurrentText(str(general["GUI_LOG_LEVEL"]).upper())
+        self.histogram_bins_spin.setValue(int(data["analysis"]["histogram_bins"]))
 
         self.default_pa_layer_edit.setText(str(general["DEFAULT_PA_LAYER"]))
 
         frame_index = general["DEFAULT_FRAME_INDEX"]
         is_fixed = frame_index not in FRAME_SELECTORS
         self.frame_mode_combo.setCurrentIndex(
-            self.frame_mode_combo.findData(
-                "index" if is_fixed else frame_index
-            )
+            self.frame_mode_combo.findData("index" if is_fixed else frame_index)
         )
         self.frame_index_spin.setValue(int(frame_index) if is_fixed else 0)
         self.frame_index_spin.setEnabled(is_fixed)
@@ -462,18 +447,12 @@ class SettingsDialog(QDialog):
         general["DEFAULT_PA_LAYER"] = self.default_pa_layer_edit.text().strip()
         frame_mode = self.frame_mode_combo.currentData()
         general["DEFAULT_FRAME_INDEX"] = (
-            self.frame_index_spin.value()
-            if frame_mode == "index"
-            else frame_mode
+            self.frame_index_spin.value() if frame_mode == "index" else frame_mode
         )
         general["DEFAULT_CHANNEL_INDEX"] = self.channel_index_spin.value()
         general["DEFAULT_PLAYBACK_FPS"] = self.playback_fps_spin.value()
-        general["PA_FALLBACK_SCALE"] = [
-            spin.value() for spin in self.pa_scale_spins
-        ]
-        general["US_FALLBACK_SCALE"] = [
-            spin.value() for spin in self.us_scale_spins
-        ]
+        general["PA_FALLBACK_SCALE"] = [spin.value() for spin in self.pa_scale_spins]
+        general["US_FALLBACK_SCALE"] = [spin.value() for spin in self.us_scale_spins]
         general.setdefault("LAYER_COLOR_MAPS", {})
         for key, combo in self.colormap_combos.items():
             general["LAYER_COLOR_MAPS"][key] = combo.currentText().strip()
@@ -484,15 +463,11 @@ class SettingsDialog(QDialog):
 
         data["analysis"]["histogram_bins"] = self.histogram_bins_spin.value()
 
-        data["annotation"][
-            "show_track_id"
-        ] = self.show_track_id_check.isChecked()
+        data["annotation"]["show_track_id"] = self.show_track_id_check.isChecked()
         data["annotation"]["roi_label_size"] = self.roi_label_size_spin.value()
         data["annotation"].setdefault("roi_features", {})
         for feature_id, checkbox in self.feature_checkboxes.items():
-            data["annotation"]["roi_features"][feature_id] = int(
-                checkbox.isChecked()
-            )
+            data["annotation"]["roi_features"][feature_id] = int(checkbox.isChecked())
         data["annotation"]["roi_colors"] = [
             self.roi_colors_list.item(row).text()
             for row in range(self.roi_colors_list.count())
@@ -513,8 +488,8 @@ class SettingsDialog(QDialog):
             registry = load_model_registry()
         except (OSError, ValueError, KeyError) as exc:
             logger.exception("Could not read the segmentation model registry.")
-            self.status_label.setText(
-                f"Could not read the model registry: {exc}"
+            show_status_error(
+                self.status_label, f"Could not read the model registry: {exc}"
             )
             return
 
@@ -568,9 +543,7 @@ class SettingsDialog(QDialog):
         item = self.roi_colors_list.currentItem()
         if item is None:
             return
-        color = QColorDialog.getColor(
-            QColor(item.text()), self, "Edit ROI color"
-        )
+        color = QColorDialog.getColor(QColor(item.text()), self, "Edit ROI color")
         if color.isValid():
             item.setText(color.name().upper())
             item.setIcon(_color_icon(color.name()))
@@ -580,7 +553,7 @@ class SettingsDialog(QDialog):
         if row < 0:
             return
         if self.roi_colors_list.count() == 1:
-            self.status_label.setText("At least one ROI color is required.")
+            show_status_error(self.status_label, "At least one ROI color is required.")
             return
         self.roi_colors_list.takeItem(row)
 
@@ -595,15 +568,16 @@ class SettingsDialog(QDialog):
             if not _resolvable_colormap(name)
         ]
         if unknown:
-            self.status_label.setText(
+            show_status_error(
+                self.status_label,
                 f"{failure_prefix}: unknown colormap(s) "
-                f"{', '.join(map(repr, unknown))}"
+                f"{', '.join(map(repr, unknown))}",
             )
             return False
         try:
             write_user_config_dict(data)
         except (ValueError, TypeError, KeyError, OSError) as exc:
-            self.status_label.setText(f"{failure_prefix}: {exc}")
+            show_status_error(self.status_label, f"{failure_prefix}: {exc}")
             return False
         settings.apply_live(data)
         self._data = data
@@ -612,9 +586,7 @@ class SettingsDialog(QDialog):
 
     def on_save_clicked(self) -> None:
         data = self._collect_from_widgets(copy.deepcopy(self._data))
-        self._write_config(
-            data, f"Settings saved. {WHEN_APPLIED}", "Not saved"
-        )
+        self._write_config(data, f"Settings saved. {WHEN_APPLIED}", "Not saved")
 
     def on_restore_defaults_clicked(self) -> None:
         confirmed = QMessageBox.question(
@@ -626,9 +598,7 @@ class SettingsDialog(QDialog):
         if confirmed != QMessageBox.Yes:
             return
 
-        data = json.loads(
-            get_default_config_file().read_text(encoding="utf-8")
-        )
+        data = json.loads(get_default_config_file().read_text(encoding="utf-8"))
         if self._write_config(
             data, f"Defaults restored. {WHEN_APPLIED}", "Not restored"
         ):

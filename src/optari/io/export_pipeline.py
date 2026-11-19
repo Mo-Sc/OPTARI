@@ -89,7 +89,8 @@ def can_save_into_scan(scan_info: ScanInfo, pa_data: pat.PAData) -> bool:
 
 
 def save_scan_into_source(export: ScanExport) -> Generator[None, None, None]:
-    """Write the session's ROIs and new layers into the scan file itself. A background step.
+    """Write the session's ROIs and new layers into the scan file itself. A background
+    step.
 
     The session's read handle on the file must be closed first
     (``ScanController.reset_scan_state``), since HDF5 refuses a second, writing one.
@@ -155,9 +156,7 @@ def _hdf5_destination(destination: Path) -> Path:
     if destination.suffix.lower() not in {".hdf5", ".h5"}:
         destination = destination.with_suffix(".hdf5")
     if destination.exists():
-        raise FileExistsError(
-            f"Not exported, {destination.name} already exists"
-        )
+        raise FileExistsError(f"Not exported, {destination.name} already exists")
     return destination
 
 
@@ -212,7 +211,8 @@ def _write_rois(export: ScanExport, destination_pa_data) -> None:
             RoiGeometry.from_record(record, fov_x_m, fov_y_m),
             fov_x_m,
             fov_y_m,
-            # Position, run and repetition belong to the frame; every wavelength shares them.
+            # Position, run and repetition belong to the frame, which every wavelength
+            # shares.
             z=z_values[frame_idx, 0],
             run=run_values[frame_idx, 0],
             rep=rep_values[frame_idx, 0],
@@ -240,20 +240,20 @@ def _delete_stored_layer(file: h5py.File, group: str, layer_name: str) -> None:
 
 
 def _write_derived_data(export: ScanExport, destination_pa_data) -> None:
-    """Write runtime-only OPTARI additions: derived PA images, the segmentation mask, and clinical metadata.
+    """Write runtime-only OPTARI additions: derived PA images, the segmentation mask,
+    and clinical metadata.
 
-    replaces any existing derived data, segmentation mask, and clinical metadata in the export.
-    Each new image carries its own origin, since a file saved into several times holds
-    layers from different sessions while the file-level origin records only its creation.
+    replaces any existing derived data, segmentation mask, and clinical metadata in the
+    export. Each new image carries its own origin, since a file saved into several times
+    holds layers from different sessions while the file-level origin records only its
+    creation.
     """
     origin = json.dumps(file_origin())
     writer = destination_pa_data.scan_writer
     for layer_name, image in export.derived.items():
         # Same layer name means same result (a different one needs a suffix), so a
         # re-run replaces what an earlier save stored under that name.
-        _delete_stored_layer(
-            writer.file, image.get_hdf5_group_name(), layer_name
-        )
+        _delete_stored_layer(writer.file, image.get_hdf5_group_name(), layer_name)
         image.attributes[HDF5Tags.FILE_ORIGIN] = origin
         writer.add_image(image)
     if export.derived:
@@ -268,16 +268,10 @@ def _write_derived_data(export: ScanExport, destination_pa_data) -> None:
             "source_model_id": layer_meta["source_model_id"],
             "frame_mode": layer_meta["frame_mode"],
             "frames": [int(f) for f in layer_meta["frames"]],
-            "class_names": {
-                str(k): v for k, v in layer_meta["class_names"].items()
-            },
+            "class_names": {str(k): v for k, v in layer_meta["class_names"].items()},
         }
-        writer.file[HDF5Tags.SEGMENTATION].attrs["optari_meta"] = json.dumps(
-            meta
-        )
-        logger.info(
-            "saved segmentation mask (model '%s')", meta["source_model_id"]
-        )
+        writer.file[HDF5Tags.SEGMENTATION].attrs["optari_meta"] = json.dumps(meta)
+        logger.info("saved segmentation mask (model '%s')", meta["source_model_id"])
 
     if export.clinical_metadata is not None:
         writer.set_clinical_metadata(export.clinical_metadata)

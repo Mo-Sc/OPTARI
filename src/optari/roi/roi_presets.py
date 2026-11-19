@@ -45,7 +45,9 @@ class RoiPreset:
     top_margin_mm: float = 0.0
 
     def __post_init__(self) -> None:
-        """Coerce *source_fov_m* and *top_margin_mm* to floats and reject a non-positive FOV or unknown *placement*."""
+        """Coerce *source_fov_m* and *top_margin_mm* to floats and reject a non-positive
+        FOV or unknown *placement*.
+        """
         self.source_fov_m = (
             float(self.source_fov_m[0]),
             float(self.source_fov_m[1]),
@@ -102,7 +104,9 @@ class RoiPresetStore(PresetStore):
         placement: str = "static",
         top_margin_mm: float = 0.0,
     ) -> Path:
-        """Build a preset from the given fields, stamp it with the current time, and save it to disk."""
+        """Build a preset from the given fields, stamp it with the current time, and
+        save it to disk.
+        """
         preset = RoiPreset(
             name=name,
             description=description,

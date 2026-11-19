@@ -1,4 +1,6 @@
-"""File naming, and writing files so that a failed write never leaves a half-written file behind."""
+"""File naming, and writing files so that a failed write never leaves a half-written
+file behind.
+"""
 
 import re
 from collections.abc import Iterator
