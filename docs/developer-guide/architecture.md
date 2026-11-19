@@ -7,7 +7,8 @@ Model-View-Controller split across four layers.
 ## Layers
 
 - **UI layer** (`widgets/`): dock widgets built by `create_*_dock()` factories. A dock is a
-  dataclass of Qt widget references and holds no logic.
+  dataclass of Qt widget references. It holds no application logic, only behaviour local to its
+  widgets.
 - **Control layer** (`controllers/`): one controller per feature area, all owned by
   `OptariController`.
 - **Utilities** (`utils/`): logging, presets, motion scoring, file helpers and other stateless helpers used by controllers.
@@ -24,7 +25,8 @@ Model-View-Controller split across four layers.
   `active_us_layer`, `derived_patato_objects`, ...) lives on `OptariController` itself.
 - `UiManager` builds the docks and wires every Qt signal to a controller method.
   `MenuManager` builds the menu bar and the Settings/Batch dialogs. `ShortcutManager` binds
-  keyboard shortcuts.
+  keyboard shortcuts. Like the task controllers, each is an instance `OptariController`
+  creates and keeps, holding the controller as `self.controller`.
 
 ## Background work and Batch Mode
 

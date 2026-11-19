@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from functools import partial
 from typing import TYPE_CHECKING
 
 from qtpy.QtCore import QTimer
@@ -27,14 +26,17 @@ logger = logging.getLogger(__name__)
 class UiManager:
     """Build and wire dock widgets for a single OPTARI controller instance."""
 
+    def __init__(self, controller: "OptariController"):
+        self.controller = controller
+
     # ============ dock setup ============
-    @staticmethod
-    def setup_docks(controller: "OptariController") -> None:
+    def setup_docks(self) -> None:
         """Create OPTARI's docks and register them, with napari's own, in
         ``controller.dock_widgets``. The order there is the order of OPTARI ▸ Docks
         and of the Settings dock list; tabified docks join the previous one in their area.
         """
-        add = partial(UiManager._add_dock, controller)
+        controller = self.controller
+        add = self._add_dock
         controller.scan_browser = add(
             create_scan_browser_dock(), "Scan Browser", "right", tabify=False
         )
@@ -72,34 +74,28 @@ class UiManager:
         controller.dock_widgets["Layer List"] = qt_viewer.dockLayerList
 
         # Select default docks after the event loop has started
-        QTimer.singleShot(
-            0, lambda: UiManager._select_default_docks(controller)
-        )
+        QTimer.singleShot(0, self._select_default_docks)
 
         logger.info("Dock widgets created and added to the viewer window.")
 
-    @staticmethod
-    def _add_dock(
-        controller, dock, title: str, area: str, tabify: bool = True
-    ):
+    def _add_dock(self, dock, title: str, area: str, tabify: bool = True):
         """Add *dock*'s widget to the window under *title* and return *dock*."""
-        controller.dock_widgets[title] = (
-            controller.viewer.window.add_dock_widget(
+        self.controller.dock_widgets[title] = (
+            self.controller.viewer.window.add_dock_widget(
                 dock.widget, name=title, area=area, tabify=tabify
             )
         )
         return dock
 
     # ============ dock layout ============
-    @staticmethod
-    def _select_default_docks(controller: "OptariController") -> None:
+    def _select_default_docks(self) -> None:
         # by default, Scan Browser on the right and Tables at the bottom
-        controller.dock_widgets["Tabular"].raise_()
-        controller.dock_widgets["Scan Browser"].raise_()
+        self.controller.dock_widgets["Tabular"].raise_()
+        self.controller.dock_widgets["Scan Browser"].raise_()
 
-    @staticmethod
-    def _install_shutdown_hook(controller: "OptariController") -> None:
+    def _install_shutdown_hook(self) -> None:
         """Run controller teardown from the main window's close event."""
+        controller = self.controller
         window = controller.viewer.window._qt_window
         napari_close_event = window.closeEvent
 
@@ -111,8 +107,8 @@ class UiManager:
 
         window.closeEvent = close_event
 
-    @staticmethod
-    def connect_events(controller: "OptariController") -> None:
+    def connect_events(self) -> None:
+        controller = self.controller
         # -------- viewer core events --------
         controller.connect_shapes_layer_events()
         controller.viewer.dims.events.point.connect(controller.on_dims_changed)
@@ -123,7 +119,7 @@ class UiManager:
             controller.on_metadata_clicked
         )
 
-        UiManager._install_shutdown_hook(controller)
+        self._install_shutdown_hook()
         # TODO: should reordering / adding layers trigger anything?
         # controller.viewer.layers.events.reordered.connect(controller.on_layers_changed)
         # controller.viewer.layers.events.inserted.connect(controller.on_layers_changed)

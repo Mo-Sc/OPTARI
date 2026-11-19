@@ -1,6 +1,7 @@
 import logging
 import sys
-from collections.abc import Callable
+
+from qtpy.QtWidgets import QPushButton
 
 logger = logging.getLogger(__name__)
 
@@ -16,55 +17,36 @@ SHORTCUTS = {
 
 
 class ShortcutManager:
-    """
-    Manager for registering custom OPTARI keyboard shortcuts.
-    """
+    """Binds OPTARI's keyboard shortcuts to the dock buttons they press."""
 
-    @classmethod
-    def register_all(cls, controller) -> None:
-        """Bind all custom keyboard shortcuts."""
+    def __init__(self, controller):
+        self.controller = controller
 
-        # 1. ROI Shortcuts
-        cls._bind_shortcut_to_button(
-            controller,
-            shortcut_id="save_roi_data",
-            button_getter=lambda c: c.roi.save_button,
-            action_name="Save ROI Data",
+    def register_all(self) -> None:
+        """Bind all custom keyboard shortcuts. The docks must exist already."""
+        controller = self.controller
+        self._bind_shortcut_to_button(
+            "save_roi_data", controller.roi.save_button, "Save ROI Data"
         )
-
-        # 2. Unmixing Shortcuts
-        cls._bind_shortcut_to_button(
-            controller,
-            shortcut_id="run_unmixing",
-            button_getter=lambda c: c.unmixing.run_button,
-            action_name="Run Unmixing",
+        self._bind_shortcut_to_button(
+            "run_unmixing", controller.unmixing.run_button, "Run Unmixing"
         )
-
-        # 3. Segmentation Shortcuts
-        cls._bind_shortcut_to_button(
-            controller,
-            shortcut_id="run_segmentation",
-            button_getter=lambda c: c.segmentation.generate_tissue_segmentation_button,
-            action_name="Run Segmentation",
+        self._bind_shortcut_to_button(
+            "run_segmentation",
+            controller.segmentation.generate_tissue_segmentation_button,
+            "Run Segmentation",
         )
-
         logger.info("registered keyboard shortcuts: %s", SHORTCUTS)
 
-    @classmethod
     def _bind_shortcut_to_button(
-        cls,
-        controller,
-        shortcut_id: str,
-        button_getter: Callable,
-        action_name: str,
+        self, shortcut_id: str, button: QPushButton, action_name: str
     ) -> None:
-        """Bind keyboard shortcut to a dock's QPushButton."""
+        """Bind a keyboard shortcut to a dock's QPushButton."""
         shortcut = SHORTCUTS[shortcut_id]
 
-        @controller.viewer.bind_key(shortcut, overwrite=True)
+        @self.controller.viewer.bind_key(shortcut, overwrite=True)
         def trigger_button(viewer):
             logger.info("shortcut %s triggered", shortcut)
-            button = button_getter(controller)
             if button.isEnabled():
                 button.click()
             else:

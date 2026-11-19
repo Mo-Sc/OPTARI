@@ -373,6 +373,8 @@ class UnmixingController(TaskControllerBase):
         """Initialize the unmixing preset store."""
         super().__init__(parent_controller)
         self.preset_store = PresetStore(get_user_presets_dir("unmixing"))
+        # The layer the wavelength list was filled from, so manual picks survive refreshes
+        self._wavelengths_source: str | None = None
 
     def _signal_bindings(self) -> list[tuple[object, Callable]]:
         """Unmixing dock signals."""
@@ -459,13 +461,14 @@ class UnmixingController(TaskControllerBase):
 
         wavelengths = active_recon_layer.metadata.get("wavelengths") or []
         source_name = active_recon_layer.name
-        last_source = dock.widget.property("_unmixing_source_name")
-
         # Keep manual wavelength selections while the same source stays active.
-        if last_source == source_name and dock.wavelengths_list.count() > 0:
+        if (
+            self._wavelengths_source == source_name
+            and dock.wavelengths_list.count() > 0
+        ):
             return
 
-        dock.widget.setProperty("_unmixing_source_name", source_name)
+        self._wavelengths_source = source_name
         dock.wavelengths_list.clear()
         for w in wavelengths:
             add_checkable_item(

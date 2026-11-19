@@ -47,11 +47,13 @@ HIDDEN_VIEW_ENTRIES = (
 class MenuManager:
     """Add the OPTARI menu to napari's menu bar and hide the entries OPTARI doesnt support."""
 
-    @staticmethod
-    def setup(controller: "OptariController") -> None:
-        window = controller.viewer.window
-        MenuManager._apply_default_dock_visibility(controller)
-        MenuManager._add_optari_menu(controller, window)
+    def __init__(self, controller: "OptariController"):
+        self.controller = controller
+
+    def setup(self) -> None:
+        window = self.controller.viewer.window
+        self._apply_default_dock_visibility()
+        self._add_optari_menu(window)
 
         if os.getenv("OPTARI_FULL_MENUS") == "1":
             logger.info(
@@ -59,27 +61,22 @@ class MenuManager:
             )
             return
 
-        MenuManager._prune_napari_menus(window)
+        self._prune_napari_menus(window)
 
     # ============ OPTARI menu ============
-    @staticmethod
-    def _add_optari_menu(controller: "OptariController", window) -> None:
+    def _add_optari_menu(self, window) -> None:
         menu = QMenu("OPTARI", window._qt_window)
 
         settings_action = QAction("Settings", menu)
         # macOS moves any action whose text mentions settings/preferences/options into the
         # application menu unless the role is pinned.
         settings_action.setMenuRole(QAction.NoRole)
-        settings_action.triggered.connect(
-            lambda: MenuManager._show_settings(controller)
-        )
+        settings_action.triggered.connect(self._show_settings)
         menu.addAction(settings_action)
 
         batch_action = QAction("Batch Mode", menu)
         batch_action.setMenuRole(QAction.NoRole)
-        batch_action.triggered.connect(
-            lambda: MenuManager._show_batch(controller)
-        )
+        batch_action.triggered.connect(self._show_batch)
         menu.addAction(batch_action)
 
         menu.addSeparator()
@@ -90,36 +87,34 @@ class MenuManager:
         menu.addAction(docs_action)
 
         menu.addSeparator()
-        MenuManager._add_dock_toggles(controller, menu)
+        self._add_dock_toggles(menu)
 
         window.main_menu.addMenu(menu)
 
-    @staticmethod
-    def _add_dock_toggles(controller: "OptariController", menu: QMenu) -> None:
+    def _add_dock_toggles(self, menu: QMenu) -> None:
         """Add a Docks submenu with a checkable show/hide toggle per dock.
 
         Reuses QDockWidget's own toggleViewAction(), the same mechanism napari uses for its own
         Window menu so visibility stays in sync even when a dock is closed some other way.
         """
         docks_menu = menu.addMenu("Docks")
-        for label, dock_widget in controller.dock_widgets.items():
+        for label, dock_widget in self.controller.dock_widgets.items():
             action = dock_widget.toggleViewAction()
             action.setText(label)
             docks_menu.addAction(action)
 
-    @staticmethod
-    def _apply_default_dock_visibility(controller: "OptariController") -> None:
+    def _apply_default_dock_visibility(self) -> None:
         """Force each dock's visibility to the Settings > Docks defaults.
 
         Runs on every launch and overrides whatever napari's own session-restore
         (save_window_state) would otherwise show
         """
         defaults = settings.general.DEFAULT_VISIBLE_DOCKS
-        for label, dock_widget in controller.dock_widgets.items():
+        for label, dock_widget in self.controller.dock_widgets.items():
             dock_widget.setVisible(bool(int(defaults.get(label, 1))))
 
-    @staticmethod
-    def _show_settings(controller: "OptariController") -> None:
+    def _show_settings(self) -> None:
+        controller = self.controller
         if controller.settings_dialog is None:
             qt_window = controller.viewer.window._qt_window
             controller.settings_dialog = SettingsDialog(
@@ -129,8 +124,8 @@ class MenuManager:
         controller.settings_dialog.raise_()
         controller.settings_dialog.activateWindow()
 
-    @staticmethod
-    def _show_batch(controller: "OptariController") -> None:
+    def _show_batch(self) -> None:
+        controller = self.controller
         if controller.batch_dialog is None:
             qt_window = controller.viewer.window._qt_window
             controller.batch_dialog = BatchDialog(qt_window, controller)

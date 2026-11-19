@@ -4,7 +4,8 @@
 
 - Each dock is created by a `create_*_dock()` factory returning a dataclass of widget
   references (`QLineEdit`, `QComboBox`, pyqtgraph `PlotWidget`, `magicgui.widgets.Table`, ...).
-- Widgets hold no logic and doesnt wire their own signals, which is done by `UiManager.connect_events()`
+- Docks hold no application logic, only behaviour local to their widgets (remembering checked scans,
+  formatting a table, etc)
 
 ## `TaskControllerBase`
 

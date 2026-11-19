@@ -204,6 +204,8 @@ class ReconstructionController(TaskControllerBase):
         self._settings_dirty = False
         self._applied_settings: dict = {}
         self.preset_store = PresetStore(get_user_presets_dir("reconstruction"))
+        # Whether refresh_ui last saw a scan, so its hint changes only when one appears
+        self._scan_loaded = False
 
     def _signal_bindings(self) -> list[tuple[object, Callable]]:
         """Reconstruction dock signals."""
@@ -231,8 +233,6 @@ class ReconstructionController(TaskControllerBase):
         self.on_preset_changed()
         self.refresh_ui()
 
-    _NO_SCAN_MESSAGE = "No scan loaded."
-
     def refresh_ui(self) -> None:
         """Refresh scan-dependent controls. Reconstruction runs off the loaded scan, not a
         layer. There is no "Source" to pick, so the only thing to reflect here is whether a
@@ -241,12 +241,14 @@ class ReconstructionController(TaskControllerBase):
         pa_data = self.optari_controller.pa_data
 
         if pa_data is None:
-            dock.status_label.setText(self._NO_SCAN_MESSAGE)
+            dock.status_label.setText("No scan loaded.")
             dock.run_button.setEnabled(False)
+            self._scan_loaded = False
             return
 
-        if dock.status_label.text() == self._NO_SCAN_MESSAGE:
+        if not self._scan_loaded:
             dock.status_label.setText("Select a preset and run.")
+            self._scan_loaded = True
         dock.run_button.setEnabled(not self.optari_controller.task_running)
 
     @property

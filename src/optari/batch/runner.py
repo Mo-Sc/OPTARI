@@ -169,21 +169,11 @@ class BatchRunner:
         self._start_background(step)
 
     def _start_background(self, step: BackgroundStep) -> None:
-        outcome: list = []
         self._worker = run_background_task(
             self.viewer,
-            step.func,
-            total=step.total,
-            desc=step.desc,
-            on_result=lambda result: outcome.append(("ok", result)),
-            on_error=lambda message: outcome.append(("error", message)),
-            on_cancel=lambda: outcome.append(("cancelled", None)),
-            # `finished` is the last signal a worker emits, so resuming here cannot
-            # race this worker's own teardown against the next step's setup.
-            on_done=lambda: self._advance(
-                outcome[0] if outcome else ("error", "step produced no result")
-            ),
+            step,
             register=self.controller.set_active_task,
+            on_finished=self._advance,
         )
 
     def _finish(self) -> None:

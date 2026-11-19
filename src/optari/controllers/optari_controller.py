@@ -32,6 +32,7 @@ from optari.widgets.layer_metadata_dialog import LayerMetadataDialog
 from optari.controllers.ui_manager import UiManager
 from optari.controllers.menu_manager import MenuManager
 from optari.controllers.shortcut_manager import ShortcutManager
+from optari.controllers.viewer_export_controller import ViewerExportController
 from optari.controllers.scan_controller import ScanController
 from optari.controllers.roi_controller import RoiController
 from optari.controllers.segmentation_controller import SegmentationController
@@ -69,7 +70,7 @@ class OptariController:
         # A batch run loads scans and measures on the main thread
         self.batch_running = False
 
-        # Docks, created by UiManager.setup_docks. dock_widgets maps each dock's title to
+        # Docks, created by UiManager.setup_docks(). dock_widgets maps each dock's title to
         # the Qt dock widget holding it, napari's own Layer Controls/List included.
         self.dock_widgets: dict[str, QDockWidget] = {}
         # --- left elements ---
@@ -82,6 +83,7 @@ class OptariController:
         self.unmixing: UnmixingDock | None = None
         self.reconstruction: ReconstructionDock | None = None
 
+        self.viewer_export_ctrl = ViewerExportController(self)
         self.scan_ctrl = ScanController(self)
         self.roi_ctrl = RoiController(self)
         self.segmentation_ctrl = SegmentationController(self)
@@ -104,16 +106,19 @@ class OptariController:
         self.is_shut_down = False
 
         self._setup_viewer()
-        UiManager.setup_docks(self)
-        MenuManager.setup(self)
+        self.ui_manager = UiManager(self)
+        self.ui_manager.setup_docks()
+        self.menu_manager = MenuManager(self)
+        self.menu_manager.setup()
         self.roi_ctrl.initialize_ui()
         self.segmentation_ctrl.initialize_ui()
         self.unmixing_ctrl.initialize_ui()
         self.reconstruction_ctrl.initialize_ui()
         self.analysis_ctrl.refresh_ui()
         self.scan_ctrl.refresh_ui()
-        UiManager.connect_events(self)
-        ShortcutManager.register_all(self)
+        self.ui_manager.connect_events()
+        self.shortcut_manager = ShortcutManager(self)
+        self.shortcut_manager.register_all()
 
         self.refresh_all()
 

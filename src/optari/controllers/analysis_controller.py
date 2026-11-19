@@ -263,73 +263,70 @@ class AnalysisController(TaskControllerBase):
             clamp=roi_ctrl.intensity_clamp,
         )
 
+    def _missing_plot_input(
+        self, *, track_scope: bool = False, min_frames: int = 1
+    ) -> str | None:
+        """What a plot still lacks before it can be drawn, or None when it has everything.
+
+        *track_scope* asks for tracked ROI records instead of shapes on this frame.
+        """
+        ctrl = self.optari_controller
+        if ctrl.shapes_layer is None:
+            return "No ROIs layer"
+        if ctrl.active_recon_layer is None:
+            return "Select a PA image layer"
+        if track_scope and not ctrl.roi_ctrl.roi_records:
+            return "No tracked ROIs available"
+        if not track_scope and len(ctrl.shapes_layer.data) == 0:
+            return "No ROIs defined"
+        if len(ctrl.active_recon_layer.metadata["frames"]) < min_frames:
+            return f"PA image layer has less than {min_frames} frames"
+        return None
+
+    @staticmethod
+    def _show_plot_error(dock, message: str) -> None:
+        """Empty *dock*'s plots and say in red why there is nothing to show."""
+        dock.clear()
+        dock.status_label.setText(f'<span style="color:red">{message}</span>')
+
     def on_generate_time_analysis_clicked(self, event=None) -> None:
         """Compute and plot the time series for the current Time Analysis scope.
 
         Validates that ROIs and a multi-frame PA layer are selected, then redraws all
         series for either the selected ROIs or a single tracked ID.
         """
-        annotation = self.optari_controller.annotation
-        track_scope = annotation.time_analysis_track_radio.isChecked()
-
-        error_msg = ""
-
-        if self.optari_controller.shapes_layer is None:
-            error_msg = "No ROIs layer"
-        elif self.optari_controller.active_recon_layer is None:
-            error_msg = "Select a PA image layer"
-        elif (
-            not track_scope
-            and len(self.optari_controller.shapes_layer.data) == 0
-        ):
-            error_msg = "No ROIs defined"
-        elif track_scope and not self.optari_controller.roi_ctrl.roi_records:
-            error_msg = "No tracked ROIs available"
-        elif (
-            len(self.optari_controller.active_recon_layer.metadata["frames"])
-            < 2
-        ):
-            error_msg = "PA image layer has less than 2 frames"
-
-        time_analysis = self.optari_controller.time_analysis
-        if error_msg:
-            time_analysis.clear()
-            time_analysis.status_label.setText(
-                f'<span style="color:red">{error_msg}</span>'
-            )
+        ctrl = self.optari_controller
+        dock = ctrl.time_analysis
+        track_scope = ctrl.annotation.time_analysis_track_radio.isChecked()
+        error = self._missing_plot_input(track_scope=track_scope, min_frames=2)
+        if error:
+            self._show_plot_error(dock, error)
             return
 
-        plot = time_analysis.plot_widget
-
+        layer = ctrl.active_recon_layer
         _, channel_idx = self._current_frame_channel()
-        feature_id = (
-            self.optari_controller.annotation.time_analysis_feature_combo.currentData()
-        )
+        feature_id = ctrl.annotation.time_analysis_feature_combo.currentData()
 
-        self.optari_controller.time_analysis.status_label.setText(
-            "Computing time series…"
-        )
+        dock.status_label.setText("Computing time series…")
         # The computation below blocks the event loop, paint the text before it.
-        self.optari_controller.time_analysis.status_label.repaint()
+        dock.status_label.repaint()
         x, series = self._time_series_for_current_scope(
             channel_idx, feature_id
         )
         key_label = "Track" if track_scope else "ROI"
 
         if not series:
-            time_analysis.clear()
-            time_analysis.status_label.setText(
-                f'<span style="color:red">No data for the selected {key_label.lower()}.</span>'
+            self._show_plot_error(
+                dock, f"No data for the selected {key_label.lower()}."
             )
             return
 
+        plot = dock.plot_widget
         plot.clear()
         plot.addLegend()
-        plot.addItem(
-            self.optari_controller.time_analysis.frame_line, ignoreBounds=True
-        )
+        plot.addItem(dock.frame_line, ignoreBounds=True)
 
-        colors = self.optari_controller.roi_ctrl.colors_by_roi_id()
+        colors = ctrl.roi_ctrl.colors_by_roi_id()
         for key, y in series.items():
             # keyed by track id in the Track ID scope, by ROI id otherwise
             color = roi_color_for_index(key) if track_scope else colors[key]
@@ -349,66 +346,44 @@ class AnalysisController(TaskControllerBase):
         vb.enableAutoRange(axis=vb.YAxis, enable=True)
         vb.autoRange(padding=0.02)
 
-        (
-            self.optari_controller.time_analysis.plotted_frames,
-            self.optari_controller.time_analysis.plotted_x,
-        ) = time_axis(self.optari_controller.active_recon_layer, channel_idx)
+        dock.plotted_frames, dock.plotted_x = time_axis(layer, channel_idx)
         self.update_frame_lines()
 
         # Same source as the x values themselves (roi_utils.time_axis).
-        layer_metadata = self.optari_controller.active_recon_layer.metadata
         xlabel = (
             "Time (s)"
-            if layer_metadata.get("timestamps") is not None
+            if layer.metadata.get("timestamps") is not None
             else "Frame"
         )
-
-        axis1_value = str(
-            self.optari_controller.active_recon_layer.metadata.get(
-                "axis1_labels"
-            )[channel_idx]
-        )
-
+        axis1_value = str(layer.metadata["axis1_labels"][channel_idx])
         plot.setLabel("bottom", xlabel)
         plot.setLabel("left", f"{feature_id} ({axis1_value})")
 
-        self.optari_controller.time_analysis.status_label.setText(
+        dock.status_label.setText(
             f"Plotted {len(series)} {key_label.lower()}(s) over {len(x)} frame(s) using {feature_id}."
         )
 
     def on_refresh_histograms_clicked(self, event=None) -> None:
         """Recompute and redraw per-ROI intensity histograms for the current frame and channel."""
-        if self.optari_controller.shapes_layer is None:
-            self.optari_controller.histograms.status_label.setText(
-                "No ROIs layer"
-            )
-            return
-        if len(self.optari_controller.shapes_layer.data) == 0:
-            self.optari_controller.histograms.clear()
-            self.optari_controller.histograms.status_label.setText(
-                '<span style="color:red">No ROIs defined</span>'
-            )
-            return
-        if self.optari_controller.active_recon_layer is None:
-            self.optari_controller.histograms.status_label.setText(
-                "Select a PA image layer"
-            )
+        ctrl = self.optari_controller
+        dock = ctrl.histograms
+        error = self._missing_plot_input()
+        if error:
+            self._show_plot_error(dock, error)
             return
 
         frame_idx, channel_idx = self._current_frame_channel()
-
         roi_vals = extract_roi_pixels_for_slice(
-            self.optari_controller.roi_ctrl.current_records(),
-            self.optari_controller.active_recon_layer,
+            ctrl.roi_ctrl.current_records(),
+            ctrl.active_recon_layer,
             frame_idx,
             channel_idx,
-            clamp=self.optari_controller.roi_ctrl.intensity_clamp,
+            clamp=ctrl.roi_ctrl.intensity_clamp,
         )
 
-        self.optari_controller.histograms.clear()
-        layout = self.optari_controller.histograms.plots_container.layout()
-
-        colors = self.optari_controller.roi_ctrl.colors_by_roi_id()
+        dock.clear()
+        layout = dock.plots_container.layout()
+        colors = ctrl.roi_ctrl.colors_by_roi_id()
         n_plotted = 0
         for roi_id, vals in roi_vals.items():
             vals = np.asarray(vals)
@@ -446,43 +421,31 @@ class AnalysisController(TaskControllerBase):
             layout.addWidget(plot)
             n_plotted += 1
 
-        self.optari_controller.histograms.status_label.setText(
+        dock.status_label.setText(
             f"Plotted {n_plotted} histogram(s) for frame {frame_idx}, channel {channel_idx}."
         )
 
     def on_refresh_spectrum_clicked(self, event=None) -> None:
         """Recompute and redraw per-ROI spectra across channels for the current frame."""
-        if self.optari_controller.shapes_layer is None:
-            self.optari_controller.spectrum.status_label.setText(
-                "No ROIs layer"
-            )
-            return
-        if len(self.optari_controller.shapes_layer.data) == 0:
-            self.optari_controller.spectrum.clear()
-            self.optari_controller.spectrum.status_label.setText(
-                '<span style="color:red">No ROIs defined</span>'
-            )
-            return
-        if self.optari_controller.active_recon_layer is None:
-            self.optari_controller.spectrum.status_label.setText(
-                "Select a PA image layer"
-            )
+        ctrl = self.optari_controller
+        dock = ctrl.spectrum
+        error = self._missing_plot_input()
+        if error:
+            self._show_plot_error(dock, error)
             return
 
         frame_idx, _ = self._current_frame_channel()
-
         x, series, x_tick_labels = compute_roi_spectra(
-            self.optari_controller.roi_ctrl.current_records(),
-            self.optari_controller.active_recon_layer,
+            ctrl.roi_ctrl.current_records(),
+            ctrl.active_recon_layer,
             frame_idx,
-            clamp=self.optari_controller.roi_ctrl.intensity_clamp,
+            clamp=ctrl.roi_ctrl.intensity_clamp,
         )
 
-        self.optari_controller.spectrum.clear()
-        layout = self.optari_controller.spectrum.plots_container.layout()
-
+        dock.clear()
+        layout = dock.plots_container.layout()
         n_plotted = 0
-        colors = self.optari_controller.roi_ctrl.colors_by_roi_id()
+        colors = ctrl.roi_ctrl.colors_by_roi_id()
         for roi_id, y in series.items():
             if y.size == 0 or np.all(np.isnan(y)):
                 continue
@@ -513,6 +476,6 @@ class AnalysisController(TaskControllerBase):
             layout.addWidget(plot)
             n_plotted += 1
 
-        self.optari_controller.spectrum.status_label.setText(
+        dock.status_label.setText(
             f"Plotted {n_plotted} spectra for frame {frame_idx}."
         )

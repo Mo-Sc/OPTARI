@@ -58,54 +58,56 @@ def _guarded(func: Callable[[], Generator]) -> Callable[[], Generator]:
     return wrapper
 
 
+# What a finished task reports, once: ("ok", return value), ("error", message) or
+# ("cancelled", None).
+Outcome = tuple[str, object]
+
+
 def run_background_task(
     viewer: Viewer,
-    func: Callable[[], Generator],
+    step: BackgroundStep,
     *,
-    total: int,
-    desc: str,
-    on_result: Callable,
-    on_error: Callable[[str], None],
-    on_done: Callable[[], None],
     register: Callable[[GeneratorWorker], None],
-    on_cancel: Callable[[], None] | None = None,
+    on_finished: Callable[[Outcome], None],
 ) -> GeneratorWorker:
-    """Run *func* in a worker thread
-    progress bar advances on each yield, and calls *on_result* with the return value when done.
+    """Run *step* in a worker thread with a progress bar that advances on each yield.
 
-    yielding a number instead (e.g. bytes written) advances it by that amount
-    cancelling calls ``worker.quit()``, which stops the generator at its next yield.
+    Yielding a number instead (e.g. bytes written) advances it by that amount.
+    Cancelling calls ``worker.quit()``, which stops the generator at its next yield.
 
-    A cancel routes to *on_cancel* and a genuine failure to *on_error*. They default to
-    the same thing, which is all a single dock needs, but a caller driving a queue has to
-    tell "the user stopped everything" apart from "this one item failed, carry on".
-
+    *on_finished* gets the outcome once the worker's ``finished``, its last signal, has
+    fired, so whatever it starts next cannot race this worker's teardown. A queue (batch
+    mode) tells a cancel from a failure, a single dock treats both alike (`start_task`).
     *register* receives the worker before anything else happens (it gates the UI).
     """
 
-    worker = create_worker(_guarded(func), _ignore_errors=True)
+    worker = create_worker(_guarded(step.func), _ignore_errors=True)
     # Setting up the progress bar processes pending events, among them the `finished`
     # of a task whose result started this one. That task must already find this one
     # registered, or it opens the gate in between.
     register(worker)
 
-    progress_bar = cancelable_progress(total=total, desc=desc)
+    progress_bar = cancelable_progress(total=step.total, desc=step.desc)
     # napari only calls cancel_callback when iterating the bar, which this manually
     # updated bar never is, so its Cancel button is pointed at the worker directly.
     progress_bar.cancel = worker.quit
+    outcome: list[Outcome] = [("error", f"{step.desc} produced no result")]
+
+    def settle(kind: str, value: object = None) -> None:
+        outcome[0] = (kind, value)
+
+    def report_error(exc: Exception) -> None:
+        logger.error("%s failed: %s", step.desc, exc, exc_info=exc)
+        settle("error", f"Failed: {exc}")
 
     def finish() -> None:
         progress_bar.close()
         show_activity_dock(viewer, False)
-        on_done()
-
-    def report_error(exc: Exception) -> None:
-        logger.error("%s failed: %s", desc, exc, exc_info=exc)
-        on_error(f"Failed: {exc}")
+        on_finished(outcome[0])
 
     worker.yielded.connect(lambda amount: progress_bar.update(amount or 1))
-    worker.returned.connect(on_result)
-    worker.aborted.connect(on_cancel or (lambda: on_error("Cancelled.")))
+    worker.returned.connect(lambda result: settle("ok", result))
+    worker.aborted.connect(lambda: settle("cancelled"))
     worker.errored.connect(report_error)
     worker.finished.connect(finish)
 
@@ -130,19 +132,22 @@ def start_task(
     it does not, for whatever reason, the gate opens.
     """
 
-    def release() -> None:
-        if optari_controller.active_task is worker:
-            optari_controller.set_active_task(None)
+    def finished(outcome: Outcome) -> None:
+        kind, value = outcome
+        try:
+            if kind == "ok":
+                on_result(value)
+            else:
+                on_error("Cancelled." if kind == "cancelled" else value)
+        finally:
+            if optari_controller.active_task is worker:
+                optari_controller.set_active_task(None)
 
     worker = run_background_task(
         optari_controller.viewer,
-        step.func,
-        total=step.total,
-        desc=step.desc,
-        on_result=on_result,
-        on_error=on_error,
-        on_done=release,
+        step,
         register=optari_controller.set_active_task,
+        on_finished=finished,
     )
 
 

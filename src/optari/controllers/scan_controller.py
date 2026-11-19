@@ -40,7 +40,6 @@ from optari.utils.motion import (
 )
 from optari.utils.setup import load_startup_logo
 from optari.controllers.base import TaskControllerBase
-from optari.controllers.viewer_export_controller import ViewerExportController
 
 
 from optari.config import settings
@@ -63,11 +62,6 @@ class ScanController(TaskControllerBase):
         super().__init__(parent_controller)
         # The Scan Browser's study. A batch run loads scans from elsewhere.
         self.scans: dict[Path, ScanInfo] = {}
-        self._export_view_handler = (
-            lambda: ViewerExportController.on_export_clicked(
-                self.optari_controller
-            )
-        )
 
     def _signal_bindings(self) -> list[tuple[object, Callable]]:
         """Scan browser signals."""
@@ -78,7 +72,10 @@ class ScanController(TaskControllerBase):
             (dock.scans_list.itemChanged, dock.save_checked_scans),
             (dock.hdf5_button.clicked, self.on_hdf5_export_clicked),
             (dock.ipasc_button.clicked, self.on_ipasc_export_clicked),
-            (dock.export_layer_button.clicked, self._export_view_handler),
+            (
+                dock.export_layer_button.clicked,
+                self.optari_controller.viewer_export_ctrl.on_export_clicked,
+            ),
         ]
 
     def refresh_ui(self) -> None:

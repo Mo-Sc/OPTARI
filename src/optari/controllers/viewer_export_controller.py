@@ -21,9 +21,12 @@ logger = logging.getLogger(__name__)
 class ViewerExportController:
     """Export the currently visible viewer content as image or video."""
 
-    @staticmethod
-    def on_export_clicked(controller) -> None:
+    def __init__(self, controller):
+        self.controller = controller
+
+    def on_export_clicked(self, event=None) -> None:
         """Open the export dialog and write the chosen image or video to disk."""
+        controller = self.controller
         viewer = controller.viewer
         parent_widget = viewer.window._qt_window
         active_layer = viewer.layers.selection.active
@@ -54,12 +57,12 @@ class ViewerExportController:
                 (layer.metadata.get("frames") if layer is not None else None)
                 or range(n_frames)
             )
-            ViewerExportController._export_video(
+            self._export_video(
                 viewer, parent_widget, default_name, frames, dialog_settings
             )
             return
 
-        ViewerExportController._export_image(
+        self._export_image(
             viewer,
             parent_widget,
             default_name,
