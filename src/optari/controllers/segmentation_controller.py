@@ -234,7 +234,7 @@ class SegmentationController(TaskControllerBase):
                     model_id, userData=model_id
                 )
 
-            # Set to active model (default is first in registry).
+            # The configured default model, or the registry's first if it is missing
             dock.segmentation_model_combo.setCurrentIndex(
                 dock.segmentation_model_combo.findData(self.active_model_id)
             )

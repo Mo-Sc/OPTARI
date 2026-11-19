@@ -464,7 +464,7 @@ class ReconstructionController(TaskControllerBase):
         # Absolute placement: a recon comes from the raw time series, so it must not
         # inherit (and re-apply) the offset of whichever layer is currently active.
         # PATATO's grid is centred on the probe, like the scan's FOV, so a recon FOV of
-        # another size sits centred in it; the preset offset shifts it from there.
+        # another size sits centred in it. The preset offset shifts it from there.
         scale = scale_from_patato_obj(
             reconstruction, settings.general.PA_FALLBACK_SCALE
         )

@@ -82,8 +82,10 @@ def _sample_std(values: np.ndarray) -> float:
 
 
 def _snr(values: np.ndarray) -> float:
-    """
-    Signal-to-noise ratio (SNR) is defined as the mean of the signal divided by its standard deviation.
+    """Mean over standard deviation of the ROI's own pixels.
+
+    A measure of how even the ROI is, not signal over background noise. It uses the
+    population std, unlike the ``std`` column (sample std).
     """
     std = float(np.nanstd(values))
     if std == 0.0:

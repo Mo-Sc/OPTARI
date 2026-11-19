@@ -39,7 +39,7 @@ The filename is `roi_data_<operator>_<analysis ID>_<timestamp>.xlsx`, built from
 
 Every change to the Saved Analysis table is also saved automatically as a backup, one file per session: `~/.optari/autosave/roi_table_<date>T<time>_<pid>.csv`, named after the session's start time (UTC) and process ID (the matching log file in `~/.optari/logs/` has the same name). New measurements are appended to it, so saving stays fast however large the table grows. Its first line records the same information as the `optari_meta` sheet. If OPTARI closes unexpectedly, start it again and import the newest backup from before the crash. The newest 20 backups are kept.
 
-Using the **Import XLSX** button, you can load a previously exported analysis file (or an autosaved CSV backup) back into the **Saved Analysis** table, allowing you to continue an earlier analysis or continue on a different machine. Import **appends** to the current table, so analyses from several sessions or machines can be combined in one place. `roi_group_uid` keeps every row attributable to the ROI it was measured from. Identical rows are skipped. Files written by a OPTARI version with an incompatible table schema are rejected.
+Using the **Import XLSX** button, you can load a previously exported analysis file (or an autosaved CSV backup) back into the **Saved Analysis** table, allowing you to continue an earlier analysis or continue on a different machine. Import **appends** to the current table, so analyses from several sessions or machines can be combined in one place. `roi_group_uid` keeps every row attributable to the ROI it was measured from. Identical rows are skipped. Files written by an OPTARI version with an incompatible table schema are rejected.
 
 ## ROI Analysis Plot Exports (PNG/...)
 

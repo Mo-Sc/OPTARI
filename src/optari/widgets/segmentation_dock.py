@@ -25,7 +25,7 @@ from .dock_helpers import (
 
 @dataclass
 class SegmentationDock:
-    """Widget references used by segmentation-related controller callbacks."""
+    """Tissue segmentation of the ultrasound, and ROIs placed from its classes."""
 
     widget: QWidget
     preset_combo: QComboBox

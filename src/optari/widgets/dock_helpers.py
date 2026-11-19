@@ -1,3 +1,5 @@
+"""Building blocks the docks share: preset rows, frame scope radios, plot strips."""
+
 from __future__ import annotations
 
 from collections.abc import Callable

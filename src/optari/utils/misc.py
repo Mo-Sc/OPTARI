@@ -1,3 +1,5 @@
+"""Small helpers: number parsing, ROI colours and model downloads."""
+
 import math
 import os
 import tempfile

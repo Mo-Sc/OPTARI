@@ -87,7 +87,7 @@ def test_xlsx_export_import_round_trip_and_dedupe(measured_rows, tmp_path):
 
 def test_import_rejects_foreign_or_outdated_tables(measured_rows, tmp_path):
     measured_rows.to_excel(tmp_path / "foreign.xlsx", index=False)
-    with pytest.raises(ValueError, match="not a OPTARI ROI table"):
+    with pytest.raises(ValueError, match="not an OPTARI ROI table"):
         read_roi_table(tmp_path / "foreign.xlsx")
 
     with pd.ExcelWriter(tmp_path / "outdated.xlsx") as writer:

@@ -16,6 +16,8 @@ from qtpy.QtWidgets import (
 
 @dataclass
 class InfoDock:
+    """Facts about the active slice, and the button that opens the metadata window."""
+
     widget: QWidget
     label: QLabel
     metadata_button: QPushButton

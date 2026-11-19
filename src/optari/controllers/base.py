@@ -63,11 +63,6 @@ class TaskControllerBase:
     DOCK: tuple | None = None
 
     def __init__(self, parent_controller: OptariController):
-        """Initialize with reference to parent controller.
-
-        Args:
-            parent_controller: OptariController instance with viewer and session state.
-        """
         self.optari_controller = parent_controller
         self.viewer = parent_controller.viewer
 

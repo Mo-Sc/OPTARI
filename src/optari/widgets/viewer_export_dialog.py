@@ -1,3 +1,5 @@
+"""The Export View dialog: image or video, colorbars and frame rate."""
+
 from __future__ import annotations
 
 from qtpy.QtWidgets import (

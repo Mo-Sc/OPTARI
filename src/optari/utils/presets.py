@@ -1,3 +1,5 @@
+"""Presets as JSON files in the user folder, one subfolder per kind."""
+
 from __future__ import annotations
 
 import json
@@ -34,6 +36,11 @@ class PresetStore:
         return self.directory / f"{normalize_preset_name(name)}.json"
 
     def load(self, preset: str | Path) -> dict:
+        """Load the preset at a path, or the one with that name in this folder.
+
+        Raises FileNotFoundError when it is missing and ValueError when it is not a
+        JSON object.
+        """
         path = Path(preset)
         if path.suffix.lower() != ".json":
             path = self.path_for(str(preset))
@@ -58,6 +65,10 @@ class PresetStore:
         *,
         overwrite: bool = False,
     ) -> Path:
+        """Write *data* as preset *name*, atomically, and return its path.
+
+        Refuses an existing name unless *overwrite* is set.
+        """
         if not isinstance(data, dict):
             raise ValueError("Preset data must be a JSON object.")
 
@@ -74,6 +85,7 @@ class PresetStore:
         return path
 
     def delete(self, preset: str | Path) -> bool:
+        """Delete a preset by path or name. False if there was none to delete."""
         path = Path(preset)
         if path.suffix.lower() != ".json":
             path = self.path_for(str(preset))

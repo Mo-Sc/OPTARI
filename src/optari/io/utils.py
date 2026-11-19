@@ -24,7 +24,7 @@ def export_overlays(viewer: Viewer, include_colorbars: bool):
     for layer, _ in previous:
         layer.colorbar.visible = include_colorbars
     watermark = viewer.canvas.overlays.text
-    previous_watermark = watermark.dict()
+    previous_watermark = watermark.model_dump()
     watermark.update(
         {
             "text": f"Created by OPTARI v{__version__}",

@@ -101,7 +101,7 @@ def read_roi_table(path: Path) -> pd.DataFrame:
             meta_df = pd.read_excel(path, sheet_name=ROI_TABLE_META_SHEET)
             meta = dict(zip(meta_df["key"], meta_df["value"]))
     except (ValueError, KeyError) as exc:
-        raise ValueError(f"'{path.name}' is not a OPTARI ROI table.") from exc
+        raise ValueError(f"'{path.name}' is not an OPTARI ROI table.") from exc
 
     file_version = str(meta.get("roi_table_schema_version", ""))
     if file_version != str(ROI_TABLE_SCHEMA_VERSION):

@@ -30,6 +30,8 @@ from .dock_helpers import (
 
 @dataclass
 class AnnotationDock:
+    """ROI tools: presets, the intensity filter, what Save measures and the Temporal plot's feature."""
+
     widget: QWidget
     roi_clipping_box: QGroupBox
     roi_clip_min_edit: QLineEdit

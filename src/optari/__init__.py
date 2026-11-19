@@ -1,3 +1,5 @@
+"""OPTARI: analysis of clinical optoacoustic studies, built on PATATO and napari."""
+
 try:
     from ._version import version as __version__
 except ImportError:

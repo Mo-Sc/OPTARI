@@ -11,6 +11,8 @@ from .dock_helpers import create_bottom_dock_header
 
 @dataclass
 class TimeAnalysisDock:
+    """The Temporal dock: one feature of each ROI plotted over the frames."""
+
     widget: QWidget
     refresh_button: QPushButton
     status_label: QLabel
@@ -39,7 +41,7 @@ def create_time_analysis_dock() -> TimeAnalysisDock:
 
     status_label, refresh_button = create_bottom_dock_header(
         layout,
-        status_text="Click 'Refresh' to compute ROI means over time.",
+        status_text="Click 'Refresh' to plot the selected feature over time.",
     )
     refresh_button.setToolTip(
         "Recompute the selected feature over time for the active ROI(s), using the "

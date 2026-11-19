@@ -1,5 +1,5 @@
-# collect image processing utilities for segmentation masks
-# must operate on 2d np arrays (single frame)
+"""Image and mask operations for segmentation, each on a single 2D frame."""
+
 import cv2
 import numpy as np
 from scipy.ndimage import distance_transform_edt

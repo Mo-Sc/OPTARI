@@ -187,6 +187,7 @@ def _load_step_preset(steps: dict, step: str) -> dict | None:
 
 
 def _measure_scope(spec: dict, all_frames: bool) -> MeasureScope:
+    """The batch preset's ``measure`` section as a ``MeasureScope``."""
     if "all_frames" in spec:
         raise ValueError(
             "'all_frames' moved out of 'measure' to the top level of the batch preset."
@@ -208,6 +209,7 @@ def _measure_scope(spec: dict, all_frames: bool) -> MeasureScope:
 
 
 def _frame_selector(value) -> int | str:
+    """A batch preset's ``frame``: a frame number or a ``FRAME_SELECTORS`` key, spectral motion if unset."""
     if isinstance(value, int) and not isinstance(value, bool):
         return value
     if value is None:

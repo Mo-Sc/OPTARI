@@ -1,4 +1,4 @@
-"""Scan and study discovery, and loading a scan into the viewer."""
+"""Loading a scan into the viewer, choosing the frame it opens on, and exporting it."""
 
 from __future__ import annotations
 
@@ -52,11 +52,6 @@ class ScanController(TaskControllerBase):
     """Scan/session lifecycle and data-loading helpers for OPTARI."""
 
     def __init__(self, parent_controller: OptariController):
-        """Initialize with reference to parent controller.
-
-        Args:
-            parent_controller: OptariController instance with viewer and session state.
-        """
         super().__init__(parent_controller)
         # The Scan Browser's study. A batch run loads scans from elsewhere.
         self.scans: dict[Path, ScanInfo] = {}
@@ -77,7 +72,7 @@ class ScanController(TaskControllerBase):
         ]
 
     def refresh_ui(self) -> None:
-        """Lock the scan browser while a task runs, and gate HDF5 export on a scan being loaded."""
+        """Lock the scan browser while a task runs, and enable the exports only with a scan loaded."""
         self.optari_controller.scan_browser_dock.widget.setEnabled(
             not self.optari_controller.task_running
         )
@@ -93,7 +88,7 @@ class ScanController(TaskControllerBase):
         return self.optari_controller.scan_info.internal_name
 
     def close_current_scan(self) -> None:
-        """Close the HDF5 handle for the current scan."""
+        """Close the scan file and forget everything read from it or edited in the session."""
         if self.optari_controller.pa_data is not None:
             self.optari_controller.pa_data.close()
         self.optari_controller.pa_data = None
@@ -199,6 +194,15 @@ class ScanController(TaskControllerBase):
             controller.pa_data, str(scan_path), scan_info.internal_name
         )
         controller.scan_fov = fov_from_objects(controller.patato_objects)
+        if controller.scan_fov is None and layers:
+            # Objects without FOV metadata are drawn at the fallback scale, so the first
+            # image's extent (the ultrasound's, when there is one) is the frame ROIs live in.
+            data, kwargs = layers[0]
+            scale = kwargs["scale"]
+            controller.scan_fov = (
+                data.shape[-1] * scale[-1] / 1000,
+                data.shape[-2] * scale[-2] / 1000,
+            )
         return layers
 
     def _add_layers(self, layers: list[tuple]) -> None:

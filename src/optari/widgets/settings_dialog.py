@@ -1,3 +1,5 @@
+"""The Settings dialog, which edits config.json, and the operator prompt at startup."""
+
 from __future__ import annotations
 
 import copy

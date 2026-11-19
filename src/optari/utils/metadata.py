@@ -11,6 +11,7 @@ import numpy as np
 
 
 def json_default(value):
+    """``json.dumps`` fallback: numpy values as plain Python, anything else as text."""
     if isinstance(value, np.ndarray):
         return value.tolist()
     if isinstance(value, np.generic):
@@ -45,9 +46,7 @@ def _format(value, details: bool = False) -> str:
 
 
 def layer_metadata_rows(layer) -> list[tuple[str, str, str]]:
-    """
-    layer infos
-    """
+    """(label, value, full value) rows describing *layer* for the metadata window."""
     if layer is None:
         return [
             ("Status", "No image layer selected", "No image layer selected")
@@ -80,9 +79,7 @@ def scan_metadata_rows(
     study_path: Path | None = None,
     scan_info=None,
 ) -> list[tuple[str, str, str]]:
-    """
-    global scan infos, including acquisition parameters and scan geometry.
-    """
+    """(label, value, full value) rows describing the loaded scan: acquisition and geometry."""
     if pa_data is None:
         return [("Status", "No scan loaded", "No scan loaded")]
 

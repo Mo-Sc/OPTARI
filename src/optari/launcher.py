@@ -1,3 +1,5 @@
+"""Entry point of the ``optari`` command: logging, the napari window and the controller."""
+
 import logging
 from os import _exit as os_exit
 from pathlib import Path
@@ -19,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 def main() -> None:
-
+    """Run OPTARI until its window closes, then end the process with ``os._exit``."""
     log_file = configure_logging()
     logger.info(
         "starting OPTARI %s (log level %s, notification level %s), logging to %s",

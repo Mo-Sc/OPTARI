@@ -27,6 +27,8 @@ from .dock_helpers import (
 
 @dataclass
 class UnmixingDock:
+    """Unmixing of the active reconstruction: wavelengths, chromophores, THb and sO2."""
+
     widget: QWidget
     source_layer_label: QLabel
     preset_combo: QComboBox

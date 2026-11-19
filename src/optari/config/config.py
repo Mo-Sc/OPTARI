@@ -87,7 +87,11 @@ class OptariConfig:
 
     @classmethod
     def load_from_user_dir(cls) -> "OptariConfig":
-        """Loads the user's config.json and safely parses it into the dataclasses."""
+        """Load the user's config.json, archiving and re-seeding it after a schema change.
+
+        Raises on any missing or unknown key, so a hand-edited config fails at launch
+        instead of running with a setting silently ignored.
+        """
         config_path = get_user_config_file()
         data = json.loads(config_path.read_text(encoding="utf-8"))
 

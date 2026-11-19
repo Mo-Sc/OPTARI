@@ -22,6 +22,8 @@ from optari.io.discovery import ScanInfo
 
 @dataclass
 class ScanBrowserDock:
+    """The study folder, its scans and the scan exports."""
+
     widget: QWidget
     folder_lineedit: QLineEdit
     browse_button: QPushButton
@@ -100,7 +102,9 @@ def create_scan_browser_dock() -> ScanBrowserDock:
         "copy, or the loaded OPTARI HDF5 file itself to update it in place"
     )
     ipasc_button = QPushButton("Export IPASC")
-    ipasc_button.setToolTip("Export the raw time series as a IPASC HDF5 file.")
+    ipasc_button.setToolTip(
+        "Export the raw time series as an IPASC HDF5 file."
+    )
     export_layer_button = QPushButton("Export View")
     export_layer_button.setToolTip(
         "Export the current viewer display as an image or video"

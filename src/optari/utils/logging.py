@@ -1,3 +1,5 @@
+"""Logging to the console, a log file per session and napari notifications."""
+
 from __future__ import annotations
 
 import logging

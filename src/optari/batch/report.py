@@ -84,11 +84,9 @@ class BatchReport:
     def __init__(
         self, destination: Path | None = None, plan_source: dict | None = None
     ):
-        """Track scan outcomes, mirroring the report to *destination* after each update.
+        """Track scan outcomes, and mirror them to *destination* after each update if given.
 
-        Args:
-            destination: Path to write batch_report.xlsx to, or None to keep the report in memory only.
-            plan_source: The batch preset this run came from, recorded in the report's provenance sheet.
+        *plan_source* is the batch preset the run came from, for the provenance sheet.
         """
         self._entries: dict[str, _Entry] = {}
         self._destination = destination

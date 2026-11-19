@@ -1,3 +1,9 @@
+"""The dock table and the wiring of viewer and dock signals.
+
+``DOCKS`` lists the docks several controllers share. A dock only one controller uses is
+declared on that controller (``TaskControllerBase.DOCK``) and added after these.
+"""
+
 from __future__ import annotations
 
 import logging

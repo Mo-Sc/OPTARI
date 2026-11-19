@@ -43,7 +43,10 @@ def _fov_m(obj) -> tuple[float, float] | None:
 
 
 def scale_from_patato_obj(obj, fallback: tuple) -> tuple:
-    """Derive a ``(t, y, x)`` napari scale in mm/pixel from a PATATO object.
+    """Derive a napari scale ``(1, y, x)`` in mm/pixel from a PATATO object.
+
+    Layers are (frame, channel, y, x). napari pads the missing leading axis with 1, so
+    only y and x carry a scale.
 
     Reads the object's ``fov`` (``(fov_x_m, fov_y_m)`` in metres) and
     ``shape_2d`` (``(ny, nx)`` in pixels).  Returns *fallback* if either

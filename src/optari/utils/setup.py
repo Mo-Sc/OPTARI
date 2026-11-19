@@ -1,3 +1,9 @@
+"""The user folder (``~/.optari`` or ``OPTARI_USER_DIR``) and first-run setup.
+
+The first call creates it and copies the shipped config and presets into it, so
+importing ``optari.config`` has that side effect.
+"""
+
 import logging
 import os
 import shutil

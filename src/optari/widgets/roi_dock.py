@@ -24,6 +24,8 @@ from optari.roi.roi_utils import (
 
 @dataclass
 class RoiDock:
+    """The Tabular dock: live measurements of the shown ROIs and the saved analysis table."""
+
     widget: QWidget
     live_table: Table
     saved_table: Table

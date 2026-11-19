@@ -98,13 +98,10 @@ class BatchRunner:
         on_progress: Callable[[BatchJob, str], None] | None = None,
         on_finished: Callable[[], None] | None = None,
     ) -> None:
-        """Set up the report, ROI table writer, and progress callbacks for *plan*.
+        """Prepare *plan* to run in *controller*'s viewer.
 
-        Args:
-            controller: OptariController driving the viewer this run operates on.
-            plan: Resolved plan to execute.
-            on_progress: optional callback(job, status), called as each scan starts and ends.
-            on_finished: optional callback(), called once the whole run has finished.
+        *on_progress(job, status)* is called as each scan starts and ends, *on_finished()*
+        once after the run.
         """
         self.controller = controller
         self.viewer = controller.viewer
@@ -201,6 +198,11 @@ class BatchRunner:
 
     # ============ the plan ============
     def _run(self):
+        """The whole run as a generator of steps, one scan after another.
+
+        A scan that fails is reported and skipped. Cancel ends the run after the step in
+        progress.
+        """
         for job in self.plan.jobs:
             yield Tick()  # let the event loop breathe between scans
             if self._cancel_requested:
@@ -236,6 +238,12 @@ class BatchRunner:
             self._on_progress(job, "ok")
 
     def _run_job(self, job: BatchJob):
+        """One scan, in a fixed order: load, go to the plan's frame, reconstruct,
+        segment, unmix, place the ROI, measure, write the outputs.
+
+        Each step works on the layers the previous one made. Heavy steps are yielded to
+        run in a worker, and a refusal or failure raises ``BatchStepError`` naming the step.
+        """
         controller = self.controller
         if not controller.scan_ctrl.load_scan(job.scan_path, job.scan_info):
             raise BatchStepError("could not open scan", "load")
@@ -362,6 +370,11 @@ class BatchRunner:
         ]
 
     def _measure(self, source_layer):
+        """This scan's rows for the table: the placed ROI, or every stored one.
+
+        Uses the plan's scope and no intensity filter, so the numbers depend on the plan
+        alone.
+        """
         roi_ctrl = self.controller.roi_ctrl
         if self.plan.roi_from_scan:
             # every frame's copy of every stored ROI. With follow_track (implied by

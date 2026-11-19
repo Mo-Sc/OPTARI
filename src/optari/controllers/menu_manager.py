@@ -1,3 +1,5 @@
+"""The OPTARI menu (Settings, Batch Mode, docs, dock toggles) and the napari entries it hides."""
+
 from __future__ import annotations
 
 import logging
@@ -45,7 +47,7 @@ HIDDEN_VIEW_ENTRIES = (
 
 
 class MenuManager:
-    """Add the OPTARI menu to napari's menu bar and hide the entries OPTARI doesnt support."""
+    """Add the OPTARI menu to napari's menu bar and hide the entries OPTARI doesn't support."""
 
     def __init__(self, controller: OptariController):
         self.controller = controller

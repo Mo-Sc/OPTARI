@@ -1,3 +1,5 @@
+"""``OptariController``, the hub every dock and controller hangs off."""
+
 from __future__ import annotations
 
 import logging
@@ -50,6 +52,14 @@ logger = logging.getLogger(__name__)
 
 
 class OptariController:
+    """The session: viewer, loaded scan, docks and one instance of each controller.
+
+    Attributes ending in ``_dock`` are the dock widget dataclasses, those ending in
+    ``_ctrl`` the controllers. Controllers never hold each other and go through this
+    object instead. Every lifecycle step (initialize, bind, refresh, shut down) and every
+    viewer hook runs over ``controllers``.
+    """
+
     def __init__(self, viewer: Viewer):
 
         self.viewer = viewer
@@ -168,7 +178,7 @@ class OptariController:
     # ============ viewer setup ============
     def _setup_viewer(self) -> None:
         self.viewer.scene.overlays.axes.visible = (
-            False  # dont show axes by default
+            False  # axes hidden by default
         )
         self.viewer.scene.overlays.axes.labels = True
         self.viewer.canvas.grid.enabled = False
@@ -238,6 +248,7 @@ class OptariController:
 
     @property
     def task_running(self) -> bool:
+        """Whether a background task or a batch run holds the UI."""
         return self.active_task is not None or self.batch_running
 
     def set_active_task(self, worker: GeneratorWorker | None) -> None:
@@ -255,8 +266,10 @@ class OptariController:
             controller.refresh_ui()
 
     def select_default_pa_layer(self) -> None:
+        """Select the configured default PA layer, else the first PA layer.
 
-        # Find layer default PA layer, otherwise pick first PA layer found
+        Raises RuntimeError when the scan has images but none of them is a PA layer.
+        """
         first_pa = None
         default_pa = settings.general.DEFAULT_PA_LAYER
         images = [l for l in self.viewer.layers if isinstance(l, Image)]
@@ -330,6 +343,7 @@ class OptariController:
         self.refresh_all()
 
     def on_selection_changed(self, event=None) -> None:
+        """Follow a new layer selection: active layer, controller hooks, dims, readouts."""
         self.resolve_active_recon_layer()
         for controller in self.controllers:
             controller.on_active_layers_changed()
@@ -338,7 +352,7 @@ class OptariController:
         self.refresh_all()
 
     def on_dims_changed(self, event=None) -> None:
-        # snap dims to what is available in the selected PA layer
+        """Keep the viewer on a slice the active layer holds and tell the controllers."""
         if self._snap_dims_to_active_layer():
             return
 
@@ -357,7 +371,7 @@ class OptariController:
         for controller in self.controllers:
             controller.on_slice_shown()
 
-    # ============ layer snappin & constraints ============
+    # ============ snapping dims to the active layer ============
     def snap_to_reconstructed_frame(self, frame_idx: int) -> int:
         """
         snap the given frame index to the closest available frame in the active layer's metadata
@@ -371,9 +385,7 @@ class OptariController:
         return int(frames[np.argmin(np.abs(frames - frame_idx))])
 
     def snap_to_available_channel(self, channel_idx: int) -> int:
-        """
-        snap the given channel index to a valid channel index based on the active layer's metadata
-        """
+        """Clamp *channel_idx* to the channels the active layer's data holds."""
         if self.active_recon_layer is None:
             return channel_idx
 
@@ -385,6 +397,10 @@ class OptariController:
         return int(np.clip(channel_idx, 0, max(0, n_channels - 1)))
 
     def _snap_dims_to_active_layer(self) -> bool:
+        """Move the viewer onto a frame and channel the active layer holds.
+
+        True if it moved, in which case the dims event that follows does the refresh.
+        """
         if self.active_recon_layer is None:
             return False
 
@@ -428,6 +444,7 @@ class OptariController:
         )
 
     def update_info_labels(self, event=None) -> None:
+        """Show the active slice's study, scan, layer, frame and time in the info dock."""
         # Scan, IPASC and clinical metadata need no layer, only the Layer tab does.
         self.info_dock.metadata_button.setEnabled(self.pa_data is not None)
         if self.active_recon_layer is None:

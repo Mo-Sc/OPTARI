@@ -49,6 +49,8 @@ class TaskFailed(Exception):
 
 
 def _guarded(func: Callable[[], Generator]) -> Callable[[], Generator]:
+    """Wrap *func* so a RuntimeError it raises reaches ``errored`` (see ``TaskFailed``)."""
+
     def wrapper():
         try:
             return (yield from func())

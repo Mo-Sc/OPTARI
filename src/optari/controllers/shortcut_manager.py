@@ -1,3 +1,5 @@
+"""OPTARI's keyboard shortcuts, each of which presses a dock button."""
+
 import logging
 import sys
 
@@ -8,7 +10,6 @@ logger = logging.getLogger(__name__)
 # workaround for cross-platform cmd/ctrl key in shortcuts
 CMD_CTRL = "Meta" if sys.platform == "darwin" else "Control"
 
-# --- SHORTCUT REGISTRY ---
 SHORTCUTS = {
     "save_roi_data": f"{CMD_CTRL}-Shift-S",  # triggers "Save ROI Data" button
     "run_unmixing": f"{CMD_CTRL}-Shift-U",  # triggers unmixing with current settings

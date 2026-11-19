@@ -32,6 +32,8 @@ SPEED_OF_SOUND_DEFAULT = 1497 # acuity default
 
 @dataclass
 class ReconstructionDock:
+    """Reconstruction presets and their settings, speed of sound and the frames to run on."""
+
     widget: QWidget
     preset_combo: QComboBox
     current_frames_radio: QRadioButton

@@ -530,10 +530,7 @@ class UnmixingController(TaskControllerBase):
         self.on_chromophores_changed()
 
     def on_chromophores_changed(self) -> None:
-        """
-        Enable THb and sO2 options only when Hb and HbO2 are selected.
-        so2 is activated by default
-        """
+        """Offer THb and sO2 only while both Hb and HbO2 are selected."""
         dock = self.optari_controller.unmixing_dock
         hb_pair_available = {"Hb", "HbO2"} <= set(self._checked_chromophores())
 

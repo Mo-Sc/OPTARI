@@ -68,14 +68,6 @@ class RoiController(TaskControllerBase):
     """ROI visualization, table management, and ROI export helpers."""
 
     def __init__(self, parent_controller: OptariController):
-        """Initialize with reference to parent controller.
-
-        Sets up the ROI record store, the session's autosaved Saved Analysis table,
-        and the ROI preset store.
-
-        Args:
-            parent_controller: OptariController instance with viewer and session state.
-        """
         super().__init__(parent_controller)
         self.saved_table = SavedRoiTable(
             new_session_file(get_user_autosave_dir(), "roi_table", ".csv")
@@ -104,6 +96,7 @@ class RoiController(TaskControllerBase):
         return list(self.store.records.values())
 
     def _n_frames(self) -> int:
+        """The scan's frame count: the ultrasound's, else the active layer's, else the raw data's."""
         layer = self.optari_controller.active_us_layer
         if layer is None:
             layer = self.optari_controller.active_recon_layer
@@ -222,6 +215,7 @@ class RoiController(TaskControllerBase):
         self.optari_controller.roi_dock.xlsx_button.setEnabled(has_rows)
 
     def _set_live_table_selection(self, selected_rows: list[int]) -> None:
+        """Select *selected_rows* in the live table without firing its selection signal."""
         table = self.optari_controller.roi_dock.live_table.native
         with QSignalBlocker(table):
             table.clearSelection()

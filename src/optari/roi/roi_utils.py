@@ -81,6 +81,7 @@ def _scale_sy_sx(active_recon_layer) -> tuple[float, float]:
 
 
 def _is_reconstructed_frame(active_recon_layer, frame_idx: int) -> bool:
+    """Whether the layer holds data on *frame_idx*. Without ``frames`` it holds them all."""
     frames = active_recon_layer.metadata.get("frames")
     return frames is None or frame_idx in frames
 
@@ -196,9 +197,9 @@ def iter_roi_masks(
 ) -> Iterator[tuple[RoiRecord, np.ndarray]]:
     """Yield each usable ROI with its boolean mask over *image_shape*.
 
-    Only place to transform world-space ROIs to pixel indices.
-    skips broken geometry and any ROI that fails to rasterize, so the four
-    measurement functions below all agree on which ROIs are measurable.
+    Skips broken geometry and any ROI that fails to rasterize, so the measurements
+    built on it agree on which ROIs count. The track time series rasterizes one
+    record per frame through ``_roi_mask`` instead.
     """
     sy, sx = _scale_sy_sx(active_recon_layer)
     ty, tx = _layer_translate(active_recon_layer)

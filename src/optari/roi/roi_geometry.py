@@ -1,7 +1,7 @@
 """ROI geometry, shared by the viewer, presets, the saved analysis
 table and HDF5 export.
 
-Described a shape, not a uniqe measurement
+It describes a shape, not a measurement.
 
 Every persisted form of an ROI uses PATATO coordinates. napari millimetres exist
 only inside the viewer, where they are relative to the field of view corner and

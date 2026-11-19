@@ -1,3 +1,8 @@
+"""Motion scores per frame, from the ultrasound, to pick a still frame and flag moving ones.
+
+Spectral motion follows Kukačka et al., Sci Rep 16, 1325 (2026).
+"""
+
 from itertools import combinations
 
 import numpy as np
@@ -35,8 +40,7 @@ def spectral_motion_scores(
     adapted from:
     Kukačka, J., Bader, M., Jüstel, D. et al. Motion score for spectral quality control of optoacoustic-ultrasound data. Sci Rep 16, 1325 (2026).
     https://doi.org/10.1038/s41598-025-33753-6
-    Highly optimized SSIM + ZNCC motion scores for structured, padded US data.
-    Speedup: ~25x
+    SSIM and ZNCC motion scores, vectorised over the padded US data.
 
     Scores motion *within* each frame's wavelength set, comparing the ultrasound
     images of its wavelengths with each other. That is the motion that misaligns
