@@ -460,11 +460,24 @@ class ReconstructionController(TaskControllerBase):
         )
 
         layer_name = params.layer_name
-        # absolute placement: a recon comes from the raw time series, so it must not
+        controller = self.optari_controller
+        # Absolute placement: a recon comes from the raw time series, so it must not
         # inherit (and re-apply) the offset of whichever layer is currently active.
-        # The preset offset is where the FOV's outer edge sits.
+        # PATATO's grid is centred on the probe, like the scan's FOV, so a recon FOV of
+        # another size sits centred in it; the preset offset shifts it from there.
         scale = scale_from_patato_obj(
             reconstruction, settings.general.PA_FALLBACK_SCALE
+        )
+        recon_mm = (data.shape[-2] * scale[-2], data.shape[-1] * scale[-1])
+        scan_fov = controller.scan_fov
+        scan_mm = (
+            recon_mm
+            if scan_fov is None
+            else (scan_fov[1] * 1000, scan_fov[0] * 1000)
+        )
+        edge_mm = (
+            (scan_mm[0] - recon_mm[0]) / 2 + params.offset_z_mm,
+            (scan_mm[1] - recon_mm[1]) / 2 + params.offset_x_mm,
         )
         self._add_or_update_image_layer(
             layer_name,
@@ -472,11 +485,8 @@ class ReconstructionController(TaskControllerBase):
             layer_metadata,
             reconstruction,
             colormap=layer_colormap(HDF5Tags.RECONSTRUCTION),
-            translate_yx=layer_translate(
-                scale, 2, (params.offset_z_mm, params.offset_x_mm)
-            ),
+            translate_yx=layer_translate(scale, 2, edge_mm),
         )
-        controller = self.optari_controller
         controller.patato_objects[layer_name] = reconstruction
         controller.derived_patato_objects[layer_name] = reconstruction
         # A raw time series scan (IPASC) has no FOV until its first reconstruction

@@ -7,7 +7,7 @@
   "INTERPOLATE_TIME": 1,
   "INTERPOLATE_DETECTORS": 1,
   "PREPROCESSING_ALGORITHM": "Standard Preprocessor",
-  "OFFSET_Z": 6.7,
+  "OFFSET_Z": 3.2,
   "RECONSTRUCTION_PARAMS": {
     "model_path": "DeepMBv1.6.0_PType218_2024-10-15.onnx",
     "model_url": "",
