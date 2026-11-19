@@ -211,8 +211,8 @@ def test_runner_isolates_failures_and_honours_cancel():
 
     controller = SimpleNamespace(
         viewer=viewer,
-        active_recon_layer=recon,
-        resolve_active_recon_layer=lambda: None,
+        active_image_layer=recon,
+        resolve_active_image_layer=lambda: None,
         scan_ctrl=ScanCtrl(),
     )
     runner = make_runner(plan, controller)
@@ -274,8 +274,8 @@ def test_source_and_overlay_layer_selection(tmp_path):
     viewer.add_image(np.zeros((1, 1, 2, 2)), name="US", metadata={"type": "us"})
     controller = SimpleNamespace(
         viewer=viewer,
-        active_recon_layer=vendor,
-        resolve_active_recon_layer=lambda: None,
+        active_image_layer=vendor,
+        resolve_active_image_layer=lambda: None,
     )
 
     plan = BatchPlan(jobs=[], output_dir=tmp_path)

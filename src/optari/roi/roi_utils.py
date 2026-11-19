@@ -79,25 +79,26 @@ class MeasureScope:
     # Only meaningful with all_frames: use each frame's own record from the ROI's
     # track instead of reusing the selected outline everywhere.
     follow_track: bool = False
+    ultrasound: bool = False
 
 
-def _scale_sy_sx(active_recon_layer: Image) -> tuple[float, float]:
-    scale = active_recon_layer.scale
+def _scale_sy_sx(active_image_layer: Image) -> tuple[float, float]:
+    scale = active_image_layer.scale
     return float(scale[-2]), float(scale[-1])
 
 
-def _is_reconstructed_frame(active_recon_layer: Image, frame_idx: int) -> bool:
+def _is_reconstructed_frame(active_image_layer: Image, frame_idx: int) -> bool:
     """Whether the layer holds data on *frame_idx*.
 
     Without ``frames`` it holds them all.
     """
-    frames = active_recon_layer.metadata.get("frames")
+    frames = active_image_layer.metadata.get("frames")
     return frames is None or frame_idx in frames
 
 
-def _channel_value(active_recon_layer: Image, channel_idx: int) -> int | str:
+def _channel_value(active_image_layer: Image, channel_idx: int) -> int | str:
     """The channel's label: a wavelength (nm) or a chromophore/parameter name."""
-    label = active_recon_layer.metadata["axis1_labels"][channel_idx]
+    label = active_image_layer.metadata["axis1_labels"][channel_idx]
     # numpy scalars would land in the table as e.g. "np.int64(700)"
     return label.item() if isinstance(label, np.generic) else label
 
@@ -185,10 +186,10 @@ def _roi_mask(
         return None
 
 
-def _layer_translate(active_recon_layer: Image) -> tuple[float, float]:
+def _layer_translate(active_image_layer: Image) -> tuple[float, float]:
     """Where the layer's pixel 0 centre sits in world mm: half a pixel inside its FOV
     edge, plus any placement offset (like DeepMB's)."""
-    translate = active_recon_layer.translate
+    translate = active_image_layer.translate
     return float(translate[-2]), float(translate[-1])
 
 
@@ -200,7 +201,7 @@ def records_by_track_and_frame(
 
 
 def iter_roi_masks(
-    records: list[RoiRecord], active_recon_layer: Image, image_shape
+    records: list[RoiRecord], active_image_layer: Image, image_shape
 ) -> Iterator[tuple[RoiRecord, np.ndarray]]:
     """Yield each usable ROI with its boolean mask over *image_shape*.
 
@@ -208,8 +209,8 @@ def iter_roi_masks(
     built on it agree on which ROIs count. The track time series rasterizes one
     record per frame through ``_roi_mask`` instead.
     """
-    sy, sx = _scale_sy_sx(active_recon_layer)
-    ty, tx = _layer_translate(active_recon_layer)
+    sy, sx = _scale_sy_sx(active_image_layer)
+    ty, tx = _layer_translate(active_image_layer)
 
     for roi in records:
         mask = _roi_mask(roi, sy=sy, sx=sx, ty=ty, tx=tx, image_shape=image_shape)
@@ -482,14 +483,13 @@ def measure_rois(
             if scope.all_frames
             else [frame_idx]
         )
-        # The viewer's channel index is a wavelength of the reconstruction. On a derived
-        # layer (unmixed, sO2, THb) it would pick an arbitrary chromophore, so those are
-        # always measured on every channel.
-        every_channel = (
-            scope.all_layers
-            or scope.all_channels
-            or layer.metadata["pa_kind"] != "recon"
+        # The viewer's channel index is a wavelength pulse of a reconstruction or the
+        # ultrasound. On a derived layer (unmixed, sO2, THb) it would pick an arbitrary
+        # chromophore, so those are always measured on every channel.
+        derived = (
+            layer.metadata["type"] == "pa" and layer.metadata["pa_kind"] != "recon"
         )
+        every_channel = scope.all_layers or scope.all_channels or derived
         channels = range(layer.data.shape[1]) if every_channel else [channel_idx]
         for frame in frames:
             records_here = records_at(frame)
@@ -508,12 +508,12 @@ def measure_rois(
 
 
 def time_axis(
-    active_recon_layer: Image, channel_idx: int
+    active_image_layer: Image, channel_idx: int
 ) -> tuple[np.ndarray, np.ndarray]:
     """Resolve the frame indices to plot and the x-axis value for each."""
-    n_frames = active_recon_layer.data.shape[0]
+    n_frames = active_image_layer.data.shape[0]
 
-    frames_meta = active_recon_layer.metadata.get("frames")
+    frames_meta = active_image_layer.metadata.get("frames")
     frames = (
         np.asarray(frames_meta, dtype=int)
         if frames_meta
@@ -521,7 +521,7 @@ def time_axis(
     )
 
     # The plot labels its x-axis from the same metadata, see AnalysisController.
-    ts = active_recon_layer.metadata.get("timestamps")
+    ts = active_image_layer.metadata.get("timestamps")
     if ts is None:
         return frames, frames.astype(float)
     # Per-channel timestamps for the plotted channel, referenced to the scan start
@@ -637,7 +637,7 @@ def compute_roi_track_time_series(
 
 def extract_roi_pixels_for_slice(
     records: list[RoiRecord],
-    active_recon_layer: Image,
+    active_image_layer: Image,
     frame_idx: int,
     channel_idx: int,
     *,
@@ -646,29 +646,29 @@ def extract_roi_pixels_for_slice(
     """Extract pixel values per ROI for the given frame/channel."""
 
     frame_idx = int(frame_idx)
-    if not _is_reconstructed_frame(active_recon_layer, frame_idx):
+    if not _is_reconstructed_frame(active_image_layer, frame_idx):
         return {}
 
-    img2d = active_recon_layer.data[frame_idx, channel_idx]
+    img2d = active_image_layer.data[frame_idx, channel_idx]
 
     return {
         roi.roi_id: clamp.apply(img2d[mask])
-        for roi, mask in iter_roi_masks(records, active_recon_layer, img2d.shape)
+        for roi, mask in iter_roi_masks(records, active_image_layer, img2d.shape)
     }
 
 
 def compute_roi_spectra(
     records: list[RoiRecord],
-    active_recon_layer: Image,
+    active_image_layer: Image,
     frame_idx: int,
     *,
     clamp: IntensityClamp = NO_CLAMP,
 ) -> tuple[np.ndarray, dict[int, np.ndarray], list[str]]:
     """Compute per-ROI mean intensity over channels for a fixed frame."""
 
-    data = active_recon_layer.data
+    data = active_image_layer.data
     frame_idx = int(frame_idx)
-    if not _is_reconstructed_frame(active_recon_layer, frame_idx):
+    if not _is_reconstructed_frame(active_image_layer, frame_idx):
         return np.asarray([]), {}, None
 
     n_channels = data.shape[1]
@@ -676,13 +676,13 @@ def compute_roi_spectra(
     # wavelength or chromophore, whatever the spacing of the wavelengths.
     x = np.arange(n_channels, dtype=float)
     x_tick_labels = [
-        str(label) for label in active_recon_layer.metadata["axis1_labels"]
+        str(label) for label in active_image_layer.metadata["axis1_labels"]
     ]
 
     frame = np.asarray(data[frame_idx])
     series: dict[int, np.ndarray] = {}
     # One mask per ROI, reused across every channel (see iter_roi_masks).
-    for roi, mask in iter_roi_masks(records, active_recon_layer, frame.shape[-2:]):
+    for roi, mask in iter_roi_masks(records, active_image_layer, frame.shape[-2:]):
         means = []
         for values in frame[:, mask]:
             values = clamp.apply(values)

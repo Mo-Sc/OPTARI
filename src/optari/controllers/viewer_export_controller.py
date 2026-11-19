@@ -46,7 +46,7 @@ class ViewerExportController:
         if dialog_settings["video"]:
             # Only the frames the active layer holds. On the others the viewer snaps
             # back to the nearest one, so the video would repeat it.
-            layer = controller.active_recon_layer
+            layer = controller.active_image_layer
             frames = list(
                 (layer.metadata.get("frames") if layer is not None else None)
                 or range(n_frames)

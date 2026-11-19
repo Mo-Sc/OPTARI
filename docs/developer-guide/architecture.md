@@ -21,7 +21,7 @@ Model-View-Controller split across four layers.
 - Session hub, holds the napari `Viewer`, the open `pa_data` (PATATO `PAData`), the active
   image layers, and one instance of each task controller.
 - Controllers hold no references to each other. A controller reaches another only through
-  `self.optari_controller.<name>_ctrl`, and shared state (`active_recon_layer`,
+  `self.optari_controller.<name>_ctrl`, and shared state (`active_image_layer`,
   `active_us_layer`, `derived_patato_objects`, ...) lives on `OptariController` itself.
 - `UiManager` builds the docks and wires every Qt signal to a controller method.
   `MenuManager` builds the menu bar and the Settings/Batch dialogs. `ShortcutManager` binds

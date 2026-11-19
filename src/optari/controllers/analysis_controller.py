@@ -34,7 +34,7 @@ class AnalysisController(TaskControllerBase):
         """Refresh gating for the histogram/spectrum/time-analysis buttons."""
         has_data = (
             self.optari_controller.shapes_layer is not None
-            and self.optari_controller.active_recon_layer is not None
+            and self.optari_controller.active_image_layer is not None
         )
         self.optari_controller.time_analysis_dock.refresh_button.setEnabled(has_data)
         self.optari_controller.histogram_dock.refresh_button.setEnabled(has_data)
@@ -248,7 +248,7 @@ class AnalysisController(TaskControllerBase):
             return compute_roi_track_time_series(
                 track_id,
                 roi_ctrl.roi_records,
-                self.optari_controller.active_recon_layer,
+                self.optari_controller.active_image_layer,
                 channel_idx,
                 feature_id,
                 clamp=roi_ctrl.intensity_clamp,
@@ -256,7 +256,7 @@ class AnalysisController(TaskControllerBase):
 
         return compute_roi_time_series(
             roi_ctrl.current_records(),
-            self.optari_controller.active_recon_layer,
+            self.optari_controller.active_image_layer,
             channel_idx,
             feature_id,
             clamp=roi_ctrl.intensity_clamp,
@@ -273,13 +273,13 @@ class AnalysisController(TaskControllerBase):
         ctrl = self.optari_controller
         if ctrl.shapes_layer is None:
             return "No ROIs layer"
-        if ctrl.active_recon_layer is None:
+        if ctrl.active_image_layer is None:
             return "Select a PA image layer"
         if track_scope and not ctrl.roi_ctrl.roi_records:
             return "No tracked ROIs available"
         if not track_scope and len(ctrl.shapes_layer.data) == 0:
             return "No ROIs defined"
-        if len(ctrl.active_recon_layer.metadata["frames"]) < min_frames:
+        if len(ctrl.active_image_layer.metadata["frames"]) < min_frames:
             return f"PA image layer has less than {min_frames} frames"
         return None
 
@@ -303,7 +303,7 @@ class AnalysisController(TaskControllerBase):
             self._show_plot_error(dock, error)
             return
 
-        layer = ctrl.active_recon_layer
+        layer = ctrl.active_image_layer
         _, channel_idx = self._current_frame_channel()
         feature_id = ctrl.annotation_dock.time_analysis_feature_combo.currentData()
 
@@ -371,7 +371,7 @@ class AnalysisController(TaskControllerBase):
         frame_idx, channel_idx = self._current_frame_channel()
         roi_vals = extract_roi_pixels_for_slice(
             ctrl.roi_ctrl.current_records(),
-            ctrl.active_recon_layer,
+            ctrl.active_image_layer,
             frame_idx,
             channel_idx,
             clamp=ctrl.roi_ctrl.intensity_clamp,
@@ -431,7 +431,7 @@ class AnalysisController(TaskControllerBase):
         frame_idx, _ = self._current_frame_channel()
         x, series, x_tick_labels = compute_roi_spectra(
             ctrl.roi_ctrl.current_records(),
-            ctrl.active_recon_layer,
+            ctrl.active_image_layer,
             frame_idx,
             clamp=ctrl.roi_ctrl.intensity_clamp,
         )

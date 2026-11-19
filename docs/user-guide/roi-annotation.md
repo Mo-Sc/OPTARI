@@ -36,7 +36,7 @@ The Saved Analysis table is used to collect ROI data for subsequent analysis. Pr
 
 Clicking the **Export XLSX** button will export the entries in the Saved Analysis table to a Microsoft Excel file that can be used for further analysis.
 
-Sometimes it can be helpful to use the same ROI across multiple layers (i.e. reconstructions and unmixed), channels (i.e. multiple wavelengths or chromophores), or frames (if motion is low). This can be achieved by checking the **Include all layers/frames/channels** checkboxes in the **Annotation** tab in the right dock. If checked, instead of a single entry, the **Save ROI Data** button will add an entry for every layer/frame/channel in the selected scan to the Saved Table.
+Sometimes it can be helpful to use the same ROI across multiple layers (i.e. reconstructions and unmixed), channels (i.e. multiple wavelengths or chromophores), or frames (if motion is low). This can be achieved by checking the **Include all layers/frames/channels** checkboxes in the **Annotation** tab under the **Options** button. If checked, instead of a single entry, the **Save ROI Data** button will add an entry for every layer/frame/channel in the selected scan to the Saved Table.
 
 With **Include all frames** checked, a second choice appears below it, controlling which record each frame is measured with (similar to scope for [Time Analysis](temporal-and-spectral-analysis.md#time-analysis))
 

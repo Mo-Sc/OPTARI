@@ -339,14 +339,14 @@ class BatchRunner:
         else:
             # Nothing named and nothing produced: fall back to whatever opening the
             # scan selected, which follows the DEFAULT_PA_LAYER setting.
-            layer = self.controller.active_recon_layer
+            layer = self.controller.active_image_layer
             if layer is None:
                 raise BatchStepError(
                     "scan contains no reconstruction to analyse", "source"
                 )
 
         self.viewer.layers.selection.select_only(layer)
-        self.controller.resolve_active_recon_layer()
+        self.controller.resolve_active_image_layer()
         return layer
 
     def _analysis_layers(self, source_layer) -> list:

@@ -107,7 +107,7 @@ class ScanController(TaskControllerBase):
         """Clear current scan state and remove all viewer layers."""
         self.close_current_scan()
         self.optari_controller.segmentation_ctrl.clear_scan_state()
-        self.optari_controller.active_recon_layer = None
+        self.optari_controller.active_image_layer = None
         self.optari_controller.active_us_layer = None
         self.optari_controller.shapes_layer = None
         self.optari_controller.roi_ctrl.clear_roi_records()
@@ -239,7 +239,7 @@ class ScanController(TaskControllerBase):
         except RuntimeError as e:
             logger.info("Default PA layer not found", exc_info=True)
             show_warning(str(e))
-        self.optari_controller.resolve_active_recon_layer()
+        self.optari_controller.resolve_active_image_layer()
         self.optari_controller.refresh_controller_uis()
 
     def _position_viewer(self) -> None:

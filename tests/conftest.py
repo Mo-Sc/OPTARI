@@ -85,6 +85,7 @@ def image_layer():
         wavelengths = list(range(700, 700 + 10 * data.shape[1], 10))
         metadata = {
             "type": "pa",
+            "pa_kind": "recon",
             "wavelengths": wavelengths,
             "axis1_labels": wavelengths,
             "frames": list(range(data.shape[0])),

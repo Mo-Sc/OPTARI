@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from qtpy.QtCore import Qt
 from qtpy.QtWidgets import (
     QAbstractItemView,
     QButtonGroup,
@@ -15,6 +16,7 @@ from qtpy.QtWidgets import (
     QListWidget,
     QPushButton,
     QRadioButton,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -179,7 +181,8 @@ def create_annotation_dock() -> AnnotationDock:
     include_all_frames_checkbox.setChecked(False)
     include_all_channels_checkbox.setChecked(False)
     include_all_layers_checkbox.setToolTip(
-        "Save this ROI's data for every layer in the scan; also enables Include all channels"
+        "Save this ROI's data for every layer in the scan, the ultrasound included. "
+        "Also enables Include all channels"
     )
     include_all_frames_checkbox.setToolTip(
         "Save this ROI's data for every frame in the scan"
@@ -220,10 +223,50 @@ def create_annotation_dock() -> AnnotationDock:
     save_scope_row.setEnabled(include_all_frames_checkbox.isChecked())
     include_all_frames_checkbox.toggled.connect(save_scope_row.setEnabled)
 
-    save_roi_layout.addWidget(include_all_layers_checkbox)
-    save_roi_layout.addWidget(include_all_channels_checkbox)
-    save_roi_layout.addWidget(include_all_frames_checkbox)
-    save_roi_layout.addWidget(save_scope_row)
+    # Collapsed by default
+    options = QWidget()
+    options_layout = QVBoxLayout(options)
+    options_layout.setContentsMargins(0, 0, 0, 0)
+    for option in (
+        include_all_layers_checkbox,
+        include_all_channels_checkbox,
+        include_all_frames_checkbox,
+        save_scope_row,
+    ):
+        options_layout.addWidget(option)
+    options.setVisible(False)
+    options_button = QToolButton()
+    options_button.setCheckable(True)
+    options_button.setArrowType(Qt.RightArrow)
+    options_button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+
+    def show_options(expanded: bool) -> None:
+        options.setVisible(expanded)
+        options_button.setArrowType(Qt.DownArrow if expanded else Qt.RightArrow)
+
+    def name_active_options(_=None) -> None:
+        active = [
+            label
+            for box, label in (
+                (include_all_layers_checkbox, "all layers"),
+                (include_all_channels_checkbox, "all channels"),
+                (include_all_frames_checkbox, "all frames"),
+            )
+            if box.isChecked()
+        ]
+        options_button.setText(f"Options: {', '.join(active) or 'this slice only'}")
+
+    options_button.toggled.connect(show_options)
+    for box in (
+        include_all_layers_checkbox,
+        include_all_channels_checkbox,
+        include_all_frames_checkbox,
+    ):
+        box.toggled.connect(name_active_options)
+    name_active_options()
+
+    save_roi_layout.addWidget(options_button)
+    save_roi_layout.addWidget(options)
 
     # Time analysis feature selection (default is mean)
     time_analysis_box = QGroupBox("Temporal Analysis")

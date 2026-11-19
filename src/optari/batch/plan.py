@@ -208,6 +208,7 @@ def _measure_scope(spec: dict, all_frames: bool) -> MeasureScope:
         all_layers=mode == "all_pa",
         all_frames=all_frames,
         all_channels=bool(spec.get("all_channels", True)),
+        ultrasound=bool(spec.get("ultrasound", False)),
         # A batch ROI is placed on every frame it measures, so each frame's own
         # outline is the only sensible one to use there.
         follow_track=all_frames,

@@ -182,6 +182,7 @@ How wide the measurement reaches. Mirrors the **Include all …** boxes in the A
 | --- | --- | --- |
 | `layers` | `"analysis"` (default), `"all_pa"` | `analysis` measures the `source` reconstruction plus what this run unmixed from it. `all_pa` measures every OA layer in the scan, including reconstructions the plan did not make. |
 | `all_channels` | `true` (default), `false` | Every wavelength of the reconstruction, or just the default one. Derived layers (unmixed, sO₂, THb) are always measured on every channel. |
+| `ultrasound` | `false` (default), `true` | Also measure the ROI on the ultrasound, like a reconstruction. |
 
 ### `outputs`
 

@@ -105,7 +105,7 @@ class RoiController(TaskControllerBase):
         """
         layer = self.optari_controller.active_us_layer
         if layer is None:
-            layer = self.optari_controller.active_recon_layer
+            layer = self.optari_controller.active_image_layer
         if layer is not None:
             return int(layer.data.shape[0])
         return int(self.optari_controller.pa_data.shape[0])
@@ -443,7 +443,7 @@ class RoiController(TaskControllerBase):
         live_cols = visible_feature_columns()
         table = self.optari_controller.roi_dock.live_table
         shapes = self.optari_controller.shapes_layer
-        layer = self.optari_controller.active_recon_layer
+        layer = self.optari_controller.active_image_layer
         if shapes is None or layer is None:
             table.value = pd.DataFrame(columns=live_cols)
             return
@@ -522,6 +522,8 @@ class RoiController(TaskControllerBase):
             all_layers=annotation.include_all_layers_checkbox.isChecked(),
             all_frames=annotation.include_all_frames_checkbox.isChecked(),
             all_channels=annotation.include_all_channels_checkbox.isChecked(),
+            # every layer means the ultrasound too
+            ultrasound=annotation.include_all_layers_checkbox.isChecked(),
             follow_track=annotation.save_scope_track_radio.isChecked(),
         )
 
@@ -539,7 +541,7 @@ class RoiController(TaskControllerBase):
         that scope resolves to and *clamp* to the dock's intensity filter. Batch mode
         passes all three, so its numbers depend on the plan alone, not on the dock.
         """
-        active_layer = self.optari_controller.active_recon_layer
+        active_layer = self.optari_controller.active_image_layer
         if active_layer is None:
             logger.info("Select an image layer to save ROI stats")
             return pd.DataFrame()
@@ -555,6 +557,9 @@ class RoiController(TaskControllerBase):
             layers = (
                 pa_layers(self.viewer.layers) if scope.all_layers else [active_layer]
             )
+        us_layer = self.optari_controller.active_us_layer
+        if scope.ultrasound and us_layer is not None and us_layer not in layers:
+            layers = [*layers, us_layer]
         return measure_rois(
             [self.store.records[roi_id] for roi_id in selected_ids],
             self.store.records.values(),

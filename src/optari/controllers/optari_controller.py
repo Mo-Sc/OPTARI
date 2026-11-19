@@ -76,7 +76,8 @@ class OptariController:
 
         self.shapes_layer: Shapes | None = None
         self._last_frame_idx: int | None = None
-        self.active_recon_layer: Image | None = None
+        # The layer the live table, info dock and plots measure
+        self.active_image_layer: Image | None = None
         self.active_us_layer: Image | None = None
         self.active_task: GeneratorWorker | None = None
         # A batch run loads scans and measures on the main thread
@@ -296,31 +297,29 @@ class OptariController:
         raise RuntimeError(f"No PA image layer found (looking for '{default_pa}')")
 
     # ============ layer selection ============
-    def resolve_active_recon_layer(self) -> None:
-        """Set `active_recon_layer` to the selected PA image layer (if exactly one is
-        selected).
+    def resolve_active_image_layer(self) -> None:
+        """Make the selected layer the active one, if exactly one PA or US layer is
+        selected.
+
+        The active layer is what the live table, the info dock and the plots measure.
         """
-
         selection = self.viewer.layers.selection
-
         if len(selection) != 1:
-            # no layer selected or multiple layers selected
+            return
+        selected_layer = selection.active
+        if not (is_pa_layer(selected_layer) or selected_layer is self.active_us_layer):
+            return
+        # No-op if nothing changed (avoids duplicate work/logging).
+        if self.active_image_layer is selected_layer:
             return
 
-        selected_layer = selection.active
-
-        # only change active layer if selected layer is a PA image layer
+        self.active_image_layer = selected_layer
+        logger.info("active layer set to %s", self.active_image_layer.name)
         if is_pa_layer(selected_layer):
-            # No-op if nothing changed (avoids duplicate work/logging).
-            if self.active_recon_layer is selected_layer:
-                return
-
-            self.active_recon_layer = selected_layer
-            logger.info("active layer set to %s", self.active_recon_layer.name)
-            # show only the active PA layer. blending and auto contrast are set when PA
-            # layers are created
+            # Show only the active PA layer. Activating the US leaves them as they are,
+            # since it is drawn underneath them anyway.
             for layer in pa_layers(self.viewer.layers):
-                layer.visible = layer is self.active_recon_layer
+                layer.visible = layer is selected_layer
 
     # ============ viewer events ============
     def on_layer_removed(self, event) -> None:
@@ -334,13 +333,13 @@ class OptariController:
         self.patato_objects.pop(layer.name, None)
         self.derived_patato_objects.pop(layer.name, None)
 
-        if layer is not self.active_recon_layer and layer is not self.active_us_layer:
+        if layer is not self.active_image_layer and layer is not self.active_us_layer:
             return
         if layer is self.active_us_layer:
             self.active_us_layer = None
-        if layer is self.active_recon_layer:
-            self.active_recon_layer = None
-            self.resolve_active_recon_layer()
+        if layer is self.active_image_layer:
+            self.active_image_layer = None
+            self.resolve_active_image_layer()
         for controller in self.controllers:
             controller.on_active_layers_changed()
         self.refresh_controller_uis()
@@ -348,7 +347,7 @@ class OptariController:
 
     def on_selection_changed(self, event=None) -> None:
         """Follow a new layer selection: active layer, hooks, dims and readouts."""
-        self.resolve_active_recon_layer()
+        self.resolve_active_image_layer()
         for controller in self.controllers:
             controller.on_active_layers_changed()
         if self._snap_dims_to_active_layer():
@@ -383,9 +382,9 @@ class OptariController:
         snap the given frame index to the closest available frame in the active layer's
         metadata
         """
-        if self.active_recon_layer is None:
+        if self.active_image_layer is None:
             return frame_idx
-        frames = self.active_recon_layer.metadata.get("frames", None)
+        frames = self.active_image_layer.metadata.get("frames", None)
         if not frames:
             return frame_idx
         frames = np.asarray(frames, dtype=int)
@@ -393,10 +392,10 @@ class OptariController:
 
     def snap_to_available_channel(self, channel_idx: int) -> int:
         """Clamp *channel_idx* to the channels the active layer's data holds."""
-        if self.active_recon_layer is None:
+        if self.active_image_layer is None:
             return channel_idx
 
-        shape = self.active_recon_layer.data.shape
+        shape = self.active_image_layer.data.shape
         if len(shape) < 2:
             return 0
 
@@ -408,7 +407,7 @@ class OptariController:
 
         True if it moved, in which case the dims event that follows does the refresh.
         """
-        if self.active_recon_layer is None:
+        if self.active_image_layer is None:
             return False
 
         frame_channel = selected_frame_and_channel(self.viewer)
@@ -432,7 +431,7 @@ class OptariController:
         if changed:
             logger.info(
                 "snapped dims for layer %s to frame=%s, channel=%s",
-                self.active_recon_layer.name,
+                self.active_image_layer.name,
                 snapped_frame,
                 snapped_channel,
             )
@@ -445,9 +444,9 @@ class OptariController:
     ) -> tuple[str, float]:
         """Wall-clock time of the slice ("N/A" if the scan cannot be dated) and its
         seconds since the first frame."""
-        ts = self.active_recon_layer.metadata["timestamps"]
+        ts = self.active_image_layer.metadata["timestamps"]
         return (
-            slice_datetime(self.active_recon_layer, frame_idx, channel_idx),
+            slice_datetime(self.active_image_layer, frame_idx, channel_idx),
             float(ts[frame_idx, channel_idx] - ts[0, 0]),
         )
 
@@ -455,20 +454,20 @@ class OptariController:
         """Show the active slice's scan, layer, frame and time in the info dock."""
         # Scan, IPASC and clinical metadata need no layer, only the Layer tab does.
         self.info_dock.metadata_button.setEnabled(self.pa_data is not None)
-        if self.active_recon_layer is None:
+        if self.active_image_layer is None:
             self.info_dock.set_message("Select a PA image layer")
             return
 
         frame_channel = selected_frame_and_channel(self.viewer)
         if frame_channel is None:
-            self.info_dock.set_rows([("Layer", self.active_recon_layer.name)])
+            self.info_dock.set_rows([("Layer", self.active_image_layer.name)])
             return
         frame_idx, channel_idx = frame_channel
 
         # Every PA layer labels its channel axis, dims are snapped to its channels.
-        channel = str(self.active_recon_layer.metadata["axis1_labels"][channel_idx])
+        channel = str(self.active_image_layer.metadata["axis1_labels"][channel_idx])
 
-        frames = self.active_recon_layer.metadata.get("frames")
+        frames = self.active_image_layer.metadata.get("frames")
         is_reconstructed = frames is None or frame_idx in frames
         frame_label = (
             f"Frame: {frame_idx} (reconstructed)"
@@ -492,7 +491,7 @@ class OptariController:
             [
                 ("Study", study_str),
                 ("Scan", scan_display),
-                ("Layer", self.active_recon_layer.name),
+                ("Layer", self.active_image_layer.name),
                 ("Frame", f"{frame_idx} | Channel: {channel}"),
                 ("Timestamp", f"{ts} ({ts_delta:.2f} s)"),
             ]
@@ -510,7 +509,7 @@ class OptariController:
                 for candidate in reversed(selected_layers)
                 if isinstance(candidate, Image)
             ),
-            self.active_recon_layer,
+            self.active_image_layer,
         )
 
         dialog = LayerMetadataDialog(

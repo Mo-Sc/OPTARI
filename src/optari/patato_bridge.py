@@ -280,6 +280,11 @@ def is_pa_layer(layer) -> bool:
     return isinstance(layer, Image) and layer.metadata.get("type") == "pa"
 
 
+def is_reconstruction(layer) -> bool:
+    """True for a PA reconstruction"""
+    return is_pa_layer(layer) and layer.metadata["pa_kind"] == "recon"
+
+
 def pa_layers(layers) -> list[Image]:
     """The PA image layers among *layers*, in layer order."""
     return [layer for layer in layers if is_pa_layer(layer)]
@@ -341,7 +346,12 @@ def build_napari_layers(
                 "opacity": 1.0,
                 "metadata": {
                     "type": "us",
+                    # One US image per wavelength pulse, labelled like the
+                    # reconstruction's channels, so ROIs measure it like one.
+                    "axis1_labels": [int(w) for w in pa_data.get_wavelengths()],
+                    "frames": list(range(n_acq_frames)),
                     "timestamps": timestamps,
+                    "acquisition_start": start,
                     "filepath": filepath,
                     "scan_name": scan_name,
                 },

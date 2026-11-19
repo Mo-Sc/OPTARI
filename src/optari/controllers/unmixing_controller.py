@@ -24,6 +24,7 @@ from optari.controllers.base import TaskControllerBase
 from optari.patato_bridge import (
     display_data_from_patato_obj,
     expand_to_acquisition_frames,
+    is_reconstruction,
     layer_colormap,
     pa_layer_metadata,
 )
@@ -164,11 +165,11 @@ class UnmixParams:
 
         Raises ValueError, message safe to show the user, when it cannot run here.
         """
-        active_layer = controller.active_recon_layer
+        active_layer = controller.active_image_layer
         if active_layer is None:
             raise ValueError("Select a PA reconstruction layer.")
         recon = controller.patato_objects.get(active_layer.name)
-        if recon is None:
+        if not is_reconstruction(active_layer) or recon is None:
             raise ValueError("Source layer must be a reconstruction.")
         if not wavelengths:
             raise ValueError("Select at least one wavelength.")
@@ -214,7 +215,7 @@ class UnmixParams:
     @classmethod
     def from_preset(cls, preset: dict, controller, *, frame_id: int | None = None):
         """Resolve an unmixing preset against the loaded scan's own wavelengths."""
-        active_layer = controller.active_recon_layer
+        active_layer = controller.active_image_layer
         if active_layer is None:
             raise ValueError("Select a PA reconstruction layer.")
         available = [int(w) for w in active_layer.metadata.get("wavelengths") or []]
@@ -438,25 +439,22 @@ class UnmixingController(TaskControllerBase):
     def refresh_ui(self) -> None:
         """Refresh source-dependent controls from the active layer."""
         dock = self.optari_controller.unmixing_dock
-        active_recon_layer = self.optari_controller.active_recon_layer
+        active_image_layer = self.optari_controller.active_image_layer
 
-        if (
-            active_recon_layer is None
-            or active_recon_layer.metadata["pa_kind"] != "recon"
-        ):
+        if active_image_layer is None or not is_reconstruction(active_image_layer):
             dock.source_layer_label.setText("Select a PA reconstruction layer")
             dock.wavelengths_list.clear()
             # disable unmixing button when no valid source is active
             dock.run_button.setEnabled(False)
             return
 
-        dock.source_layer_label.setText(active_recon_layer.name)
+        dock.source_layer_label.setText(active_image_layer.name)
 
         # Enable unmixing button
         dock.run_button.setEnabled(not self.optari_controller.task_running)
 
-        wavelengths = active_recon_layer.metadata.get("wavelengths") or []
-        source_name = active_recon_layer.name
+        wavelengths = active_image_layer.metadata.get("wavelengths") or []
+        source_name = active_image_layer.name
         # Keep manual wavelength selections while the same source stays active.
         if (
             self._wavelengths_source == source_name
