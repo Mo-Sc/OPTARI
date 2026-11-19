@@ -59,7 +59,8 @@ class UiManager:
         and of the Settings dock list; tabified docks join the previous one in their area.
         """
         controller = self.controller
-        for attribute, create_dock, title, area, tabify in DOCKS:
+        own_docks = tuple(c.DOCK for c in controller.controllers if c.DOCK)
+        for attribute, create_dock, title, area, tabify in DOCKS + own_docks:
             dock = create_dock()
             controller.dock_widgets[title] = (
                 controller.viewer.window.add_dock_widget(

@@ -26,17 +26,13 @@ nothing unless overridden:
 
 ## Adding a feature
 
-A new feature with its own dock and controller touches three places outside its own files:
+To add a new feature with a dock requires two files and one line to include it:
 
-1. Write the dock as a `create_*_dock()` factory in `widgets/` and the controller as a `TaskControllerBase` subclass:
-   `_signal_bindings()` for its dock's signals, `refresh_ui()` for gating, the hooks above if it follows the viewer,
-   and `_params_from_ui` / `prepare` / `publish` if it runs heavy work.
-2. Add a row to `DOCKS` in `controllers/ui_manager.py` (attribute, factory, title, area, tabify), and the typed dock
-   attribute in `OptariController.__init__`.
-3. Create the controller in `OptariController.__init__` and add it to `self.controllers`. Initializing, binding,
-   refreshing, the hooks and shutdown then include it.
-
-The dock shows up in OPTARI ▸ Docks and in the Settings dock list on its own.
+1. Write the dock as a `create_*_dock()` factory in `widgets/`, and the controller as a `TaskControllerBase` subclass.
+   The controller declares its dock as a class attribute, `DOCK = (attribute, factory, title, area, tabify)`, and
+   reaches it as `self.dock`. It implements `_signal_bindings()` for the dock's signals, `refresh_ui()` for gating,
+   the hooks above if it follows the viewer, and `_params_from_ui` / `prepare` / `publish` if it runs heavy work. (A minimal working example is `controllers/demo_controller.py` with `widgets/demo_dock.py`)
+2. Add the controller to `self.controllers` in `OptariController.__init__` (uncomment the demo dock to show it).
 
 ## Controllers
 

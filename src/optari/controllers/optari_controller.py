@@ -30,6 +30,8 @@ from optari.widgets.histogram_dock import HistogramDock
 from optari.widgets.spectrum_dock import SpectrumDock
 from optari.widgets.layer_metadata_dialog import LayerMetadataDialog
 from optari.controllers.base import TaskControllerBase
+
+# from optari.controllers.demo_controller import DemoController # Demo feature
 from optari.controllers.ui_manager import UiManager
 from optari.controllers.menu_manager import MenuManager
 from optari.controllers.shortcut_manager import ShortcutManager
@@ -102,6 +104,7 @@ class OptariController:
             self.unmixing_ctrl,
             self.reconstruction_ctrl,
             self.segmentation_ctrl,
+            # DemoController(self),  # demo feature
         ]
 
         # Track event bindings for proper cleanup

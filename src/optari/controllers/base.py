@@ -59,6 +59,9 @@ class TaskControllerBase:
     """
 
     image_units = ("dimensionless", "dimensionless", "mm", "mm")
+    # A dock only this controller uses, as a `UiManager.DOCKS` row (attribute, factory,
+    # title, area, tabify).
+    DOCK: tuple | None = None
 
     def __init__(self, parent_controller: OptariController):
         """Initialize with reference to parent controller.
@@ -68,6 +71,11 @@ class TaskControllerBase:
         """
         self.optari_controller = parent_controller
         self.viewer = parent_controller.viewer
+
+    @property
+    def dock(self):
+        """This controller's own dock, the one its `DOCK` row declares."""
+        return getattr(self.optari_controller, self.DOCK[0])
 
     def initialize_ui(self) -> None:
         """Initialize UI controls (populate lists, combos, etc). Override if needed."""
