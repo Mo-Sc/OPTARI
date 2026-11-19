@@ -1,5 +1,6 @@
-import numpy as np
 from itertools import combinations
+
+import numpy as np
 from skimage.metrics import structural_similarity as ssim
 
 # Depth of the band at the top of the ultrasound left out of motion scoring

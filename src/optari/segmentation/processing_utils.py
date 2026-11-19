@@ -4,7 +4,6 @@ import cv2
 import numpy as np
 from scipy.ndimage import distance_transform_edt
 from skimage.measure import label, regionprops
-from skimage.morphology import remove_small_objects
 
 # --- processing functions for images ---
 

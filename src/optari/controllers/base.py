@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
-
 from napari.layers import Image
 
 from optari.config import settings

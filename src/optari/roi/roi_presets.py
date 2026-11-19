@@ -59,7 +59,7 @@ class RoiPreset:
             )
 
     @classmethod
-    def from_dict(cls, name: str, data: dict) -> "RoiPreset":
+    def from_dict(cls, name: str, data: dict) -> RoiPreset:
         """Rebuild from a preset file's dict. Raises if ``source_fov_m`` is missing."""
         if "source_fov_m" not in data:
             raise ValueError(f"ROI preset must record its source FOV: {name}")

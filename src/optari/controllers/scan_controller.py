@@ -16,12 +16,9 @@ from patato.io.ithera.read_ithera import iTheraMSOT
 from qtpy.QtCore import QSettings
 from qtpy.QtWidgets import QFileDialog
 
+from optari.config import settings
+from optari.controllers.base import TaskControllerBase
 from optari.io.discovery import ScanInfo, discover_scans
-from optari.patato_bridge import (
-    build_napari_layers,
-    fov_from_objects,
-    roi_records_from_scan_rois,
-)
 from optari.io.export_pipeline import (
     ScanExport,
     can_save_into_scan,
@@ -30,19 +27,20 @@ from optari.io.export_pipeline import (
     ipasc_export_report,
     save_scan_into_source,
 )
+from optari.patato_bridge import (
+    build_napari_layers,
+    fov_from_objects,
+    roi_records_from_scan_rois,
+)
 from optari.segmentation.segmenter import MASK_DTYPE
 from optari.utils.misc import roi_color_for_index
-from optari.utils.tasks import BackgroundStep, start_task
 from optari.utils.motion import (
     frame_motion_scores,
     spectral_motion_scores,
     transducer_mask_rows,
 )
 from optari.utils.setup import load_startup_logo
-from optari.controllers.base import TaskControllerBase
-
-
-from optari.config import settings
+from optari.utils.tasks import BackgroundStep, start_task
 
 if TYPE_CHECKING:
     from optari.controllers.optari_controller import OptariController
@@ -65,7 +63,7 @@ class ScanController(TaskControllerBase):
 
     def _signal_bindings(self) -> list[tuple[object, Callable]]:
         """Scan browser signals."""
-        dock = self.optari_controller.scan_browser
+        dock = self.optari_controller.scan_browser_dock
         return [
             (dock.browse_button.clicked, self.on_browse_study_clicked),
             (dock.scans_list.currentRowChanged, self.on_scan_selected),
@@ -80,17 +78,17 @@ class ScanController(TaskControllerBase):
 
     def refresh_ui(self) -> None:
         """Lock the scan browser while a task runs, and gate HDF5 export on a scan being loaded."""
-        self.optari_controller.scan_browser.widget.setEnabled(
+        self.optari_controller.scan_browser_dock.widget.setEnabled(
             not self.optari_controller.task_running
         )
-        self.optari_controller.scan_browser.hdf5_button.setEnabled(
+        self.optari_controller.scan_browser_dock.hdf5_button.setEnabled(
             self.optari_controller.pa_data is not None
         )
-        self.optari_controller.scan_browser.ipasc_button.setEnabled(
+        self.optari_controller.scan_browser_dock.ipasc_button.setEnabled(
             self.optari_controller.pa_data is not None
         )
 
-    def scan_name(self) -> "str | None":
+    def scan_name(self) -> str | None:
         """The scan's internal (vendor) name, for stamping onto layers OPTARI creates."""
         return self.optari_controller.scan_info.internal_name
 
@@ -148,11 +146,15 @@ class ScanController(TaskControllerBase):
         """Discover scans in *folder* and select the first one."""
         self.scans = discover_scans(folder)
 
-        self.optari_controller.scan_browser.set_folder(folder)
-        self.optari_controller.scan_browser.set_scans(list(self.scans.items()))
+        self.optari_controller.scan_browser_dock.set_folder(folder)
+        self.optari_controller.scan_browser_dock.set_scans(
+            list(self.scans.items())
+        )
 
         if self.scans:
-            self.optari_controller.scan_browser.scans_list.setCurrentRow(0)
+            self.optari_controller.scan_browser_dock.scans_list.setCurrentRow(
+                0
+            )
         else:
             self.reset_scan_state()
 

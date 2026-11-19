@@ -25,7 +25,7 @@ from optari.roi.roi_placement import (
     static_preset_verts,
 )
 from optari.roi.roi_presets import RoiPresetStore
-from optari.roi.roi_records import ROIRecord
+from optari.roi.roi_records import RoiRecord
 from optari.roi.roi_store import RoiStore
 from optari.roi.roi_table import SavedRoiTable
 from optari.roi.roi_table_io import (
@@ -99,7 +99,7 @@ class RoiController(TaskControllerBase):
             )
 
     @property
-    def roi_records(self) -> list[ROIRecord]:
+    def roi_records(self) -> list[RoiRecord]:
         """All ROI records currently held, across every frame."""
         return list(self.store.records.values())
 
@@ -128,7 +128,7 @@ class RoiController(TaskControllerBase):
         self.store.projected()[-1].tissue_class = tissue_class
         shapes.selected_data = {len(shapes.data) - 1}
 
-    def restore_roi_records(self, records: list[ROIRecord]) -> None:
+    def restore_roi_records(self, records: list[RoiRecord]) -> None:
         """Replace all ROI records with the ones stored in the scan, resuming the id
         counters above their highest values.
 
@@ -144,7 +144,7 @@ class RoiController(TaskControllerBase):
         self.store.clear()
         clear_mask_cache()
 
-    def current_records(self) -> list[ROIRecord]:
+    def current_records(self) -> list[RoiRecord]:
         """Records for the ROIs currently displayed, in display order."""
         return self.store.projected()
 
@@ -214,15 +214,15 @@ class RoiController(TaskControllerBase):
 
     def _set_saved_table_view(self) -> None:
         """Push the saved rows into the widget and gate the actions that need rows."""
-        self.optari_controller.roi.saved_table.value = (
+        self.optari_controller.roi_dock.saved_table.value = (
             self.saved_table.visible_rows()
         )
         has_rows = not self.saved_table.is_empty
-        self.optari_controller.roi.delete_button.setEnabled(has_rows)
-        self.optari_controller.roi.xlsx_button.setEnabled(has_rows)
+        self.optari_controller.roi_dock.delete_button.setEnabled(has_rows)
+        self.optari_controller.roi_dock.xlsx_button.setEnabled(has_rows)
 
     def _set_live_table_selection(self, selected_rows: list[int]) -> None:
-        table = self.optari_controller.roi.live_table.native
+        table = self.optari_controller.roi_dock.live_table.native
         with QSignalBlocker(table):
             table.clearSelection()
             for row in selected_rows:
@@ -232,7 +232,7 @@ class RoiController(TaskControllerBase):
     def _update_save_button_state(self) -> None:
         """Update save button enabled state based on current ROI selection."""
         selected = self.optari_controller.shapes_layer.selected_data
-        self.optari_controller.roi.save_button.setEnabled(len(selected) > 0)
+        self.optari_controller.roi_dock.save_button.setEnabled(len(selected) > 0)
 
     def on_shapes_selection_changed(self, event=None) -> None:
         """Sync shapes selection -> live table selection on selection changes only."""
@@ -259,7 +259,7 @@ class RoiController(TaskControllerBase):
             return
         rows = {
             idx.row()
-            for idx in self.optari_controller.roi.live_table.native.selectedIndexes()
+            for idx in self.optari_controller.roi_dock.live_table.native.selectedIndexes()
         }
         self._syncing = True
         try:
@@ -286,7 +286,7 @@ class RoiController(TaskControllerBase):
 
     def on_intensity_settings_changed(self, _=None) -> None:
         """Read the intensity filter and measure."""
-        annotation = self.optari_controller.annotation
+        annotation = self.optari_controller.annotation_dock
         if annotation.roi_exclusion_box.isChecked():
             self.intensity_clamp = IntensityClamp(
                 minimum=parse_float_input(
@@ -310,8 +310,8 @@ class RoiController(TaskControllerBase):
 
     def _signal_bindings(self) -> list[tuple[object, Callable]]:
         """ROI dock and annotation dock signals."""
-        roi = self.optari_controller.roi
-        ann = self.optari_controller.annotation
+        roi = self.optari_controller.roi_dock
+        ann = self.optari_controller.annotation_dock
         intensity_edits = (
             ann.roi_clip_min_edit,
             ann.roi_clip_max_edit,
@@ -442,7 +442,7 @@ class RoiController(TaskControllerBase):
         reconstruction layer to measure against.
         """
         live_cols = visible_feature_columns()
-        table = self.optari_controller.roi.live_table
+        table = self.optari_controller.roi_dock.live_table
         shapes = self.optari_controller.shapes_layer
         layer = self.optari_controller.active_recon_layer
         if shapes is None or layer is None:
@@ -522,7 +522,7 @@ class RoiController(TaskControllerBase):
         the one the user selected, reused everywhere (default), or that ROI's tracked
         group's own record per frame, skipping a frame the track has no record on.
         """
-        annotation = self.optari_controller.annotation
+        annotation = self.optari_controller.annotation_dock
         return MeasureScope(
             all_layers=annotation.include_all_layers_checkbox.isChecked(),
             all_frames=annotation.include_all_frames_checkbox.isChecked(),
@@ -590,7 +590,7 @@ class RoiController(TaskControllerBase):
     def on_delete_saved_clicked(self, event=None) -> None:
         """Delete the selected rows from the Saved Analysis table."""
         selection_model = (
-            self.optari_controller.roi.saved_table.native.selectionModel()
+            self.optari_controller.roi_dock.saved_table.native.selectionModel()
         )
         selected_rows = selection_model.selectedRows()
         selected_indices = [idx.row() for idx in selected_rows]
@@ -662,7 +662,7 @@ class RoiController(TaskControllerBase):
         Restoring is per row, not per ROI group
         """
         selection = (
-            self.optari_controller.roi.saved_table.native.selectionModel()
+            self.optari_controller.roi_dock.saved_table.native.selectionModel()
         )
         positions = [index.row() for index in selection.selectedRows()]
         if not positions and default_row is not None:
@@ -736,7 +736,7 @@ class RoiController(TaskControllerBase):
             return f"That ROI references frames outside this scan's {n_frames} frame(s)."
         return None
 
-    def _records_from_saved_rows(self, rows: pd.DataFrame) -> list[ROIRecord]:
+    def _records_from_saved_rows(self, rows: pd.DataFrame) -> list[RoiRecord]:
         """Rebuild one record per frame present in *rows*.
 
         *rows* is an arbitrary selection from the Saved table. Enter can restore a
@@ -760,7 +760,7 @@ class RoiController(TaskControllerBase):
             for record in self.store.records.values()
         }
 
-        records: list[ROIRecord] = []
+        records: list[RoiRecord] = []
         for roi_group_uid, group in rows.groupby("roi_group_uid"):
             roi_group_uid = str(roi_group_uid)
             # Rejoin the group already in the viewer, if any, so frames restored
@@ -794,15 +794,15 @@ class RoiController(TaskControllerBase):
         # Names only: parsing every file here meant one broken preset emptied the
         # whole list. Selecting a broken one reports it instead.
         names = [path.stem for path in self._roi_preset_store.list_paths()]
-        self.optari_controller.annotation.set_roi_preset_names(names)
-        self.optari_controller.annotation.roi_presets_description_label.setText(
+        self.optari_controller.annotation_dock.set_roi_preset_names(names)
+        self.optari_controller.annotation_dock.roi_presets_description_label.setText(
             ""
         )
         self._update_remove_roi_preset_button_state()
 
     def _update_remove_roi_preset_button_state(self) -> None:
         """Update remove-preset button enabled state based on the current list selection."""
-        ann = self.optari_controller.annotation
+        ann = self.optari_controller.annotation_dock
         ann.remove_roi_preset_button.setEnabled(
             ann.roi_presets_list.currentItem() is not None
         )
@@ -820,7 +820,7 @@ class RoiController(TaskControllerBase):
         selected = list(self.optari_controller.shapes_layer.selected_data)
         if len(selected) == 0:
             logger.info("Save ROI preset clicked with no selected ROI")
-            self.optari_controller.annotation.roi_presets_description_label.setText(
+            self.optari_controller.annotation_dock.roi_presets_description_label.setText(
                 "No ROI selected in viewer."
             )
             return
@@ -859,7 +859,7 @@ class RoiController(TaskControllerBase):
 
         fov_m = self.optari_controller.scan_fov
         if fov_m is None:
-            self.optari_controller.annotation.roi_presets_description_label.setText(
+            self.optari_controller.annotation_dock.roi_presets_description_label.setText(
                 "Could not save ROI preset: current scan has no valid FOV."
             )
             return
@@ -878,7 +878,7 @@ class RoiController(TaskControllerBase):
                 top_margin_mm=top_margin_mm,
             )
         except (TypeError, ValueError, OSError) as exc:
-            self.optari_controller.annotation.roi_presets_description_label.setText(
+            self.optari_controller.annotation_dock.roi_presets_description_label.setText(
                 f"Could not save ROI preset: {exc}"
             )
             return
@@ -888,7 +888,7 @@ class RoiController(TaskControllerBase):
 
     def on_remove_roi_preset_clicked(self, event=None) -> None:
         """Delete the preset currently selected in the presets list."""
-        item = self.optari_controller.annotation.roi_presets_list.currentItem()
+        item = self.optari_controller.annotation_dock.roi_presets_list.currentItem()
         if item is None:
             return
         preset_name = item.text()
@@ -898,7 +898,7 @@ class RoiController(TaskControllerBase):
         try:
             removed = self._roi_preset_store.delete(preset_name)
         except (TypeError, ValueError, OSError) as exc:
-            self.optari_controller.annotation.roi_presets_description_label.setText(
+            self.optari_controller.annotation_dock.roi_presets_description_label.setText(
                 f"Could not remove ROI preset: {exc}"
             )
             return
@@ -911,7 +911,7 @@ class RoiController(TaskControllerBase):
         dock's placement and frame scope."""
         if self.optari_controller.shapes_layer is None:
             return
-        annotation = self.optari_controller.annotation
+        annotation = self.optari_controller.annotation_dock
         item = annotation.roi_presets_list.currentItem()
         if item is None:
             return
@@ -993,7 +993,7 @@ class RoiController(TaskControllerBase):
         Runs only when the selection changes, so a placement the user picked by hand
         survives clicking or double-clicking the same preset again.
         """
-        combo = self.optari_controller.annotation.roi_placement_mode_combo
+        combo = self.optari_controller.annotation_dock.roi_placement_mode_combo
         location_item = combo.model().item(combo.findData("auto"))
         if item is None:
             location_item.setText("Location")
@@ -1003,7 +1003,7 @@ class RoiController(TaskControllerBase):
         try:
             preset = self._roi_preset_store.get(item.text())
         except (TypeError, ValueError, OSError) as exc:
-            self.optari_controller.annotation.roi_presets_description_label.setText(
+            self.optari_controller.annotation_dock.roi_presets_description_label.setText(
                 f"Could not load ROI preset: {exc}"
             )
             return
@@ -1021,7 +1021,7 @@ class RoiController(TaskControllerBase):
             parts.append(
                 f"(location: {location}, top margin {preset.top_margin_mm:.2f} mm)"
             )
-        self.optari_controller.annotation.roi_presets_description_label.setText(
+        self.optari_controller.annotation_dock.roi_presets_description_label.setText(
             " ".join(filter(None, parts))
         )
 
@@ -1041,7 +1041,7 @@ class RoiController(TaskControllerBase):
     def refresh_ui(self) -> None:
         """Refresh ROI controls after scan or active-layer state changes."""
         if self.optari_controller.shapes_layer is None:
-            self.optari_controller.roi.save_button.setEnabled(False)
+            self.optari_controller.roi_dock.save_button.setEnabled(False)
             self.update_live_table()
             return
         self._update_save_button_state()

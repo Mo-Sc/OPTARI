@@ -1,7 +1,6 @@
 """Exporting scans: OPTARI HDF5 with ROIs and derived images, IPASC raw data, batch report."""
 
 import json
-from dataclasses import replace
 from pathlib import Path
 
 import h5py
@@ -11,14 +10,13 @@ import patato as pat
 import pytest
 from patato.io.attribute_tags import HDF5Tags
 
-from optari import OPTARI_SOURCE_TAG
 from optari.batch.plan import BatchJob
 from optari.batch.report import REPORT_COLUMNS, REPORT_SHEET, BatchReport
-from optari.io.discovery import ScanInfo, scan_type
 from optari.controllers.unmixing_controller import (
     set_unmixed_export_attrs,
     unmix_frames,
 )
+from optari.io.discovery import ScanInfo, scan_type
 from optari.io.export_pipeline import (
     ScanExport,
     export_scan_to_hdf5,
@@ -30,9 +28,9 @@ from optari.patato_bridge import (
     roi_records_from_scan_rois,
 )
 from optari.provenance import OPTARI_FILE_FORMAT_VERSION
-from optari.roi.roi_records import ROIRecord
+from optari.roi.roi_records import RoiRecord
 from optari.roi.roi_table_io import ROI_TABLE_META_SHEET
-from tests.conftest import ITHERA_SCAN, needs_study, run_to_end
+from tests.conftest import needs_study, run_to_end
 
 pytestmark = needs_study
 
@@ -55,7 +53,7 @@ def scan_export(pa_data, records=(), derived=None) -> ScanExport:
 
 
 def test_hdf5_export_round_trip(ithera_scan, tmp_path):
-    roi = ROIRecord(
+    roi = RoiRecord(
         roi_id=0,
         track_id=0,
         frame_id=FRAME,

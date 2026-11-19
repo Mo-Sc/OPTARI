@@ -7,15 +7,14 @@ import logging
 from datetime import datetime, timedelta
 
 import numpy as np
-
+import patato as pat  # type: ignore[import]
 from napari.layers import Image
 from patato.io.attribute_tags import HDF5Tags  # type: ignore[import]
-import patato as pat  # type: ignore[import]
-
+from patato.utils.rois.roi_type import ROI as PatatoROI  # type: ignore[import]
 
 from optari.config import settings
 from optari.roi.roi_geometry import RoiGeometry
-from optari.roi.roi_records import ROIRecord, new_roi_group_uid
+from optari.roi.roi_records import RoiRecord, new_roi_group_uid
 from optari.segmentation.segmenter import MASK_DTYPE
 
 logger = logging.getLogger(__name__)
@@ -85,7 +84,7 @@ def layer_translate(
 YEAR_ONE = datetime(1, 1, 1)
 
 
-def acquisition_start(pa_data: "pat.PAData") -> datetime | None:
+def acquisition_start(pa_data: pat.PAData) -> datetime | None:
     """Wall-clock time of the first frame, time-zone aware, or None if the scan cannot be dated.
 
     PATATO's iThera and IPASC readers count timestamps in seconds since 0001-01-01, but
@@ -188,7 +187,7 @@ class PaddedFrames:
 
 def expand_to_acquisition_frames(
     data: np.ndarray, frames: list[int], n_acq_frames: int
-) -> "np.ndarray | PaddedFrames":
+) -> np.ndarray | PaddedFrames:
     """Place per-output-frame *data* at its *frames* on the acquisition frame axis.
 
     Frames that were not processed read as zero, so every PA layer shares the frame
@@ -298,7 +297,7 @@ def pa_layers(layers) -> list[Image]:
 
 
 def build_napari_layers(
-    pa_data: "pat.PAData", filepath: str, scan_name: str | None
+    pa_data: pat.PAData, filepath: str, scan_name: str | None
 ) -> tuple[list[tuple], dict]:
     """Build napari image layers from an open *pa_data* handle.
 
@@ -502,7 +501,7 @@ def build_napari_layers(
 # ---------------------------------------------------------------------------
 
 
-def fov_from_objects(patato_objects: dict) -> "tuple[float, float] | None":
+def fov_from_objects(patato_objects: dict) -> tuple[float, float] | None:
     """The scan's ``(fov_x_m, fov_y_m)``, the frame ROIs are stored in.
 
     The ultrasound's, which every vendor reconstruction matches (checked in
@@ -526,7 +525,7 @@ def fov_from_objects(patato_objects: dict) -> "tuple[float, float] | None":
 # ---------------------------------------------------------------------------
 
 
-def segmentation_from_scan(pa_data: "pat.PAData") -> dict | None:
+def segmentation_from_scan(pa_data: pat.PAData) -> dict | None:
     """Load a previously exported segmentation mask and its class metadata.
 
     Returns ``None`` when the scan has no segmentation, or one that has not optari compatible metadata
@@ -552,8 +551,8 @@ def segmentation_from_scan(pa_data: "pat.PAData") -> dict | None:
 
 
 def roi_records_from_scan_rois(
-    pa_data: "pat.PAData", fov_x_m: float, fov_y_m: float
-) -> list[ROIRecord]:
+    pa_data: pat.PAData, fov_x_m: float, fov_y_m: float
+) -> list[RoiRecord]:
     """Load PATATO ROIs as one frame-owned record per valid frame."""
     try:
         rois = pa_data.get_rois()
@@ -561,7 +560,7 @@ def roi_records_from_scan_rois(
     except Exception as exc:
         raise ValueError("could not read stored ROI annotations") from exc
 
-    records: list[ROIRecord] = []
+    records: list[RoiRecord] = []
     used_ids: set[int] = set()
     next_id = 0
     # Above every persisted group id, so an ROI without one never takes the number a
@@ -656,8 +655,6 @@ def patato_roi_from_geometry(
 
     The geometry's ``source`` becomes PATATO's ``roi_class``, so provenance survives export.
     """
-    from patato.utils.rois.roi_type import ROI as PatatoROI  # type: ignore[import]
-
     roi = PatatoROI.from_polygon_mm(
         verts_yx_mm=geometry.verts_mm(fov_x_m, fov_y_m),
         fov=(fov_x_m, fov_y_m),

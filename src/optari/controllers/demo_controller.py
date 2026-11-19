@@ -39,7 +39,7 @@ def demo_frames(n_frames: int) -> Generator[None, None, int]:
 class DemoController(TaskControllerBase):
     """Owns the Demo dock, which only it uses, so it declares the dock itself."""
 
-    DOCK = ("demo", create_demo_dock, "Demo", "right", True)
+    DOCK = ("demo_dock", create_demo_dock, "Demo", "right", True)
 
     def _signal_bindings(self) -> list[tuple[object, Callable]]:
         return [(self.dock.run_button.clicked, self.on_run_clicked)]

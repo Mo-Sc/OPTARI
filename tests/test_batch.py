@@ -20,7 +20,6 @@ from optari.batch.runner import (
     BatchRunner,
     BatchStepError,
     Tick,
-    _in_background,
 )
 from optari.io.discovery import ScanInfo
 from optari.roi.roi_utils import MeasureScope

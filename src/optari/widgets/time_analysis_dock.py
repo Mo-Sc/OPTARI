@@ -12,7 +12,7 @@ from .dock_helpers import create_bottom_dock_header
 @dataclass
 class TimeAnalysisDock:
     widget: QWidget
-    generate_button: QPushButton
+    refresh_button: QPushButton
     status_label: QLabel
     # One plot for the dock's lifetime, redrawn on every refresh.
     plot_widget: pg.PlotWidget
@@ -37,11 +37,11 @@ def create_time_analysis_dock() -> TimeAnalysisDock:
     widget = QWidget()
     layout = QVBoxLayout(widget)
 
-    status_label, generate_button = create_bottom_dock_header(
+    status_label, refresh_button = create_bottom_dock_header(
         layout,
         status_text="Click 'Refresh' to compute ROI means over time.",
     )
-    generate_button.setToolTip(
+    refresh_button.setToolTip(
         "Recompute the selected feature over time for the active ROI(s), using the "
         "Feature setting in the Annotation dock"
     )
@@ -54,7 +54,7 @@ def create_time_analysis_dock() -> TimeAnalysisDock:
 
     return TimeAnalysisDock(
         widget=widget,
-        generate_button=generate_button,
+        refresh_button=refresh_button,
         status_label=status_label,
         plot_widget=plot_widget,
         frame_line=frame_line,

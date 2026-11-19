@@ -117,7 +117,7 @@ def run_background_task(
 
 
 def start_task(
-    optari_controller: "OptariController",
+    optari_controller: OptariController,
     step: BackgroundStep,
     *,
     on_result: Callable,
@@ -152,7 +152,7 @@ def start_task(
 
 
 def download_then(
-    optari_controller: "OptariController",
+    optari_controller: OptariController,
     model_path: Path,
     url: str | None,
     status_label: QLabel,

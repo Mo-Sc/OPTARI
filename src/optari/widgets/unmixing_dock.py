@@ -9,13 +9,13 @@ from qtpy.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QListWidget,
     QPushButton,
     QRadioButton,
     QSpinBox,
     QVBoxLayout,
     QWidget,
-    QLineEdit,
 )
 
 from .dock_helpers import (

@@ -4,19 +4,16 @@ from pathlib import Path
 
 # must import before Qt/napari on Windows (for PyQt6)
 # TODO: check if still necessary after switch to PySide6
-import jax  # noqa: jax is required by PATATO
-
-
+import jax  # noqa: F401  (PATATO needs it imported before Qt)
 from qtpy.QtGui import QIcon
 from qtpy.QtWidgets import QApplication
 
-from optari.utils.logging import configure_logging
-from optari.utils.setup import configure_napari, load_startup_logo
+from optari import __version__
 from optari.config import settings
 from optari.controllers.optari_controller import OptariController
+from optari.utils.logging import configure_logging
+from optari.utils.setup import configure_napari, load_startup_logo
 from optari.widgets.settings_dialog import identification_dialog
-
-from optari import __version__
 
 logger = logging.getLogger(__name__)
 

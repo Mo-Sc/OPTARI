@@ -13,39 +13,38 @@ if TYPE_CHECKING:
     from napari.qt.threading import GeneratorWorker
     from qtpy.QtWidgets import QDockWidget
 
-from optari.patato_bridge import is_pa_layer, pa_layers
-from optari.roi.roi_utils import slice_datetime
-from optari.utils.viewer import selected_frame_and_channel
-from optari.widgets.info_dock import InfoDock
-from optari.widgets.roi_dock import RoiDock
-from optari.widgets.scan_browser_dock import ScanBrowserDock
-from optari.io.discovery import ScanInfo
-from optari.widgets.annotation_dock import AnnotationDock
-from optari.widgets.reconstruction_dock import ReconstructionDock
-from optari.widgets.segmentation_dock import SegmentationDock
-from optari.widgets.motion_dock import MotionDock
-from optari.widgets.time_analysis_dock import TimeAnalysisDock
-from optari.widgets.unmixing_dock import UnmixingDock
-from optari.widgets.histogram_dock import HistogramDock
-from optari.widgets.spectrum_dock import SpectrumDock
-from optari.widgets.layer_metadata_dialog import LayerMetadataDialog
-from optari.controllers.base import TaskControllerBase
-
-# from optari.controllers.demo_controller import DemoController # Demo feature
-from optari.controllers.ui_manager import UiManager
-from optari.controllers.menu_manager import MenuManager
-from optari.controllers.shortcut_manager import ShortcutManager
-from optari.controllers.viewer_export_controller import ViewerExportController
-from optari.controllers.scan_controller import ScanController
-from optari.controllers.roi_controller import RoiController
-from optari.controllers.segmentation_controller import SegmentationController
+from optari.config import settings
 from optari.controllers.analysis_controller import AnalysisController
-from optari.controllers.unmixing_controller import UnmixingController
+from optari.controllers.base import TaskControllerBase
+from optari.controllers.menu_manager import MenuManager
 from optari.controllers.reconstruction_controller import (
     ReconstructionController,
 )
+from optari.controllers.roi_controller import RoiController
+from optari.controllers.scan_controller import ScanController
+from optari.controllers.segmentation_controller import SegmentationController
+from optari.controllers.shortcut_manager import ShortcutManager
 
-from optari.config import settings
+# from optari.controllers.demo_controller import DemoController # Demo feature
+from optari.controllers.ui_manager import UiManager
+from optari.controllers.unmixing_controller import UnmixingController
+from optari.controllers.viewer_export_controller import ViewerExportController
+from optari.io.discovery import ScanInfo
+from optari.patato_bridge import is_pa_layer, pa_layers
+from optari.roi.roi_utils import slice_datetime
+from optari.utils.viewer import selected_frame_and_channel
+from optari.widgets.annotation_dock import AnnotationDock
+from optari.widgets.histogram_dock import HistogramDock
+from optari.widgets.info_dock import InfoDock
+from optari.widgets.layer_metadata_dialog import LayerMetadataDialog
+from optari.widgets.motion_dock import MotionDock
+from optari.widgets.reconstruction_dock import ReconstructionDock
+from optari.widgets.roi_dock import RoiDock
+from optari.widgets.scan_browser_dock import ScanBrowserDock
+from optari.widgets.segmentation_dock import SegmentationDock
+from optari.widgets.spectrum_dock import SpectrumDock
+from optari.widgets.time_analysis_dock import TimeAnalysisDock
+from optari.widgets.unmixing_dock import UnmixingDock
 
 logger = logging.getLogger(__name__)
 
@@ -76,17 +75,17 @@ class OptariController:
         # Docks, set by UiManager.setup_docks() from its DOCKS table. dock_widgets maps each
         # dock's title to the Qt dock widget holding it, napari's own Layer Controls/List included.
         self.dock_widgets: dict[str, QDockWidget] = {}
-        self.scan_browser: ScanBrowserDock | None = None
-        self.info: InfoDock | None = None
-        self.roi: RoiDock | None = None
-        self.time_analysis: TimeAnalysisDock | None = None
-        self.motion: MotionDock | None = None
-        self.histograms: HistogramDock | None = None
-        self.spectrum: SpectrumDock | None = None
-        self.annotation: AnnotationDock | None = None
-        self.segmentation: SegmentationDock | None = None
-        self.unmixing: UnmixingDock | None = None
-        self.reconstruction: ReconstructionDock | None = None
+        self.scan_browser_dock: ScanBrowserDock | None = None
+        self.info_dock: InfoDock | None = None
+        self.roi_dock: RoiDock | None = None
+        self.time_analysis_dock: TimeAnalysisDock | None = None
+        self.motion_dock: MotionDock | None = None
+        self.histogram_dock: HistogramDock | None = None
+        self.spectrum_dock: SpectrumDock | None = None
+        self.annotation_dock: AnnotationDock | None = None
+        self.segmentation_dock: SegmentationDock | None = None
+        self.unmixing_dock: UnmixingDock | None = None
+        self.reconstruction_dock: ReconstructionDock | None = None
 
         self.viewer_export_ctrl = ViewerExportController(self)
         self.scan_ctrl = ScanController(self)
@@ -207,7 +206,7 @@ class OptariController:
             ),
             # Live table itemSelectionChanged is signal for table -> viewer sync.
             (
-                self.roi.live_table.native.itemSelectionChanged,
+                self.roi_dock.live_table.native.itemSelectionChanged,
                 self.roi_ctrl.on_live_table_selection_changed,
             ),
         ]
@@ -430,14 +429,14 @@ class OptariController:
 
     def update_info_labels(self, event=None) -> None:
         # Scan, IPASC and clinical metadata need no layer, only the Layer tab does.
-        self.info.metadata_button.setEnabled(self.pa_data is not None)
+        self.info_dock.metadata_button.setEnabled(self.pa_data is not None)
         if self.active_recon_layer is None:
-            self.info.set_message("Select a PA image layer")
+            self.info_dock.set_message("Select a PA image layer")
             return
 
         frame_channel = selected_frame_and_channel(self.viewer)
         if frame_channel is None:
-            self.info.set_rows([("Layer", self.active_recon_layer.name)])
+            self.info_dock.set_rows([("Layer", self.active_recon_layer.name)])
             return
         frame_idx, channel_idx = frame_channel
 
@@ -468,7 +467,7 @@ class OptariController:
             f"{scan_folder} ({scan_name})" if scan_name else scan_folder
         )
         study_str = self.study_path.stem if self.study_path else "N/A"
-        self.info.set_rows(
+        self.info_dock.set_rows(
             [
                 ("Study", study_str),
                 ("Scan", scan_display),

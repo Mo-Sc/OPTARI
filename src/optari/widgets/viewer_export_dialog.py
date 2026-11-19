@@ -11,6 +11,8 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
+from optari.config import settings
+
 
 class ViewerExportDialog(QDialog):
     """Dialog for exporting the currently visible viewer content."""
@@ -39,8 +41,6 @@ class ViewerExportDialog(QDialog):
         self.fps_spinbox.setRange(0.1, 240.0)
         self.fps_spinbox.setDecimals(2)
         fps_layout.addWidget(self.fps_spinbox, 1)
-
-        from optari.config import settings
 
         self.fps_spinbox.setValue(float(settings.general.DEFAULT_PLAYBACK_FPS))
         self.fps_row.setVisible(False)

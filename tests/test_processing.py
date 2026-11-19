@@ -1,6 +1,5 @@
 """Reconstruction, spectral unmixing, segmentation and automatic ROI placement on testdata."""
 
-import json
 from types import SimpleNamespace
 
 import numpy as np
@@ -11,13 +10,13 @@ from optari.controllers.reconstruction_controller import (
     ReconParams,
     reconstruct_frames,
 )
-from optari.roi.roi_placement import anchor_verts_to_mask
 from optari.controllers.unmixing_controller import (
     UnmixParams,
-    unmix_frames,
     resolve_unmixing_wavelengths,
+    unmix_frames,
 )
 from optari.patato_bridge import display_data_from_patato_obj
+from optari.roi.roi_placement import anchor_verts_to_mask
 from optari.roi.roi_shapes import class_top_at_center_column
 from optari.segmentation.segmenter import create_segmenter
 from optari.utils.presets import PresetStore

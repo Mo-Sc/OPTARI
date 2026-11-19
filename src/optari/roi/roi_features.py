@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
-class ROIContext:
+class RoiContext:
     """Everything one measurement needs: identifiers, provenance, the geometry blob
     and the pixel values a ``FeatureSpec`` reads.
 
@@ -50,10 +50,10 @@ class ROIContext:
 
 @dataclass(frozen=True)
 class FeatureSpec:
-    """Pairs a dtype with a function from an :class:`ROIContext` to the column's value."""
+    """Pairs a dtype with a function from an :class:`RoiContext` to the column's value."""
 
     dtype: type
-    fn: Callable[[ROIContext], object]
+    fn: Callable[[RoiContext], object]
 
 
 def _nan_stat(values: np.ndarray, fn: Callable[[np.ndarray], float]) -> float:
@@ -95,7 +95,7 @@ def _bound(value: float | None) -> float:
     return float("nan") if value is None else float(value)
 
 
-def _size_mm(ctx: ROIContext) -> float:
+def _size_mm(ctx: RoiContext) -> float:
     """Area in mm² of a 2D ROI, or length in mm of a line or path.
     """
     if ctx.kind in ("line", "path"):

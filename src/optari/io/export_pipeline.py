@@ -21,14 +21,14 @@ from pathlib import Path
 import h5py
 import numpy as np
 import patato as pat
+from patato.io.attribute_tags import HDF5Tags
 
 from optari.io.discovery import ScanInfo
 from optari.patato_bridge import LAYER_NAME_ATTR, patato_roi_from_geometry
 from optari.provenance import file_origin
-from optari.utils.files import atomic_destination
 from optari.roi.roi_geometry import RoiGeometry
-from optari.roi.roi_records import ROIRecord
-from patato.io.attribute_tags import HDF5Tags
+from optari.roi.roi_records import RoiRecord
+from optari.utils.files import atomic_destination
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ class ScanExport:
     pa_data: pat.PAData
     path: Path | None
     # OPTARI's own ROIs. Other tools' annotations stay as the file stores them.
-    rois: list[ROIRecord]
+    rois: list[RoiRecord]
     # False when stored OPTARI ROIs failed to restore: they are not in the session,
     # so they must be kept.
     replace_stored_rois: bool
@@ -130,6 +130,7 @@ def ipasc_export_report(destination: Path) -> str:
     present" are absent when the source format never recorded them, so their
     absence is not a failure and is not counted here.
     """
+    # Imported here: pacfish takes about 0.4 s to load and only this report needs it.
     import pacfish as pf
     from pacfish import MetadataAcquisitionTags
 

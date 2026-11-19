@@ -3,9 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from qtpy.QtWidgets import (
-    QHBoxLayout,
     QComboBox,
     QGroupBox,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QListWidget,

@@ -149,6 +149,7 @@ def configure_napari(viewer) -> None:
     """
     # imported here: optari.config imports this module, and headless users of it shouldn't load napari
     from napari.settings import get_settings
+
     from optari.config import settings
 
     napari_settings = get_settings()

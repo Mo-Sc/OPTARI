@@ -1,4 +1,4 @@
-"""``ROIRecord``: one ROI shape on one frame, the source-of-truth unit ``RoiController`` persists.
+"""``RoiRecord``: one ROI shape on one frame, the source-of-truth unit ``RoiController`` persists.
 
 Records are frame-owned, not shape-owned: a region followed across frames is several
 records sharing one ``roi_group_uid``, not one record holding a list of frames.
@@ -27,7 +27,7 @@ def new_roi_group_uid() -> str:
 
 
 @dataclass
-class ROIRecord:
+class RoiRecord:
     """One ROI shape on one frame.
 
     Has 3 identifiers, for 3 scopes:

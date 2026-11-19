@@ -38,8 +38,8 @@ flowchart LR
         scan[Load a scan's ROIs]
     end
 
-    record["ROIRecord<br/><small>one per shape per frame</small>"]
-    ctx["ROIContext<br/><small>via FEATURE_REGISTRY</small>"]
+    record["RoiRecord<br/><small>one per shape per frame</small>"]
+    ctx["RoiContext<br/><small>via FEATURE_REGISTRY</small>"]
     geometry["RoiGeometry<br/><small>FOV-independent form</small>"]
 
     live[Live Analysis table]
@@ -75,16 +75,16 @@ different scopes and are not interchangeable.
 
 **Every record in a group shares one `roi_group_uid`.** A uid identifies a **region**, not a measurement of it. Copying a shape to another frame,
 merging shapes into a group, or interpolating between keyframes all mean giving the results
-a common uid. `ROIRecord` creates a fresh one by default, so any code that copies a record
+a common uid. `RoiRecord` creates a fresh one by default, so any code that copies a record
 must pass the source's uid explicitly.
 
 To uniquely identify a measurement, `roi_ts`, created once per save, can be used. `new_roi_group_uid()` in `roi_records.py` creates roi_group_uid as a UTC timestamp plus 48 random bits.
 
-## `ROIRecord`
+## `RoiRecord`
 
 ```python
 @dataclass
-class ROIRecord:
+class RoiRecord:
     roi_id: int
     track_id: int
     frame_id: int
@@ -97,7 +97,7 @@ class ROIRecord:
 
 Records are **frame-owned**: there is one per (shape, frame), not one shape with a list of
 frames. They live in a `RoiStore` (`roi_store.py`), held by `RoiController` as `self.store`:
-`store.records: dict[int, ROIRecord]`, keyed by `roi_id`, is the single source of truth.
+`store.records: dict[int, RoiRecord]`, keyed by `roi_id`, is the single source of truth.
 `RoiStore` is free of Qt and napari, so the record bookkeeping can be tested on plain arrays.
 The napari Shapes layer is a projection of it:
 
@@ -143,7 +143,7 @@ every conversion in the codebase goes through them.
 
 | Frame | Use | Anchored to |
 |---|---|---|
-| **world mm** | `ROIRecord.verts`, always | the viewer's shared physical space |
+| **world mm** | `RoiRecord.verts`, always | the viewer's shared physical space |
 | **PATATO metres** | `RoiGeometry.verts_m`, everything persisted | the scan's FOV centre |
 | **layer pixels** | mask indices, pixel centres at integers | one layer's own array |
 
@@ -166,7 +166,7 @@ round-tripped back into a shape.
 ### The type
 
 `RoiGeometry` holds `verts_m`, `kind`, `tissue_class` and `source`, which is everything needed to
-rebuild an `ROIRecord` and converts in both directions:
+rebuild an `RoiRecord` and converts in both directions:
 
 ```python
 geometry = RoiGeometry.from_record(record, fov_x_m, fov_y_m)
@@ -177,14 +177,14 @@ geometry = RoiGeometry.from_json(blob)
 ```
 
 It does **not** carry any identifier. Geometry is shape, identity is
-`ROIRecord`. Keeping them apart is what lets one preset be placed many times,
+`RoiRecord`. Keeping them apart is what lets one preset be placed many times,
 each placement getting its own identity.
 
-## Measurement: `ROIContext` and the feature registry
+## Measurement: `RoiContext` and the feature registry
 
 Statistics are computed by a registry, so adding a measurement only requires a one-line change.
 
-`ROIContext` (`roi_features.py`) is an bundle of everything a single measurement needs: the identifiers, provenance (`scan_name`, `frame`, `channel`, `src_layer`,
+`RoiContext` (`roi_features.py`) is an bundle of everything a single measurement needs: the identifiers, provenance (`scan_name`, `frame`, `channel`, `src_layer`,
 timestamps), the geometry blob, and the pixel values (`vals_raw`, the clamped `vals`, the
 scale, the vertices).
 
@@ -225,7 +225,7 @@ This is intentional: the saved table always stores the full feature set, and
 visibility settings only affect what is displayed. 
 
 !!! note "Adding a feature"
-    Add a `FeatureSpec` to `FEATURE_REGISTRY`, add the field to `ROIContext` if it needs new
+    Add a `FeatureSpec` to `FEATURE_REGISTRY`, add the field to `RoiContext` if it needs new
     input, and add the key to `annotation.roi_features` in the packaged
     `config.json`. Existing user configs tolerate a missing key so no schema bump is needed for a purely additive feature.
 
@@ -339,7 +339,7 @@ is **skipped**.
     isolation, centre-column anchoring, depth offset, contour extraction). It does not
     participate in persistence: `RoiGeometry` represents an ROI, `roi_shapes.py` constructs
     one. Its `shape_type` argument is named after napari's Shapes-layer argument
-    (`shapes_layer.add(shape_type=...)`) and is the same concept as `ROIRecord.kind`.
+    (`shapes_layer.add(shape_type=...)`) and is the same concept as `RoiRecord.kind`.
 
 
 ## Live Refresh

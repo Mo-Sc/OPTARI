@@ -6,9 +6,9 @@ import numpy as np
 import pytest
 
 from optari.controllers.roi_controller import RoiController
+from optari.roi.roi_records import RoiRecord
+from optari.roi.roi_shapes import RoiPlacementConfig, roi_verts_from_mask
 from optari.roi.roi_store import layer_holds
-from optari.roi.roi_records import ROIRecord
-from optari.roi.roi_shapes import ROIPlacementConfig, roi_verts_from_mask
 from optari.roi.roi_utils import (
     NO_CLAMP,
     IntensityClamp,
@@ -35,7 +35,7 @@ def rectangle_over_block(roi_id=0, track_id=0, frame_id=0):
     Rasterization fills boundary pixels, so the outline runs through the centres of
     the block's edge pixels (rows 20 and 39), not around them.
     """
-    return ROIRecord(
+    return RoiRecord(
         roi_id=roi_id,
         track_id=track_id,
         frame_id=frame_id,
@@ -81,7 +81,7 @@ def test_rectangle_stats_are_exact(image_layer):
 def test_ellipse_area_is_close_to_analytic(image_layer):
     layer = image_layer(np.ones((1, 1, 200, 200)), SCALE)
     # 10 x 4 mm bounding box: semi-axes 50 and 20 pixels.
-    ellipse = ROIRecord(
+    ellipse = RoiRecord(
         roi_id=0,
         track_id=0,
         frame_id=0,
@@ -147,7 +147,7 @@ def test_clamp_clip_keeps_pixels_exclude_drops_them(image_layer):
         roi_exclude_max_edit=text(""),
     )
     roi_ctrl = SimpleNamespace(
-        optari_controller=SimpleNamespace(annotation=dock),
+        optari_controller=SimpleNamespace(annotation_dock=dock),
         update_live_table=lambda: None,
     )
     RoiController.on_intensity_settings_changed(roi_ctrl)
@@ -221,7 +221,9 @@ def test_roi_shape_from_mask_is_exact():
     mask = np.zeros((100, 100), dtype=bool)
     mask[30:60] = True  # tissue band from row 30 to 59
 
-    config = ROIPlacementConfig(width_mm=4.0, height_mm=2.0, depth_mm=None)
+    config = RoiPlacementConfig(
+        width_mm=4.0, height_mm=2.0, top_margin_mm=None
+    )
     verts = roi_verts_from_mask("rectangle", mask, config, sy=SCALE, sx=SCALE)
     assert sorted(set(verts[:, 0])) == [
         3.0,
@@ -235,6 +237,8 @@ def test_roi_shape_from_mask_is_exact():
     assert poly_verts[:, 0].min() >= 3.0 and poly_verts[:, 0].max() <= 5.0
     assert poly_verts[:, 1].min() >= 3.0 and poly_verts[:, 1].max() <= 7.0
 
-    too_tall = ROIPlacementConfig(width_mm=4.0, height_mm=5.0, depth_mm=None)
+    too_tall = RoiPlacementConfig(
+        width_mm=4.0, height_mm=5.0, top_margin_mm=None
+    )
     with pytest.raises(ValueError, match="exceeds class depth"):
         roi_verts_from_mask("rectangle", mask, too_tall, sy=SCALE, sx=SCALE)

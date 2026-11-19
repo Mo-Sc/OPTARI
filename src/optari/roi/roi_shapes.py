@@ -9,17 +9,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import numpy as np
 import cv2
+import numpy as np
 
 
 @dataclass(frozen=True)
-class ROIPlacementConfig:
+class RoiPlacementConfig:
     """ROI placement configuration in mm."""
 
     width_mm: float | None
     height_mm: float | None
-    depth_mm: float | None
+    top_margin_mm: float | None
 
 
 def largest_component(mask: np.ndarray) -> np.ndarray:
@@ -59,7 +59,7 @@ def class_top_at_center_column(mask: np.ndarray) -> tuple[int, int]:
 def roi_verts_from_mask(
     shape_type: str,
     class_mask: np.ndarray,
-    config: ROIPlacementConfig,
+    config: RoiPlacementConfig,
     *,
     sy: float,
     sx: float,
@@ -80,7 +80,7 @@ def roi_verts_from_mask(
 
 def _pixel_bounds(
     mask: np.ndarray,
-    config: ROIPlacementConfig,
+    config: RoiPlacementConfig,
     sy: float,
     sx: float,
 ) -> tuple[int, int, int, int, np.ndarray]:
@@ -117,9 +117,9 @@ def _pixel_bounds(
         x0, x1 = 0, w
 
     # Height: Extending downwards from the established Y-anchor
-    depth_mm = float(config.depth_mm or 0.0)
-    depth_px = max(0, int(round(depth_mm / float(sy))))
-    y0 = min(h, top_y + depth_px)
+    margin_mm = float(config.top_margin_mm or 0.0)
+    margin_px = max(0, int(round(margin_mm / float(sy))))
+    y0 = min(h, top_y + margin_px)
 
     if config.height_mm is not None:
         height_px = max(1, int(round(float(config.height_mm) / float(sy))))
@@ -134,7 +134,7 @@ def _pixel_bounds(
 
 def _box_verts_mm(
     class_mask: np.ndarray,
-    config: ROIPlacementConfig,
+    config: RoiPlacementConfig,
     sy: float,
     sx: float,
     ty: float,
@@ -150,14 +150,14 @@ def _box_verts_mm(
     top_row, center_col = _top_at_center_column(largest_mask)
     bottom_row = np.flatnonzero(largest_mask[:, center_col])[-1] + 1
 
-    needed_depth = float(config.depth_mm or 0.0) + float(config.height_mm)
+    needed_depth = float(config.top_margin_mm or 0.0) + float(config.height_mm)
     class_depth = (bottom_row - top_row) * sy
     if needed_depth > class_depth + 1e-9:
         raise ValueError(
             f"ROI top margin plus height ({needed_depth:.2f} mm) exceeds class depth "
             f"({class_depth:.2f} mm)."
         )
-    y0 = ty + top_row * sy + float(config.depth_mm or 0.0)
+    y0 = ty + top_row * sy + float(config.top_margin_mm or 0.0)
     y1 = y0 + float(config.height_mm)
     cx = tx + center_col * sx
     half_w = 0.5 * float(config.width_mm)
@@ -167,7 +167,7 @@ def _box_verts_mm(
 
 
 def _polygon_verts_px(
-    class_mask: np.ndarray, config: ROIPlacementConfig, sy: float, sx: float
+    class_mask: np.ndarray, config: RoiPlacementConfig, sy: float, sx: float
 ) -> np.ndarray:
     """Polygon (pixels) from the class's outline, trimmed to the configured bounds and
     anchored to the component's absolute top.

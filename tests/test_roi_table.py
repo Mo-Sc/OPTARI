@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from optari.roi.roi_records import ROIRecord
+from optari.roi.roi_records import RoiRecord
 from optari.roi.roi_table import SavedRoiTable
 from optari.roi.roi_table_io import (
     ROI_TABLE_META_SHEET,
@@ -23,7 +23,7 @@ def measured_rows(image_layer):
         filepath="/data/Study_1/Scan_1.hdf5",
     )
     rois = [
-        ROIRecord(
+        RoiRecord(
             roi_id=i,
             track_id=i,
             frame_id=0,

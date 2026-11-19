@@ -9,17 +9,17 @@ from collections.abc import Callable
 import numpy as np
 import pyqtgraph as pg
 
+from optari.config import settings
+from optari.controllers.base import TaskControllerBase
 from optari.roi.roi_utils import (
-    compute_roi_track_time_series,
-    compute_roi_time_series,
     compute_roi_spectra,
+    compute_roi_time_series,
+    compute_roi_track_time_series,
     extract_roi_pixels_for_slice,
     time_axis,
 )
 from optari.utils.misc import roi_color_for_index
 from optari.utils.motion import standout_frames
-from optari.controllers.base import TaskControllerBase
-from optari.config import settings
 from optari.utils.viewer import selected_frame_and_channel
 
 logger = logging.getLogger(__name__)
@@ -34,12 +34,16 @@ class AnalysisController(TaskControllerBase):
             self.optari_controller.shapes_layer is not None
             and self.optari_controller.active_recon_layer is not None
         )
-        self.optari_controller.time_analysis.generate_button.setEnabled(
+        self.optari_controller.time_analysis_dock.refresh_button.setEnabled(
             has_data
         )
-        self.optari_controller.histograms.refresh_button.setEnabled(has_data)
-        self.optari_controller.spectrum.refresh_button.setEnabled(has_data)
-        self.optari_controller.motion.refresh_button.setEnabled(
+        self.optari_controller.histogram_dock.refresh_button.setEnabled(
+            has_data
+        )
+        self.optari_controller.spectrum_dock.refresh_button.setEnabled(
+            has_data
+        )
+        self.optari_controller.motion_dock.refresh_button.setEnabled(
             self.optari_controller.active_us_layer is not None
         )
 
@@ -48,31 +52,31 @@ class AnalysisController(TaskControllerBase):
         ctrl = self.optari_controller
         return [
             (
-                ctrl.time_analysis.generate_button.clicked,
+                ctrl.time_analysis_dock.refresh_button.clicked,
                 self.on_generate_time_analysis_clicked,
             ),
             (
-                ctrl.histograms.refresh_button.clicked,
+                ctrl.histogram_dock.refresh_button.clicked,
                 self.on_refresh_histograms_clicked,
             ),
             (
-                ctrl.spectrum.refresh_button.clicked,
+                ctrl.spectrum_dock.refresh_button.clicked,
                 self.on_refresh_spectrum_clicked,
             ),
             (
-                ctrl.annotation.time_analysis_track_radio.toggled,
+                ctrl.annotation_dock.time_analysis_track_radio.toggled,
                 self.on_time_analysis_scope_changed,
             ),
             (
-                ctrl.motion.refresh_button.clicked,
+                ctrl.motion_dock.refresh_button.clicked,
                 self.on_refresh_motion_clicked,
             ),
             (
-                ctrl.motion.frame_line.sigPositionChangeFinished,
+                ctrl.motion_dock.frame_line.sigPositionChangeFinished,
                 self.on_motion_frame_line_dragged,
             ),
             (
-                ctrl.time_analysis.frame_line.sigPositionChangeFinished,
+                ctrl.time_analysis_dock.frame_line.sigPositionChangeFinished,
                 self.on_time_frame_line_dragged,
             ),
         ]
@@ -105,7 +109,7 @@ class AnalysisController(TaskControllerBase):
         Without *compute* only already cached scores are plotted, so a scan load can
         refresh the dock for free when a motion-based default frame scored it anyway.
         """
-        dock = self.optari_controller.motion
+        dock = self.optari_controller.motion_dock
         scores = self.optari_controller.scan_ctrl.motion_scores(
             compute=compute
         )
@@ -174,9 +178,9 @@ class AnalysisController(TaskControllerBase):
         Called on a scan change
         """
         for dock in (
-            self.optari_controller.time_analysis,
-            self.optari_controller.histograms,
-            self.optari_controller.spectrum,
+            self.optari_controller.time_analysis_dock,
+            self.optari_controller.histogram_dock,
+            self.optari_controller.spectrum_dock,
         ):
             dock.clear()
 
@@ -186,9 +190,9 @@ class AnalysisController(TaskControllerBase):
         if frame_channel is None:
             return
         frame = frame_channel[0]
-        self.optari_controller.motion.frame_line.setValue(frame)
+        self.optari_controller.motion_dock.frame_line.setValue(frame)
 
-        time_analysis = self.optari_controller.time_analysis
+        time_analysis = self.optari_controller.time_analysis_dock
         plotted = np.flatnonzero(time_analysis.plotted_frames == frame)
         # A frame the plot has no point for (not in the plotted layer) gets no line.
         time_analysis.frame_line.setVisible(plotted.size > 0)
@@ -208,7 +212,7 @@ class AnalysisController(TaskControllerBase):
 
     def on_time_frame_line_dragged(self, line) -> None:
         """Show the plotted frame nearest to where the user dragged the line."""
-        time_analysis = self.optari_controller.time_analysis
+        time_analysis = self.optari_controller.time_analysis_dock
         nearest = np.argmin(np.abs(time_analysis.plotted_x - line.value()))
         self.viewer.dims.set_point(
             0, int(time_analysis.plotted_frames[nearest])
@@ -225,7 +229,9 @@ class AnalysisController(TaskControllerBase):
         Keeps the previous selection if that track still exists. Returns the
         selected track id, or ``None`` if no tracked ROI exists to plot.
         """
-        combo = self.optari_controller.annotation.time_analysis_track_id_combo
+        combo = (
+            self.optari_controller.annotation_dock.time_analysis_track_id_combo
+        )
         track_ids = sorted(
             {r.track_id for r in self.optari_controller.roi_ctrl.roi_records}
         )
@@ -249,7 +255,7 @@ class AnalysisController(TaskControllerBase):
         every frame. "Track ID" follows
         one tracked ROI, measuring each frame on that frame's own record."""
         roi_ctrl = self.optari_controller.roi_ctrl
-        annotation = self.optari_controller.annotation
+        annotation = self.optari_controller.annotation_dock
 
         if annotation.time_analysis_track_radio.isChecked():
             track_id = self._refresh_time_analysis_track_combo()
@@ -305,8 +311,10 @@ class AnalysisController(TaskControllerBase):
         series for either the selected ROIs or a single tracked ID.
         """
         ctrl = self.optari_controller
-        dock = ctrl.time_analysis
-        track_scope = ctrl.annotation.time_analysis_track_radio.isChecked()
+        dock = ctrl.time_analysis_dock
+        track_scope = (
+            ctrl.annotation_dock.time_analysis_track_radio.isChecked()
+        )
         error = self._missing_plot_input(track_scope=track_scope, min_frames=2)
         if error:
             self._show_plot_error(dock, error)
@@ -314,7 +322,9 @@ class AnalysisController(TaskControllerBase):
 
         layer = ctrl.active_recon_layer
         _, channel_idx = self._current_frame_channel()
-        feature_id = ctrl.annotation.time_analysis_feature_combo.currentData()
+        feature_id = (
+            ctrl.annotation_dock.time_analysis_feature_combo.currentData()
+        )
 
         dock.status_label.setText("Computing time series…")
         # The computation below blocks the event loop, paint the text before it.
@@ -375,7 +385,7 @@ class AnalysisController(TaskControllerBase):
     def on_refresh_histograms_clicked(self, event=None) -> None:
         """Recompute and redraw per-ROI intensity histograms for the current frame and channel."""
         ctrl = self.optari_controller
-        dock = ctrl.histograms
+        dock = ctrl.histogram_dock
         error = self._missing_plot_input()
         if error:
             self._show_plot_error(dock, error)
@@ -437,7 +447,7 @@ class AnalysisController(TaskControllerBase):
     def on_refresh_spectrum_clicked(self, event=None) -> None:
         """Recompute and redraw per-ROI spectra across channels for the current frame."""
         ctrl = self.optari_controller
-        dock = ctrl.spectrum
+        dock = ctrl.spectrum_dock
         error = self._missing_plot_input()
         if error:
             self._show_plot_error(dock, error)

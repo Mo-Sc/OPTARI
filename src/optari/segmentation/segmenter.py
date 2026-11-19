@@ -7,27 +7,27 @@ model registry references it by class name in adapter_class.
 
 from __future__ import annotations
 
-import logging
 import json
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 import numpy as np
 import onnxruntime as ort
+from skimage.morphology import remove_small_objects
 
-from optari.utils.setup import (
-    get_user_seg_models_config_file,
-    get_user_models_dir,
-)
 from optari.segmentation.processing_utils import (
-    resize_img,
-    resize_mask,
-    normalize_img,
     combine_classes,
     keep_largest_region,
-    reassign_freed_pixels_row_based,
-    remove_small_objects,
+    normalize_img,
     reassign_freed_pixels,
+    reassign_freed_pixels_row_based,
+    resize_img,
+    resize_mask,
+)
+from optari.utils.setup import (
+    get_user_models_dir,
+    get_user_seg_models_config_file,
 )
 
 logger = logging.getLogger(__name__)

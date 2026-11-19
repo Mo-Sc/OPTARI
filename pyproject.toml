@@ -5,8 +5,7 @@ description = "Analysis tool for clinical photoacoustic/optoacoustic studies bas
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [
-  {name = "Moritz Schillinger"},
-  {email = "moritz.schillinger@fau.de"},
+  {name = "Moritz Schillinger", email = "moritz.schillinger@fau.de"},
 ]
 classifiers = [
     "License :: OSI Approved :: BSD License",
@@ -52,6 +51,7 @@ docs = [
 ]
 dev = [
     "black>=26.5",
+    "ruff>=0.15",
 ]
 
 [project.gui-scripts]
@@ -87,6 +87,18 @@ filterwarnings = [
     "ignore:`json_encoders` is deprecated:DeprecationWarning",
 ]
 
+# formatting
 [tool.black]
 line-length = 79
 target-version = ['py312']
+
+# Linting
+[tool.ruff]
+line-length = 79
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["I", "F401", "UP037"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["optari"]

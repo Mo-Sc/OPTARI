@@ -6,13 +6,13 @@ from qtpy.QtWidgets import (
     QAbstractItemView,
     QButtonGroup,
     QCheckBox,
+    QComboBox,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QListWidget,
-    QComboBox,
     QPushButton,
     QRadioButton,
     QVBoxLayout,
@@ -20,6 +20,7 @@ from qtpy.QtWidgets import (
 )
 
 from optari.roi.roi_features import numeric_feature_ids
+
 from .dock_helpers import (
     create_frame_scope_controls,
     create_number_edit,

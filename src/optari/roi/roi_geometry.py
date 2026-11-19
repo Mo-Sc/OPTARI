@@ -10,7 +10,7 @@ therefore inconsistent once the FOV changes.
 So we have 3 coordinate systems in OPTARI:
 
 ``world mm``
-    What ``ROIRecord.verts`` always holds. The Shapes layer is never translated, so
+    What ``RoiRecord.verts`` always holds. The Shapes layer is never translated, so
     world millimetres are the shared physical frame every layer is registered into.
     Scan-loaded layers have their outer pixel edge at world 0, which makes world mm
     *identical* to the scan frame.
@@ -32,7 +32,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from optari import OPTARI_SOURCE_TAG
-from optari.roi.roi_records import ROIRecord, new_roi_group_uid
+from optari.roi.roi_records import RoiRecord, new_roi_group_uid
 
 
 def patato_to_napari(
@@ -94,8 +94,8 @@ class RoiGeometry:
 
     @classmethod
     def from_record(
-        cls, record: ROIRecord, fov_x_m: float, fov_y_m: float
-    ) -> "RoiGeometry":
+        cls, record: RoiRecord, fov_x_m: float, fov_y_m: float
+    ) -> RoiGeometry:
         """Build from a record's world-space vertices."""
         return cls(
             verts_m=napari_to_patato(
@@ -119,9 +119,9 @@ class RoiGeometry:
         fov_x_m: float,
         fov_y_m: float,
         roi_group_uid: str = "",
-    ) -> ROIRecord:
+    ) -> RoiRecord:
         """Rebuild a record. An empty *roi_group_uid* mints a new group identity."""
-        return ROIRecord(
+        return RoiRecord(
             roi_id=roi_id,
             track_id=track_id,
             frame_id=frame_id,
@@ -134,7 +134,7 @@ class RoiGeometry:
 
     def repositioned(
         self, source_fov: tuple[float, float], target_fov: tuple[float, float]
-    ) -> "RoiGeometry":
+    ) -> RoiGeometry:
         """Move the ROI to the same relative spot in a different FOV, keeping its size."""
         scale = np.asarray(target_fov, dtype=float) / np.asarray(
             source_fov, dtype=float
@@ -157,7 +157,7 @@ class RoiGeometry:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "RoiGeometry":
+    def from_dict(cls, data: dict) -> RoiGeometry:
         """Rebuild from :meth:`to_dict`'s output, defaulting any missing key."""
         return cls(
             verts_m=data.get("verts_m", []),
@@ -171,6 +171,6 @@ class RoiGeometry:
         return json.dumps(self.to_dict())
 
     @classmethod
-    def from_json(cls, text: str) -> "RoiGeometry":
+    def from_json(cls, text: str) -> RoiGeometry:
         """Inverse of :meth:`to_json`."""
         return cls.from_dict(json.loads(text))

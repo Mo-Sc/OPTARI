@@ -47,7 +47,7 @@ HIDDEN_VIEW_ENTRIES = (
 class MenuManager:
     """Add the OPTARI menu to napari's menu bar and hide the entries OPTARI doesnt support."""
 
-    def __init__(self, controller: "OptariController"):
+    def __init__(self, controller: OptariController):
         self.controller = controller
 
     def setup(self) -> None:

@@ -24,7 +24,7 @@ def prompt_roi_preset(
     dialog.setWindowTitle("Save ROI")
 
     form = QFormLayout(dialog)
-    roi_id_edit = QLineEdit()
+    preset_name_edit = QLineEdit()
     description_edit = QLineEdit()
     location_combo = QComboBox()
     location_combo.addItem("None (static)", userData=None)
@@ -56,7 +56,7 @@ def prompt_roi_preset(
     )
     on_location_changed()
 
-    form.addRow("ROI Name:", roi_id_edit)
+    form.addRow("ROI Name:", preset_name_edit)
     form.addRow("Description (optional):", description_edit)
     form.addRow("Location:", location_combo)
     form.addRow("Top margin:", margin_spin)
@@ -69,11 +69,11 @@ def prompt_roi_preset(
     if dialog.exec() != QDialog.Accepted:
         return None
 
-    roi_id = roi_id_edit.text().strip()
-    if not roi_id:
+    name = preset_name_edit.text().strip()
+    if not name:
         return None
     return (
-        roi_id,
+        name,
         description_edit.text().strip(),
         location_combo.currentData(),
         margin_spin.value() if margin_spin.isEnabled() else 0.0,

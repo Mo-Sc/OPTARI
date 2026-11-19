@@ -11,10 +11,10 @@ from collections.abc import Callable
 import numpy as np
 
 from optari import OPTARI_SOURCE_TAG
-from optari.roi.roi_records import ROIRecord
+from optari.roi.roi_records import RoiRecord
 
 
-def layer_holds(record: ROIRecord, verts: np.ndarray, kind: str) -> bool:
+def layer_holds(record: RoiRecord, verts: np.ndarray, kind: str) -> bool:
     """Whether the Shapes layer still shows *record* unedited"""
     return record.kind == kind and np.array_equal(
         record.verts.astype(verts.dtype), verts
@@ -29,7 +29,7 @@ class RoiStore:
     """
 
     def __init__(self) -> None:
-        self.records: dict[int, ROIRecord] = {}
+        self.records: dict[int, RoiRecord] = {}
         self.projection_ids: list[int] = []
         self._next_roi_id = 0
         self._next_track_id = 0
@@ -42,7 +42,7 @@ class RoiStore:
         self._next_track_id += 1
         return self._next_track_id - 1
 
-    def restore(self, records: list[ROIRecord]) -> None:
+    def restore(self, records: list[RoiRecord]) -> None:
         """Replace every record, resuming the id counters above their highest values."""
         self.records = {record.roi_id: record for record in records}
         self.projection_ids = []
@@ -55,11 +55,11 @@ class RoiStore:
         self.records.clear()
         self.projection_ids = []
 
-    def projected(self) -> list[ROIRecord]:
+    def projected(self) -> list[RoiRecord]:
         """The records the Shapes layer shows, in shape order."""
         return [self.records[roi_id] for roi_id in self.projection_ids]
 
-    def project(self, frame_id: int) -> list[ROIRecord]:
+    def project(self, frame_id: int) -> list[RoiRecord]:
         """Make *frame_id*'s records the projection, by ``roi_id``, and return them."""
         visible = sorted(
             (r for r in self.records.values() if r.frame_id == frame_id),
@@ -107,7 +107,7 @@ class RoiStore:
         for i, (verts, kind) in enumerate(zip(data, kinds)):
             if new_ids[i] is None:
                 # A copy: napari owns the layer's float32 arrays
-                record = ROIRecord(
+                record = RoiRecord(
                     roi_id=self.new_roi_id(),
                     track_id=self.new_track_id(),
                     frame_id=frame_id,
@@ -157,7 +157,7 @@ class RoiStore:
             verts = resolve(frame_id, source.verts)
             if verts is None:
                 continue
-            record = ROIRecord(
+            record = RoiRecord(
                 roi_id=self.new_roi_id(),
                 track_id=source.track_id,
                 frame_id=frame_id,

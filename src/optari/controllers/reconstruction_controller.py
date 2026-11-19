@@ -16,30 +16,31 @@ import patato as pat
 from patato import PAT_MAXIMUM_BATCH_SIZE
 from patato.io.attribute_tags import HDF5Tags, ReconAttributeTags
 from qtpy.QtCore import Qt
+
+from optari.config import settings
 from optari.controllers.base import TaskControllerBase
 from optari.patato_bridge import (
     acquisition_start,
     display_data_from_patato_obj,
-    layer_colormap,
     expand_to_acquisition_frames,
     fov_from_objects,
+    layer_colormap,
     layer_translate,
     pa_layer_metadata,
     scale_from_patato_obj,
 )
-from optari.config import settings
 from optari.utils.presets import PresetStore
 from optari.utils.setup import (
     get_user_presets_dir,
     resolve_model_path,
 )
 from optari.utils.tasks import BackgroundStep
+from optari.widgets.dock_helpers import populate_preset_combo
 from optari.widgets.reconstruction_dock import (
     SPEED_OF_SOUND_DEFAULT,
     SPEED_OF_SOUND_MAX,
     SPEED_OF_SOUND_MIN,
 )
-from optari.widgets.dock_helpers import populate_preset_combo
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +97,7 @@ class ReconParams:
         speed_of_sound: float | None = None,
         suffix: str = "",
         frame_id: int | None = None,
-    ) -> "ReconParams":
+    ) -> ReconParams:
         """Resolve a reconstruction preset against the currently loaded scan.
 
         *speed_of_sound* defaults to the preset's own value. The dock passes its
@@ -209,7 +210,7 @@ class ReconstructionController(TaskControllerBase):
 
     def _signal_bindings(self) -> list[tuple[object, Callable]]:
         """Reconstruction dock signals."""
-        dock = self.optari_controller.reconstruction
+        dock = self.optari_controller.reconstruction_dock
         return [
             (dock.preset_combo.currentIndexChanged, self.on_preset_changed),
             (dock.all_settings_button.toggled, self.on_all_settings_toggled),
@@ -226,7 +227,7 @@ class ReconstructionController(TaskControllerBase):
 
     def initialize_ui(self) -> None:
         """Populate the preset combo once."""
-        dock = self.optari_controller.reconstruction
+        dock = self.optari_controller.reconstruction_dock
 
         populate_preset_combo(dock.preset_combo, self.preset_store)
 
@@ -237,7 +238,7 @@ class ReconstructionController(TaskControllerBase):
         """Refresh scan-dependent controls. Reconstruction runs off the loaded scan, not a
         layer. There is no "Source" to pick, so the only thing to reflect here is whether a
         scan is loaded at all."""
-        dock = self.optari_controller.reconstruction
+        dock = self.optari_controller.reconstruction_dock
         pa_data = self.optari_controller.pa_data
 
         if pa_data is None:
@@ -253,7 +254,7 @@ class ReconstructionController(TaskControllerBase):
 
     @property
     def preset_dock(self):
-        return self.optari_controller.reconstruction
+        return self.optari_controller.reconstruction_dock
 
     def _apply_preset(self, settings: dict) -> None:
         """Show a loaded preset in the settings editor and use it for the next run."""
@@ -269,14 +270,14 @@ class ReconstructionController(TaskControllerBase):
                 ReconAttributeTags.SPEED_OF_SOUND, SPEED_OF_SOUND_DEFAULT
             )
         )
-        self.optari_controller.reconstruction.status_label.setText(
+        self.optari_controller.reconstruction_dock.status_label.setText(
             f"Preset applied. {warning}".strip()
         )
 
     def _preset_settings_from_ui(self) -> dict:
         """The JSON editor's settings. Raises ValueError with the reason."""
         text = (
-            self.optari_controller.reconstruction.settings_edit.toPlainText()
+            self.optari_controller.reconstruction_dock.settings_edit.toPlainText()
         )
         try:
             settings_dict = json.loads(text)
@@ -288,7 +289,7 @@ class ReconstructionController(TaskControllerBase):
 
     def on_all_settings_toggled(self, checked: bool) -> None:
         """Show or hide the in-memory JSON settings editor."""
-        dock = self.optari_controller.reconstruction
+        dock = self.optari_controller.reconstruction_dock
         dock.settings_edit.setVisible(checked)
         dock.apply_preset_button.setVisible(checked)
         dock.all_settings_button.setArrowType(
@@ -306,14 +307,14 @@ class ReconstructionController(TaskControllerBase):
         try:
             settings_dict = self._preset_settings_from_ui()
         except ValueError as exc:
-            self.optari_controller.reconstruction.status_label.setText(
+            self.optari_controller.reconstruction_dock.status_label.setText(
                 str(exc)
             )
             return
         self._use_settings(settings_dict)
 
     def _set_settings_editor(self, settings_dict: dict) -> None:
-        dock = self.optari_controller.reconstruction
+        dock = self.optari_controller.reconstruction_dock
         self._updating_settings = True
         try:
             dock.settings_edit.setPlainText(
@@ -329,7 +330,7 @@ class ReconstructionController(TaskControllerBase):
         slider's value while a batch run uses the preset's own. Returns a warning when
         the two differ, otherwise an empty string.
         """
-        dock = self.optari_controller.reconstruction
+        dock = self.optari_controller.reconstruction_dock
         value = max(
             SPEED_OF_SOUND_MIN,
             min(SPEED_OF_SOUND_MAX, round(float(speed_of_sound))),
@@ -348,13 +349,13 @@ class ReconstructionController(TaskControllerBase):
 
     def on_speed_of_sound_changed(self, value: int) -> None:
         """Keep the speed of sound label in sync with the slider."""
-        dock = self.optari_controller.reconstruction
+        dock = self.optari_controller.reconstruction_dock
         dock.speed_of_sound_value_label.setText(f"{value} m/s")
 
     # ============ run: params -> prepare -> publish ============
     def _params_from_ui(self) -> ReconParams:
         """Build run parameters from the dock. Raises ValueError with a user-facing message."""
-        dock = self.optari_controller.reconstruction
+        dock = self.optari_controller.reconstruction_dock
         if dock.preset_combo.currentData() is None:
             raise ValueError("Select a reconstruction preset.")
         if self._settings_dirty:
@@ -488,4 +489,4 @@ class ReconstructionController(TaskControllerBase):
 
     def on_run_reconstruction_clicked(self) -> None:
         """Run reconstruction from the dock's Run button."""
-        self.run_from_ui(self.optari_controller.reconstruction)
+        self.run_from_ui(self.optari_controller.reconstruction_dock)

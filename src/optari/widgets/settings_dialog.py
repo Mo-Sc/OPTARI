@@ -7,7 +7,7 @@ from pathlib import Path
 
 from patato.io.attribute_tags import HDF5Tags  # type: ignore
 from qtpy.QtCore import QUrl
-from qtpy.QtGui import QColor, QDesktopServices, QPixmap, QIcon
+from qtpy.QtGui import QColor, QDesktopServices, QIcon, QPixmap
 from qtpy.QtWidgets import (
     QCheckBox,
     QColorDialog,
@@ -44,8 +44,8 @@ from optari.roi.roi_features import FEATURE_REGISTRY
 from optari.segmentation.segmenter import load_model_registry
 from optari.utils.setup import (
     get_default_config_file,
-    get_user_config_file,
     get_user_autosave_dir,
+    get_user_config_file,
     get_user_dir,
     get_user_logs_dir,
     get_user_models_dir,

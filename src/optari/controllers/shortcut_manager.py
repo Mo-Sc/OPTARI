@@ -26,14 +26,14 @@ class ShortcutManager:
         """Bind all custom keyboard shortcuts. The docks must exist already."""
         controller = self.controller
         self._bind_shortcut_to_button(
-            "save_roi_data", controller.roi.save_button, "Save ROI Data"
+            "save_roi_data", controller.roi_dock.save_button, "Save ROI Data"
         )
         self._bind_shortcut_to_button(
-            "run_unmixing", controller.unmixing.run_button, "Run Unmixing"
+            "run_unmixing", controller.unmixing_dock.run_button, "Run Unmixing"
         )
         self._bind_shortcut_to_button(
             "run_segmentation",
-            controller.segmentation.generate_tissue_segmentation_button,
+            controller.segmentation_dock.generate_tissue_segmentation_button,
             "Run Segmentation",
         )
         logger.info("registered keyboard shortcuts: %s", SHORTCUTS)

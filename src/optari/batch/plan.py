@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from patato.io.attribute_tags import ReconAttributeTags, UnmixingAttributeTags
+from patato.unmixing.spectra import SPECTRA_NAMES
 
 from optari.config.config import FRAME_SELECTORS
 from optari.io.discovery import ScanInfo, discover_studies
@@ -412,8 +413,6 @@ def _validate_segmentation(plan: BatchPlan) -> list[str]:
 def _validate_unmixing(plan: BatchPlan) -> list[str]:
     if plan.unmixing is None:
         return []
-    from patato.unmixing.spectra import SPECTRA_NAMES
-
     chromophores = list(plan.unmixing.get(UnmixingAttributeTags.SPECTRA, []))
     if not chromophores:
         return ["The unmixing preset selects no chromophores."]

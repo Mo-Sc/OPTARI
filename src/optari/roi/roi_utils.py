@@ -2,7 +2,7 @@
 
 ``iter_roi_masks`` turns world-space ROIs into pixel indices, ``IntensityClamp``
 filters outlier values before a statistic is computed, and ``roi_stat_rows`` builds an
-``ROIContext`` per ROI and evaluates the requested ``FEATURE_REGISTRY`` entries.
+``RoiContext`` per ROI and evaluates the requested ``FEATURE_REGISTRY`` entries.
 ``measure_rois`` runs that over every layer, frame and channel a save reaches.
 """
 
@@ -18,15 +18,16 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from skimage.draw import ellipse, line, polygon
+
 from optari.config import settings
-from optari.roi.roi_geometry import RoiGeometry
 from optari.roi.roi_features import (
     ALL_FEATURE_COLUMNS,
     FEATURE_REGISTRY,
-    ROIContext,
     SAVED_FIXED_SOURCE_COLUMNS,
+    RoiContext,
 )
-from optari.roi.roi_records import ROIRecord
+from optari.roi.roi_geometry import RoiGeometry
+from optari.roi.roi_records import RoiRecord
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +144,7 @@ def clear_mask_cache() -> None:
 
 
 def _roi_mask(
-    roi: ROIRecord,
+    roi: RoiRecord,
     *,
     sy: float,
     sx: float,
@@ -184,15 +185,15 @@ def _layer_translate(active_recon_layer) -> tuple[float, float]:
 
 
 def records_by_track_and_frame(
-    records: Iterable[ROIRecord], track_id: int
-) -> dict[int, ROIRecord]:
+    records: Iterable[RoiRecord], track_id: int
+) -> dict[int, RoiRecord]:
     """One track's records, indexed by the frame each was measured on."""
     return {r.frame_id: r for r in records if r.track_id == track_id}
 
 
 def iter_roi_masks(
-    records: list[ROIRecord], active_recon_layer, image_shape
-) -> Iterator[tuple[ROIRecord, np.ndarray]]:
+    records: list[RoiRecord], active_recon_layer, image_shape
+) -> Iterator[tuple[RoiRecord, np.ndarray]]:
     """Yield each usable ROI with its boolean mask over *image_shape*.
 
     Only place to transform world-space ROIs to pixel indices.
@@ -212,7 +213,7 @@ def iter_roi_masks(
 
 @dataclass(frozen=True)
 class _LayerInfo:
-    """Per-layer info required for ROIContexts, resolved once instead of per ROI."""
+    """Per-layer info required for RoiContexts, resolved once instead of per ROI."""
 
     name: str
     filepath: str
@@ -224,7 +225,7 @@ class _LayerInfo:
     sx: float
 
     @classmethod
-    def resolve(cls, layer, channel_idx: int) -> "_LayerInfo":
+    def resolve(cls, layer, channel_idx: int) -> _LayerInfo:
         """Resolve *layer*'s per-call constants once, from its metadata and scale."""
         filepath = str(layer.metadata.get("filepath", "") or "")
         sy, sx = _scale_sy_sx(layer)
@@ -241,7 +242,7 @@ class _LayerInfo:
 
 
 def _roi_context(
-    roi: ROIRecord,
+    roi: RoiRecord,
     layer_info: _LayerInfo,
     *,
     frame_idx: int,
@@ -249,9 +250,9 @@ def _roi_context(
     vals_raw: np.ndarray,
     clamp: IntensityClamp,
     roi_geometry: str = "",
-) -> ROIContext:
+) -> RoiContext:
     """Assemble the data a FeatureSpec is evaluated against."""
-    return ROIContext(
+    return RoiContext(
         roi_id=roi.roi_id,
         track_id=roi.track_id,
         roi_group_uid=roi.roi_group_uid,
@@ -276,7 +277,7 @@ def _roi_context(
     )
 
 
-def _roi_centroid_mm(roi: ROIRecord) -> tuple[float, float]:
+def _roi_centroid_mm(roi: RoiRecord) -> tuple[float, float]:
     """Centroid in *world* mm, deliberately not layer-local.
 
     This is only display/informational column, so it is left in the same
@@ -376,7 +377,7 @@ def ellipse_mask(verts_px, image_shape):
 
 
 def roi_stat_rows(
-    records: list[ROIRecord],
+    records: list[RoiRecord],
     layer,
     frame_idx: int,
     channel_idx: int,
@@ -419,7 +420,7 @@ def roi_stat_rows(
 
 
 def compute_roi_stats(
-    records: list[ROIRecord],
+    records: list[RoiRecord],
     layer,
     frame_idx: int,
     channel_idx: int,
@@ -444,8 +445,8 @@ def compute_roi_stats(
 
 
 def measure_rois(
-    selected: list[ROIRecord],
-    all_records: Iterable[ROIRecord],
+    selected: list[RoiRecord],
+    all_records: Iterable[RoiRecord],
     layers: list,
     frame_idx: int,
     channel_idx: int,
@@ -472,7 +473,7 @@ def measure_rois(
         for record in selected
     }
 
-    def records_at(frame: int) -> list[ROIRecord]:
+    def records_at(frame: int) -> list[RoiRecord]:
         if not follow_track:
             return [fallback for fallback, _ in tracks.values()]
         return [track[frame] for _, track in tracks.values() if frame in track]
@@ -543,7 +544,7 @@ def _feature_series(
     frames: np.ndarray,
     feature_id: str,
     clamp: IntensityClamp,
-    record_and_mask_at: Callable[[int], tuple[ROIRecord, np.ndarray] | None],
+    record_and_mask_at: Callable[[int], tuple[RoiRecord, np.ndarray] | None],
 ) -> np.ndarray:
     """One *feature_id* value per frame in *frames*.
 
@@ -576,7 +577,7 @@ def _feature_series(
 
 
 def compute_roi_time_series(
-    records: list[ROIRecord],
+    records: list[RoiRecord],
     layer,
     channel_idx: int,
     feature_id: str,
@@ -607,7 +608,7 @@ def compute_roi_time_series(
 
 def compute_roi_track_time_series(
     track_id: int,
-    records: list[ROIRecord],
+    records: list[RoiRecord],
     layer,
     channel_idx: int,
     feature_id: str,
@@ -645,7 +646,7 @@ def compute_roi_track_time_series(
 
 
 def extract_roi_pixels_for_slice(
-    records: list[ROIRecord],
+    records: list[RoiRecord],
     active_recon_layer,
     frame_idx: int,
     channel_idx: int,
@@ -669,7 +670,7 @@ def extract_roi_pixels_for_slice(
 
 
 def compute_roi_spectra(
-    records: list[ROIRecord],
+    records: list[RoiRecord],
     active_recon_layer,
     frame_idx: int,
     *,

@@ -2,11 +2,11 @@
 
 from optari.segmentation.segmenter import (
     ModelAdapterBase,
-    UKErUSSegAdapter,
-    SegmentationResult,
     SegmentationModelConfig,
-    load_model_registry,
+    SegmentationResult,
+    UKErUSSegAdapter,
     create_segmenter,
+    load_model_registry,
 )
 
 __all__ = [

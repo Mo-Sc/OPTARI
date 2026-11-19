@@ -1,15 +1,15 @@
 """OptariConfig: dataclass schema for the user's ~/.optari/config/config.json."""
 
-from dataclasses import dataclass, field, replace
 import json
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
+from optari.utils.files import atomic_destination
 from optari.utils.setup import (
     archive_config_dir,
     get_default_config_file,
     get_user_config_file,
 )
-from optari.utils.files import atomic_destination
 
 CONFIG_SCHEMA_VERSION = json.loads(
     get_default_config_file().read_text(encoding="utf-8")
