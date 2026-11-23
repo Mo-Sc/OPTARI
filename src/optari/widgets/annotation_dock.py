@@ -2,33 +2,40 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from qtpy.QtCore import Qt
 from qtpy.QtWidgets import (
     QAbstractItemView,
     QButtonGroup,
     QCheckBox,
+    QComboBox,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QListWidget,
-    QComboBox,
     QPushButton,
     QRadioButton,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
 from optari.roi.roi_features import numeric_feature_ids
+
 from .dock_helpers import (
     create_frame_scope_controls,
-    create_range_edits,
+    create_number_edit,
     create_right_dock_shell,
 )
 
 
 @dataclass
 class AnnotationDock:
+    """ROI tools: presets, the intensity filter, what Save measures and the Temporal
+    plot's feature.
+    """
+
     widget: QWidget
     roi_clipping_box: QGroupBox
     roi_clip_min_edit: QLineEdit
@@ -114,9 +121,7 @@ def create_annotation_dock() -> AnnotationDock:
     placement_layout.addWidget(roi_placement_mode_combo)
     roi_presets_layout.addWidget(placement_row)
 
-    scope_row, current_frames_radio, all_frames_radio = (
-        create_frame_scope_controls()
-    )
+    scope_row, current_frames_radio, all_frames_radio = create_frame_scope_controls()
     roi_presets_layout.addWidget(scope_row)
 
     roi_presets_layout.addWidget(button_row)
@@ -133,7 +138,8 @@ def create_annotation_dock() -> AnnotationDock:
         "(mutually exclusive with ROI Exclusion)"
     )
     roi_clip_form = QFormLayout(roi_clipping_box)
-    roi_clip_min_edit, roi_clip_max_edit = create_range_edits()
+    roi_clip_min_edit = create_number_edit(placeholder="(unset)")
+    roi_clip_max_edit = create_number_edit(placeholder="(unset)")
     roi_clip_form.addRow("Min. Intensity", roi_clip_min_edit)
     roi_clip_form.addRow("Max. Intensity", roi_clip_max_edit)
 
@@ -145,7 +151,8 @@ def create_annotation_dock() -> AnnotationDock:
         "(mutually exclusive with ROI Clipping)"
     )
     roi_exclude_form = QFormLayout(roi_exclusion_box)
-    roi_exclude_min_edit, roi_exclude_max_edit = create_range_edits()
+    roi_exclude_min_edit = create_number_edit(placeholder="(unset)")
+    roi_exclude_max_edit = create_number_edit(placeholder="(unset)")
     roi_exclude_form.addRow("Min. Intensity", roi_exclude_min_edit)
     roi_exclude_form.addRow("Max. Intensity", roi_exclude_max_edit)
 
@@ -174,7 +181,8 @@ def create_annotation_dock() -> AnnotationDock:
     include_all_frames_checkbox.setChecked(False)
     include_all_channels_checkbox.setChecked(False)
     include_all_layers_checkbox.setToolTip(
-        "Save this ROI's data for every layer in the scan; also enables Include all channels"
+        "Save this ROI's data for every layer in the scan, the ultrasound included. "
+        "Also enables Include all channels"
     )
     include_all_frames_checkbox.setToolTip(
         "Save this ROI's data for every frame in the scan"
@@ -196,11 +204,11 @@ def create_annotation_dock() -> AnnotationDock:
     save_scope_track_radio = QRadioButton("Track ID")
     save_scope_selected_radio.setChecked(True)
     save_scope_selected_radio.setToolTip(
-        "Measure every frame in the sequence using exactly the ROI you selected."
+        "Measure every frame with the selected ROI's outline as it is on this frame."
     )
     save_scope_track_radio.setToolTip(
-        "Measure each frame using that frame's own ROI, if this ROI belongs to"
-        " a tracked group. A frame the track has no record on is skipped."
+        "Measure each frame with the selected ROI's own copy on that frame, e.g. a"
+        " preset placed on all frames. A frame without one is skipped."
     )
     save_scope_group = QButtonGroup(save_roi_box)
     save_scope_group.setExclusive(True)
@@ -215,10 +223,50 @@ def create_annotation_dock() -> AnnotationDock:
     save_scope_row.setEnabled(include_all_frames_checkbox.isChecked())
     include_all_frames_checkbox.toggled.connect(save_scope_row.setEnabled)
 
-    save_roi_layout.addWidget(include_all_layers_checkbox)
-    save_roi_layout.addWidget(include_all_channels_checkbox)
-    save_roi_layout.addWidget(include_all_frames_checkbox)
-    save_roi_layout.addWidget(save_scope_row)
+    # Collapsed by default
+    options = QWidget()
+    options_layout = QVBoxLayout(options)
+    options_layout.setContentsMargins(0, 0, 0, 0)
+    for option in (
+        include_all_layers_checkbox,
+        include_all_channels_checkbox,
+        include_all_frames_checkbox,
+        save_scope_row,
+    ):
+        options_layout.addWidget(option)
+    options.setVisible(False)
+    options_button = QToolButton()
+    options_button.setCheckable(True)
+    options_button.setArrowType(Qt.RightArrow)
+    options_button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+
+    def show_options(expanded: bool) -> None:
+        options.setVisible(expanded)
+        options_button.setArrowType(Qt.DownArrow if expanded else Qt.RightArrow)
+
+    def name_active_options(_=None) -> None:
+        active = [
+            label
+            for box, label in (
+                (include_all_layers_checkbox, "all layers"),
+                (include_all_channels_checkbox, "all channels"),
+                (include_all_frames_checkbox, "all frames"),
+            )
+            if box.isChecked()
+        ]
+        options_button.setText(f"Options: {', '.join(active) or 'this slice only'}")
+
+    options_button.toggled.connect(show_options)
+    for box in (
+        include_all_layers_checkbox,
+        include_all_channels_checkbox,
+        include_all_frames_checkbox,
+    ):
+        box.toggled.connect(name_active_options)
+    name_active_options()
+
+    save_roi_layout.addWidget(options_button)
+    save_roi_layout.addWidget(options)
 
     # Time analysis feature selection (default is mean)
     time_analysis_box = QGroupBox("Temporal Analysis")
@@ -231,13 +279,14 @@ def create_annotation_dock() -> AnnotationDock:
     )
     time_analysis_layout.addRow("Feature", time_analysis_feature_combo)
 
-    # Scope: "Selected ROI" measures each visible shape's own record on every frame
-    # "Track ID" follows one tracked ROI's own record per frame instead, leaving a gap where it has no record on a frame.
+    # Scope: "Selected ROI" measures each ROI shown on this frame, with its current
+    # outline, on every frame "Track ID" follows one tracked ROI's own record per frame
+    # instead, leaving a gap where it has no record on a frame.
     time_analysis_selected_radio = QRadioButton("Selected ROI")
     time_analysis_track_radio = QRadioButton("Track ID")
     time_analysis_selected_radio.setChecked(True)
     time_analysis_selected_radio.setToolTip(
-        "Every ROI currently shown on the viewed frame is reused for every frame in the sequence."
+        "Every ROI shown on this frame, each with its current outline on every frame."
     )
     time_analysis_track_radio.setToolTip(
         "Follow one tracked ROI across frames, measuring each frame on"
@@ -261,9 +310,7 @@ def create_annotation_dock() -> AnnotationDock:
     time_analysis_track_id_combo.setToolTip(
         "Which tracked ROI to plot. Refreshed each time you generate the plot."
     )
-    time_analysis_track_radio.toggled.connect(
-        time_analysis_track_id_combo.setEnabled
-    )
+    time_analysis_track_radio.toggled.connect(time_analysis_track_id_combo.setEnabled)
     time_analysis_layout.addRow("Track", time_analysis_track_id_combo)
 
     outer.addWidget(roi_presets_box)

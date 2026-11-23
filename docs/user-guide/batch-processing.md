@@ -21,7 +21,7 @@ Batch mode runs presets, it does not create them. Set up and save the presets yo
 
 ## The batch preset
 
-A batch preset is a small JSON file in `~/.optari/config/presets/batch` that **names** the presets above rather than copying them. A step is a preset name and nothing else, so every setting has exactly one home and one thing to cite. Three are shipped: `clinical_muscle_roi`, `existing_recon_roi` and `convert_to_hdf5`.
+A batch preset is a small JSON file in `~/.optari/config/presets/batch` that **names** the presets above rather than copying them. A step is a preset name and nothing else, so every setting has exactly one home and one thing to cite. 5 are included: `clinical_muscle_roi`, `existing_recon_roi`, `from_scan_roi_intensities`, `convert_to_hdf5` and `export_png`.
 
 ```json
 {
@@ -86,7 +86,7 @@ When the run ends a summary dialog appears, listing any failures, and the per-sc
 
 HDF5 and IPASC exports mirror the input layout, so a converted dataset opens exactly like the original. Overlays stay in one flat folder, since flipping through them in order is the point.
 
-`batch_roi_table.xlsx` is the main deliverable and is identical in shape to the [Saved Analysis export](exporting-data.md#saved-analysis-table-importexport-xlsx), so it imports back into the ROI dock and combines with tables from other sessions. Both it and the report are rewritten after **every** scan, so a run interrupted after four hours keeps everything measured so far.
+`batch_roi_table.xlsx` is the main deliverable and is identical in shape to the [Saved Analysis export](exporting-data.md#saved-analysis-table-importexport-xlsx), so it imports back into the ROI dock and combines with tables from other sessions. While the run is going, measurements are appended to `batch_roi_table.csv` after **every** scan, and the report is rewritten. The XLSX is written once at the end and the CSV removed.
 
 ## When a scan fails
 
@@ -96,6 +96,9 @@ To retry only the failures, sort `batch_report.xlsx` by `status`, then run the s
 
 !!! tip "Converting vendor data in bulk"
     A plan with no steps and `hdf5` or `ipasc` enabled is a pure format converter: it reads each vendor scan and writes it out again, with no analysis at all. That is what the shipped `convert_to_hdf5` preset does; switch on `ipasc` instead (or as well) for the interoperable format.
+
+!!! tip "Quick visual overview of a dataset"
+    The included `export_png` preset shows the default PA layer over the ultrasound on each scan's frame with the least frame-to-frame motion, which is a fast way to look through a whole study before analysing it. Set `source` to pick another stored reconstruction, or `frame` to another selector.
 
 !!! warning "Saving into the scan files"
     With `"hdf5": "in_place"` a run adds its reconstructions, unmixed layers and ROIs to the existing OPTARI HDF5 files instead of writing copies.
@@ -116,7 +119,7 @@ optari-batch convert_to_hdf5 /data/MyStudy /data/MyStudy_optari
 
 The first argument is the name of a saved batch preset, or a path to a preset `.json`. Then the dataset folder and the output folder, which is created if missing. The run does exactly what the Batch window would. The terminal prints the resolved plan and asks for confirmation before anything starts, then prints one line per scan. The same `batch_report.xlsx` and log file land in the output folder. Pass `--yes` (`-y`) to skip the question, e.g. in a script.
 
-Every output is written atomically, so only the scan in progress is lost. `--resume` continues an interrupted run in the same output folder. It skips every scan whose export already exists, so it needs a plan with `hdf5` or `ipasc` output, and says how many it skips before asking to start. A plan with `"hdf5": "in_place"` cannot be resumed, since saving into a scan leaves no new file behind. The resumed run writes its own `batch_roi_table_<time>.xlsx` and `batch_report_<time>.xlsx` next to the interrupted run's.
+Every output is written atomically, so only the scan in progress is lost. Measurements taken before the interruption are in `batch_roi_table.csv`, since the XLSX is only written at the end of a run. `--resume` continues an interrupted run in the same output folder. It skips every scan whose export already exists, so it needs a plan with `hdf5` or `ipasc` output, and says how many it skips before asking to start. A plan with `"hdf5": "in_place"` cannot be resumed, since saving into a scan leaves no new file behind. The resumed run writes its own `batch_roi_table_<time>.xlsx` and `batch_report_<time>.xlsx` next to the interrupted run's.
 
 The exit code is 0 when every scan succeeded or you answered no, 1 when some failed, and 2 when the plan was refused and nothing ran.
 

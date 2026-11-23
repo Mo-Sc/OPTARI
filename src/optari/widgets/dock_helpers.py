@@ -1,21 +1,24 @@
+"""Building blocks the docks share: preset rows, frame scope radios, plot strips."""
+
 from __future__ import annotations
 
+import html
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from qtpy.QtCore import QLocale, Qt
-from qtpy.QtGui import QDoubleValidator
+from qtpy.QtCore import QRegularExpression, Qt
+from qtpy.QtGui import QRegularExpressionValidator
 from qtpy.QtWidgets import (
     QButtonGroup,
     QComboBox,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
     QPushButton,
-    QInputDialog,
     QRadioButton,
     QScrollArea,
     QSizePolicy,
@@ -26,9 +29,12 @@ from qtpy.QtWidgets import (
 from optari.utils.presets import PresetStore
 
 
-def create_frame_scope_controls() -> (
-    tuple[QWidget, QRadioButton, QRadioButton]
-):
+def show_status_error(label: QLabel, message: str) -> None:
+    """Show *message* on a dock's status label in red, the style of every error."""
+    label.setText(f'<span style="color:red">{html.escape(message)}</span>')
+
+
+def create_frame_scope_controls() -> tuple[QWidget, QRadioButton, QRadioButton]:
     """Create the shared current/all frames radio-button control."""
     container = QWidget()
     layout = QHBoxLayout(container)
@@ -50,9 +56,7 @@ def create_frame_scope_controls() -> (
 
 
 # helpers for preset management
-def create_preset_controls() -> (
-    tuple[QComboBox, QPushButton, QPushButton, QWidget]
-):
+def create_preset_controls() -> tuple[QComboBox, QPushButton, QPushButton, QWidget]:
     """Create the shared preset selector and save/remove action row."""
     preset_combo = QComboBox()
     save_preset_button = QPushButton("Save Preset")
@@ -79,9 +83,7 @@ def populate_preset_combo(combo: QComboBox, store: PresetStore) -> None:
         combo.blockSignals(False)
 
 
-def prompt_preset_name(
-    parent: QWidget, combo: QComboBox, fallback: str
-) -> str | None:
+def prompt_preset_name(parent: QWidget, combo: QComboBox, fallback: str) -> str | None:
     """Ask for a new preset name, returning ``None`` when cancelled."""
     name, accepted = QInputDialog.getText(
         parent,
@@ -189,39 +191,33 @@ class RoiPlotsDock:
             status_label=status_label,
         )
 
+    def clear(self) -> None:
+        """Remove every plot and the status text."""
+        layout = self.plots_container.layout()
+        while layout.count():
+            plot = layout.takeAt(0).widget()
+            plot.setParent(None)  # hidden now, not only once deleteLater runs
+            plot.deleteLater()
+        self.status_label.setText("")
 
-def create_bottom_single_plot_container() -> QWidget:
-    """Create the single-plot container used by the time-analysis bottom dock."""
-    plot_container = QWidget()
-    plot_layout = QVBoxLayout(plot_container)
-    plot_layout.setContentsMargins(0, 0, 0, 0)
-    return plot_container
 
+def create_number_edit(*, placeholder: str = "", signed: bool = True) -> QLineEdit:
+    """A line edit for a decimal number, read with ``parse_float_input``.
 
-def create_range_edits(
-    *,
-    placeholder: str = "(unset)",
-    minimum: float | None = None,
-    maximum: float | None = None,
-    decimals: int = 6,
-) -> tuple[QLineEdit, QLineEdit]:
-    """Create a pair of min/max numeric edits with consistent validation and UX."""
-
-    def _new_numeric_edit() -> QLineEdit:
-        edit = QLineEdit()
-        validator = QDoubleValidator()
-        validator.setLocale(QLocale.c())
-        validator.setDecimals(decimals)
-        if minimum is not None:
-            validator.setBottom(minimum)
-        if maximum is not None:
-            validator.setTop(maximum)
-        edit.setValidator(validator)
-        edit.setPlaceholderText(placeholder)
-        edit.setClearButtonEnabled(True)
-        return edit
-
-    return _new_numeric_edit(), _new_numeric_edit()
+    Point and comma are both accepted as the decimal separator, whatever the system
+    locale: QDoubleValidator follows the locale, so on a German system it accepts
+    only "2,5", which float() rejects, and with the C locale the comma key does nothing.
+    """
+    sign = "-?" if signed else ""
+    edit = QLineEdit()
+    edit.setValidator(
+        QRegularExpressionValidator(
+            QRegularExpression(rf"^{sign}\d*([.,]\d*)?([eE][-+]?\d*)?$")
+        )
+    )
+    edit.setPlaceholderText(placeholder)
+    edit.setClearButtonEnabled(True)
+    return edit
 
 
 # helpers for lists of checkboxes (chromophores, wavelengths, segmentation classes)
@@ -243,11 +239,7 @@ def list_items(list_widget: QListWidget) -> list[QListWidgetItem]:
 
 def checked_items(list_widget: QListWidget) -> list[QListWidgetItem]:
     """The checked entries, in display order."""
-    return [
-        item
-        for item in list_items(list_widget)
-        if item.checkState() == Qt.Checked
-    ]
+    return [item for item in list_items(list_widget) if item.checkState() == Qt.Checked]
 
 
 def set_checked(

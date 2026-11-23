@@ -1,3 +1,8 @@
+"""The user's configuration, loaded once at import as ``settings``.
+
+Modules import ``settings`` by name, so ``OptariConfig.apply_live`` updates it in place.
+"""
+
 from optari.config.config import OptariConfig
 
 try:

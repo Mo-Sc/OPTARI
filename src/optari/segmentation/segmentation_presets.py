@@ -49,12 +49,8 @@ def validate_segmentation_settings(
     if not isinstance(roi_shape, str) or roi_shape not in SUPPORTED_ROI_SHAPES:
         raise ValueError(f"Unsupported ROI shape: {roi_shape}")
 
-    roi_width_mm = _optional_dimension(
-        settings.get("roi_width_mm"), "ROI width"
-    )
-    roi_height_mm = _optional_dimension(
-        settings.get("roi_height_mm"), "ROI height"
-    )
+    roi_width_mm = _optional_dimension(settings.get("roi_width_mm"), "ROI width")
+    roi_height_mm = _optional_dimension(settings.get("roi_height_mm"), "ROI height")
     if (
         roi_class_id is not None
         and roi_shape in {"ellipse", "rectangle"}
@@ -82,9 +78,7 @@ def validate_segmentation_settings(
                     f"Preset contains unknown ROI class ID: {roi_class_id}"
                 )
             if roi_class_id not in selected_class_ids:
-                raise ValueError(
-                    "ROI class ID must be one of the selected classes."
-                )
+                raise ValueError("ROI class ID must be one of the selected classes.")
 
     return {
         "model_id": model_id,

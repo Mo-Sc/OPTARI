@@ -27,11 +27,15 @@ from .dock_helpers import (
 # speed of sound slider bounds
 SPEED_OF_SOUND_MIN = 1400
 SPEED_OF_SOUND_MAX = 1600
-SPEED_OF_SOUND_DEFAULT = 1525
+SPEED_OF_SOUND_DEFAULT = 1497  # acuity default
 
 
 @dataclass
 class ReconstructionDock:
+    """Reconstruction presets and their settings, speed of sound and the frames to run
+    on.
+    """
+
     widget: QWidget
     preset_combo: QComboBox
     current_frames_radio: QRadioButton
@@ -63,9 +67,7 @@ def create_reconstruction_dock() -> ReconstructionDock:
     preset_combo.setToolTip(
         "Selecting a preset loads its settings into the editor below"
     )
-    remove_preset_button.setToolTip(
-        "Permanently delete the selected preset file"
-    )
+    remove_preset_button.setToolTip("Permanently delete the selected preset file")
 
     all_settings_button = QToolButton()
     all_settings_button.setText("Show all settings")
@@ -127,9 +129,7 @@ def create_reconstruction_dock() -> ReconstructionDock:
         create_frame_scope_controls()
     )
     run_button = QPushButton("Run Reconstruction")
-    run_button.setToolTip(
-        "Requires a loaded scan and a selected, non-edited preset"
-    )
+    run_button.setToolTip("Requires a loaded scan and a selected, non-edited preset")
     status_label = QLabel("No scan loaded.")
     status_label.setWordWrap(True)
     action_layout.addWidget(frame_scope_row)

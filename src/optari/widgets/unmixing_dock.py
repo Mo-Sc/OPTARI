@@ -9,13 +9,13 @@ from qtpy.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QListWidget,
     QPushButton,
     QRadioButton,
     QSpinBox,
     QVBoxLayout,
     QWidget,
-    QLineEdit,
 )
 
 from .dock_helpers import (
@@ -27,6 +27,8 @@ from .dock_helpers import (
 
 @dataclass
 class UnmixingDock:
+    """Unmixing of the active reconstruction: wavelengths, chromophores, THb and sO2."""
+
     widget: QWidget
     source_layer_label: QLabel
     preset_combo: QComboBox
@@ -67,9 +69,7 @@ def create_unmixing_dock() -> UnmixingDock:
     preset_combo.setToolTip(
         "Selecting a preset loads its wavelength, chromophore, and layer settings"
     )
-    remove_preset_button.setToolTip(
-        "Permanently delete the selected preset file"
-    )
+    remove_preset_button.setToolTip("Permanently delete the selected preset file")
 
     wavelengths_list = QListWidget()
     wavelengths_list.setSelectionMode(QListWidget.NoSelection)
@@ -144,7 +144,7 @@ def create_unmixing_dock() -> UnmixingDock:
     run_button = QPushButton("Run Unmixing")
     run_button.setToolTip(
         "Requires an active PA reconstruction layer, and at least one wavelength and "
-        "chromophore selected (Shift+Ctrl+U / Shift+Cmd+U)"
+        "chromophore selected"
     )
     status_label = QLabel("Select wavelengths and chromophores.")
     status_label.setWordWrap(True)

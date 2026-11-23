@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 from xml.etree import ElementTree
@@ -13,6 +14,9 @@ from patato.io.attribute_tags import HDF5Tags, IPASCTags
 from patato.io.hdf.hdf5_reader_factory import get_hdf5_reader
 
 logger = logging.getLogger(__name__)
+
+# Both are offered by the save dialog, so both must be found again.
+HDF5_SUFFIXES = (".hdf5", ".h5")
 
 
 @dataclass(frozen=True)
@@ -24,19 +28,25 @@ class ScanInfo:
 
 
 def scan_key(scan_path: Path) -> str:
-    """Return the ``Scan_<n>`` prefix of *scan_path*'s name, or the full name if it doesn't match."""
+    """Return the ``Scan_<n>`` prefix of *scan_path*'s name, or the full name if it
+    doesn't match.
+    """
     name = scan_path.stem if scan_path.is_file() else scan_path.name
     m = re.match(r"^(Scan_\d+)", name)
     return m.group(1) if m else name
 
 
-def scan_sort_key(scan_path: Path):
-    """Sort key that orders ``Scan_<n>`` names numerically, ahead of any other name sorted alphabetically."""
+def scan_sort_key(scan_path: Path) -> tuple[int, int, str]:
+    """Sort key that orders ``Scan_<n>`` names numerically, ahead of any other name
+    sorted alphabetically.
+
+    Files sharing a ``Scan_<n>`` prefix (an export, its IPASC copy) sort by full name.
+    """
     key = scan_key(scan_path)
     m = re.match(r"^Scan_(\d+)$", key)
     if m:
-        return (0, int(m.group(1)), key)
-    return (1, 0, key)
+        return (0, int(m.group(1)), scan_path.name)
+    return (1, 0, scan_path.name)
 
 
 def scan_type(path: Path) -> str | None:
@@ -45,7 +55,7 @@ def scan_type(path: Path) -> str | None:
     """
     if path.is_dir():
         return "ithera" if any(path.glob("*.msot")) else None
-    if path.suffix.lower() != ".hdf5":
+    if path.suffix.lower() not in HDF5_SUFFIXES:
         return None
     try:
         with h5py.File(path, "r") as file:
@@ -69,19 +79,18 @@ def _read_internal_scan_name(path: Path, kind: str) -> str | None:
     try:
         if kind == "ithera":
             # Stream the XML and stop at the scan's name
-            msot = path / f"{path.name}.msot"
+            # Not f"{path.name}.msot": a renamed scan folder keeps its old .msot name.
+            msot = next(path.glob("*.msot"))
             in_scan_node = False
-            for event, element in ElementTree.iterparse(
-                msot, events=("start", "end")
-            ):
+            for event, element in ElementTree.iterparse(msot, events=("start", "end")):
                 if event == "start" and element.tag == "ScanNode":
                     in_scan_node = True
                 elif event == "end" and in_scan_node and element.tag == "Name":
                     return (element.text or "").strip() or None
         else:
-            reader = get_hdf5_reader(str(path))
-            name = reader.get_scan_name()
-            reader.close()
+            # An open read-only handle would block a later save into this file.
+            with closing(get_hdf5_reader(str(path))) as reader:
+                name = reader.get_scan_name()
             return str(name) if name else None
     except Exception:
         logger.debug(
@@ -105,7 +114,9 @@ def discover_studies(
     studies: dict[Path, dict[Path, ScanInfo]] = {}
 
     def walk(folder: Path, depth: int) -> None:
-        """Recurse into *folder* up to *max_depth*, stopping at the first folder that holds a scan."""
+        """Recurse into *folder* up to *max_depth*, stopping at the first folder that
+        holds a scan.
+        """
         scans = discover_scans(folder)
         if scans:
             studies[folder] = scans
@@ -131,26 +142,27 @@ def discover_studies(
 
 
 def discover_scans(folder: Path) -> dict[Path, ScanInfo]:
-    """Find every scan directly under *folder*, keyed by path and deduplicated by ``scan_key``.
+    """Find every scan directly under *folder*, keyed by path, in ``scan_sort_key``
+    order.
 
-    When both an HDF5 file and an iThera folder resolve to the same key, the HDF5
-    one wins.
+    Every HDF5 file is listed, also several sharing one ``Scan_<n>`` prefix: an
+    OPTARI export, an IPASC export and a copy hold different data. An iThera folder
+    is the raw form of a scan, so it is hidden once an HDF5 file with its prefix exists.
     """
-    by_key: dict[str, tuple[Path, ScanInfo]] = {}
-    for path in sorted(folder.glob("*.hdf5")):
+    scans: dict[Path, ScanInfo] = {}
+    for path in folder.iterdir():
+        if path.is_dir():
+            continue
         kind = scan_type(path)
         if kind is not None:
-            info = ScanInfo(kind, _read_internal_scan_name(path, kind))
-            by_key[scan_key(path)] = (path, info)
+            scans[path] = ScanInfo(kind, _read_internal_scan_name(path, kind))
 
-    # An iThera folder only counts if no HDF5 file holds the same scan.
+    converted = {scan_key(path) for path in scans}
     for path in folder.glob("Scan_*"):
-        key = scan_key(path)
+        if not path.is_dir() or scan_key(path) in converted:
+            continue
         kind = scan_type(path)
-        if kind is not None and key not in by_key:
-            info = ScanInfo(kind, _read_internal_scan_name(path, kind))
-            by_key[key] = (path, info)
+        if kind is not None:
+            scans[path] = ScanInfo(kind, _read_internal_scan_name(path, kind))
 
-    return dict(
-        sorted(by_key.values(), key=lambda item: scan_sort_key(item[0]))
-    )
+    return dict(sorted(scans.items(), key=lambda item: scan_sort_key(item[0])))

@@ -9,29 +9,26 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import numpy as np
 import cv2
+import numpy as np
 
 
 @dataclass(frozen=True)
-class ROIPlacementConfig:
+class RoiPlacementConfig:
     """ROI placement configuration in mm."""
 
     width_mm: float | None
     height_mm: float | None
-    depth_mm: float | None
+    top_margin_mm: float | None
 
 
 def largest_component(mask: np.ndarray) -> np.ndarray:
     """Boolean mask of *mask*'s largest connected component."""
-    mask_u8 = mask.astype(np.uint8)
-    if mask_u8.max() == 1:
-        mask_u8 *= 255  # cv2's connectivity analysis expects a 0/255 image
-    if mask_u8.shape[0] == 0 or mask_u8.shape[1] == 0:
+    if mask.shape[0] == 0 or mask.shape[1] == 0:
         raise ValueError("Empty mask")
-
+    # cv2 counts every non-zero pixel as foreground, a 0/1 image is fine
     num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(
-        mask_u8, connectivity=8
+        mask.astype(np.uint8), connectivity=8
     )
     if num_labels < 2:
         raise ValueError("Selected class is empty or not found.")
@@ -54,7 +51,7 @@ def class_top_at_center_column(mask: np.ndarray) -> tuple[int, int]:
     image's horizontal centre.
 
     used below by the box-shaped ROI generators, and by ROI preset auto-placement
-    (``RoiController._place_roi_preset_auto``) to align a saved preset the same way.
+    (``roi_placement.anchor_verts_to_mask``) to align a saved preset the same way.
     """
     return _top_at_center_column(largest_component(mask))
 
@@ -62,14 +59,15 @@ def class_top_at_center_column(mask: np.ndarray) -> tuple[int, int]:
 def roi_verts_from_mask(
     shape_type: str,
     class_mask: np.ndarray,
-    config: ROIPlacementConfig,
+    config: RoiPlacementConfig,
     *,
     sy: float,
     sx: float,
     ty: float = 0.0,
     tx: float = 0.0,
 ) -> np.ndarray:
-    """World-mm vertices of a *shape_type* ROI placed in *class_mask*'s largest component.
+    """World-mm vertices of a *shape_type* ROI placed in *class_mask*'s largest
+    component.
 
     ``rectangle`` and ``ellipse`` are boxes anchored to the class's top at the centre
     column; ``polygon`` follows the class outline, trimmed to the configured bounds.
@@ -83,7 +81,7 @@ def roi_verts_from_mask(
 
 def _pixel_bounds(
     mask: np.ndarray,
-    config: ROIPlacementConfig,
+    config: RoiPlacementConfig,
     sy: float,
     sx: float,
 ) -> tuple[int, int, int, int, np.ndarray]:
@@ -120,9 +118,9 @@ def _pixel_bounds(
         x0, x1 = 0, w
 
     # Height: Extending downwards from the established Y-anchor
-    depth_mm = float(config.depth_mm or 0.0)
-    depth_px = max(0, int(round(depth_mm / float(sy))))
-    y0 = min(h, top_y + depth_px)
+    margin_mm = float(config.top_margin_mm or 0.0)
+    margin_px = max(0, int(round(margin_mm / float(sy))))
+    y0 = min(h, top_y + margin_px)
 
     if config.height_mm is not None:
         height_px = max(1, int(round(float(config.height_mm) / float(sy))))
@@ -137,13 +135,14 @@ def _pixel_bounds(
 
 def _box_verts_mm(
     class_mask: np.ndarray,
-    config: ROIPlacementConfig,
+    config: RoiPlacementConfig,
     sy: float,
     sx: float,
     ty: float,
     tx: float,
 ) -> np.ndarray:
-    """Rectangle/ellipse corners (world mm) centred on the class's top at the centre column.
+    """Rectangle/ellipse corners (world mm) centred on the class's top at the centre
+    column.
 
     Exact millimetres rather than whole pixels, so the box has the requested size and
     margin, and sits where an ROI preset anchored with the same margin would.
@@ -153,14 +152,14 @@ def _box_verts_mm(
     top_row, center_col = _top_at_center_column(largest_mask)
     bottom_row = np.flatnonzero(largest_mask[:, center_col])[-1] + 1
 
-    needed_depth = float(config.depth_mm or 0.0) + float(config.height_mm)
+    needed_depth = float(config.top_margin_mm or 0.0) + float(config.height_mm)
     class_depth = (bottom_row - top_row) * sy
     if needed_depth > class_depth + 1e-9:
         raise ValueError(
             f"ROI top margin plus height ({needed_depth:.2f} mm) exceeds class depth "
             f"({class_depth:.2f} mm)."
         )
-    y0 = ty + top_row * sy + float(config.depth_mm or 0.0)
+    y0 = ty + top_row * sy + float(config.top_margin_mm or 0.0)
     y1 = y0 + float(config.height_mm)
     cx = tx + center_col * sx
     half_w = 0.5 * float(config.width_mm)
@@ -170,12 +169,13 @@ def _box_verts_mm(
 
 
 def _polygon_verts_px(
-    class_mask: np.ndarray, config: ROIPlacementConfig, sy: float, sx: float
+    class_mask: np.ndarray, config: RoiPlacementConfig, sy: float, sx: float
 ) -> np.ndarray:
     """Polygon (pixels) from the class's outline, trimmed to the configured bounds and
     anchored to the component's absolute top.
 
-    TODO: holes in the mask are currently ignored. Find a good way of handling them if needed.
+    TODO: holes in the mask are currently ignored. Find a good way of handling them if
+    needed.
     """
     x0, x1, y0, y1, largest_mask = _pixel_bounds(class_mask, config, sy, sx)
 
@@ -188,9 +188,7 @@ def _polygon_verts_px(
         trimmed_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
     )
     if not contours:
-        raise ValueError(
-            "No polygon found after trimming. Check sizes and depth."
-        )
+        raise ValueError("No polygon found after trimming. Check sizes and depth.")
 
     # cv2 returns (x, y) points; a single-point contour squeezes to 1-D
     largest_contour = max(contours, key=cv2.contourArea).reshape(-1, 2)

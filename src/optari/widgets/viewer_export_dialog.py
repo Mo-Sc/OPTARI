@@ -1,3 +1,5 @@
+"""The Export View dialog: image or video, colorbars and frame rate."""
+
 from __future__ import annotations
 
 from qtpy.QtWidgets import (
@@ -10,6 +12,8 @@ from qtpy.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from optari.config import settings
 
 
 class ViewerExportDialog(QDialog):
@@ -40,14 +44,10 @@ class ViewerExportDialog(QDialog):
         self.fps_spinbox.setDecimals(2)
         fps_layout.addWidget(self.fps_spinbox, 1)
 
-        from optari.config import settings
-
         self.fps_spinbox.setValue(float(settings.general.DEFAULT_PLAYBACK_FPS))
         self.fps_row.setVisible(False)
 
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
-        )
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
 

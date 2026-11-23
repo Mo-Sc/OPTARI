@@ -10,7 +10,7 @@ cd OPTARI
 pip install -e ".[test,docs,dev]"
 ```
 
-**Note:** this pulls in a [custom PATATO fork](https://github.com/Mo-Sc/patato/releases/tag/patari-v0.8.0), not upstream [BohndiekLab/patato](https://github.com/BohndiekLab/patato).
+**Note:** this pulls in a [custom PATATO fork](https://github.com/Mo-Sc/patato/releases/tag/patari-v0.9.0), not upstream [BohndiekLab/patato](https://github.com/BohndiekLab/patato).
 
 
 ### Test data
@@ -37,7 +37,7 @@ Segmentation tests additionally need the ONNX weights of `c_unet_gastrocnemius-t
 
 ### Tests overview
 
-The tests are headless, so they dont cover publishing layers into the viewer, the Qt event loop, etc.
+The tests are headless, so they don't cover publishing layers into the viewer, the Qt event loop, etc.
 
 | Module | Checks |
 | --- | --- |

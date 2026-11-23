@@ -1,28 +1,27 @@
+"""Entry point of the ``optari`` command: logging, the napari window, the controller."""
+
 import logging
 from os import _exit as os_exit
 from pathlib import Path
 
 # must import before Qt/napari on Windows (for PyQt6)
 # TODO: check if still necessary after switch to PySide6
-import jax  # noqa: jax is required by PATATO
-
-
+import jax  # noqa: F401  (PATATO needs it imported before Qt)
 from qtpy.QtGui import QIcon
 from qtpy.QtWidgets import QApplication
 
-from .utils.logging import configure_logging
-from .utils.setup import configure_napari, load_startup_logo
+from optari import __version__
 from optari.config import settings
 from optari.controllers.optari_controller import OptariController
+from optari.utils.logging import configure_logging
+from optari.utils.setup import configure_napari, load_startup_logo
 from optari.widgets.settings_dialog import identification_dialog
-
-from . import __version__
 
 logger = logging.getLogger(__name__)
 
 
 def main() -> None:
-
+    """Run OPTARI until its window closes, then end the process with ``os._exit``."""
     log_file = configure_logging()
     logger.info(
         "starting OPTARI %s (log level %s, notification level %s), logging to %s",
@@ -54,10 +53,9 @@ def main() -> None:
         run()
 
     except Exception:
-        # os_exit below ends the process before a re-raised exception could print its traceback
-        logger.exception(
-            "OPTARI stopped on an unhandled error, log: %s", log_file
-        )
+        # os_exit below ends the process before a re-raised exception could print its
+        # traceback
+        logger.exception("OPTARI stopped on an unhandled error, log: %s", log_file)
         exit_code = 1
 
     finally:
@@ -67,8 +65,9 @@ def main() -> None:
                 logger.info("OPTARI shutdown complete")
             except Exception:
                 logger.exception("error during controller shutdown")
-        # os._exit bypasses Pythons GC. Probably not ideal, but avoids a segfault on shutdown due to Qt objects
-        # being destroyed in the wrong order after the event loop has stopped.
+        # os._exit bypasses Pythons GC. Probably not ideal, but avoids a segfault on
+        # shutdown due to Qt objects being destroyed in the wrong order after the event
+        # loop has stopped.
         os_exit(exit_code)
 
 

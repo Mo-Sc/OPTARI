@@ -6,51 +6,56 @@ import numpy as np
 import pyqtgraph as pg
 from qtpy.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget
 
-from .dock_helpers import (
-    create_bottom_dock_header,
-    create_bottom_single_plot_container,
-)
+from .dock_helpers import create_bottom_dock_header
 
 
 @dataclass
 class TimeAnalysisDock:
+    """The Temporal dock: one feature of each ROI plotted over the frames."""
+
     widget: QWidget
-    generate_button: QPushButton
-    plot_container: QWidget
+    refresh_button: QPushButton
     status_label: QLabel
+    # One plot for the dock's lifetime, redrawn on every refresh.
+    plot_widget: pg.PlotWidget
     # Follows the viewer's frame, dragging it moves the viewer to that frame.
     frame_line: pg.InfiniteLine
 
-    # Created by AnalysisController on the first plot.
-    plot_widget: pg.PlotWidget | None = None
-    plotted_frames: np.ndarray = field(
-        default_factory=lambda: np.empty(0, dtype=int)
-    )
+    plotted_frames: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=int))
     plotted_x: np.ndarray = field(default_factory=lambda: np.empty(0))
+
+    def clear(self) -> None:
+        """Remove every curve and the status text, and forget what was plotted."""
+        self.plot_widget.clear()
+        self.plotted_frames = np.empty(0, dtype=int)
+        self.plotted_x = np.empty(0)
+        self.frame_line.setVisible(False)
+        self.status_label.setText("")
 
 
 def create_time_analysis_dock() -> TimeAnalysisDock:
     widget = QWidget()
     layout = QVBoxLayout(widget)
 
-    status_label, generate_button = create_bottom_dock_header(
+    status_label, refresh_button = create_bottom_dock_header(
         layout,
-        status_text="Click 'Refresh' to compute ROI means over time.",
+        status_text="Click 'Refresh' to plot the selected feature over time.",
     )
-    generate_button.setToolTip(
+    refresh_button.setToolTip(
         "Recompute the selected feature over time for the active ROI(s), using the "
         "Feature setting in the Annotation dock"
     )
-    plot_container = create_bottom_single_plot_container()
+    plot_widget = pg.PlotWidget()
+    plot_widget.showGrid(x=True, y=True)
     frame_line = pg.InfiniteLine(angle=90, movable=True, pen=pg.mkPen("y"))
     frame_line.setToolTip("Current frame, drag to move the viewer")
 
-    layout.addWidget(plot_container, stretch=1)
+    layout.addWidget(plot_widget, stretch=1)
 
     return TimeAnalysisDock(
         widget=widget,
-        generate_button=generate_button,
-        plot_container=plot_container,
+        refresh_button=refresh_button,
         status_label=status_label,
+        plot_widget=plot_widget,
         frame_line=frame_line,
     )

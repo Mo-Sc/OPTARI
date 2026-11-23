@@ -19,9 +19,7 @@ def test_patato_napari_round_trip():
         napari_to_patato(patato_to_napari(verts_m, *FOV), *FOV), verts_m
     )
     # PATATO origin is the image centre, napari's the top-left corner, PATATO y points up.
-    np.testing.assert_allclose(
-        patato_to_napari(np.zeros((1, 2)), *FOV), [[15.0, 20.0]]
-    )
+    np.testing.assert_allclose(patato_to_napari(np.zeros((1, 2)), *FOV), [[15.0, 20.0]])
     assert patato_to_napari(np.array([[0.0, 0.01]]), *FOV)[0, 0] < 15.0
 
 
@@ -43,10 +41,7 @@ def test_geometry_record_and_json_round_trip():
 
     np.testing.assert_allclose(restored.verts_m, geometry.verts_m, atol=1e-9)
     assert (restored.kind, restored.tissue_class) == ("ellipse", "Muskel1")
-    assert (
-        RoiGeometry.from_json(geometry.to_json()).to_dict()
-        == geometry.to_dict()
-    )
+    assert RoiGeometry.from_json(geometry.to_json()).to_dict() == geometry.to_dict()
 
 
 def test_repositioned_keeps_size_scales_centre():

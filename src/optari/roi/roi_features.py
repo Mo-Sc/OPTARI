@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
-class ROIContext:
+class RoiContext:
     """Everything one measurement needs: identifiers, provenance, the geometry blob
     and the pixel values a ``FeatureSpec`` reads.
 
@@ -35,7 +35,7 @@ class ROIContext:
     scan_folder: str
     scan_name: str
     frame: int
-    channel: object
+    channel: int | str
     scan_ts: str
     roi_centroid: tuple[float, float]
     roi_geometry: str
@@ -50,10 +50,10 @@ class ROIContext:
 
 @dataclass(frozen=True)
 class FeatureSpec:
-    """Pairs a dtype with a function from an :class:`ROIContext` to the column's value."""
+    """A dtype and the function from a ``RoiContext`` to the column's value."""
 
     dtype: type
-    fn: Callable[[ROIContext], object]
+    fn: Callable[[RoiContext], object]
 
 
 def _nan_stat(values: np.ndarray, fn: Callable[[np.ndarray], float]) -> float:
@@ -67,14 +67,26 @@ def _nan_stat(values: np.ndarray, fn: Callable[[np.ndarray], float]) -> float:
 
 def _iqr(values: np.ndarray) -> float:
     """
-    Interquartile range (IQR) is the difference between the 75th and 25th percentiles of the data.
+    Interquartile range (IQR) is the difference between the 75th and 25th percentiles of
+    the data.
     """
     return float(np.nanpercentile(values, 75) - np.nanpercentile(values, 25))
 
 
-def _snr(values: np.ndarray) -> float:
+def _sample_std(values: np.ndarray) -> float:
+    """Sample standard deviation (ddof=1), as pandas ``std()`` and Excel ``STDEV.S``.
+    NaN below two pixels, where it is undefined
     """
-    Signal-to-noise ratio (SNR) is defined as the mean of the signal divided by its standard deviation.
+    if np.count_nonzero(~np.isnan(values)) < 2:
+        return float("nan")
+    return float(np.nanstd(values, ddof=1))
+
+
+def _snr(values: np.ndarray) -> float:
+    """Mean over standard deviation of the ROI's own pixels.
+
+    A measure of how even the ROI is, not signal over background noise. It uses the
+    population std, unlike the ``std`` column (sample std).
     """
     std = float(np.nanstd(values))
     if std == 0.0:
@@ -86,11 +98,9 @@ def _bound(value: float | None) -> float:
     return float("nan") if value is None else float(value)
 
 
-def _size_mm(ctx: ROIContext) -> float:
-    """
-    returns the size of the ROI in mm^2 (for 2D ROIs) or length in mm (for line ROIs).
-    """
-    if ctx.kind == "line":
+def _size_mm(ctx: RoiContext) -> float:
+    """Area in mm² of a 2D ROI, or length in mm of a line or path."""
+    if ctx.kind in ("line", "path"):
         return float(np.linalg.norm(np.diff(ctx.verts, axis=0), axis=1).sum())
     return float(ctx.vals.size * ctx.sy * ctx.sx)
 
@@ -101,7 +111,7 @@ FEATURE_REGISTRY: dict[str, FeatureSpec] = {
     "roi_group_uid": FeatureSpec(str, lambda c: str(c.roi_group_uid)),
     "mean": FeatureSpec(float, lambda c: _nan_stat(c.vals, np.nanmean)),
     "median": FeatureSpec(float, lambda c: _nan_stat(c.vals, np.nanmedian)),
-    "std": FeatureSpec(float, lambda c: _nan_stat(c.vals, np.nanstd)),
+    "std": FeatureSpec(float, lambda c: _sample_std(c.vals)),
     "p10": FeatureSpec(
         float, lambda c: _nan_stat(c.vals, lambda v: np.nanpercentile(v, 10))
     ),
@@ -120,7 +130,8 @@ FEATURE_REGISTRY: dict[str, FeatureSpec] = {
     "filter_max": FeatureSpec(float, lambda c: _bound(c.clamp.maximum)),
     "src_layer": FeatureSpec(str, lambda c: str(c.src_layer)),
     "kind": FeatureSpec(str, lambda c: str(c.kind)),  # "shape_type" in napari
-    # who drew the ROI: OPTARI, or the vendor file it came from (e.g iAnnotation, iROIList)
+    # who drew the ROI: OPTARI, or the vendor file it came from (e.g iAnnotation,
+    # iROIList)
     "roi_source": FeatureSpec(str, lambda c: str(c.roi_source)),
     "study_folder": FeatureSpec(str, lambda c: str(c.study_folder)),
     "scan_folder": FeatureSpec(str, lambda c: str(c.scan_folder)),
@@ -149,7 +160,8 @@ def numeric_feature_ids() -> list[str]:
     ]
 
 
-# Fixed set of columns that are always included in the saved table, regardless of user settings to identify the origin of the ROI
+# Fixed set of columns that are always included in the saved table, regardless of user
+# settings to identify the origin of the ROI
 SAVED_FIXED_SOURCE_COLUMNS: list[str] = [
     "roi_id",
     "track_id",

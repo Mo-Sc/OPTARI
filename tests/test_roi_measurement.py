@@ -5,9 +5,10 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from optari.controllers.roi_controller import RoiController, _layer_holds
-from optari.roi.roi_records import ROIRecord
-from optari.roi.roi_shapes import ROIPlacementConfig, roi_verts_from_mask
+from optari.controllers.roi_controller import RoiController
+from optari.roi.roi_records import RoiRecord
+from optari.roi.roi_shapes import RoiPlacementConfig, roi_verts_from_mask
+from optari.roi.roi_store import layer_holds
 from optari.roi.roi_utils import (
     NO_CLAMP,
     IntensityClamp,
@@ -18,6 +19,7 @@ from optari.roi.roi_utils import (
 )
 
 SCALE = 0.1  # mm per pixel
+SCAN_FOV = (0.04, 0.04)  # m, only enters roi_geometry
 
 
 def block_image(value=5.0, n_frames=1, n_channels=1):
@@ -33,7 +35,7 @@ def rectangle_over_block(roi_id=0, track_id=0, frame_id=0):
     Rasterization fills boundary pixels, so the outline runs through the centres of
     the block's edge pixels (rows 20 and 39), not around them.
     """
-    return ROIRecord(
+    return RoiRecord(
         roi_id=roi_id,
         track_id=track_id,
         frame_id=frame_id,
@@ -45,7 +47,11 @@ def rectangle_over_block(roi_id=0, track_id=0, frame_id=0):
 def test_rectangle_stats_are_exact(image_layer):
     layer = image_layer(block_image(), SCALE)
     rows = compute_roi_stats(
-        [rectangle_over_block()], layer, frame_idx=0, channel_idx=0
+        [rectangle_over_block()],
+        layer,
+        frame_idx=0,
+        channel_idx=0,
+        scan_fov_m=SCAN_FOV,
     )
 
     assert len(rows) == 1
@@ -69,20 +75,22 @@ def test_rectangle_stats_are_exact(image_layer):
     # napari keeps shape vertices as float32, where 3.9 mm is not exact: that
     # rounding must not count as an edit (which would turn a vendor ROI into OPTARI's)
     record = rectangle_over_block()
-    assert _layer_holds(record, record.verts.astype(np.float32), "rectangle")
+    assert layer_holds(record, record.verts.astype(np.float32), "rectangle")
 
 
 def test_ellipse_area_is_close_to_analytic(image_layer):
     layer = image_layer(np.ones((1, 1, 200, 200)), SCALE)
     # 10 x 4 mm bounding box: semi-axes 50 and 20 pixels.
-    ellipse = ROIRecord(
+    ellipse = RoiRecord(
         roi_id=0,
         track_id=0,
         frame_id=0,
         kind="ellipse",
         verts=np.array([[5.0, 4.0], [5.0, 14.0], [9.0, 14.0], [9.0, 4.0]]),
     )
-    rows = compute_roi_stats([ellipse], layer, frame_idx=0, channel_idx=0)
+    rows = compute_roi_stats(
+        [ellipse], layer, frame_idx=0, channel_idx=0, scan_fov_m=SCAN_FOV
+    )
 
     assert rows.iloc[0]["n_pixels"] == pytest.approx(np.pi * 50 * 20, rel=0.03)
     assert rows.iloc[0]["size_mm"] == pytest.approx(np.pi * 5 * 2, rel=0.03)
@@ -96,23 +104,27 @@ def test_clamp_clip_keeps_pixels_exclude_drops_them(image_layer):
     layer = image_layer(data, SCALE)
     roi = [rectangle_over_block()]
 
-    unclamped = compute_roi_stats(roi, layer, 0, 0).iloc[0]
+    unclamped = compute_roi_stats(roi, layer, 0, 0, scan_fov_m=SCAN_FOV).iloc[0]
     clipped = compute_roi_stats(
-        roi, layer, 0, 0, clamp=IntensityClamp(maximum=4, mode="clip")
+        roi,
+        layer,
+        0,
+        0,
+        scan_fov_m=SCAN_FOV,
+        clamp=IntensityClamp(maximum=4, mode="clip"),
     ).iloc[0]
     excluded = compute_roi_stats(
-        roi, layer, 0, 0, clamp=IntensityClamp(maximum=4, mode="exclude")
+        roi,
+        layer,
+        0,
+        0,
+        scan_fov_m=SCAN_FOV,
+        clamp=IntensityClamp(maximum=4, mode="exclude"),
     ).iloc[0]
 
     assert unclamped["mean"] == pytest.approx(4.5)
-    assert (
-        clipped["n_pixels"] == 600
-        and clipped["max"] == 4
-        and clipped["mean"] < 4.5
-    )
-    assert excluded["n_pixels"] == 300 and excluded["mean"] == pytest.approx(
-        2.0
-    )
+    assert clipped["n_pixels"] == 600 and clipped["max"] == 4 and clipped["mean"] < 4.5
+    assert excluded["n_pixels"] == 300 and excluded["mean"] == pytest.approx(2.0)
     assert excluded["size_mm"] == pytest.approx(clipped["size_mm"] / 2)
 
     # Unchecking both filter boxes in the Annotation dock switches filtering off again.
@@ -127,7 +139,7 @@ def test_clamp_clip_keeps_pixels_exclude_drops_them(image_layer):
         roi_exclude_max_edit=text(""),
     )
     roi_ctrl = SimpleNamespace(
-        optari_controller=SimpleNamespace(annotation=dock),
+        optari_controller=SimpleNamespace(annotation_dock=dock),
         update_live_table=lambda: None,
     )
     RoiController.on_intensity_settings_changed(roi_ctrl)
@@ -144,20 +156,23 @@ def test_layer_translate_shifts_mask(image_layer):
     shifted_roi = rectangle_over_block()
     shifted_roi.verts += (1.0, 2.0)
 
-    assert compute_roi_stats([shifted_roi], layer, 0, 0).iloc[0]["mean"] == 5
     assert (
-        compute_roi_stats([rectangle_over_block()], layer, 0, 0).iloc[0][
+        compute_roi_stats([shifted_roi], layer, 0, 0, scan_fov_m=SCAN_FOV).iloc[0][
             "mean"
         ]
+        == 5
+    )
+    assert (
+        compute_roi_stats(
+            [rectangle_over_block()], layer, 0, 0, scan_fov_m=SCAN_FOV
+        ).iloc[0]["mean"]
         < 5
     )
 
 
 def test_time_series_fixed_and_tracked(image_layer):
     data = block_image(n_frames=4)
-    data *= np.arange(4, dtype=np.float32)[
-        :, None, None, None
-    ]  # frame f has value 5f
+    data *= np.arange(4, dtype=np.float32)[:, None, None, None]  # frame f has value 5f
     timestamps = 100.0 + np.arange(4)[:, None] * 2.0 + np.zeros((4, 1))
     layer = image_layer(data, SCALE, timestamps=timestamps)
 
@@ -196,7 +211,7 @@ def test_roi_shape_from_mask_is_exact():
     mask = np.zeros((100, 100), dtype=bool)
     mask[30:60] = True  # tissue band from row 30 to 59
 
-    config = ROIPlacementConfig(width_mm=4.0, height_mm=2.0, depth_mm=None)
+    config = RoiPlacementConfig(width_mm=4.0, height_mm=2.0, top_margin_mm=None)
     verts = roi_verts_from_mask("rectangle", mask, config, sy=SCALE, sx=SCALE)
     assert sorted(set(verts[:, 0])) == [
         3.0,
@@ -204,12 +219,10 @@ def test_roi_shape_from_mask_is_exact():
     ]  # anchored to the band's top edge
     assert sorted(set(verts[:, 1])) == [3.0, 7.0]  # centred on column 50
 
-    poly_verts = roi_verts_from_mask(
-        "polygon", mask, config, sy=SCALE, sx=SCALE
-    )
+    poly_verts = roi_verts_from_mask("polygon", mask, config, sy=SCALE, sx=SCALE)
     assert poly_verts[:, 0].min() >= 3.0 and poly_verts[:, 0].max() <= 5.0
     assert poly_verts[:, 1].min() >= 3.0 and poly_verts[:, 1].max() <= 7.0
 
-    too_tall = ROIPlacementConfig(width_mm=4.0, height_mm=5.0, depth_mm=None)
+    too_tall = RoiPlacementConfig(width_mm=4.0, height_mm=5.0, top_margin_mm=None)
     with pytest.raises(ValueError, match="exceeds class depth"):
         roi_verts_from_mask("rectangle", mask, too_tall, sy=SCALE, sx=SCALE)

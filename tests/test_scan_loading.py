@@ -23,8 +23,9 @@ pytestmark = needs_study
 
 
 def test_discover_studies_finds_both_scans(tmp_path):
+    # The test data folder holds other studies too, Study_19 is the one checked here.
     studies = discover_studies(STUDY_DIR.parent)
-    assert list(studies) == [STUDY_DIR]
+    assert STUDY_DIR in studies
     scans = studies[STUDY_DIR]
     assert list(scans) == [ITHERA_SCAN, HDF5_SCAN]
     assert [(info.kind, info.internal_name) for info in scans.values()] == [
@@ -61,16 +62,14 @@ def test_discover_studies_finds_both_scans(tmp_path):
 
 
 def test_build_layers_from_hdf5_scan(hdf5_scan, vendor_recon):
-    layers, objects = build_napari_layers(hdf5_scan)
+    layers, objects = build_napari_layers(hdf5_scan, str(HDF5_SCAN), None)
     (us, us_kw), (recon, recon_kw) = layers
 
     assert us_kw["name"] == "US" and us.shape == (26, 13, 210, 210)
     assert us_kw["scale"] == pytest.approx((1, 40 / 210, 40 / 210), rel=1e-6)
     assert us_kw["metadata"]["type"] == "us"
 
-    assert recon_kw[
-        "name"
-    ] == "Recon: iThera BP-40mm(res:100μm)_0" and recon.shape == (
+    assert recon_kw["name"] == "Recon: iThera BP-40mm(res:100μm)_0" and recon.shape == (
         26,
         13,
         400,
@@ -118,28 +117,27 @@ def test_ithera_scan_builds_the_same_layer_structure(ithera_scan, hdf5_scan):
             for data, kw in layers
         ]
 
-    assert structure(build_napari_layers(ithera_scan)[0]) == structure(
-        build_napari_layers(hdf5_scan)[0]
-    )
+    assert structure(
+        build_napari_layers(ithera_scan, str(ITHERA_SCAN), None)[0]
+    ) == structure(build_napari_layers(hdf5_scan, str(HDF5_SCAN), None)[0])
     assert ithera_scan.get_scan_name() == "DEMO_SCAN_2"
 
 
 def test_motion_frame_selection(hdf5_scan, ithera_scan):
     rng = np.random.default_rng(0)
     us = rng.normal(size=(5, 3, 64, 64))
-    us[2] = us[
-        2, 0
-    ]  # all wavelengths of frame 2 see the same image: no motion
-    assert (
-        int(np.argmin(spectral_motion_scores(us, mask_transducer=0))) == 2
-    )
+    # all wavelengths of frame 2 see one image: nothing to compare
+    us[2] = us[2, 0]
+    scores = spectral_motion_scores(us, mask_transducer=0)
+    assert np.isnan(scores).tolist() == [False, False, True, False, False]
 
     # Regression values for the shipped test scans.
     def lowest_motion_frame(scan):
         return int(
             np.argmin(
                 spectral_motion_scores(
-                    display_data_from_patato_obj(scan.get_ultrasound())
+                    display_data_from_patato_obj(scan.get_ultrasound()),
+                    60,  # TRANSDUCER_MASK_MM at these scans' 0.19 mm/px
                 )
             )
         )

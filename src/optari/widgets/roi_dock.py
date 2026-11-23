@@ -24,6 +24,10 @@ from optari.roi.roi_utils import (
 
 @dataclass
 class RoiDock:
+    """The Tabular dock: live measurements of the shown ROIs and the saved analysis
+    table.
+    """
+
     widget: QWidget
     live_table: Table
     saved_table: Table
@@ -51,13 +55,10 @@ def create_roi_dock() -> RoiDock:
 
     save_button = QPushButton("Save ROI Data")
     save_button.setToolTip(
-        "Save the selected shape's measurements to the Saved Analysis table "
-        "(Shift+Ctrl+S / Shift+Cmd+S)"
+        "Save the selected shape's measurements to the Saved Analysis table"
     )
     delete_button = QPushButton("Delete ROI Data")
-    delete_button.setToolTip(
-        "Delete the selected row(s) from the Saved Analysis table"
-    )
+    delete_button.setToolTip("Delete the selected row(s) from the Saved Analysis table")
     xlsx_button = QPushButton("Export XLSX")
     import_button = QPushButton("Import XLSX")
     import_button.setToolTip(
@@ -70,9 +71,7 @@ def create_roi_dock() -> RoiDock:
 
     live_panel = QWidget()
     live_layout = QVBoxLayout(live_panel)
-    live_layout.addWidget(
-        QLabel("Live Analysis (auto-updates when ROI is modified)")
-    )
+    live_layout.addWidget(QLabel("Live Analysis (auto-updates when ROI is modified)"))
     live_layout.addWidget(live_table.native)
 
     delete_shortcut = QShortcut(QKeySequence.Delete, live_table.native)
@@ -94,9 +93,7 @@ def create_roi_dock() -> RoiDock:
     saved_layout.addWidget(saved_table.native)
     # Double-clicking collapses a multi-row selection, so Return is how several rows
     # are restored at once.
-    restore_shortcut = QShortcut(
-        QKeySequence(Qt.Key_Return), saved_table.native
-    )
+    restore_shortcut = QShortcut(QKeySequence(Qt.Key_Return), saved_table.native)
 
     layout.addWidget(live_panel)
     layout.addWidget(btn_panel)

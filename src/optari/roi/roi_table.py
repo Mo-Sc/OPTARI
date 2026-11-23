@@ -1,11 +1,13 @@
-"""The Saved Analysis table consisting of saved ROI measurements.
+"""The Saved Analysis table, the ROI measurements saved in a session.
 
-- **Saving never overwrites.** Re-measuring an ROI appends a second set of rows under
-  the same ``roi_group_uid``, separated by ``roi_ts``. TODO: should this be kept or cause error/delete prompt?
-- **Every change writes to disk.** Each change to the saved table autosaves
-- **Re-importing the same file adds nothing.** Identical rows are skipped, so analysis sheets can be combined
+- **Saving never overwrites.** Re-measuring an ROI appends another set of rows under
+  the same ``roi_group_uid``, told apart by ``roi_ts``. Earlier measurements stay, so
+  the table records everything that was measured.
+- **Every change writes to disk.** New rows are appended to a CSV, a delete rewrites it.
+- **Re-importing the same file adds nothing.** Identical rows are skipped, so analysis
+  sheets can be combined.
 
-All the Qt stuff is in the controller
+The Qt side lives in ``RoiController``.
 """
 
 from __future__ import annotations
@@ -15,8 +17,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from optari.io.export_pipeline import export_roi_table_to_xlsx
-from optari.utils.files import atomic_destination
+from optari.roi.roi_table_io import append_roi_table_csv, write_roi_table_csv
 from optari.roi.roi_utils import saved_export_columns, saved_table_columns
 
 logger = logging.getLogger(__name__)
@@ -62,13 +63,16 @@ class SavedRoiTable:
         return self._rows.iloc[positions]
 
     def _next_measurement_stamp(self) -> str:
-        """A roi timestamp. Must not collide.
+        """A ``roi_ts`` for the next save, later than every stamp already in the table.
 
-        To avoid collisions, the stamp is guaranteed to be later than the most recent one in the table.
-        TODO: really necessary? Or is wall clock time enough (microsecond precision)?
+        ``roi_ts`` is part of the measurement key, so two saves must never share one.
+        The wall clock alone can repeat or step back (clock sync), which would merge two
+        measurements into one.
         """
 
-        now = pd.Timestamp.now()
+        # UTC with offset, like every timestamp OPTARI writes. One offset for all
+        # stamps also keeps the string comparison below chronological.
+        now = pd.Timestamp.now(tz="UTC")
         if not self._rows.empty:
             latest = self._rows["roi_ts"].iloc[-1]
             if now.isoformat(timespec="microseconds") <= str(latest):
@@ -86,12 +90,8 @@ class SavedRoiTable:
         remeasured = set(rows["roi_group_uid"]) & set(
             self._rows.get("roi_group_uid", [])
         )
-        self._rows = (
-            rows
-            if self._rows.empty
-            else pd.concat([self._rows, rows], ignore_index=True)
-        )
-        self._autosave()
+        self._rows = self._appended(rows)
+        self._save(rows)
         return remeasured
 
     def delete_at(self, positions: list[int]) -> int:
@@ -102,7 +102,7 @@ class SavedRoiTable:
         # view is ever sorted or filtered.
         labels = self._rows.index[positions]
         self._rows = self._rows.drop(labels).reset_index(drop=True)
-        self._autosave()
+        self._save()
         return len(positions)
 
     def merge_imported(self, rows: pd.DataFrame) -> tuple[int, int]:
@@ -112,28 +112,38 @@ class SavedRoiTable:
         from several sessions or machines combine in one table. ``roi_group_uid`` keeps
         every row attributable to the ROI it was measured from.
         """
-        combined = pd.concat([self._rows, rows], ignore_index=True)
+        n_before = len(self._rows)
+        combined = self._appended(rows)
         # A measurement is identified by what was measured where and when.
         duplicates = combined[MEASUREMENT_KEY].astype(str).duplicated()
         self._rows = combined[~duplicates].reset_index(drop=True)
-        self._autosave()
+        self._save(self._rows.iloc[n_before:])
 
         skipped = int(duplicates.sum())
         return len(rows) - skipped, skipped
 
-    def _autosave(self) -> None:
+    def _appended(self, rows: pd.DataFrame) -> pd.DataFrame:
+        # Concatenating onto the empty initial frame, whose columns are all object
+        # dtype, would make every numeric column object too.
+        if self._rows.empty:
+            return rows.reset_index(drop=True)
+        return pd.concat([self._rows, rows], ignore_index=True)
+
+    def _save(self, appended: pd.DataFrame | None = None) -> None:
+        """Mirror the table to its CSV: append *appended*, or rewrite it after a delete.
+
+        An emptied table leaves the file as it was: the session's only backup must
+        not go with a select-all and Delete. The next save then rewrites it, since
+        appending would bring the deleted rows back on import.
         """
-        Write the table to disk, overwrite on every change. If the table is empty, delete the file
-        """
-        if self._autosave_path is None:
+        if self._autosave_path is None or self._rows.empty:
             return
         path = self._autosave_path
         try:
-            if self._rows.empty:
-                path.unlink(missing_ok=True)
-                return
-            with atomic_destination(path) as temporary:
-                export_roi_table_to_xlsx(self._rows, temporary)
+            if appended is None or len(appended) == len(self._rows):
+                write_roi_table_csv(self._rows, path)
+            else:
+                append_roi_table_csv(appended, path)
         except OSError:
             # A failing backup must never discard the ROI data just saved.
             logger.exception("could not autosave the ROI table to %s", path)

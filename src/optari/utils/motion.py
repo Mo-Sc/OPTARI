@@ -1,48 +1,76 @@
-import numpy as np
+"""Motion scores per frame, from the ultrasound, to pick a still frame and flag moving
+ones.
+
+Spectral motion follows Kukačka et al., Sci Rep 16, 1325 (2026).
+"""
+
 from itertools import combinations
+
+import numpy as np
 from skimage.metrics import structural_similarity as ssim
+
+# Depth of the band at the top of the ultrasound left out of motion scoring
+TRANSDUCER_MASK_MM = 11.4  # iThera 40 mm / 210 px ultrasound (0.19 mm/px),
+
+
+def transducer_mask_rows(pixel_mm: float, n_rows: int) -> int:
+    """Rows of an ultrasound image with *pixel_mm* row spacing that
+    ``TRANSDUCER_MASK_MM`` covers.
+
+    Raises ValueError when that leaves nothing to score, rather than scoring nothing.
+    """
+    rows = round(TRANSDUCER_MASK_MM / pixel_mm)
+    if rows >= n_rows:
+        raise ValueError(
+            f"the {TRANSDUCER_MASK_MM} mm transducer mask covers the whole "
+            f"{n_rows * pixel_mm:.1f} mm ultrasound image"
+        )
+    return rows
 
 
 def _min_max_scale(arr: np.ndarray) -> np.ndarray:
-    ptp = np.ptp(arr)
-    return (arr - arr.min()) / ptp if ptp > 0 else np.zeros_like(arr)
+    """Scale to 0-1, leaving NaN (unscored) entries NaN."""
+    shifted = arr - np.nanmin(arr)
+    ptp = np.nanmax(shifted)
+    return shifted / ptp if ptp > 0 else shifted
 
 
 def spectral_motion_scores(
-    us_data: np.ndarray, mask_transducer: int = 60
+    us_data: np.ndarray, mask_transducer: int
 ) -> np.ndarray | None:
     """
     adapted from:
-    Kukačka, J., Bader, M., Jüstel, D. et al. Motion score for spectral quality control of optoacoustic-ultrasound data. Sci Rep 16, 1325 (2026).
+    Kukačka, J., Bader, M., Jüstel, D. et al. Motion score for spectral quality control
+    of optoacoustic-ultrasound data. Sci Rep 16, 1325 (2026).
     https://doi.org/10.1038/s41598-025-33753-6
-    Highly optimized SSIM + ZNCC motion scores for structured, padded US data.
-    Speedup: ~25x
+    SSIM and ZNCC motion scores, vectorised over the padded US data.
 
     Scores motion *within* each frame's wavelength set, comparing the ultrasound
     images of its wavelengths with each other. That is the motion that misaligns
     spectra and corrupts unmixing. Frames are not compared with each other, only
     scaled against each other at the end.
 
+    A wavelength set whose wavelengths all show the same US image scores NaN. That
+    happens when the scanner refreshes the US slower than the OA frames and repeats the
+    last US image, so the set has no motion to measure.
+
     Returns None when no frame has two distinct images to compare (a single
-    wavelength, or a scanner repeating one US image per wavelength set): every frame would
-    score the same, and an all-zero result would read as "no motion".
+    wavelength, or a scanner repeating one US image per wavelength set).
 
     Input shape: (n_frames, n_wavelengths, height, width)
-    mask_transducer: int, number of pixels to mask out from the top of the image (transducer)
+    mask_transducer: rows to leave out at the top of the image, see
+    ``transducer_mask_rows``
     """
     n_frames = us_data.shape[0]
 
-    raw_ssim = np.zeros(n_frames)
-    raw_zncc = np.zeros(n_frames)
+    raw_ssim = np.full(n_frames, np.nan)
+    raw_zncc = np.full(n_frames, np.nan)
 
     us_data = us_data[:, :, mask_transducer:, :]
-    # Counted after cropping
-    num_pixels = us_data.shape[2] * us_data.shape[3]
 
     # Constant peak-to-peak data range for stable SSIM, taken over the compared pixels
     global_range = np.ptp(us_data)
 
-    any_sweep_compared = False
     for i in range(n_frames):
         block = us_data[i]
 
@@ -55,46 +83,38 @@ def spectral_motion_scores(
         n_unique = len(unique_frames)
 
         if n_unique <= 1:
-            # check static match
-            # to instantly skip heavy skimage structural processing loops.
-            raw_ssim[i] = -1.0  # SSIM of identical images is always 1.0
-            raw_zncc[i] = -num_pixels  # ZNCC dot-product of self is always -N
-        else:
-            any_sweep_compared = True
-            # Standardize all unique frames in one vectorized step.
-            # Avoids recalculating the mean and std inside the pairwise combinations loop.
-            means = unique_frames.mean(axis=(1, 2), keepdims=True)
-            stds = unique_frames.std(axis=(1, 2), keepdims=True)
-            stds = np.where(
-                stds == 0, 1.0, stds
-            )  # Guard against zero division
-            std_frames = (unique_frames - means) / stds
+            continue
 
-            s_pairs, z_pairs = [], []
-            for idx1, idx2 in combinations(range(n_unique), 2):
-                # Calculate structural similarity with the constant global dynamic range
-                s_pairs.append(
-                    -ssim(
-                        unique_frames[idx1],
-                        unique_frames[idx2],
-                        data_range=global_range,
-                    )
+        # Standardize all unique frames in one vectorized step.
+        # Avoids recalculating the mean and std inside the pairwise combinations loop.
+        means = unique_frames.mean(axis=(1, 2), keepdims=True)
+        stds = unique_frames.std(axis=(1, 2), keepdims=True)
+        stds = np.where(stds == 0, 1.0, stds)  # Guard against zero division
+        std_frames = (unique_frames - means) / stds
+
+        s_pairs, z_pairs = [], []
+        for idx1, idx2 in combinations(range(n_unique), 2):
+            # Calculate structural similarity with the constant global dynamic range
+            s_pairs.append(
+                -ssim(
+                    unique_frames[idx1],
+                    unique_frames[idx2],
+                    data_range=global_range,
                 )
+            )
 
-                # dot-product matrix multiplication on pre-standardized arrays
-                z_pairs.append(-np.sum(std_frames[idx1] * std_frames[idx2]))
+            # dot-product matrix multiplication on pre-standardized arrays
+            z_pairs.append(-np.sum(std_frames[idx1] * std_frames[idx2]))
 
-            raw_ssim[i] = np.mean(s_pairs)
-            raw_zncc[i] = np.mean(z_pairs)
+        raw_ssim[i] = np.mean(s_pairs)
+        raw_zncc[i] = np.mean(z_pairs)
 
-    if not any_sweep_compared:
+    if np.isnan(raw_ssim).all():
         return None
     return (_min_max_scale(raw_ssim) + _min_max_scale(raw_zncc)) / 2.0
 
 
-def frame_motion_scores(
-    us_data: np.ndarray, mask_transducer: int = 60
-) -> np.ndarray:
+def frame_motion_scores(us_data: np.ndarray, mask_transducer: int) -> np.ndarray:
     """Motion *between* frames: how much each frame's ultrasound differs from the
     previous and the next frame, e.g. from breathing or probe movement.
 
@@ -139,9 +159,16 @@ def frame_motion_scores(
         return np.nanmean(np.stack([padded[:-1], padded[1:]]), axis=0)
 
     return (
-        (
-            _min_max_scale(per_image(pair_ssim))
-            + _min_max_scale(per_image(pair_zncc))
-        )
+        (_min_max_scale(per_image(pair_ssim)) + _min_max_scale(per_image(pair_zncc)))
         / 2.0
     )[image_of_frame]
+
+
+def standout_frames(scores: np.ndarray, k: float = 4.0) -> np.ndarray:
+    """Frames whose motion stands out from the rest of the scan: above median + k·MAD.
+
+    NaN (unscored) frames are ignored and never flagged.
+    """
+    median = np.nanmedian(scores)
+    mad = 1.4826 * np.nanmedian(np.abs(scores - median))
+    return scores > median + k * mad

@@ -26,7 +26,7 @@ from optari.batch.plan import (
 )
 from optari.utils.logging import configure_logging
 from optari.utils.presets import PresetStore
-from optari.utils.setup import get_user_batch_presets_dir
+from optari.utils.setup import get_user_presets_dir
 
 
 def main() -> None:
@@ -34,15 +34,9 @@ def main() -> None:
         prog="optari-batch",
         description="Run an OPTARI batch preset over a dataset",
     )
-    parser.add_argument(
-        "preset", help="batch preset .json, or a saved preset's name"
-    )
-    parser.add_argument(
-        "dataset", type=Path, help="folder holding Study_*/Scan_* data"
-    )
-    parser.add_argument(
-        "output", type=Path, help="output folder, created if missing"
-    )
+    parser.add_argument("preset", help="batch preset .json, or a saved preset's name")
+    parser.add_argument("dataset", type=Path, help="folder holding Study_*/Scan_* data")
+    parser.add_argument("output", type=Path, help="output folder, created if missing")
     parser.add_argument(
         "--resume",
         action="store_true",
@@ -59,7 +53,7 @@ def main() -> None:
     configure_logging()
 
     try:
-        preset = PresetStore(get_user_batch_presets_dir()).load(args.preset)
+        preset = PresetStore(get_user_presets_dir("batch")).load(args.preset)
         args.output.mkdir(parents=True, exist_ok=True)
         plan = build_plan(
             root=args.dataset, batch_preset=preset, output_dir=args.output
@@ -89,9 +83,7 @@ def main() -> None:
     if problems:
         print("\n".join(f"✗ {p}" for p in problems), file=sys.stderr)
         sys.exit(2)
-    answer = (
-        "y" if args.yes else input(f"Run {len(plan.jobs)} scan(s)? [y/N] ")
-    )
+    answer = "y" if args.yes else input(f"Run {len(plan.jobs)} scan(s)? [y/N] ")
     if answer.strip().lower() not in ("y", "yes"):
         print("Not started.")
         sys.exit(0)
@@ -114,9 +106,7 @@ def main() -> None:
     runner = BatchRunner(
         controller,
         plan,
-        on_progress=lambda job, status: print(
-            f"{job.key}: {status}", flush=True
-        ),
+        on_progress=lambda job, status: print(f"{job.key}: {status}", flush=True),
         on_finished=app.quit,
     )
     # Qt's loop would swallow KeyboardInterrupt. Killing outright is safe: every output

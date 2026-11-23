@@ -4,7 +4,8 @@
 
 - Each dock is created by a `create_*_dock()` factory returning a dataclass of widget
   references (`QLineEdit`, `QComboBox`, pyqtgraph `PlotWidget`, `magicgui.widgets.Table`, ...).
-- Widgets hold no logic and doesnt wire their own signals, which is done by `UiManager.connect_events()`
+- Docks hold no application logic, only behaviour local to their widgets (remembering checked scans,
+  formatting a table, etc)
 
 ## `TaskControllerBase`
 
@@ -15,6 +16,23 @@ Controllers share one base class: `controllers/base.py`:
 3. `publish(result, params)`: adds the resulting layer(s) and returns the "Finished: ..." text.
 
 Batch mode builds `params` from a preset instead of the dock and calls the same `prepare`/`publish`.
+
+`OptariController` also calls three hooks on every controller, in the order of its `controllers` list. Each does
+nothing unless overridden:
+
+- `on_active_layers_changed()`: the layer selection changed, or the active PA or US layer was removed.
+- `on_frame_changed(frame_idx)`: the viewer moved to another frame.
+- `on_slice_shown()`: the viewer shows another frame, channel or layer, for live readouts.
+
+## Adding a feature
+
+To add a new feature with a dock requires two files and one line to include it:
+
+1. Write the dock as a `create_*_dock()` factory in `widgets/`, and the controller as a `TaskControllerBase` subclass.
+   The controller declares its dock as a class attribute, `DOCK = (attribute, factory, title, area, tabify)`, and
+   reaches it as `self.dock`. It implements `_signal_bindings()` for the dock's signals, `refresh_ui()` for gating,
+   the hooks above if it follows the viewer, and `_params_from_ui` / `prepare` / `publish` if it runs heavy work. (A minimal working example is `controllers/demo_controller.py` with `widgets/demo_dock.py`)
+2. Add the controller to `self.controllers` in `OptariController.__init__` (uncomment the demo dock to show it).
 
 ## Controllers
 
@@ -33,17 +51,22 @@ holding a direct reference to it.
 
 ## `patato_bridge.py`
 
-Handles conversion between PATATO objects and napari layers/coordinates. No controller
-reads a PATATO array or writes an HDF5 attribute directly outside `patato_bridge.py` and
-`io/export_pipeline.py`.
+Handles conversion between PATATO objects and napari layers/coordinates. HDF5 attributes are
+written only there and in `io/export_pipeline.py`. Controllers read PATATO arrays through `patato_bridge.py`
 
 !!! note "Export creates a new file, unless it is the loaded scan"
     `export_scan_to_hdf5` always creates a new file. When the destination chosen for **Save HDF5** is the loaded
     scan file itself (confirmed through the file dialog's overwrite prompt), `ScanController` calls
     `save_scan_into_source` instead. It opens the loaded OPTARI HDF5 read-write and runs the same `_write_rois` and
-    `_write_derived_data` on it, so only `derived_patato_objects` are added and nothing is deleted. h5py
-    cannot reopen a file read-write that this process holds read-only, and the loaded layers read lazily through
-    that handle, so the scan is closed before writing and `ScanController` reloads it afterwards.
+    `_write_derived_data` on it, so the session's `derived_patato_objects` are added, each replacing a stored
+    dataset of the same layer name, and nothing else is deleted. h5py cannot reopen a file read-write that this
+    process holds read-only, so `ScanController` resets the scan before writing and reloads it afterwards.
+
+!!! note "Exports run in the background"
+    `export_scan_to_hdf5`, `save_scan_into_source` and `export_scan_to_ipasc` are generators run as background
+    steps (`start_task` in the GUI, a yielded `BackgroundStep` in batch mode). They never read the viewer or a
+    controller: `ScanController.export_snapshot()` copies what they write (OPTARI ROIs, derived images, segmentation mask,
+    clinical metadata edits) on the main thread first, so ROIs edited during a running export do not leak into it.
 
 !!! note "Export always overwrites"
     `pa_data.save_hdf5()` already copies whatever the *source* file had (ROIs, segmentation, clinical metadata) into the export, but a live optari edit this session (a new/edited ROI shape, a run segmentation, an edited clinical metadata field) is never part of `pa_data`'s reader, so it can't be part of that automatic copy. `_write_rois` and `_write_derived_data` (`io/export_pipeline.py`) run *after* `save_hdf5()` and explicitly delete+rewrite those datasets from the current state. In the common case (nothing changed since load) this rewrites identical data.

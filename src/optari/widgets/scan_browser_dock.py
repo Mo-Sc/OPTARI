@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
+from dataclasses import dataclass
 from pathlib import Path
 
 from qtpy.QtCore import QSettings, Qt
@@ -22,6 +22,8 @@ from optari.io.discovery import ScanInfo
 
 @dataclass
 class ScanBrowserDock:
+    """The study folder, its scans and the scan exports."""
+
     widget: QWidget
     folder_lineedit: QLineEdit
     browse_button: QPushButton
@@ -44,9 +46,7 @@ class ScanBrowserDock:
             )
             item = QListWidgetItem(display)
             item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-            item.setCheckState(
-                Qt.Checked if display in checked else Qt.Unchecked
-            )
+            item.setCheckState(Qt.Checked if display in checked else Qt.Unchecked)
             self.scans_list.addItem(item)
 
     def save_checked_scans(self) -> None:
@@ -56,16 +56,12 @@ class ScanBrowserDock:
         studies[self.folder_lineedit.text()] = [
             item.text() for item in items if item.checkState() == Qt.Checked
         ]
-        QSettings("OPTARI", "OPTARI").setValue(
-            "checked_scans", json.dumps(studies)
-        )
+        QSettings("OPTARI", "OPTARI").setValue("checked_scans", json.dumps(studies))
 
 
 def _read_checked_scans() -> dict[str, list[str]]:
     """Checked scans by study folder."""
-    return json.loads(
-        QSettings("OPTARI", "OPTARI").value("checked_scans", "{}")
-    )
+    return json.loads(QSettings("OPTARI", "OPTARI").value("checked_scans", "{}"))
 
 
 def create_scan_browser_dock() -> ScanBrowserDock:
@@ -100,7 +96,7 @@ def create_scan_browser_dock() -> ScanBrowserDock:
         "copy, or the loaded OPTARI HDF5 file itself to update it in place"
     )
     ipasc_button = QPushButton("Export IPASC")
-    ipasc_button.setToolTip("Export the raw time series as a IPASC HDF5 file.")
+    ipasc_button.setToolTip("Export the raw time series as an IPASC HDF5 file.")
     export_layer_button = QPushButton("Export View")
     export_layer_button.setToolTip(
         "Export the current viewer display as an image or video"

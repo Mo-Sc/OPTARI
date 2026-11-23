@@ -4,36 +4,38 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from pathlib import Path
-import re
 
-import cv2
+import imageio.v3 as iio
 from napari.layers import Image
 from napari.viewer import Viewer
 
+from optari import __version__
+
 
 @contextmanager
-def colorbars_visible(viewer: Viewer, visible: bool):
+def export_overlays(viewer: Viewer, include_colorbars: bool):
+    """Temporarily set the canvas up for an exported image or video: colorbars of all
+    images on or off, and the OPTARI version stamped bottom left.
     """
-    Temporarily set built-in napari colorbar visibility for all images.
-    Useful for exporting images.
-    """
-    image_layers = [
-        layer for layer in viewer.layers if isinstance(layer, Image)
-    ]
+    image_layers = [layer for layer in viewer.layers if isinstance(layer, Image)]
     previous = [(layer, layer.colorbar.visible) for layer in image_layers]
     for layer, _ in previous:
-        layer.colorbar.visible = visible
+        layer.colorbar.visible = include_colorbars
+    watermark = viewer.canvas.overlays.text
+    previous_watermark = watermark.model_dump()
+    watermark.update(
+        {
+            "text": f"Created by OPTARI v{__version__}",
+            "position": "bottom_left",
+            "visible": True,
+        }
+    )
     try:
         yield
     finally:
         for layer, was_visible in previous:
             layer.colorbar.visible = was_visible
-
-
-def filename_token(text: str) -> str:
-    """Reduce free text to something safe to embed in a filename."""
-    token = re.sub(r"[^A-Za-z0-9]+", "-", str(text)).strip("-")
-    return token or "unknown"
+        watermark.update(previous_watermark)
 
 
 def save_viewer_screenshot(
@@ -44,6 +46,8 @@ def save_viewer_screenshot(
     Shared by the Export View dialog and batch mode so an overlay saved by a batch
     run is the same image the user would have exported by hand.
     """
-    with colorbars_visible(viewer, include_colorbars):
+    with export_overlays(viewer, include_colorbars):
         image = viewer.screenshot(canvas_only=True)[..., :3]
-    cv2.imwrite(str(destination), cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
+    # Not cv2.imwrite, which returns False instead of raising and has a history of
+    # failing on non-ASCII paths on Windows (user folders with umlauts).
+    iio.imwrite(destination, image)

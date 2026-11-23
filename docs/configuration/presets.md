@@ -62,6 +62,13 @@ Reconstruction algorithm and filtering parameters, passed through to PATATO and 
 }
 ```
 
+Two optional keys control the timing of the preprocessing:
+
+- `DAQ_DELAY_CORRECTION` (`true`/`false`): iThera scanners start recording 200 ns after the laser pulse (`DAQTriggerDelay` in the `.msot` file). Without the correction every structure appears about 0.3 mm too shallow. With it on, a scan that records no delay is refused with an error instead of being reconstructed as if there were none; this applies to HDF5 files converted before OPTARI stored the delay, which have to be converted again from the original scan.
+- `IRF_TIME_ZERO`: where the impulse response's time zero is assumed when `IRF` is on. `"centre"` (PATATO's default) or `"peak"` makes the impulse-response correction sharpen the signal without moving it.
+
+DeepMB presets differ: The network's output grid is fixed and read from the model file, so a DeepMB preset has no `RECONSTRUCTION_N*` or `RECONSTRUCTION_FIELD_OF_VIEW_*` keys and is refused if it sets them. The model does its own band-pass filtering and windowing, so `IRF`, `HILBERT_TRANSFORM` and `DAQ_DELAY_CORRECTION` stay off, the interpolation factors stay 1, and the speed of sound must lie in the model's trained range (1440 to 1580 m/s for v1.6.0). `OFFSET_Z` shifts the image in depth, in mm, from where a centred grid would sit. Its 33 mm deep FOV is first centred in the scan's 40 mm one. The model's own geometry is 3.5 mm deeper than centred (its first row 7.0 mm below the scan's FOV edge), but visual alignment is best at 3.2 mm (first row at 6.7 mm), so that is what the preset uses. `laser_energy` stays 1.0 because PATATO already corrects each pulse for its laser energy.
+
 ## Unmixing presets (`presets/unmixing/`)
 
 Wavelength range, chromophore selection, and derived-parameter options.
@@ -175,6 +182,7 @@ How wide the measurement reaches. Mirrors the **Include all …** boxes in the A
 | --- | --- | --- |
 | `layers` | `"analysis"` (default), `"all_pa"` | `analysis` measures the `source` reconstruction plus what this run unmixed from it. `all_pa` measures every OA layer in the scan, including reconstructions the plan did not make. |
 | `all_channels` | `true` (default), `false` | Every wavelength of the reconstruction, or just the default one. Derived layers (unmixed, sO₂, THb) are always measured on every channel. |
+| `ultrasound` | `false` (default), `true` | Also measure the ROI on the ultrasound, like a reconstruction. |
 
 ### `outputs`
 

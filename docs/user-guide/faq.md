@@ -85,7 +85,7 @@ filename. See [Exporting Data](exporting-data.md#full-scan-export-hdf5).
 ## Can I measure distances in OPTARI?
 
 Yes — select the line shape (shortcut `L`) and draw it along the distance you want to measure. The `size_mm`
-feature in the Live Analysis table shows its length in millimeters. See
+feature in the Live Analysis table shows its length in millimeters; a path shows the length along all its segments. See
 [ROI Annotation](roi-annotation.md#drawing-and-editing-rois).
 
 ## How do I set a fixed contrast limit instead of auto-scaling?

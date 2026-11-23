@@ -1,7 +1,7 @@
 """ROI geometry, shared by the viewer, presets, the saved analysis
 table and HDF5 export.
 
-Described a shape, not a uniqe measurement
+It describes a shape, not a measurement.
 
 Every persisted form of an ROI uses PATATO coordinates. napari millimetres exist
 only inside the viewer, where they are relative to the field of view corner and
@@ -10,18 +10,18 @@ therefore inconsistent once the FOV changes.
 So we have 3 coordinate systems in OPTARI:
 
 ``world mm``
-    What ``ROIRecord.verts`` always holds. The Shapes layer is never translated, so
+    What ``RoiRecord.verts`` always holds. The Shapes layer is never translated, so
     world millimetres are the shared physical frame every layer is registered into.
-    Scan-loaded layers sit at translate 0, which makes world mm *identical* to the
-    scan frame.
+    Scan-loaded layers have their outer pixel edge at world 0, which makes world mm
+    *identical* to the scan frame.
 ``PATATO metres``
     What this module stores. Scan-anchored, like PATATO. origin at the image centre,
     derived from world mm and the scan's field of view.
 ``layer pixels``
-    Indices into a layer's array. A runtime-derived layer may sit at a nonzero
-    ``translate`` (like deepmb) to register it against the others,
-    so converting world mm to *that* layer's pixels means subtracting its
-    translate first.
+    Indices into a layer's array, pixel centres at integers. Every layer's translate
+    holds half a pixel (its field of view spans the outer pixel edges, see
+    ``patato_bridge.layer_translate``), plus any placement offset (like DeepMB's),
+    so converting world mm to a layer's pixels means subtracting its translate first.
 """
 
 from __future__ import annotations
@@ -32,12 +32,10 @@ from dataclasses import dataclass
 import numpy as np
 
 from optari import OPTARI_SOURCE_TAG
-from optari.roi.roi_records import ROIRecord
+from optari.roi.roi_records import RoiRecord, new_roi_group_uid
 
 
-def patato_to_napari(
-    pts_m: np.ndarray, fov_x_m: float, fov_y_m: float
-) -> np.ndarray:
+def patato_to_napari(pts_m: np.ndarray, fov_x_m: float, fov_y_m: float) -> np.ndarray:
     """Convert PATATO ``(x_m, y_m)`` polygon vertices to napari ``(y_mm, x_mm)``.
 
     PATATO: origin at image centre, x→right, y→up, metres.
@@ -84,7 +82,10 @@ class RoiGeometry:
     source: str = OPTARI_SOURCE_TAG
 
     def __post_init__(self) -> None:
-        """Coerce *verts_m* to an (N, 2) array and the other fields to their types. Rejects an empty geometry."""
+        """Coerce *verts_m* to an (N, 2) array and the other fields to their types.
+
+        Rejects an empty geometry.
+        """
         self.verts_m = np.asarray(self.verts_m, dtype=float).reshape(-1, 2)
         if self.verts_m.size == 0:
             raise ValueError("ROI geometry must contain vertices")
@@ -94,8 +95,8 @@ class RoiGeometry:
 
     @classmethod
     def from_record(
-        cls, record: ROIRecord, fov_x_m: float, fov_y_m: float
-    ) -> "RoiGeometry":
+        cls, record: RoiRecord, fov_x_m: float, fov_y_m: float
+    ) -> RoiGeometry:
         """Build from a record's world-space vertices."""
         return cls(
             verts_m=napari_to_patato(
@@ -119,13 +120,13 @@ class RoiGeometry:
         fov_x_m: float,
         fov_y_m: float,
         roi_group_uid: str = "",
-    ) -> ROIRecord:
+    ) -> RoiRecord:
         """Rebuild a record. An empty *roi_group_uid* mints a new group identity."""
-        return ROIRecord(
+        return RoiRecord(
             roi_id=roi_id,
             track_id=track_id,
             frame_id=frame_id,
-            roi_group_uid=roi_group_uid,
+            roi_group_uid=roi_group_uid or new_roi_group_uid(),
             verts=self.verts_mm(fov_x_m, fov_y_m),
             kind=self.kind,
             source=self.source,
@@ -134,8 +135,8 @@ class RoiGeometry:
 
     def repositioned(
         self, source_fov: tuple[float, float], target_fov: tuple[float, float]
-    ) -> "RoiGeometry":
-        """Move the ROI to the same relative spot in a different FOV, keeping its size."""
+    ) -> RoiGeometry:
+        """Move the ROI to the same relative spot in another FOV, keeping its size."""
         scale = np.asarray(target_fov, dtype=float) / np.asarray(
             source_fov, dtype=float
         )
@@ -157,7 +158,7 @@ class RoiGeometry:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "RoiGeometry":
+    def from_dict(cls, data: dict) -> RoiGeometry:
         """Rebuild from :meth:`to_dict`'s output, defaulting any missing key."""
         return cls(
             verts_m=data.get("verts_m", []),
@@ -171,6 +172,6 @@ class RoiGeometry:
         return json.dumps(self.to_dict())
 
     @classmethod
-    def from_json(cls, text: str) -> "RoiGeometry":
+    def from_json(cls, text: str) -> RoiGeometry:
         """Inverse of :meth:`to_json`."""
         return cls.from_dict(json.loads(text))

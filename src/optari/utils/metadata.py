@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, time
+from datetime import date, time
 from numbers import Number
 from pathlib import Path
 
@@ -11,6 +11,7 @@ import numpy as np
 
 
 def json_default(value):
+    """``json.dumps`` fallback: numpy values as plain Python, anything else as text."""
     if isinstance(value, np.ndarray):
         return value.tolist()
     if isinstance(value, np.generic):
@@ -45,13 +46,9 @@ def _format(value, details: bool = False) -> str:
 
 
 def layer_metadata_rows(layer) -> list[tuple[str, str, str]]:
-    """
-    layer infos
-    """
+    """(label, value, full value) rows describing *layer* for the metadata window."""
     if layer is None:
-        return [
-            ("Status", "No image layer selected", "No image layer selected")
-        ]
+        return [("Status", "No image layer selected", "No image layer selected")]
 
     rows = [
         ("Name", layer.name),
@@ -69,8 +66,7 @@ def layer_metadata_rows(layer) -> list[tuple[str, str, str]]:
         ("Layer-specific metadata", dict(layer.metadata)),
     ]
     return [
-        (label, _format(value), _format(value, details=True))
-        for label, value in rows
+        (label, _format(value), _format(value, details=True)) for label, value in rows
     ]
 
 
@@ -80,8 +76,8 @@ def scan_metadata_rows(
     study_path: Path | None = None,
     scan_info=None,
 ) -> list[tuple[str, str, str]]:
-    """
-    global scan infos, including acquisition parameters and scan geometry.
+    """(label, value, full value) rows describing the loaded scan: acquisition and
+    geometry.
     """
     if pa_data is None:
         return [("Status", "No scan loaded", "No scan loaded")]
@@ -90,12 +86,12 @@ def scan_metadata_rows(
         ("Study folder", study_path.stem if study_path else "N/A"),
         ("Scan path", scan_path),
         ("Scan name", pa_data.get_scan_name()),
-        ("Internal name", getattr(scan_info, "internal_name", None)),
+        ("Internal name", scan_info.internal_name),
         ("File origin", pa_data.get_file_origin()),
         ("Acquisition date", pa_data.get_scan_datetime()),
         ("Device info", pa_data.get_device_info()),
         ("Clinical scan", pa_data.is_clinical()),
-        ("Acquisition shape", getattr(pa_data, "shape", None)),
+        ("Acquisition shape", pa_data.shape),
         ("Acquisition start frame", pa_data.get_acquisition_start_frame()),
         ("Wavelengths", np.asarray(pa_data.get_wavelengths())),
         ("Sampling frequency", pa_data.get_sampling_frequency()),
@@ -111,8 +107,7 @@ def scan_metadata_rows(
         ("Timestamps (s)", np.asarray(pa_data.get_timestamps())),
     ]
     return [
-        (label, _format(value), _format(value, details=True))
-        for label, value in rows
+        (label, _format(value), _format(value, details=True)) for label, value in rows
     ]
 
 
@@ -120,9 +115,9 @@ def ipasc_metadata_rows(pa_data) -> list[tuple[str, str, str]]:
     """
     Scan metadata under the IPASC tag names, in IPASC SI units.
 
-    These are the same values OPTARI writes into the ``meta_data`` group on export, built by
-    the custom PATATO fork. Fields IPASC marks as minimal
-    are flagged, and fields the scan does not provide are listed as absent.
+    These are the same values OPTARI writes into the ``meta_data`` group on export,
+    built by the custom PATATO fork. Fields IPASC marks as minimal are flagged, and
+    fields the scan does not provide are listed as absent.
     """
     if pa_data is None:
         return [("Status", "No scan loaded", "No scan loaded")]
@@ -140,20 +135,12 @@ def ipasc_metadata_rows(pa_data) -> list[tuple[str, str, str]]:
         (
             "IPASC completeness",
             status,
-            (
-                status
-                if not missing
-                else status + "\nMissing: " + ", ".join(missing)
-            ),
+            (status if not missing else status + "\nMissing: " + ", ".join(missing)),
         )
     ]
     for entry in entries:
         label = entry["tag"] + (" *" if entry["minimal"] else "")
         unit = "" if entry["unit"] in ("N/A", None) else f" [{entry['unit']}]"
-        summary = (
-            "absent"
-            if not entry["present"]
-            else _format(entry["value"]) + unit
-        )
+        summary = "absent" if not entry["present"] else _format(entry["value"]) + unit
         rows.append((label, summary, _format(entry["value"], details=True)))
     return rows

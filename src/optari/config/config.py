@@ -1,28 +1,43 @@
 """OptariConfig: dataclass schema for the user's ~/.optari/config/config.json."""
 
-from dataclasses import dataclass, field, replace
 import json
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-from optari.utils.setup import archive_config_dir, get_user_config_file
 from optari.utils.files import atomic_destination
+from optari.utils.setup import (
+    archive_config_dir,
+    get_default_config_file,
+    get_user_config_file,
+)
 
-CONFIG_SCHEMA_VERSION = 6  # adapt in default config.json as well
+CONFIG_SCHEMA_VERSION = json.loads(
+    get_default_config_file().read_text(encoding="utf-8")
+)["schema_version"]
+
+# Named frames a scan can open on (DEFAULT_FRAME_INDEX, a batch preset's "frame"), next
+# to a plain frame number, with the label the Settings dialog shows.
+# ScanController.go_to_frame resolves them.
+FRAME_SELECTORS = {
+    "spectral_motion": "Motion (Spectral)",
+    "frame_motion": "Motion (Frame-to-Frame)",
+    "acquisition_start": "Acquisition start",
+    "roi": "First ROI frame",
+}
 
 
 @dataclass(frozen=True)
 class GeneralConfig:
-    """App-wide defaults: logging, default layers/scales/frame/channel, operator identity, layer colors, dock visibility."""
+    """App-wide defaults: logging, default layers/scales/frame/channel, operator
+    identity, layer colors, dock visibility.
+    """
 
     LOG_LEVEL: str
     GUI_LOG_LEVEL: str
     DEFAULT_PA_LAYER: str
     PA_FALLBACK_SCALE: tuple[float, float, float]
-    DEFAULT_US_LAYER: str  # not implemented yet
     US_FALLBACK_SCALE: tuple[float, float, float]
-    DEFAULT_FRAME_INDEX: (
-        int | str
-    )  # frame index, "spectral_motion" / "frame_motion", "acquisition_start" or "roi"
+    DEFAULT_FRAME_INDEX: int | str  # a frame number or a FRAME_SELECTORS key
     DEFAULT_CHANNEL_INDEX: int
     DEFAULT_PLAYBACK_FPS: int
     OPERATOR: str
@@ -59,20 +74,12 @@ class SegmentationConfig:
     default_model: str
 
 
-@dataclass(frozen=True)
-class ExportConfig:
-    """Layout settings for exported figures: font size, colorbar width, and padding."""
-
-    font_size: int
-    cbar_width: int
-    padding: int
-
-
 @dataclass
 class OptariConfig:
     """Top-level config, loaded at startup into the module-level ``settings``.
 
-    Modules import that object by name, so it is updated in place, see ``apply_live``. Mirrors ``~/.optari/config/config.json``: one section per settings category.
+    Modules import that object by name, so it is updated in place, see ``apply_live``.
+    Mirrors ``~/.optari/config/config.json``: one section per settings category.
     """
 
     schema_version: int
@@ -80,25 +87,31 @@ class OptariConfig:
     annotation: AnnotationConfig
     analysis: AnalysisConfig
     segmentation: SegmentationConfig
-    export: ExportConfig
 
     @classmethod
     def load_from_user_dir(cls) -> "OptariConfig":
-        """Loads the user's config.json and safely parses it into the dataclasses."""
+        """Load the user's config.json, archiving and re-seeding it after a schema
+        change.
+
+        Raises on any missing or unknown key, so a hand-edited config fails at launch
+        instead of running with a setting silently ignored.
+        """
         config_path = get_user_config_file()
-        data = json.loads(config_path.read_text())
+        data = json.loads(config_path.read_text(encoding="utf-8"))
 
         schema_version = data.get("schema_version")
 
         if schema_version != CONFIG_SCHEMA_VERSION:
             archive_config_dir(config_path.parent)
             config_path = get_user_config_file()
-            data = json.loads(config_path.read_text())
+            data = json.loads(config_path.read_text(encoding="utf-8"))
 
         return _config_from_dict(data)
 
     def apply_live(self, data: dict) -> None:
-        """Take over the settings that change no measurement, the rest is read at launch."""
+        """Take over the settings that change no measurement, the rest is read at
+        launch.
+        """
         new = _config_from_dict(data)
         self.annotation, self.analysis = new.annotation, new.analysis
         self.general = replace(
@@ -115,7 +128,6 @@ def _config_from_dict(data: dict) -> OptariConfig:
         annotation=AnnotationConfig(**data["annotation"]),
         analysis=AnalysisConfig(**data["analysis"]),
         segmentation=SegmentationConfig(**data["segmentation"]),
-        export=ExportConfig(**data["export"]),
     )
 
 
@@ -133,8 +145,8 @@ def write_user_config_dict(data: dict) -> Path:
             f"expected {CONFIG_SCHEMA_VERSION}."
         )
 
-    # Constructing the sections also works as validation: the loader is intolerant of missing or
-    # unknown keys, so anything it would reject never reaches disk.
+    # Constructing the sections also works as validation: the loader is intolerant of
+    # missing or unknown keys, so anything it would reject never reaches disk.
     _config_from_dict(data)
 
     path = get_user_config_file()

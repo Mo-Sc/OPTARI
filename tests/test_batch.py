@@ -20,17 +20,16 @@ from optari.batch.runner import (
     BatchRunner,
     BatchStepError,
     Tick,
-    _in_background,
 )
 from optari.io.discovery import ScanInfo
 from optari.roi.roi_utils import MeasureScope
 from optari.utils.presets import PresetStore
-from optari.utils.setup import get_user_batch_presets_dir, get_user_models_dir
+from optari.utils.setup import get_user_models_dir, get_user_presets_dir
 from tests.conftest import HDF5_SCAN, ITHERA_SCAN, STUDY_DIR, needs_study
 
 
 def batch_preset(name):
-    return PresetStore(get_user_batch_presets_dir()).load(name)
+    return PresetStore(get_user_presets_dir("batch")).load(name)
 
 
 @needs_study
@@ -41,22 +40,17 @@ def test_shipped_presets_resolve_against_the_dataset(tmp_path):
         output_dir=tmp_path,
     )
 
-    assert [job.key for job in plan.jobs] == [
-        "Study_19_Scan_2",
-        "Study_19_Scan_3",
-    ]
-    assert [job.scan_path for job in plan.jobs] == [ITHERA_SCAN, HDF5_SCAN]
-    assert plan.jobs[1].scan_name == "DEMO_SCAN_3"
+    jobs = [job for job in plan.jobs if job.study_path == STUDY_DIR]
+    assert [job.key for job in jobs] == ["Study_19_Scan_2", "Study_19_Scan_3"]
+    assert [job.scan_path for job in jobs] == [ITHERA_SCAN, HDF5_SCAN]
+    assert jobs[1].scan_name == "DEMO_SCAN_3"
     assert plan.step_names == [
         "reconstruction",
         "segmentation",
         "unmixing",
         "roi (auto)",
     ]
-    assert (
-        plan.reconstruction["RECONSTRUCTION_ALGORITHM"]
-        == "Reference Backprojection"
-    )
+    assert plan.reconstruction["RECONSTRUCTION_ALGORITHM"] == "Reference Backprojection"
     assert plan.unmixing["SPECTRA"] == ["Hb", "HbO2"]
     assert plan.segmentation["model_id"] == "c_unet_gastrocnemius-transverse"
     assert (
@@ -83,9 +77,7 @@ def test_shipped_presets_resolve_against_the_dataset(tmp_path):
         output_dir=tmp_path,
     )
     assert (
-        convert.step_names == []
-        and convert.outputs.hdf5
-        and not convert.outputs.xlsx
+        convert.step_names == [] and convert.outputs.hdf5 and not convert.outputs.xlsx
     )
 
     existing = build_plan(
@@ -93,9 +85,7 @@ def test_shipped_presets_resolve_against_the_dataset(tmp_path):
         batch_preset=batch_preset("existing_recon_roi"),
         output_dir=tmp_path,
     )
-    assert (
-        existing.source == "Recon: iThera" and existing.reconstruction is None
-    )
+    assert existing.source == "Recon: iThera" and existing.reconstruction is None
     assert plan_warnings(existing) == [] and plan_warnings(convert) == []
     assert plan_warnings(
         build_plan(
@@ -110,8 +100,10 @@ def test_validate_plan_reports_every_problem(tmp_path):
     empty_root, out = tmp_path / "data", tmp_path / "out"
     empty_root.mkdir()
     out.mkdir()
+    # The overlay is on by default and alone is a valid plan (export_png)
+    nothing = {"steps": {}, "outputs": {"overlay_png": False}}
     problems = validate_plan(
-        build_plan(root=empty_root, batch_preset={"steps": {}}, output_dir=out)
+        build_plan(root=empty_root, batch_preset=nothing, output_dir=out)
     )
     assert [p[:14] for p in problems] == ["No scans found", "The plan has n"]
 
@@ -135,9 +127,7 @@ def test_validate_plan_reports_every_problem(tmp_path):
         "Unknown chromophore(s): Unobtainium",
         "already contains batch_roi_table.xlsx",
     ]
-    if not (
-        get_user_models_dir() / "c_unet_ta_20260928_gastrocnemius.onnx"
-    ).is_file():
+    if not (get_user_models_dir() / "c_unet_ta_20260928_gastrocnemius.onnx").is_file():
         expected.insert(0, "are not downloaded")
     assert len(problems) == len(expected) + 1
     for text in expected:
@@ -158,6 +148,7 @@ def job(number, kind="hdf5"):
         Path("/d/Study_1"),
         Path(f"/d/Study_1/Scan_{number}.hdf5"),
         ScanInfo(kind, f"S{number}"),
+        Path("/d"),
     )
 
 
@@ -220,12 +211,12 @@ def test_runner_isolates_failures_and_honours_cancel():
 
     controller = SimpleNamespace(
         viewer=viewer,
-        active_recon_layer=recon,
-        resolve_active_recon_layer=lambda: None,
+        active_image_layer=recon,
+        resolve_active_image_layer=lambda: None,
         scan_ctrl=ScanCtrl(),
     )
     runner = make_runner(plan, controller)
-    runner._write_outputs = lambda job, frame_idx, layer: None
+    runner._write_outputs = lambda job, frame_idx, layer: iter(())
     drive(runner._run())
     statuses = runner.report.rows.set_index("scan")["status"].to_dict()
     assert statuses == {
@@ -249,7 +240,7 @@ def test_runner_isolates_failures_and_honours_cancel():
     )
 
     runner = make_runner(plan, controller)
-    runner._write_outputs = lambda job, frame_idx, layer: None
+    runner._write_outputs = lambda job, frame_idx, layer: iter(())
     drive(runner._run(), cancel_after=3, runner=runner)
     assert runner.report.rows["status"].tolist() == [
         "failed",
@@ -280,13 +271,11 @@ def test_source_and_overlay_layer_selection(tmp_path):
         name="sO2: Reference Backprojection_F15",
         metadata={"type": "pa", "source_layer": ours.name},
     )
-    viewer.add_image(
-        np.zeros((1, 1, 2, 2)), name="US", metadata={"type": "us"}
-    )
+    viewer.add_image(np.zeros((1, 1, 2, 2)), name="US", metadata={"type": "us"})
     controller = SimpleNamespace(
         viewer=viewer,
-        active_recon_layer=vendor,
-        resolve_active_recon_layer=lambda: None,
+        active_image_layer=vendor,
+        resolve_active_image_layer=lambda: None,
     )
 
     plan = BatchPlan(jobs=[], output_dir=tmp_path)
@@ -299,9 +288,7 @@ def test_source_and_overlay_layer_selection(tmp_path):
     )  # nothing made, nothing named: the default PA layer
     assert list(viewer.layers.selection) == [vendor]
     plan.source = "Recon: iThera"
-    assert (
-        runner._select_source_layer(ours.name) is vendor
-    )  # an explicit source wins
+    assert runner._select_source_layer(ours.name) is vendor  # an explicit source wins
     plan.source = "Recon: DeepMB"
     with pytest.raises(
         BatchStepError,

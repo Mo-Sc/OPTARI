@@ -1,0 +1,11 @@
+{
+  "description": "No analysis: one PNG per scan of the default PA layer over the ultrasound, on the frame with the least frame-to-frame motion.",
+  "steps": {},
+  "frame": "frame_motion",
+  "measure": {},
+  "outputs": {
+    "xlsx": false,
+    "hdf5": false,
+    "overlay_png": true
+  }
+}

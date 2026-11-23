@@ -1,70 +1,59 @@
+"""OPTARI's keyboard shortcuts, each of which presses a dock button."""
+
 import logging
 import sys
-from collections.abc import Callable
+
+from qtpy.QtWidgets import QPushButton
 
 logger = logging.getLogger(__name__)
 
 # workaround for cross-platform cmd/ctrl key in shortcuts
 CMD_CTRL = "Meta" if sys.platform == "darwin" else "Control"
 
-# --- SHORTCUT REGISTRY ---
+# napari key names. Each button's tooltip shows its shortcut from here, so this is the
+# only place a key is written down.
 SHORTCUTS = {
-    "save_roi_data": f"{CMD_CTRL}-Shift-S",  # triggers "Save ROI Data" button
-    "run_unmixing": f"{CMD_CTRL}-Shift-U",  # triggers unmixing with current settings
-    "run_segmentation": f"{CMD_CTRL}-Shift-T",  # triggers segmentation with current settings
+    "save_roi_data": f"{CMD_CTRL}-Shift-S",
+    "run_unmixing": f"{CMD_CTRL}-Shift-U",
+    "run_segmentation": f"{CMD_CTRL}-Shift-T",
 }
 
 
 class ShortcutManager:
-    """
-    Manager for registering custom OPTARI keyboard shortcuts.
-    """
+    """Binds OPTARI's keyboard shortcuts to the dock buttons they press."""
 
-    @classmethod
-    def register_all(cls, controller) -> None:
-        """Bind all custom keyboard shortcuts."""
+    def __init__(self, controller):
+        self.controller = controller
 
-        # 1. ROI Shortcuts
-        cls._bind_shortcut_to_button(
-            controller,
-            shortcut_id="save_roi_data",
-            button_getter=lambda c: c.roi.save_button,
-            action_name="Save ROI Data",
+    def register_all(self) -> None:
+        """Bind all custom keyboard shortcuts. The docks must exist already."""
+        controller = self.controller
+        self._bind_shortcut_to_button(
+            "save_roi_data", controller.roi_dock.save_button, "Save ROI Data"
         )
-
-        # 2. Unmixing Shortcuts
-        cls._bind_shortcut_to_button(
-            controller,
-            shortcut_id="run_unmixing",
-            button_getter=lambda c: c.unmixing.run_button,
-            action_name="Run Unmixing",
+        self._bind_shortcut_to_button(
+            "run_unmixing", controller.unmixing_dock.run_button, "Run Unmixing"
         )
-
-        # 3. Segmentation Shortcuts
-        cls._bind_shortcut_to_button(
-            controller,
-            shortcut_id="run_segmentation",
-            button_getter=lambda c: c.segmentation.generate_tissue_segmentation_button,
-            action_name="Run Segmentation",
+        self._bind_shortcut_to_button(
+            "run_segmentation",
+            controller.segmentation_dock.generate_tissue_segmentation_button,
+            "Run Segmentation",
         )
-
         logger.info("registered keyboard shortcuts: %s", SHORTCUTS)
 
-    @classmethod
     def _bind_shortcut_to_button(
-        cls,
-        controller,
-        shortcut_id: str,
-        button_getter: Callable,
-        action_name: str,
+        self, shortcut_id: str, button: QPushButton, action_name: str
     ) -> None:
-        """Bind keyboard shortcut to a dock's QPushButton."""
+        """Bind a shortcut to a dock button and name it in the button's tooltip."""
         shortcut = SHORTCUTS[shortcut_id]
+        keys = (
+            shortcut.replace("Meta", "Cmd").replace("Control", "Ctrl").replace("-", "+")
+        )
+        button.setToolTip(f"{button.toolTip()} ({keys})")
 
-        @controller.viewer.bind_key(shortcut, overwrite=True)
+        @self.controller.viewer.bind_key(shortcut, overwrite=True)
         def trigger_button(viewer):
             logger.info("shortcut %s triggered", shortcut)
-            button = button_getter(controller)
             if button.isEnabled():
                 button.click()
             else:

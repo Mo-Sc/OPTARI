@@ -16,6 +16,8 @@ from qtpy.QtWidgets import (
 
 @dataclass
 class InfoDock:
+    """Facts about the active slice, and the button that opens the metadata window."""
+
     widget: QWidget
     label: QLabel
     metadata_button: QPushButton
@@ -72,6 +74,4 @@ def create_info_dock() -> InfoDock:
     scroll_area.setWidget(label)
     layout.addWidget(header)
     layout.addWidget(scroll_area)
-    return InfoDock(
-        widget=widget, label=label, metadata_button=metadata_button
-    )
+    return InfoDock(widget=widget, label=label, metadata_button=metadata_button)

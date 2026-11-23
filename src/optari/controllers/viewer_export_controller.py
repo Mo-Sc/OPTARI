@@ -11,7 +11,7 @@ import cv2
 from napari.utils.progress import cancelable_progress
 from qtpy.QtWidgets import QFileDialog
 
-from optari.io.utils import colorbars_visible, save_viewer_screenshot
+from optari.io.utils import export_overlays, save_viewer_screenshot
 from optari.utils.viewer import show_activity_dock
 from optari.widgets.viewer_export_dialog import ViewerExportDialog
 
@@ -21,38 +21,42 @@ logger = logging.getLogger(__name__)
 class ViewerExportController:
     """Export the currently visible viewer content as image or video."""
 
-    @staticmethod
-    def on_export_clicked(controller) -> None:
+    def __init__(self, controller):
+        self.controller = controller
+
+    def on_export_clicked(self, event=None) -> None:
         """Open the export dialog and write the chosen image or video to disk."""
+        controller = self.controller
         viewer = controller.viewer
         parent_widget = viewer.window._qt_window
         active_layer = viewer.layers.selection.active
         n_frames = viewer.dims.nsteps[0] if viewer.dims.ndim > 0 else 1
-        dialog = ViewerExportDialog(
-            parent_widget, video_available=n_frames > 1
-        )
+        dialog = ViewerExportDialog(parent_widget, video_available=n_frames > 1)
         if dialog.exec() != ViewerExportDialog.Accepted:
             return
 
         dialog_settings = dialog.get_dialog_export_settings()
-        default_name = (
-            f"OPTARIVIEW_{active_layer.name if active_layer else 'viewer'}"
-        )
+        default_name = f"OPTARIVIEW_{active_layer.name if active_layer else 'viewer'}"
         if not dialog_settings["video"]:
-            frame_id = (
-                viewer.dims.current_step[0] if viewer.dims.ndim > 0 else 0
-            )
+            frame_id = viewer.dims.current_step[0] if viewer.dims.ndim > 0 else 0
             default_name += f"_F{frame_id}"
         channel_id = viewer.dims.current_step[1] if viewer.dims.ndim > 1 else 0
         default_name += f"_C{channel_id}"
 
         if dialog_settings["video"]:
-            ViewerExportController._export_video(
-                viewer, parent_widget, default_name, n_frames, dialog_settings
+            # Only the frames the active layer holds. On the others the viewer snaps
+            # back to the nearest one, so the video would repeat it.
+            layer = controller.active_image_layer
+            frames = list(
+                (layer.metadata.get("frames") if layer is not None else None)
+                or range(n_frames)
+            )
+            self._export_video(
+                viewer, parent_widget, default_name, frames, dialog_settings
             )
             return
 
-        ViewerExportController._export_image(
+        self._export_image(
             viewer,
             parent_widget,
             default_name,
@@ -76,9 +80,7 @@ class ViewerExportController:
             ".tiff" if "TIFF" in file_filter else ".png"
         )
 
-        save_viewer_screenshot(
-            viewer, filename, include_colorbars=include_colorbars
-        )
+        save_viewer_screenshot(viewer, filename, include_colorbars=include_colorbars)
         logger.info("Exported image to %s", filename)
 
     @staticmethod
@@ -86,14 +88,14 @@ class ViewerExportController:
         viewer,
         parent_widget,
         default_name: str,
-        n_frames: int,
+        frames: list[int],
         dialog_settings,
     ) -> None:
         """Capture the viewer canvas frame by frame and mux it into an MP4.
 
-        Unlike the reconstruction/unmixing/segmentation tasks, this cannot run in a worker
-        thread. `camera.mouse_pan`/`mouse_zoom` are blocked to prevent the camera drifting mid-capture
-        since that would corrupt the recording
+        Unlike the reconstruction/unmixing/segmentation tasks, this cannot run in a
+        worker thread. `camera.mouse_pan`/`mouse_zoom` are blocked to prevent the camera
+        drifting mid-capture since that would corrupt the recording
         """
         filename, _ = QFileDialog.getSaveFileName(
             parent_widget,
@@ -106,7 +108,8 @@ class ViewerExportController:
 
         filename = Path(filename).with_suffix(".mp4")
         # Write to a scratch file and rename only once every frame is captured, so a
-        # cancelled or failed export can never leave a corrupt file at the real destination.
+        # cancelled or failed export can never leave a corrupt file at the real
+        # destination.
         fd, tmp_name = tempfile.mkstemp(
             dir=filename.parent, prefix=f".{filename.stem}-", suffix=".mp4"
         )
@@ -129,12 +132,8 @@ class ViewerExportController:
             show_activity_dock(viewer, True)
             viewer.scene.camera.mouse_pan = False
             viewer.scene.camera.mouse_zoom = False
-            with colorbars_visible(
-                viewer, dialog_settings["include_colorbars"]
-            ):
-                for frame_id in cancelable_progress(
-                    range(n_frames), desc="Exporting video"
-                ):
+            with export_overlays(viewer, dialog_settings["include_colorbars"]):
+                for frame_id in cancelable_progress(frames, desc="Exporting video"):
                     viewer.dims.current_step = (
                         frame_id,
                         *viewer.dims.current_step[1:],
@@ -145,6 +144,11 @@ class ViewerExportController:
                         writer = cv2.VideoWriter(
                             str(tmp_path), fourcc, fps, (width, height)
                         )
+                        if not writer.isOpened():
+                            raise OSError(
+                                f"Cannot write video to {filename.parent}: "
+                                "codec mp4v unavailable or path not writable"
+                            )
                     writer.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
                     frames_written += 1
         finally:
@@ -154,7 +158,7 @@ class ViewerExportController:
             show_activity_dock(viewer, False)
             if writer is not None:
                 writer.release()
-            if frames_written == n_frames:
+            if frames_written == len(frames):
                 tmp_path.replace(filename)
                 logger.info("Video export done: %s", filename)
             else:
@@ -162,5 +166,5 @@ class ViewerExportController:
                 logger.info(
                     "Video export cancelled or failed after %s/%s frame(s); discarded",
                     frames_written,
-                    n_frames,
+                    len(frames),
                 )

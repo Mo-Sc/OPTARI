@@ -5,7 +5,7 @@ clinical photoacoustic/optoacoustic (OA) and ultrasound (US) studies.
 
 ![Demo Layers](assets/optari_startup.png)
 
-OPTARI is an attempt to close the gap between engineering frameworks and clinical research in OA imaging. It combines a custom version of [PATATO](https://github.com/Mo-Sc/patato/releases/tag/patari-v0.8.0)
+OPTARI is an attempt to close the gap between engineering frameworks and clinical research in OA imaging. It combines a custom version of [PATATO](https://github.com/Mo-Sc/patato/releases/tag/patari-v0.9.0)
 for data I/O and processing with [napari](https://napari.org) for multi-layer image
 visualization, then adds a multi-patient study workflow, ROI annotation, automated tissue segmentation, and analysis tools required for clinical OA studies.
 

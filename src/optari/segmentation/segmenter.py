@@ -7,27 +7,27 @@ model registry references it by class name in adapter_class.
 
 from __future__ import annotations
 
-import logging
 import json
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 import numpy as np
 import onnxruntime as ort
+from skimage.morphology import remove_small_objects
 
-from optari.utils.setup import (
-    get_user_seg_models_config_file,
-    get_user_models_dir,
-)
 from optari.segmentation.processing_utils import (
-    resize_img,
-    resize_mask,
-    normalize_img,
     combine_classes,
     keep_largest_region,
-    reassign_freed_pixels_row_based,
-    remove_small_objects,
+    normalize_img,
     reassign_freed_pixels,
+    reassign_freed_pixels_row_based,
+    resize_img,
+    resize_mask,
+)
+from optari.utils.setup import (
+    get_user_models_dir,
+    get_user_seg_models_config_file,
 )
 
 logger = logging.getLogger(__name__)
@@ -71,7 +71,9 @@ class SegmentationModelConfig:
 def load_model_registry() -> dict[str, SegmentationModelConfig]:
     """Load model configs and return a mapping of model_id -> config."""
 
-    model_config = json.loads(get_user_seg_models_config_file().read_text())
+    model_config = json.loads(
+        get_user_seg_models_config_file().read_text(encoding="utf-8")
+    )
     models: dict[str, SegmentationModelConfig] = {}
     for item in model_config["models"]:
         model_id = str(item["id"])
@@ -126,49 +128,41 @@ class ModelAdapterBase(ABC):
     def postprocess(
         self, mask_2d: np.ndarray, frame_shape: tuple[int, int]
     ) -> np.ndarray:
-        """Turn the raw predicted mask into the final class id map for the original frame.
+        """Turn the raw predicted mask into the final class id map for the original
+        frame.
 
         Implementations resize the mask back to *frame_shape* and clean up the class
         predictions.
         """
         raise NotImplementedError
 
-    def predict(self, frames: np.ndarray) -> list[SegmentationResult]:
-        """Segment a batch of frames.
+    def predict(self, frame_2d: np.ndarray) -> SegmentationResult:
+        """Segment one (H, W) frame.
 
-        Args:
-            frames: (nframes, H, W), use frames[np.newaxis] for a single frame.
+        Batched inference would be a separate path (F-34).
         """
-        results = []
-        for frame_2d in frames:
-            # A constant frame has nothing to segment, and its z-score normalization would divide
-            # by a zero std and feed NaN to the model, which returns a meaningless mask.
-            if np.ptp(frame_2d) == 0:
-                results.append(
-                    SegmentationResult(
-                        seg=np.zeros(frame_2d.shape, dtype=MASK_DTYPE),
-                        class_names=dict(self.class_names),
-                        blank=True,
-                    )
-                )
-            else:
-                mask_2d = self.postprocess(
-                    self.infer(self.preprocess(frame_2d)), frame_2d.shape
-                )
-                results.append(
-                    SegmentationResult(
-                        seg=mask_2d.astype(MASK_DTYPE),
-                        class_names=dict(self.class_names),
-                    )
-                )
-        return results
+        # A constant frame has nothing to segment, and its z-score normalization would
+        # divide by a zero std and feed NaN to the model, which returns a meaningless
+        # mask.
+        if np.ptp(frame_2d) == 0:
+            return SegmentationResult(
+                seg=np.zeros(frame_2d.shape, dtype=MASK_DTYPE),
+                class_names=dict(self.class_names),
+                blank=True,
+            )
+        mask_2d = self.postprocess(
+            self.infer(self.preprocess(frame_2d)), frame_2d.shape
+        )
+        return SegmentationResult(
+            seg=mask_2d.astype(MASK_DTYPE), class_names=dict(self.class_names)
+        )
 
 
 class UKErUSSegAdapter(ModelAdapterBase):
     """
-    Ultrasound segmentation adapter for scans taken at the university hospital of Erlangen
-    using itheras Acuity Echo MSOT scanners.
-    Requires trained ONNX model file and a config entry in segmentation_models.json.
+    Ultrasound segmentation adapter for scans taken at the university hospital of
+    Erlangen using itheras Acuity Echo MSOT scanners. Requires trained ONNX model file
+    and a config entry in segmentation_models.json.
 
     """
 
@@ -179,6 +173,12 @@ class UKErUSSegAdapter(ModelAdapterBase):
             FileNotFoundError: The model weights have not been downloaded yet.
         """
         super().__init__(model_config)
+        # Optional in the registry, but postprocess() needs it for this adapter
+        if model_config.postprocessing_config is None:
+            raise ValueError(
+                f"Model '{model_config.model_id}' needs a postprocessing_config "
+                "in segmentation_models.json"
+            )
 
         self.input_shape = (
             model_config.input_height,
@@ -188,27 +188,22 @@ class UKErUSSegAdapter(ModelAdapterBase):
         model_path = get_user_models_dir() / model_config.filename
 
         if not model_path.is_file():
-            raise FileNotFoundError(
-                f"Segmentation model not downloaded: {model_path}"
-            )
+            raise FileNotFoundError(f"Segmentation model not downloaded: {model_path}")
 
-        # CUDA is only available with onnxruntime-gpu (Linux). Elsewhere this resolves to CPU.
+        # CUDA is only available with onnxruntime-gpu (Linux). Elsewhere this resolves
+        # to CPU.
         providers = [
             p
             for p in ("CUDAExecutionProvider", "CPUExecutionProvider")
             if p in ort.get_available_providers()
         ]
-        self.session = ort.InferenceSession(
-            str(model_path), providers=providers
-        )
-        logger.info(
-            "segmentation running on %s", self.session.get_providers()[0]
-        )
+        self.session = ort.InferenceSession(str(model_path), providers=providers)
+        logger.info("segmentation running on %s", self.session.get_providers()[0])
         self.input_name = self.session.get_inputs()[0].name
         self.output_name = self.session.get_outputs()[0].name
 
     def preprocess(self, frame_2d: np.ndarray) -> np.ndarray:
-        """Resize the frame to the model's input shape and apply z-score normalization."""
+        """Resize the frame to the model's input and z-score normalize it."""
         # resize to model input shape
         # TODO: check resize vs padding
         frame_2d = resize_img(frame_2d, self.input_shape)
@@ -223,9 +218,7 @@ class UKErUSSegAdapter(ModelAdapterBase):
         """Run the ONNX session on the frame and return the per-pixel class id map."""
         # add leading dim and run inference
         frame_tensor = np.expand_dims(frame_2d, axis=(0, 1))
-        outputs = self.session.run(
-            [self.output_name], {self.input_name: frame_tensor}
-        )
+        outputs = self.session.run([self.output_name], {self.input_name: frame_tensor})
         mask_2d = np.argmax(outputs[0], axis=1).squeeze()
 
         return mask_2d
@@ -240,28 +233,20 @@ class UKErUSSegAdapter(ModelAdapterBase):
         # resize back to original frame shape
         mask_2d = resize_mask(mask_2d, frame_shape)
         # only keep the largest connected component for the given class ids
-        mask_2d = keep_largest_region(
-            mask_2d, post_cfg["keep_largest_per_class"]
-        )
+        keep_largest_region(mask_2d, post_cfg["keep_largest_per_class"])
         # give freed pixels the most frequent remaining class in their row
-        mask_2d = reassign_freed_pixels_row_based(mask_2d)
+        reassign_freed_pixels_row_based(mask_2d)
         # combine given classes into one class (here fascia classes)
-        mask_2d = combine_classes(mask_2d, post_cfg["combine_class_groups"])
+        combine_classes(mask_2d, post_cfg["combine_class_groups"])
         for class_id, max_size in post_cfg["remove_small_objects_config"]:
             class_mask = mask_2d == class_id
-            processed_class = remove_small_objects(
-                class_mask, max_size=max_size
-            )
+            processed_class = remove_small_objects(class_mask, max_size=max_size)
             mask_2d[class_mask & ~processed_class] = 0
         # The row-wise step hands a row's majority class to pixels anywhere in that row,
-        # which can recreate fragments of a class reduced to its largest component above.
-        # Enforce that again last, then give the gaps their nearest class.
-        mask_2d = keep_largest_region(
-            mask_2d, post_cfg["keep_largest_per_class"]
-        )
-        mask_2d = reassign_freed_pixels(mask_2d)
-
-        return mask_2d
+        # which can recreate fragments of a class reduced to its largest component
+        # above. Enforce that again last, then give the gaps their nearest class.
+        keep_largest_region(mask_2d, post_cfg["keep_largest_per_class"])
+        return reassign_freed_pixels(mask_2d)
 
 
 def create_segmenter(

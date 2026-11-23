@@ -11,22 +11,22 @@ the user what is wrong with it must work before anything is loaded.
 from __future__ import annotations
 
 import logging
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from patato.io.attribute_tags import ReconAttributeTags
+from patato.io.attribute_tags import ReconAttributeTags, UnmixingAttributeTags
+from patato.unmixing.spectra import SPECTRA_NAMES
 
-from optari.io.discovery import ScanInfo, discover_studies, scan_key
+from optari.config.config import FRAME_SELECTORS
+from optari.io.discovery import ScanInfo, discover_studies
 from optari.roi.roi_presets import RoiPreset, RoiPresetStore
 from optari.roi.roi_utils import MeasureScope
 from optari.segmentation.segmenter import load_model_registry
 from optari.utils.presets import PresetStore
 from optari.utils.setup import (
     get_user_models_dir,
-    get_user_reconstruction_presets_dir,
-    get_user_roi_presets_dir,
-    get_user_segmentation_presets_dir,
-    get_user_unmixing_presets_dir,
+    get_user_presets_dir,
     resolve_model_path,
 )
 
@@ -43,26 +43,48 @@ class BatchJob:
     study_path: Path
     scan_path: Path
     scan_info: ScanInfo
+    dataset_root: Path
+
+    @property
+    def study_rel(self) -> Path:
+        """The study folder relative to the dataset root, or its name when it is the
+        root.
+
+        Two sites may both hold a ``Study_1``, so the folder name alone does not
+        identify a study within the dataset.
+        """
+        if self.study_path == self.dataset_root:
+            return Path(self.study_path.name)
+        return self.study_path.relative_to(self.dataset_root)
 
     @property
     def scan_stem(self) -> str:
-        """``Scan_3``, whether the scan is an HDF5 file or an iThera folder."""
-        return scan_key(self.scan_path)
+        """The file stem (``Scan_3``, ``Scan_3_copy``) or the iThera folder name."""
+        if self.scan_info.kind == "ithera":
+            return self.scan_path.name
+        return self.scan_path.stem
 
     @property
     def key(self) -> str:
-        """Identifier for this scan's outputs, unique across the dataset."""
-        return f"{self.study_path.name}_{self.scan_stem}"
+        """Identifier for this scan's outputs, e.g. ``siteA_Study_1_Scan_3``.
+
+        Flattened for use in file names, so ``validate_plan`` checks it is unique.
+        """
+        return "_".join((*self.study_rel.parts, self.scan_stem))
 
     @property
     def scan_name(self) -> str:
-        """The scan's internal name from its acquisition metadata, or empty if it has none."""
+        """The scan's internal name from its acquisition metadata, or empty if it has
+        none.
+        """
         return self.scan_info.internal_name or ""
 
 
 @dataclass(frozen=True)
 class OutputSpec:
-    """Which outputs a batch run writes per scan: ROI table, HDF5/IPASC export, and overlay PNG."""
+    """Which outputs a batch run writes per scan: ROI table, HDF5/IPASC export, and
+    overlay PNG.
+    """
 
     xlsx: bool = True
     hdf5: bool = False
@@ -104,6 +126,11 @@ class BatchPlan:
         return self.output_dir / f"batch_roi_table{self.run_suffix}.xlsx"
 
     @property
+    def table_csv_path(self) -> Path:
+        """Where measurements are appended during the run (batch_roi_table.csv)."""
+        return self.table_path.with_suffix(".csv")
+
+    @property
     def report_path(self) -> Path:
         """Where the run's per-scan status report is written (batch_report.xlsx)."""
         return self.output_dir / f"batch_report{self.run_suffix}.xlsx"
@@ -112,21 +139,11 @@ class BatchPlan:
         """Where *job*'s ``"hdf5"`` or ``"ipasc"`` export goes.
 
         Exports mirror the input layout, so a converted dataset can be reopened
-        exactly like the original: <out>/<format>/Study_X/Scan_Y.hdf5
+        exactly like the original: <out>/<format>/<study path>/Scan_Y.hdf5
         """
         # same suffix as the Scan Browser's export
         suffix = "_ipasc" if kind == "ipasc" else ""
-        return (
-            self.output_dir
-            / kind
-            / job.study_path.name
-            / f"{job.scan_stem}{suffix}.hdf5"
-        )
-
-    @property
-    def measures(self) -> bool:
-        """Whether this plan measures ROIs at all."""
-        return self.roi is not None or self.roi_from_scan
+        return self.output_dir / kind / job.study_rel / f"{job.scan_stem}{suffix}.hdf5"
 
     @property
     def measures(self) -> bool:
@@ -172,16 +189,21 @@ def _step_preset_name(steps: dict, label: str) -> str | None:
     return name.strip()
 
 
-def _load_named(store: PresetStore, name: str, label: str) -> dict:
+def _load_step_preset(steps: dict, step: str) -> dict | None:
+    """The preset the plan names for *step* ("reconstruction", "unmixing",
+    "segmentation"), or None.
+    """
+    name = _step_preset_name(steps, step)
+    if name is None:
+        return None
     try:
-        return store.load(name)
+        return PresetStore(get_user_presets_dir(step)).load(name)
     except (ValueError, OSError) as exc:
-        raise ValueError(
-            f"Could not load {label} preset '{name}': {exc}"
-        ) from exc
+        raise ValueError(f"Could not load {step} preset '{name}': {exc}") from exc
 
 
 def _measure_scope(spec: dict, all_frames: bool) -> MeasureScope:
+    """The batch preset's ``measure`` section as a ``MeasureScope``."""
     if "all_frames" in spec:
         raise ValueError(
             "'all_frames' moved out of 'measure' to the top level of the batch preset."
@@ -192,10 +214,12 @@ def _measure_scope(spec: dict, all_frames: bool) -> MeasureScope:
             f"Invalid measure.layers '{mode}'. Use one of {MEASURE_LAYER_MODES}."
         )
     return MeasureScope(
-        # "analysis" narrows to this run's own chain, which the runner passes explicitly.
+        # "analysis" narrows to this run's own chain, which the runner passes
+        # explicitly.
         all_layers=mode == "all_pa",
         all_frames=all_frames,
         all_channels=bool(spec.get("all_channels", True)),
+        ultrasound=bool(spec.get("ultrasound", False)),
         # A batch ROI is placed on every frame it measures, so each frame's own
         # outline is the only sensible one to use there.
         follow_track=all_frames,
@@ -203,21 +227,22 @@ def _measure_scope(spec: dict, all_frames: bool) -> MeasureScope:
 
 
 def _frame_selector(value) -> int | str:
+    """A batch preset's ``frame``: a frame number or a ``FRAME_SELECTORS`` key, spectral
+    motion if unset.
+    """
     if isinstance(value, int) and not isinstance(value, bool):
         return value
     if value is None:
         return "spectral_motion"
-    if value in ("spectral_motion", "frame_motion", "acquisition_start", "roi"):
+    if value in FRAME_SELECTORS:
         return value
     raise ValueError(
-        f"Invalid frame selector {value!r}. Use 'spectral_motion', 'frame_motion', "
-        "'acquisition_start', 'roi' or a frame number."
+        f"Invalid frame selector {value!r}. Use "
+        f"{', '.join(repr(s) for s in FRAME_SELECTORS)} or a frame number."
     )
 
 
-def build_plan(
-    *, root: Path, batch_preset: dict, output_dir: Path
-) -> BatchPlan:
+def build_plan(*, root: Path, batch_preset: dict, output_dir: Path) -> BatchPlan:
     """Resolve *batch_preset* against the dataset at *root*.
 
     Raises ValueError, message safe to show the user, when the preset cannot be
@@ -230,49 +255,31 @@ def build_plan(
         raise ValueError("Batch preset 'steps' must be an object.")
 
     jobs = [
-        BatchJob(study_path=study, scan_path=scan, scan_info=info)
+        BatchJob(study_path=study, scan_path=scan, scan_info=info, dataset_root=root)
         for study, scans in discover_studies(root).items()
         for scan, info in scans.items()
     ]
 
-    reconstruction = unmixing = segmentation = None
-    name = _step_preset_name(steps, "reconstruction")
-    if name is not None:
-        reconstruction = _load_named(
-            PresetStore(get_user_reconstruction_presets_dir()),
-            name,
-            "reconstruction",
-        )
-    name = _step_preset_name(steps, "unmixing")
-    if name is not None:
-        unmixing = _load_named(
-            PresetStore(get_user_unmixing_presets_dir()), name, "unmixing"
-        )
-    name = _step_preset_name(steps, "segmentation")
-    if name is not None:
-        segmentation = _load_named(
-            PresetStore(get_user_segmentation_presets_dir()),
-            name,
-            "segmentation",
-        )
+    reconstruction, unmixing, segmentation = (
+        _load_step_preset(steps, step)
+        for step in ("reconstruction", "unmixing", "segmentation")
+    )
 
     roi = None
     name = _step_preset_name(steps, "roi")
     roi_from_scan = name == ROI_FROM_SCAN
     if name is not None and not roi_from_scan:
         try:
-            roi = RoiPresetStore(get_user_roi_presets_dir()).get(name)
+            roi = RoiPresetStore(get_user_presets_dir("roi")).get(name)
         except (TypeError, ValueError, OSError) as exc:
-            raise ValueError(
-                f"Could not load ROI preset '{name}': {exc}"
-            ) from exc
+            raise ValueError(f"Could not load ROI preset '{name}': {exc}") from exc
 
     outputs_spec = batch_preset.get("outputs") or {}
     # Strict, since a mistyped "in_place" must not quietly turn into copies.
     hdf5 = outputs_spec.get("hdf5", False)
     if hdf5 not in (True, False, "in_place"):
         raise ValueError(
-            f"Invalid outputs.hdf5 {hdf5!r}. Use true, false or \"in_place\"."
+            f'Invalid outputs.hdf5 {hdf5!r}. Use true, false or "in_place".'
         )
     return BatchPlan(
         jobs=jobs,
@@ -285,7 +292,8 @@ def build_plan(
         roi_from_scan=roi_from_scan,
         source=(batch_preset.get("source") or None),
         frame=_frame_selector(batch_preset.get("frame")),
-        # the scan's ROIs sit on their own frames, so steps and measurement need them all
+        # the scan's ROIs sit on their own frames, so steps and measurement need them
+        # all
         measure=_measure_scope(
             batch_preset.get("measure") or {},
             bool(batch_preset.get("all_frames", False)) or roi_from_scan,
@@ -311,12 +319,21 @@ def validate_plan(plan: BatchPlan) -> list[str]:
     problems: list[str] = []
 
     if not plan.jobs:
+        problems.append("No scans found in this folder or the folders below it.")
+    outputs = plan.outputs
+    if not plan.step_names and not (
+        outputs.hdf5 or outputs.hdf5_in_place or outputs.ipasc or outputs.overlay_png
+    ):
         problems.append(
-            "No scans found. Pick a folder holding Study_*/Scan_* data."
+            "The plan has no analysis steps and no output, so it would do nothing."
         )
-    if not plan.step_names and not (plan.outputs.hdf5 or plan.outputs.ipasc):
+    keys = Counter(job.key for job in plan.jobs)
+    clashes = sorted(key for key, count in keys.items() if count > 1)
+    if clashes:
+        # e.g. "a_b/Scan_1" and "a/b_Scan_1": one would overwrite the other's outputs
         problems.append(
-            "The plan has no analysis steps and no file export, so it would do nothing."
+            f"Scans would share output names: {', '.join(clashes)}. Rename a "
+            "folder so each study path is unique."
         )
     if plan.outputs.hdf5_in_place:
         others = [job for job in plan.jobs if job.scan_info.kind != "hdf5"]
@@ -408,9 +425,7 @@ def _validate_segmentation(plan: BatchPlan) -> list[str]:
 def _validate_unmixing(plan: BatchPlan) -> list[str]:
     if plan.unmixing is None:
         return []
-    from patato.unmixing.spectra import SPECTRA_NAMES
-
-    chromophores = list(plan.unmixing.get("SPECTRA", []))
+    chromophores = list(plan.unmixing.get(UnmixingAttributeTags.SPECTRA, []))
     if not chromophores:
         return ["The unmixing preset selects no chromophores."]
     unknown = [c for c in chromophores if c not in SPECTRA_NAMES]
@@ -426,7 +441,7 @@ def _validate_output_dir(plan: BatchPlan) -> list[str]:
     # Refusing beats overwriting: a previous run's table is somebody's analysis.
     existing = [
         path.name
-        for path in (plan.table_path, plan.report_path)
+        for path in (plan.table_path, plan.table_csv_path, plan.report_path)
         if path.exists()
     ]
     if existing:
@@ -456,9 +471,7 @@ def resume_plan(plan: BatchPlan) -> list[str]:
         return ["Resuming is not possible for a plan that saves into the scan files."]
     kinds = [k for k in ("hdf5", "ipasc") if getattr(plan.outputs, k)]
     if not kinds:
-        return [
-            "Resuming needs an hdf5 or ipasc export to recognise finished scans."
-        ]
+        return ["Resuming needs an hdf5 or ipasc export to recognise finished scans."]
     plan.jobs = [
         job
         for job in plan.jobs
@@ -471,7 +484,7 @@ def describe_plan(plan: BatchPlan) -> str:
     """The resolved settings, as shown in the batch window before the run."""
     lines = [
         f"Scans:      {len(plan.jobs)} in {len({job.study_path for job in plan.jobs})} study folder(s)",
-        f"Steps:      {' -> '.join(plan.step_names) or 'none (conversion only)'}",
+        f"Steps:      {' -> '.join(plan.step_names) or 'none'}",
         f"Frame:      {plan.frame}",
     ]
     if plan.reconstruction is not None:
@@ -481,9 +494,7 @@ def describe_plan(plan: BatchPlan) -> str:
             f"{plan.reconstruction.get('RECONSTRUCTION_SPEED_OF_SOUND', '?')} m/s"
         )
     if plan.unmixing is not None:
-        lines.append(
-            f"Unmixing:   {', '.join(plan.unmixing.get('SPECTRA', []))}"
-        )
+        lines.append(f"Unmixing:   {', '.join(plan.unmixing.get('SPECTRA', []))}")
     if plan.segmentation is not None:
         lines.append(f"Model:      {plan.segmentation.get('model_id', '?')}")
     if plan.roi is not None:
@@ -492,9 +503,7 @@ def describe_plan(plan: BatchPlan) -> str:
             f"tissue class '{plan.roi.geometry.tissue_class}')"
         )
     if plan.roi_from_scan:
-        lines.append(
-            "ROI:        the scan's own, each on the frames it is drawn on"
-        )
+        lines.append("ROI:        the scan's own, each on the frames it is drawn on")
 
     # Nothing is analysed or measured without an ROI, so saying how would be noise.
     if plan.measures:
